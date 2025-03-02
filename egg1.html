@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stellar Survivor</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
+        #gameCanvas { cursor: none; }
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            user-select: none;
+            text-shadow: 0 0 5px #0f0;
+        }
+        #healthBar {
+            width: 200px;
+            height: 10px;
+            border: 2px solid #0f0;
+            margin-top: 5px;
+            box-shadow: 0 0 5px #0f0;
+        }
+        #healthFill {
+            width: 100%;
+            height: 100%;
+            background: #0f0;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        SCORE: <span id="score">0</span><br>
+        ENERGY: <span id="energy">100</span>%<br>
+        <div id="healthBar">
+            <div id="healthFill"></div>
+        </div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width = window.innerWidth;
+let height = canvas.height = window.innerHeight;
+
+// Game state
+let score = 0;
+let energy = 100;
+let health = 100;
+let particles = [];
+let planets = [];
+let asteroids = [];
+let resources = [];
+let powerups = [];
+
+class Spaceship {
+    constructor() {
+        this.x = width/2;
+        this.y = height/2;
+        this.size = 20;
+        this.angle = 0;
+        this.thrust = 0;
+        this.heat = 0;
+    }
+
+    draw() {
+        // Glow effect
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size*1.5, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(0, 255, 0, ${0.2 + Math.random()*0.1})`;
+        ctx.fill();
+
+        // Ship body
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        
+        ctx.beginPath();
+        ctx.moveTo(this.size, 0);
+        ctx.lineTo(-this.size, this.size/2);
+        ctx.lineTo(-this.size, -this.size/2);
+        ctx.closePath();
+        ctx.fillStyle = this.heat > 80 ? '#f00' : '#0f0';
+        ctx.fill();
+        ctx.strokeStyle = '#0f0';
+        ctx.stroke();
+
+        // Thrust effect
+        if(this.thrust > 0) {
+            ctx.beginPath();
+            ctx.moveTo(-this.size*1.5, 0);
+            ctx.lineTo(-this.size*2 - this.thrust*5, 0);
+            ctx.strokeStyle = `hsl(${Math.random()*40}, 100%, 50%)`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    update() {
+        // Apply gravity from planets
+        planets.forEach(planet => {
+            const dx = planet.x - this.x;
+            const dy = planet.y - this.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist < planet.gravityRadius) {
+                const force = planet.gravityStrength * (1 - dist/planet.gravityRadius);
+                this.x += (dx/dist) * force;
+                this.y += (dy/dist) * force;
+            }
+        });
+
+        // Energy management
+        if(this.thrust > 0) energy = Math.max(0, energy - 0.1);
+        else energy = Math.min(100, energy + 0.05);
+    }
+}
+
+class Planet {
+    constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.size = Math.random() * 80 + 40;
+        this.type = Math.random() < 0.1 ? 'blackhole' : 
+                   Math.random() < 0.3 ? 'ice' : 'normal';
+        this.gravityStrength = this.type === 'blackhole' ? 2 : 0.5;
+        this.gravityRadius = this.size * (this.type === 'blackhole' ? 10 : 5);
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        const gradient = ctx.createRadialGradient(
+            this.x, this.y, 0, this.x, this.y, this.size
+        );
+        
+        if(this.type === 'blackhole') {
+            gradient.addColorStop(0, '#000');
+            gradient.addColorStop(1, '#330066');
+        } else if(this.type === 'ice') {
+            gradient.addColorStop(0, '#00ffff');
+            gradient.addColorStop(1, '#0000ff');
+        } else {
+            gradient.addColorStop(0, '#964B00');
+            gradient.addColorStop(1, '#502000');
+        }
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+    }
+}
+
+// Initialize game objects
+const ship = new Spaceship();
+for(let i = 0; i < 5; i++) planets.push(new Planet());
+
+// Input handling
+let mouseX = width/2, mouseY = height/2;
+canvas.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+});
+
+// Game mechanics
+function spawnAsteroid() {
+    asteroids.push({
+        x: Math.random() < 0.5 ? -100 : width + 100,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 5,
+        vy: (Math.random() - 0.5) * 5,
+        size: Math.random() * 30 + 10
+    });
+}
+
+function spawnResource() {
+    resources.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        type: Math.random() < 0.5 ? 'energy' : 'repair',
+        size: 10
+    });
+}
+
+// Collision detection
+function checkCollisions() {
+    asteroids.forEach((asteroid, i) => {
+        const dx = ship.x - asteroid.x;
+        const dy = ship.y - asteroid.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        if(dist < ship.size + asteroid.size) {
+            health -= 5;
+            asteroids.splice(i, 1);
+            spawnExplosion(asteroid.x, asteroid.y);
+        }
+    });
+}
+
+function spawnExplosion(x, y) {
+    for(let i = 0; i < 20; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 5,
+            vy: (Math.random() - 0.5) * 5,
+            life: 1.0
+        });
+    }
+}
+
+// Game loop
+function update() {
+    // Update ship
+    const dx = mouseX - ship.x;
+    const dy = mouseY - ship.y;
+    ship.angle = Math.atan2(dy, dx);
+    ship.thrust = Math.hypot(dx, dy) > 50 ? 1 : 0;
+    if(ship.thrust) {
+        ship.x += Math.cos(ship.angle) * 3;
+        ship.y += Math.sin(ship.angle) * 3;
+    }
+    ship.update();
+
+    // Update asteroids
+    asteroids.forEach(asteroid => {
+        asteroid.x += asteroid.vx;
+        asteroid.y += asteroid.vy;
+    });
+
+    // Spawn objects
+    if(Math.random() < 0.05) spawnAsteroid();
+    if(Math.random() < 0.01) spawnResource();
+
+    // Update particles
+    particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+    });
+    particles = particles.filter(p => p.life > 0);
+
+    checkCollisions();
+    
+    // Update HUD
+    document.getElementById('score').textContent = Math.floor(score);
+    document.getElementById('energy').textContent = Math.floor(energy);
+    document.getElementById('healthFill').style.width = health + '%';
+
+    // Game over check
+    if(health <= 0) {
+        alert(`GAME OVER! Final Score: ${Math.floor(score)}`);
+        location.reload();
+    }
+
+    score += 0.1;
+}
+
+function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw starfield
+    for(let i = 0; i < 100; i++) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random()})`;
+        ctx.fillRect(Math.random()*width, Math.random()*height, 1, 1);
+    }
+
+    planets.forEach(planet => planet.draw());
+    ship.draw();
+    
+    // Draw asteroids
+    asteroids.forEach(asteroid => {
+        ctx.beginPath();
+        ctx.arc(asteroid.x, asteroid.y, asteroid.size, 0, Math.PI*2);
+        ctx.fillStyle = '#666';
+        ctx.fill();
+    });
+
+    // Draw particles
+    particles.forEach(p => {
+        ctx.fillStyle = `rgba(255, ${Math.random()*255}, 0, ${p.life})`;
+        ctx.fillRect(p.x, p.y, 3, 3);
+    });
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+// Start game
+gameLoop();
+
+// Resize handler
+window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>

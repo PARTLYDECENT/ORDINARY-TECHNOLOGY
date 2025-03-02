@@ -1,0 +1,138 @@
+// =====================
+// CLOUDS & PARTICLE STORM SCRIPT
+// =====================
+
+// --- Auto-spawn Particle Storm ---
+function autoSpawnParticleStorm() {
+  setInterval(() => {
+    spawnParticleStorm();
+  }, 20000); // Spawns a particle storm every 20 seconds
+}
+
+// Function to spawn a particle storm effect
+function spawnParticleStorm() {
+  const stormDuration = 10000; // Storm lasts for 10 seconds
+  const particleCount = 150;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+
+  // Generate random positions and colors for each particle
+  for (let i = 0; i < particleCount; i++) {
+    const i3 = i * 3;
+    positions[i3] = (Math.random() - 0.5) * 400;
+    positions[i3 + 1] = (Math.random() - 0.5) * 400 + 100; // elevated a bit
+    positions[i3 + 2] = (Math.random() - 0.5) * 400;
+
+    colors[i3] = Math.random();
+    colors[i3 + 1] = Math.random();
+    colors[i3 + 2] = Math.random();
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 3,
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 1
+  });
+
+  const particles = new THREE.Points(geometry, material);
+  // Randomly position the storm within the scene
+  particles.position.set(Math.random() * 800 - 400, 50, Math.random() * 800 - 400);
+  GAME.scene.add(particles);
+
+  const startTime = Date.now();
+
+  // Animate the particle storm (rotate and slightly move particles)
+  function animateStorm() {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > stormDuration) {
+      // Fade out and remove particles
+      GAME.scene.remove(particles);
+      geometry.dispose();
+      material.dispose();
+      return;
+    }
+
+    particles.rotation.y += 0.005;
+
+    // Optionally, update positions to create a swirling effect:
+    const positions = geometry.attributes.position.array;
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i] += Math.sin(Date.now() * 0.001 + i) * 0.05;
+      positions[i + 1] += Math.cos(Date.now() * 0.001 + i) * 0.05;
+    }
+    geometry.attributes.position.needsUpdate = true;
+
+    requestAnimationFrame(animateStorm);
+  }
+  animateStorm();
+}
+
+// --- Auto-spawn Clouds ---
+
+// Load the cloud texture before spawning clouds
+async function loadCloudTexture() {
+  return new Promise((resolve) => {
+    const textureLoader = new THREE.TextureLoader();
+    GAME.cloudTexture = textureLoader.load('cloud.png', () => {
+      resolve();
+    });
+  });
+}
+
+function autoSpawnClouds() {
+  setInterval(() => {
+    spawnCloud();
+  }, 15000); // Spawns a cloud every 15 seconds
+}
+
+// Function to spawn a drifting cloud sprite
+function spawnCloud() {
+  const cloudMaterial = new THREE.SpriteMaterial({
+    map: GAME.cloudTexture,
+    transparent: true,
+    opacity: 0.8,
+    blending: THREE.NormalBlending
+  });
+
+  const cloudSprite = new THREE.Sprite(cloudMaterial);
+  // Randomize scale (cloud size) and initial position
+  const scale = 100 + Math.random() * 50;
+  cloudSprite.scale.set(scale, scale, 1);
+
+  // Spawn clouds high in the sky with random X/Z positions
+  cloudSprite.position.set(Math.random() * 800 - 400, 250 + Math.random() * 50, Math.random() * 800 - 400);
+  GAME.scene.add(cloudSprite);
+
+  // Animate cloud drifting slowly (and remove when off-screen)
+  function animateCloud() {
+    // Drift to the right slowly
+    cloudSprite.position.x += 0.05;
+    // Optional: slight vertical bobbing effect
+    cloudSprite.position.y += Math.sin(Date.now() * 0.001) * 0.02;
+    
+    // Remove cloud if it drifts too far
+    if (cloudSprite.position.x > 500) {
+      GAME.scene.remove(cloudSprite);
+      cloudMaterial.dispose();
+      return;
+    }
+    requestAnimationFrame(animateCloud);
+  }
+  animateCloud();
+}
+
+// --- Initialize Effects on DOMContentLoaded ---
+document.addEventListener("DOMContentLoaded", () => {
+  // Load cloud texture then start cloud spawning
+  loadCloudTexture().then(() => {
+    autoSpawnClouds();
+  });
+  // Start auto-spawning particle storms immediately
+  autoSpawnParticleStorm();
+});

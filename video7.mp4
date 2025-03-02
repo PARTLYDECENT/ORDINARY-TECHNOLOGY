@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alien Video Player</title>
+    <style>
+        body {
+            margin: 0;
+            background: radial-gradient(circle, #0d0d2b, #050018);
+            color: #00ffff;
+            font-family: 'Orbitron', sans-serif;
+            overflow-y: auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #matrixCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        header {
+            width: 100%;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .back-button,
+        .control-panel button,
+        .comments-section button,
+        .speed-panel button {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            background: none;
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .back-button:hover,
+        .control-panel button:hover,
+        .comments-section button:hover,
+        .speed-panel button:hover {
+            background: rgba(0, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .back-button:active,
+        .control-panel button:active,
+        .speed-panel button:active {
+            transform: scale(0.95);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+            text-shadow: 0 0 15px #00ffff, 0 0 30px #ff00ff;
+        }
+
+        main {
+            width: 90%;
+            max-width: 1000px;
+            margin-bottom: 20px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border: 4px solid #00ffff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .video-container video {
+            width: 100%;
+            display: block;
+        }
+
+        .control-panel {
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-around;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+        }
+
+        .like-counter {
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .comments-section {
+            width: 90%;
+            max-width: 1000px;
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+        }
+
+        .comments-section textarea {
+            width: 100%;
+            height: 80px;
+            background: #111;
+            color: #00ffff;
+            border: 2px solid #00ffff;
+            padding: 5px;
+            resize: vertical;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .comments-section button {
+            margin-top: 10px;
+            background: none;
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            border-radius: 5px;
+            cursor: pointer;
+            padding: 5px 10px;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .comments-section button:hover {
+            background: rgba(0, 255, 255, 0.2);
+        }
+
+        .video-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding: 5px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 5px;
+        }
+
+        .video-title {
+            font-size: 1.2rem;
+            color: #ff00ff;
+            text-shadow: 0 0 5px #00ffff;
+        }
+
+        #commentsList {
+            list-style-type: none;
+            padding: 0;
+            margin-top: 15px;
+        }
+
+        #commentsList li {
+            background: rgba(0, 0, 0, 0.5);
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #00ffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .delete-btn {
+            background: none;
+            border: 1px solid #ff3366;
+            color: #ff3366;
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 2px 5px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+
+        .delete-btn:hover {
+            background: rgba(255, 51, 102, 0.2);
+        }
+
+        .comment-text {
+            flex-grow: 1;
+        }
+
+        .video-navigation {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .video-counter {
+            font-size: 1rem;
+            color: #ff00ff;
+        }
+
+        .speed-metrics {
+            width: 90%;
+            max-width: 1000px;
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+        }
+
+        .speed-panel {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .speed-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ffff;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            color: #ff00ff;
+            text-shadow: 0 0 5px #00ffff;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #00ffff;
+        }
+
+        .speed-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .current-speed {
+            font-size: 1.2rem;
+            color: #ff00ff;
+            margin-left: 10px;
+        }
+
+        #progressBar {
+            height: 20px;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ffff;
+            border-radius: 10px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        #progressFill {
+            height: 100%;
+            background: linear-gradient(to right, #00ffff, #ff00ff);
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="matrixCanvas"></canvas>
+    <header>
+        <button class="back-button" onclick="goBack()">BACK</button>
+        <h1>ALIEN VIDEO PLAYER</h1>
+    </header>
+    <main>
+        <div class="video-container">
+            <video id="cyclicVideo" autoplay loop controls>
+                <source src="video1.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        <div class="video-info">
+            <div class="video-title" id="videoTitle">Video 1</div>
+            <div class="video-counter">
+                <span id="videoCounter">1</span> / 20
+            </div>
+        </div>
+        <div class="control-panel">
+            <div class="video-navigation">
+                <button id="prevVideo">Previous</button>
+                <button id="nextVideo">Next</button>
+            </div>
+            <div class="like-section">
+                <button id="likeButton">Like</button>
+                <div class="like-counter">Likes: <span id="likeCount">0</span></div>
+            </div>
+        </div>
+    </main>
+    <section class="speed-metrics">
+        <h2>Video Speed Metrics</h2>
+        <div class="speed-indicator">
+            Current Speed: <span class="current-speed" id="currentSpeed">1.0x</span>
+        </div>
+        <div class="speed-panel">
+            <button data-speed="0.5">0.5x</button>
+            <button data-speed="0.75">0.75x</button>
+            <button data-speed="1.0" class="active">1.0x</button>
+            <button data-speed="1.25">1.25x</button>
+            <button data-speed="1.5">1.5x</button>
+            <button data-speed="1.75">1.75x</button>
+            <button data-speed="2.0">2.0x</button>
+        </div>
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <div class="speed-stats">
+            <div class="stat-box">
+                <div class="stat-value" id="timeSaved">0:00</div>
+                <div class="stat-label">Time Saved This Video</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="totalTimeSaved">0:00</div>
+                <div class="stat-label">Total Time Saved</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="averageSpeed">1.0x</div>
+                <div class="stat-label">Average Speed</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="efficiencyScore">100%</div>
+                <div class="stat-label">Viewing Efficiency</div>
+            </div>
+        </div>
+    </section>
+    <section class="comments-section">
+        <h2>Comments</h2>
+        <textarea id="commentInput" placeholder="Leave a comment..."></textarea>
+        <button id="postCommentBtn">Post</button>
+        <ul id="commentsList"></ul>
+    </section>
+
+    <script>
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+
+        const drops = [];
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#00ff00';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = String.fromCharCode(Math.random() * 128);
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+
+                drops[i]++;
+            }
+        }
+
+        setInterval(drawMatrix, 33);
+        const videoSources = Array.from({
+            length: 20
+        }, (_, i) => `video${i + 1}.mp4`);
+        let currentVideoIndex = 0;
+        const cyclicVideo = document.getElementById("cyclicVideo");
+        const videoTitle = document.getElementById("videoTitle");
+        const videoCounter = document.getElementById("videoCounter");
+        const likeButton = document.getElementById("likeButton");
+        const likeCountSpan = document.getElementById("likeCount");
+        const commentsList = document.getElementById("commentsList");
+        const commentInput = document.getElementById("commentInput");
+        const postCommentBtn = document.getElementById("postCommentBtn");
+        const currentSpeedDisplay = document.getElementById("currentSpeed");
+        const progressFill = document.getElementById("progressFill");
+        const timeSavedDisplay = document.getElementById("timeSaved");
+        const totalTimeSavedDisplay = document.getElementById("totalTimeSaved");
+        const averageSpeedDisplay = document.getElementById("averageSpeed");
+        const efficiencyScoreDisplay = document.getElementById("efficiencyScore");
+
+        // Initialize data structure for storing likes, comments, and speed metrics
+        let videoData = JSON.parse(localStorage.getItem("alienVideoData")) || Array.from({
+            length: 20
+        }, (_, i) => ({
+            id: i + 1,
+            likes: 0,
+            comments: [],
+            liked: false
+        }));
+
+        // Speed metrics data
+        let speedMetrics = JSON.parse(localStorage.getItem("speedMetrics")) || {
+            totalTimeSaved: 0,
+            speedSamples: [],
+            currentVideoTimeSaved: 0,
+            currentSpeed: 1.0,
+            startTime: Date.now(),
+            lastUpdateTime: Date.now(),
+            videoStartedAt: 0,
+            videoWatched: 0
+        };
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem("alienVideoData", JSON.stringify(videoData));
+        }
+
+        function saveSpeedMetrics() {
+            localStorage.setItem("speedMetrics", JSON.stringify(speedMetrics));
+        }
+
+        // Update UI with current video data
+        function updateUI() {
+            const currentVideo = videoData[currentVideoIndex];
+
+            // Update video source and title
+            cyclicVideo.src = videoSources[currentVideoIndex];
+            cyclicVideo.load();
+            cyclicVideo.play();
+
+            videoTitle.textContent = `Video ${currentVideo.id}`;
+            videoCounter.textContent = currentVideo.id;
+
+            // Update likes
+            likeCountSpan.textContent = currentVideo.likes;
+
+            // Check if the video was already liked
+            if (currentVideo.liked) {
+                likeButton.disabled = true;
+                likeButton.style.opacity = "0.5";
+            } else {
+                likeButton.disabled = false;
+                likeButton.style.opacity = "1";
+            }
+
+            // Update comments
+            commentsList.innerHTML = '';
+            currentVideo.comments.forEach((comment, index) => {
+                const commentItem = document.createElement("li");
+
+                const commentText = document.createElement("div");
+                commentText.className = "comment-text";
+                commentText.textContent = comment;
+                commentItem.appendChild(commentText);
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.className = "delete-btn";
+                deleteBtn.textContent = "Delete";
+                deleteBtn.onclick = () => {
+                    const password = prompt("Enter the developer password to delete this comment:");
+                    if (password === "yourPassword") { // Replace 'yourPassword' with the actual developer password
+                        currentVideo.comments.splice(index, 1);
+                        saveData();
+                        updateUI();
+                    } else {
+                        alert("Incorrect password. You cannot delete this comment.");
+                    }
+                };
+                commentItem.appendChild(deleteBtn);
+
+                commentsList.appendChild(commentItem);
+            });
+
+            // Reset speed metrics for the new video
+            resetVideoSpeedMetrics();
+        }
+
+        // Initialize
+        updateUI();
+        initializeSpeedControls();
+
+        // Previous video button
+        document.getElementById("prevVideo").addEventListener("click", function() {
+            currentVideoIndex = (currentVideoIndex - 1 + videoSources.length) % videoSources.length;
+            updateUI();
+        });
+
+        // Next video button
+        document.getElementById("nextVideo").addEventListener("click", function() {
+            currentVideoIndex = (currentVideoIndex + 1) % videoSources.length;
+            updateUI();
+        });
+
+        // Like button
+        likeButton.addEventListener("click", function() {
+            const currentVideo = videoData[currentVideoIndex];
+            currentVideo.likes += 1;
+            currentVideo.liked = true;
+            saveData();
+            updateUI();
+        });
+
+        // Post comment button
+        postCommentBtn.addEventListener("click", function() {
+            const commentText = commentInput.value.trim();
+            if (commentText === "") return;
+
+            const currentVideo = videoData[currentVideoIndex];
+            currentVideo.comments.push(commentText);
+            saveData();
+            updateUI();
+            commentInput.value = '';
+        });
+
+        // Back button function
+        function goBack() {
+            window.history.back();
+        }
+
+        // Speed control functions
+        function initializeSpeedControls() {
+            const speedButtons = document.querySelectorAll('.speed-panel button');
+            
+            // Set initial speed
+            cyclicVideo.playbackRate = speedMetrics.currentSpeed;
+            currentSpeedDisplay.textContent = speedMetrics.currentSpeed + 'x';
+            
+            // Set active button
+            speedButtons.forEach(button => {
+                if (parseFloat(button.dataset.speed) === speedMetrics.currentSpeed) {
+                    button.classList.add('active');
+                }
+                
+                button.addEventListener('click', function() {
+                    const speed = parseFloat(this.dataset.speed);
+                    setVideoSpeed(speed);
+                    
+                    // Update active button
+                    speedButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+            
+            // Update speed metrics every second
+            setInterval(updateSpeedMetrics, 1000);
+            
+            // Track progress
+            cyclicVideo.addEventListener('timeupdate', updateProgress);
+            
+            // Reset metrics when video ends and loops
+            cyclicVideo.addEventListener('ended', resetVideoSpeedMetrics);
+        }
+        
+        function setVideoSpeed(speed) {
+            // Add time watched at current speed before changing
+            updateWatchedTime();
+            
+            // Update speed
+            speedMetrics.currentSpeed = speed;
+            cyclicVideo.playbackRate = speed;
+            currentSpeedDisplay.textContent = speed + 'x';
+            
+            // Save to localStorage
+            saveSpeedMetrics();
+        }
+        
+        function updateWatchedTime() {
+            const now = Date.now();
+            const timeElapsed = (now - speedMetrics.lastUpdateTime) / 1000; // in seconds
+            
+            // Only count if video was actually playing
+            if (!cyclicVideo.paused) {
+                speedMetrics.videoWatched += timeElapsed;
+                
+                // Calculate time saved
+                if (speedMetrics.currentSpeed > 1.0) {
+                    const realTimePassed = timeElapsed;
+                    const videoTimePassed = timeElapsed * speedMetrics.currentSpeed;
+                    const timeSaved = videoTimePassed - realTimePassed;
+                    
+                    speedMetrics.currentVideoTimeSaved += timeSaved;
+                    speedMetrics.totalTimeSaved += timeSaved;
+                }
+                
+                // Add speed sample for average calculation
+                speedMetrics.speedSamples.push({
+                    speed: speedMetrics.currentSpeed,
+                    duration: timeElapsed
+                });
+            }
+            
+            speedMetrics.lastUpdateTime = now;
+        }
+        
+        function updateSpeedMetrics() {
+            // Update tracked time
+            updateWatchedTime();
+            
+            // Format time saved displays
+            timeSavedDisplay.textContent = formatTime(speedMetrics.currentVideoTimeSaved);
+            totalTimeSavedDisplay.textContent = formatTime(speedMetrics.totalTimeSaved);
+            
+            // Calculate average speed
+            let totalDuration = 0;
+            let speedWeightedSum = 0;
+            
+            speedMetrics.speedSamples.forEach(sample => {
+                totalDuration += sample.duration;
+                speedWeightedSum += sample.speed * sample.duration;
+            });
+            
+            const avgSpeed = totalDuration > 0 ? speedWeightedSum / totalDuration : 1.0;
+            averageSpeedDisplay.textContent = avgSpeed.toFixed(2) + 'x';
+            
+            // Calculate efficiency score (how much faster than 1x)
+            const efficiency = avgSpeed * 100;
+            efficiencyScoreDisplay.textContent = efficiency.toFixed(0) + '%';
+            
+            // Save metrics
+            saveSpeedMetrics();
+        }
+        
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        function updateProgress() {
+            // Update progress bar
+            const progress = (cyclicVideo.currentTime / cyclicVideo.duration) * 100;
+            progressFill.style.width = progress + '%';
+        }
+        
+        function resetVideoSpeedMetrics() {
+            // Save total time first
+            updateWatchedTime();
+            const savedTotalTime = speedMetrics.totalTimeSaved;
+            
+            // Reset video-specific metrics
+            speedMetrics.currentVideoTimeSaved = 0;
+            speedMetrics.videoStartedAt = cyclicVideo.currentTime;
+            speedMetrics.lastUpdateTime = Date.now();
+            speedMetrics.videoWatched = 0;
+            speedMetrics.speedSamples = [];
+            
+            // Keep the total time saved across all videos
+            speedMetrics.totalTimeSaved = savedTotalTime;
+            
+            // Update UI
+            timeSavedDisplay.textContent = formatTime(0);
+            averageSpeedDisplay.textContent = speedMetrics.currentSpeed.toFixed(1) + 'x';
+            
+            saveSpeedMetrics();
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+
+</html>

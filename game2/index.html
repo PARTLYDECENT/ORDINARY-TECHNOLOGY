@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BabylonJS FPS Game</title>
+  <style>
+    html, body {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    #renderCanvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    /* Crosshair styling */
+    .crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      pointer-events: none;
+      transition: transform 0.1s ease-out, filter 0.1s ease-out;
+      filter: brightness(1);
+    }
+    .crosshair-button {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      padding: 10px;
+      background: black;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 5px;
+    }
+    /* UI Elements */
+    #ammoCounter, #playerHealthCounter {
+      position: fixed;
+      top: 10px;
+      padding: 5px 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 20px;
+      border-radius: 5px;
+    }
+    #ammoCounter { right: 10px; }
+    #playerHealthCounter { left: 10px; }
+    /* Game Over Screen */
+    #gameOver {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      font-size: 48px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+  </style>
+  <!-- BabylonJS Libraries -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+</head>
+<body>
+  <!-- UI -->
+  <div id="ammoCounter">30/30</div>
+  <div id="playerHealthCounter">Health: 100</div>
+  <div id="gameOver">Game Over</div>
+  <canvas id="renderCanvas"></canvas>
+  <!-- Crosshair and crosshair switch button -->
+  <img id="crosshair" src="crosshairs/crosshair1.png" class="crosshair">
+  <button id="cycleCrosshair" class="crosshair-button">Switch Crosshair</button>
+
+  <!-- Crosshair & UI Logic -->
+  <script>
+    const crosshairs = [
+      "crosshair1.png",
+      "crosshair2.png",
+      "crosshair3.png",
+      "crosshair4.png",
+      "crosshair5.png",
+      "crosshair6.png",
+      "crosshair7.png",
+      "crosshair8.png",
+      "crosshair9.png",
+      "crosshair10.png"
+    ];
+    let currentCrosshairIndex = 0;
+    const crosshairImage = document.getElementById("crosshair");
+    const cycleButton = document.getElementById("cycleCrosshair");
+    cycleButton.addEventListener("click", () => {
+      currentCrosshairIndex = (currentCrosshairIndex + 1) % crosshairs.length;
+      crosshairImage.src = "crosshairs/" + crosshairs[currentCrosshairIndex];
+    });
+    // Sway effect on movement
+    let movementTimeout;
+    document.addEventListener("keydown", (event) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"].includes(event.key)) {
+        crosshairImage.style.transform = `translate(-50%, -50%) rotate(${Math.random()*4-2}deg) translate(${Math.random()*5-2.5}px, ${Math.random()*5-2.5}px) scale(1.2)`;
+        crosshairImage.style.filter = "brightness(1.5)";
+        clearTimeout(movementTimeout);
+        movementTimeout = setTimeout(() => {
+          crosshairImage.style.transform = "translate(-50%, -50%) scale(1)";
+          crosshairImage.style.filter = "brightness(1)";
+        }, 150);
+      }
+    });
+  </script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Get the audio element and the toggle button
+    const backgroundMusic = document.getElementById("backgroundMusic");
+    const musicToggle = document.getElementById("musicToggle");
+
+    // Set initial volume (optional)
+    backgroundMusic.volume = 0.5; // 50% volume
+
+    // Play the background music when the game starts
+    backgroundMusic.play();
+
+    // Toggle music on button click
+    musicToggle.addEventListener("click", () => {
+      if (backgroundMusic.paused) {
+        backgroundMusic.play();
+        musicToggle.innerText = "Pause Music";
+      } else {
+        backgroundMusic.pause();
+        musicToggle.innerText = "Play Music";
+      }
+    });
+
+    // Optional: Automatically play music when the user interacts with the page
+    document.addEventListener("click", () => {
+      if (backgroundMusic.paused) {
+        backgroundMusic.play();
+      }
+    }, { once: true });
+  });
+</script>
+  <!-- BabylonJS Game Code -->
+  <script>
+    // Get canvas and create engine
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+
+    // Global configuration and variables
+    const config = {
+      groundTexturePath: "ground-texture.png",
+      buildingTexturePath: "https://www.babylonjs-playground.com/textures/floor.png",
+      roofTexturePath: "https://www.babylonjs-playground.com/textures/roof.png",
+      barrierTexturePath: "https://www.babylonjs-playground.com/textures/crate.png",
+      skyboxPath: "https://www.babylonjs-playground.com/textures/skybox",
+      enemyTexturePath: "enemy.png",       // <-- Use your soldier-with-guns PNG here
+      healthPackTexturePath: "healthpack.png"// <-- Use your health pack PNG here
+    };
+    let playerHealth = 2000;
+    const PLAYER_DAMAGE = 20;
+    const ENEMY_DAMAGE = 10;
+    const ENEMY_HEALTH = 100;
+    const ENEMY_SHOOT_RANGE = 30;
+    const ENEMY_SHOOT_INTERVAL = 2000; // ms
+    let enemies = [];
+    let healthPacks = []; // Array to hold health pack objects
+    // Weapon/Ammo variables (if needed)
+    let currentWeapon = 0;
+    const weapons = ["rifle", "shotgun", "pistol"];
+    let weaponMesh = null;
+
+    function updatePlayerHealthUI() {
+      playerHealth = Math.max(0, playerHealth); // clamp to 0
+      document.getElementById("playerHealthCounter").innerText = "Health: " + playerHealth;
+    }
+
+  // Improved Muzzle Flash: Literal Flash of Light
+function createPlayerMuzzleFlash(scene, camera) {
+  // Calculate the flash position 1 unit in front of the camera.
+  const forwardRay = camera.getForwardRay(1);
+  const flashPosition = camera.position.add(forwardRay.direction.scale(1));
+
+  // Create a point light at the flash position.
+  const flashLight = new BABYLON.PointLight("flashLight", flashPosition, scene);
+  flashLight.diffuse = new BABYLON.Color3(1, 0.9, 0.2); // warm yellow color
+  flashLight.intensity = 20; // start bright
+  flashLight.range = 10;
+
+  // Animate the light's intensity: hold for a brief moment then drop to 0.
+  const intensityAnim = new BABYLON.Animation(
+    "intensityAnim", 
+    "intensity", 
+    60, 
+    BABYLON.Animation.ANIMATIONTYPE_FLOAT, 
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+  const keys = [
+    { frame: 0, value: 20 },
+    { frame: 2, value: 20 },
+    { frame: 4, value: 0 }
+  ];
+  intensityAnim.setKeys(keys);
+  flashLight.animations = [];
+  flashLight.animations.push(intensityAnim);
+
+  // Start the animation and dispose the light when done.
+  scene.beginAnimation(flashLight, 0, 4, false, 1, () => { flashLight.dispose(); });
+
+  // Optional: Add a particle system for extra muzzle flash effect.
+  const particleSystem = new BABYLON.ParticleSystem("flashParticles", 100, scene);
+  particleSystem.particleTexture = new BABYLON.Texture("textures/flare.jpg", scene);
+  particleSystem.emitter = flashPosition; // use the same position as the flash light
+  particleSystem.minEmitBox = new BABYLON.Vector3(0, 0, 0);
+  particleSystem.maxEmitBox = new BABYLON.Vector3(0, 0, 0);
+  particleSystem.color1 = new BABYLON.Color4(1, 0.9, 0.2, 1);
+  particleSystem.color2 = new BABYLON.Color4(1, 0.9, 0.2, 0.5);
+  particleSystem.minSize = 0.2;
+  particleSystem.maxSize = 0.5;
+  particleSystem.minLifeTime = 0.05;
+  particleSystem.maxLifeTime = 0.1;
+  particleSystem.emitRate = 300;
+  particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
+  particleSystem.gravity = new BABYLON.Vector3(0, 0, 0);
+  particleSystem.direction1 = new BABYLON.Vector3(-1, 1, -1);
+  particleSystem.direction2 = new BABYLON.Vector3(1, -1, 1);
+  particleSystem.minAngularSpeed = 0;
+  particleSystem.maxAngularSpeed = Math.PI;
+  particleSystem.start();
+
+  // Stop and dispose the particle system after a short duration.
+  setTimeout(() => {
+    particleSystem.stop();
+    particleSystem.dispose();
+  }, 100);
+}
+
+
+    // Enemy shot effect: red projectile moving from enemy to player.
+    function createEnemyShotEffect(scene, enemy, camera) {
+      let shot = BABYLON.MeshBuilder.CreateSphere("enemyShot", { diameter: 0.2 }, scene);
+      let mat = new BABYLON.StandardMaterial("enemyShotMat", scene);
+      mat.emissiveColor = new BABYLON.Color3(1, 0, 0);
+      mat.alpha = 1;
+      shot.material = mat;
+      shot.position = enemy.mesh.position.clone();
+      let animPos = new BABYLON.Animation("enemyShotAnim", "position", 60, BABYLON.Animation.ANIMATIONTYPE_VECTOR3, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+      let keysPos = [];
+      keysPos.push({ frame: 0, value: enemy.mesh.position.clone() });
+      keysPos.push({ frame: 15, value: camera.position.clone() });
+      animPos.setKeys(keysPos);
+      shot.animations.push(animPos);
+      scene.beginAnimation(shot, 0, 15, false, 1, () => { shot.dispose(); });
+    }
+    // --- End Shot Animation Functions ---
+
+    // --- Health Pack Function ---
+    function createHealthPack(scene, x, y, z) {
+      let pack = BABYLON.MeshBuilder.CreatePlane("healthPack", { width: 1, height: 1 }, scene);
+      pack.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+      let packMat = new BABYLON.StandardMaterial("healthPackMat", scene);
+      packMat.diffuseTexture = new BABYLON.Texture(config.healthPackTexturePath, scene);
+      packMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+      packMat.backFaceCulling = false;
+      pack.material = packMat;
+      pack.position = new BABYLON.Vector3(x, y, z);
+      return pack;
+    }
+    // --- End Health Pack Function ---
+
+    const createScene = async function() {
+      const scene = new BABYLON.Scene(engine);
+
+      // Camera (player)
+      const camera = new BABYLON.FreeCamera("FPSCamera", new BABYLON.Vector3(0, 2, -10), scene);
+      camera.attachControl(canvas, true);
+      camera.speed = 0.5;
+      camera.angularSensibility = 1000;
+      camera.applyGravity = true;
+      camera.checkCollisions = true;
+      camera.ellipsoid = new BABYLON.Vector3(1, 1, 1);
+      camera.keysUp = [87];
+      camera.keysDown = [83];
+      camera.keysLeft = [65];
+      camera.keysRight = [68];
+
+      // Store normal camera height for crouching
+      const normalHeight = camera.position.y;
+      let isCrouching = false;
+      // Crouch functionality: Hold "C" to crouch.
+      scene.onKeyboardObservable.add((kbInfo) => {
+        if (kbInfo.type === BABYLON.KeyboardEventTypes.KEYDOWN) {
+          if (kbInfo.event.key.toLowerCase() === "c" && !isCrouching) {
+            isCrouching = true;
+            camera.position.y = normalHeight - 1;
+            camera.ellipsoid = new BABYLON.Vector3(1, 0.5, 1);
+          }
+        } else if (kbInfo.type === BABYLON.KeyboardEventTypes.KEYUP) {
+          if (kbInfo.event.key.toLowerCase() === "c") {
+            isCrouching = false;
+            camera.position.y = normalHeight;
+            camera.ellipsoid = new BABYLON.Vector3(1, 1, 1);
+          }
+        }
+      });
+// BabylonJS Flashlight Script
+function addFlashlight(scene, camera) {
+    let flashlightOn = false;
+    
+    // Create a spotlight to act as a flashlight
+    const flashlight = new BABYLON.SpotLight("flashlight", 
+        camera.position, 
+        camera.getForwardRay().direction, 
+        Math.PI / 6, // Beam angle
+        10, // Intensity falloff
+        scene
+    );
+    flashlight.intensity = 0; // Initially off
+    flashlight.diffuse = new BABYLON.Color3(1, 1, 0.8); // Warm light color
+    flashlight.specular = new BABYLON.Color3(1, 1, 1);
+
+    // Attach the flashlight to the camera
+    scene.registerBeforeRender(() => {
+        flashlight.position = camera.position;
+        flashlight.direction = camera.getForwardRay().direction;
+    });
+
+    // Toggle flashlight on key press (L key)
+    window.addEventListener("keydown", (event) => {
+        if (event.key.toLowerCase() === "l") {
+            flashlightOn = !flashlightOn;
+            flashlight.intensity = flashlightOn ? 10 : 0;
+            console.log("Flashlight toggled: " + (flashlightOn ? "ON" : "OFF"));
+        }
+    });
+
+    return flashlight;
+}
+
+// Call this function in your scene setup after creating the camera
+// Example: addFlashlight(scene, camera);
+
+// Create a Hemispheric Light (Soft Global Lighting)
+const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+hemiLight.intensity = 0.3; // Dim the global light for a darker atmosphere
+hemiLight.groundColor = new BABYLON.Color3(0.1, 0, 0.1); // Dark purple for a spooky ground tone
+hemiLight.diffuse = new BABYLON.Color3(0.2, 0.2, 0.3); // Cool, desaturated blue for a night feel
+
+// Create a Point Light (Dynamic Light Source)
+const pointLight = new BABYLON.PointLight("pointLight", new BABYLON.Vector3(0, 5, 0), scene);
+pointLight.intensity = 1.0; // Slightly dimmer for a more eerie effect
+pointLight.diffuse = new BABYLON.Color3(0.8, 0.4, 0.4); // Reddish tint for a sinister glow
+pointLight.specular = new BABYLON.Color3(0.8, 0.4, 0.4); // Matching specular for consistency
+pointLight.range = 10; // Limit the range to create pockets of light and shadow
+pointLight.shadowEnabled = true; // Enable shadows for a more dramatic effect
+
+// Add fog for a creepy, mysterious atmosphere
+scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+scene.fogDensity = 0.02; // Adjust density to control how thick the fog appears
+scene.fogColor = new BABYLON.Color3(0.1, 0.1, 0.2); // Dark blue fog for a nighttime feel
+
+// Optional: Add a flickering effect to the point light for a horror vibe
+let flickerIntensity = 1.0;
+scene.registerBeforeRender(() => {
+    flickerIntensity = 0.8 + Math.random() * 0.4; // Randomize intensity for flickering
+    pointLight.intensity = flickerIntensity;
+});
+
+
+      // Skybox
+      try {
+        const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 10000.0 }, scene);
+        const skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+        skyboxMaterial.backFaceCulling = false;
+        skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture(config.skyboxPath, scene);
+        skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+        skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+        skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+        skybox.material = skyboxMaterial;
+      } catch (error) {
+        console.log("Error loading skybox:", error);
+        scene.clearColor = new BABYLON.Color3(0.4, 0.6, 0.8);
+      }
+
+      // Ground
+      try {
+        const groundSize = 500;
+        const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: groundSize, height: groundSize }, scene);
+        const groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
+        const groundTexture = new BABYLON.Texture(config.groundTexturePath, scene);
+        groundTexture.uScale = 300;
+        groundTexture.vScale = 300;
+        groundMaterial.diffuseTexture = groundTexture;
+        groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+        ground.material = groundMaterial;
+        ground.checkCollisions = true;
+      } catch (error) {
+        console.log("Error loading ground texture:", error);
+        const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 200000, height: 200000 }, scene);
+        const groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
+        groundMaterial.diffuseColor = new BABYLON.Color3(0.2, 0.6, 0.2);
+        ground.material = groundMaterial;
+        ground.checkCollisions = true;
+      }
+
+      // Create environment elements
+      createEnvironment(scene);
+
+      // Create enemy NPCs (using enemy sprites) and add them to the global enemies array
+      createEnemy(scene, 10, 1, 10);
+      createEnemy(scene, -10, 1, -10);
+      createEnemy(scene, 15, 1, -15);
+
+      // Create a couple of health packs on the map
+      healthPacks.push(createHealthPack(scene, 5, 1, 5));
+      healthPacks.push(createHealthPack(scene, -5, 1, -5));
+	   healthPacks.push(createHealthPack(scene, 7, 1, 7));
+      healthPacks.push(createHealthPack(scene, -8, 1, -8));
+
+  // Global variable to hold the current weapon transform node.
+let currentWeapon = null;
+let gui = null; // dat.GUI instance
+
+// Function to load a weapon model given its file name.
+function loadWeaponModel(fileName, callback) {
+  BABYLON.SceneLoader.ImportMesh("", "models/", fileName, scene, function(meshes) {
+    if (meshes.length === 0) {
+      console.error("No meshes found in", fileName);
+      return;
+    }
+    // Create a transform node to group the weapon meshes.
+    const weaponRoot = new BABYLON.TransformNode("weaponRoot", scene);
+    meshes.forEach(mesh => mesh.setParent(weaponRoot));
+    callback(weaponRoot);
+  }, null, function(error) {
+    console.error("Failed to load weapon model:", error);
+  });
+}
+
+// Function to create (or recreate) the dat.GUI controls for the current weapon.
+function createWeaponGUI() {
+  // Destroy the previous GUI if it exists.
+  if (gui) {
+    gui.destroy();
+    gui = null;
+  }
+  gui = new dat.GUI();
+  const weaponFolder = gui.addFolder('Weapon Transform');
+  
+  // Create parameters object from current weapon's transform.
+  const params = {
+    posX: currentWeapon.position.x,
+    posY: currentWeapon.position.y,
+    posZ: currentWeapon.position.z,
+    rotX: currentWeapon.rotation.x,
+    rotY: currentWeapon.rotation.y,
+    rotZ: currentWeapon.rotation.z,
+    scale: currentWeapon.scaling.x // assuming uniform scaling
+  };
+  
+  // Add position controllers.
+  weaponFolder.add(params, 'posX', -5, 5).onChange(value => { currentWeapon.position.x = value; });
+  weaponFolder.add(params, 'posY', -5, 5).onChange(value => { currentWeapon.position.y = value; });
+  weaponFolder.add(params, 'posZ', -5, 5).onChange(value => { currentWeapon.position.z = value; });
+  
+  // Add rotation controllers.
+  weaponFolder.add(params, 'rotX', -Math.PI, Math.PI).onChange(value => { currentWeapon.rotation.x = value; });
+  weaponFolder.add(params, 'rotY', -Math.PI, Math.PI).onChange(value => { currentWeapon.rotation.y = value; });
+  weaponFolder.add(params, 'rotZ', -Math.PI, Math.PI).onChange(value => { currentWeapon.rotation.z = value; });
+  
+  // Add scale controller.
+  weaponFolder.add(params, 'scale', 0.1, 2).onChange(value => { 
+    currentWeapon.scaling.set(value, value, value); 
+  });
+  
+  weaponFolder.open();
+}
+
+// Function to switch the current weapon model.
+function switchWeapon(weaponNumber) {
+  // Dispose the current weapon if one exists.
+  if (currentWeapon) {
+    currentWeapon.dispose();
+    currentWeapon = null;
+  }
+  // Construct the filename (e.g., "weapon1.glb").
+  const fileName = `weapon${weaponNumber}.glb`;
+  loadWeaponModel(fileName, function(weaponRoot) {
+    // Attach the weapon to the camera.
+    weaponRoot.setParent(camera);
+    // Set default transform values.
+    weaponRoot.position.set(0.3, -0.3, 1.5);
+    weaponRoot.scaling.set(0.5, 0.5, 0.5);
+    weaponRoot.rotationQuaternion = null;
+    // Default rotation: adjust these numbers as needed.
+    weaponRoot.rotation.set(Math.PI / 0.5, -1.5, -6.3);
+    currentWeapon = weaponRoot;
+    console.log(`Loaded ${fileName} successfully!`);
+    
+    // Create GUI controls for the current weapon.
+    createWeaponGUI();
+  });
+}
+
+// Load the default weapon (weapon1) on startup.
+switchWeapon(1);
+
+// Listen for key presses to switch weapons.
+window.addEventListener("keydown", (event) => {
+  const key = event.key;
+  if (["1", "2", "3"].includes(key)) {
+    switchWeapon(key);
+  }
+});
+
+
+     // --- Enable Physics ---
+const gravityVector = new BABYLON.Vector3(0, -9.81, 0);
+const physicsPlugin = new BABYLON.CannonJSPlugin(); // You can also use AmmoJSPlugin if preferred
+scene.enablePhysics(gravityVector, physicsPlugin);
+
+// Create the shot sound once for reuse.
+const shotSound = new BABYLON.Sound("shot", "sounds/shot.mp3", scene, null, { loop: false, autoplay: false });
+
+// Variable to track the auto-fire interval.
+let shootIntervalID = null;
+
+scene.onPointerObservable.add((pointerInfo) => {
+    switch (pointerInfo.type) {
+        case BABYLON.PointerEventTypes.POINTERDOWN:
+            if (pointerInfo.event.button === 0) { // Left click
+                // Fire immediately.
+                shoot();
+                createPlayerMuzzleFlash(scene, camera);
+                // Begin semi-auto fire if not already firing.
+                if (!shootIntervalID) {
+                    shootIntervalID = setInterval(() => {
+                        shoot();
+                        createPlayerMuzzleFlash(scene, camera);
+                    }, 200); // Adjust the interval (in ms) to control fire rate.
+                }
+            }
+            break;
+        case BABYLON.PointerEventTypes.POINTERUP:
+            if (pointerInfo.event.button === 0) {
+                // Stop semi-auto fire when the button is released.
+                if (shootIntervalID) {
+                    clearInterval(shootIntervalID);
+                    shootIntervalID = null;
+                }
+            }
+            break;
+    }
+});
+
+function shoot() {
+    console.log("Player shooting");
+    
+    // Play the shot sound.
+    shotSound.play();
+
+    // Bullet properties
+    const bulletSpeed = 50;
+    const bulletLifetime = 3; // Bullet exists for 3 seconds
+    const bulletSize = 0.1;   // Smaller bullet for improved realism
+
+    // Create bullet mesh at the camera's position.
+    const bullet = BABYLON.MeshBuilder.CreateSphere("bullet", { diameter: bulletSize }, scene);
+    bullet.position = camera.position.clone();
+
+    // More realistic bullet material: dark, metallic look.
+    const bulletMat = new BABYLON.StandardMaterial("bulletMat", scene);
+    bulletMat.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2); // Dark grey
+    bulletMat.specularColor = new BABYLON.Color3(0.9, 0.9, 0.9);  // Shiny highlight
+    bullet.material = bulletMat;
+
+    // Enable physics for the bullet.
+    bullet.physicsImpostor = new BABYLON.PhysicsImpostor(
+        bullet, 
+        BABYLON.PhysicsImpostor.SphereImpostor, 
+        { mass: 0.1, restitution: 0 }, 
+        scene
+    );
+
+    // Set bullet velocity in the direction the camera is facing.
+    const forwardVector = camera.getForwardRay().direction.scale(bulletSpeed);
+    bullet.physicsImpostor.setLinearVelocity(forwardVector);
+
+    // Collision detection: check for enemy hits.
+    bullet.registerBeforeRender(() => {
+        enemies.forEach(enemy => {
+            if (bullet.intersectsMesh(enemy.mesh, false)) {
+                console.log("Bullet hit:", enemy.mesh.name);
+
+                // Reduce enemy health.
+                enemy.health -= PLAYER_DAMAGE;
+                console.log("Enemy health:", enemy.health);
+                if (enemy.health <= 0) {
+                    console.log("Enemy defeated!");
+                    enemy.mesh.dispose();
+                    enemies = enemies.filter(e => e.mesh !== enemy.mesh);
+                }
+
+                // Dispose the bullet on impact.
+                bullet.dispose();
+            }
+        });
+    });
+
+    // Dispose bullet after its lifetime expires to free memory.
+    setTimeout(() => {
+        if (bullet) bullet.dispose();
+    }, bulletLifetime * 1000);
+}
+
+
+
+      // Create sound objects (ensure the paths match your project structure)
+const enemyShotSound = new BABYLON.Sound("enemyShot", "sounds/enemyshot.mp3", scene, null, { loop: false, autoplay: false });
+const healthSound = new BABYLON.Sound("healthPickup", "sounds/health.mp3", scene, null, { loop: false, autoplay: false });
+
+// --- Enemy Shooting & Health Pack Pickup ---
+scene.registerBeforeRender(() => {
+    const currentTime = Date.now();
+    
+    // Enemy shooting
+    enemies.forEach(enemy => {
+        const distance = BABYLON.Vector3.Distance(enemy.mesh.position, camera.position);
+        if (distance < ENEMY_SHOOT_RANGE && (currentTime - enemy.lastShotTime > ENEMY_SHOOT_INTERVAL)) {
+            console.log(enemy.mesh.name, "shoots the player!");
+            enemy.lastShotTime = currentTime;
+            
+            createEnemyShotEffect(scene, enemy, camera);
+            
+            // Play enemy shot sound
+            enemyShotSound.play();
+            
+            playerHealth -= ENEMY_DAMAGE;
+            updatePlayerHealthUI();
+            if (playerHealth <= 0) {
+                console.log("Player is dead! Game Over.");
+                playerHealth = 0;
+                updatePlayerHealthUI();
+                document.getElementById("gameOver").style.display = "flex";
+                engine.stopRenderLoop();
+            }
+        }
+    });
+    
+    // Health pack pickup: if player is near a pack, add health
+    healthPacks.forEach((pack, index) => {
+        let dist = BABYLON.Vector3.Distance(pack.position, camera.position);
+        if (dist < 2) { // pickup threshold
+            console.log("Picked up health pack!");
+            
+            // Play health pack pickup sound
+            healthSound.play();
+            
+            playerHealth = Math.min(100, playerHealth + 20);
+            updatePlayerHealthUI();
+            pack.dispose();
+            healthPacks.splice(index, 1);
+        }
+    });
+});
+
+
+      // Request pointer lock on canvas click
+      canvas.addEventListener("click", () => {
+        canvas.requestPointerLock = canvas.requestPointerLock ||
+                                    canvas.msRequestPointerLock ||
+                                    canvas.mozRequestPointerLock ||
+                                    canvas.webkitRequestPointerLock;
+        if (canvas.requestPointerLock) {
+          canvas.requestPointerLock();
+        }
+      });
+
+      return scene;
+    };
+
+    // --- Helper Functions ---
+    function createBuilding(scene, x, z, width, height, depth) {
+      const building = BABYLON.MeshBuilder.CreateBox("building", { width, height, depth }, scene);
+      building.position = new BABYLON.Vector3(x, height / 2, z);
+      building.checkCollisions = true;
+      const buildingMaterial = new BABYLON.StandardMaterial("buildingMat", scene);
+      const buildingTexture = new BABYLON.Texture(config.buildingTexturePath, scene);
+      buildingTexture.uScale = width / 2;
+      buildingTexture.vScale = height / 2;
+      buildingMaterial.diffuseTexture = buildingTexture;
+      building.material = buildingMaterial;
+      const roof = BABYLON.MeshBuilder.CreateBox("roof", { width: width + 0.5, height: 0.5, depth: depth + 0.5 }, scene);
+      roof.position = new BABYLON.Vector3(x, height + 0.25, z);
+      roof.checkCollisions = true;
+      const roofMaterial = new BABYLON.StandardMaterial("roofMat", scene);
+      const roofTexture = new BABYLON.Texture(config.roofTexturePath, scene);
+      roofTexture.uScale = width / 2;
+      roofTexture.vScale = depth / 2;
+      roofMaterial.diffuseTexture = roofTexture;
+      roof.material = roofMaterial;
+    }
+
+    function createBarrier(scene, x, z) {
+      const width = 2 + Math.random() * 3;
+      const height = 1.5;
+      const depth = 0.5;
+      const barrier = BABYLON.MeshBuilder.CreateBox("barrier", { width, height, depth }, scene);
+      barrier.position = new BABYLON.Vector3(x, height / 2, z);
+      barrier.rotation.y = Math.random() * Math.PI;
+      barrier.checkCollisions = true;
+      const barrierMaterial = new BABYLON.StandardMaterial("barrierMat", scene);
+      const barrierTexture = new BABYLON.Texture(config.barrierTexturePath, scene);
+      barrierTexture.uScale = width;
+      barrierTexture.vScale = height;
+      barrierMaterial.diffuseTexture = barrierTexture;
+      barrier.material = barrierMaterial;
+    }
+
+    function createEnvironment(scene) {
+      for (let i = 0; i < 10; i++) {
+        const x = (Math.random() - 0.5) * 160;
+        const z = (Math.random() - 0.5) * 160;
+        createBuilding(scene, x, z, 10 + Math.random() * 10, 8 + Math.random() * 8, 10 + Math.random() * 10);
+      }
+      for (let i = 0; i < 15; i++) {
+        const x = (Math.random() - 0.5) * 180;
+        const z = (Math.random() - 0.5) * 180;
+        createSmallStructure(scene, x, z);
+      }
+      for (let i = 0; i < 40; i++) {
+        const x = (Math.random() - 0.5) * 200;
+        const z = (Math.random() - 0.5) * 200;
+        createBarrier(scene, x, z);
+      }
+      createStrategicPath(scene, -50, -50, 50, 50);
+      createStrategicPath(scene, -40, 40, 40, -40);
+    }
+
+    function createSmallStructure(scene, x, z) {
+      const size = 3 + Math.random() * 2;
+      const height = 2 + Math.random() * 2;
+      const structure = BABYLON.MeshBuilder.CreateBox("smallStructure", { width: size, height: height, depth: size }, scene);
+      structure.position = new BABYLON.Vector3(x, height / 2, z);
+      structure.rotation.y = Math.random() * Math.PI;
+      structure.checkCollisions = true;
+      const material = new BABYLON.StandardMaterial("structureMat", scene);
+      const buildingTexture = new BABYLON.Texture(config.buildingTexturePath, scene);
+      buildingTexture.uScale = size;
+      buildingTexture.vScale = height;
+      material.diffuseTexture = buildingTexture;
+      structure.material = material;
+    }
+
+    function createStrategicPath(scene, startX, startZ, endX, endZ) {
+      const points = 5;
+      for (let i = 0; i < points; i++) {
+        const t = i / (points - 1);
+        const x = startX + (endX - startX) * t;
+        const z = startZ + (endZ - startZ) * t;
+        createBarrier(scene, x + 3, z + Math.random() * 2);
+        createBarrier(scene, x - 3, z + Math.random() * 2);
+      }
+    }
+
+const ENEMY_CONFIG = {
+    health: ENEMY_HEALTH,
+    damage: ENEMY_DAMAGE,
+    moveSpeed: 0.05,
+    sprintSpeed: 0.1,
+    shootRange: ENEMY_SHOOT_RANGE,
+    aggroRange: ENEMY_SHOOT_RANGE * 1.2,
+    shootInterval: ENEMY_SHOOT_INTERVAL,
+    respawnTime: 5000,
+    size: { width: 1.5, height: 2 },
+    bounceAmount: 0.3, // Increased for more dramatic scaling
+    bounceSpeed: 0.025, // Faster bounce animation
+    jumpHeight: 0.5, // Added for vertical jumping effect
+    jumpSpeed: 0.02, // Speed of the jump animation
+    strafeIntensity: 2.0, // More aggressive strafing
+    attackChargeTime: 500 // Time to "charge" before attacking
+};
+
+function createEnemy(scene, x, y, z) {
+    let enemySprite = BABYLON.MeshBuilder.CreatePlane(
+        "enemy", 
+        { width: ENEMY_CONFIG.size.width, height: ENEMY_CONFIG.size.height }, 
+        scene
+    );
+    enemySprite.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+    enemySprite.position = new BABYLON.Vector3(x, y, z);
+    enemySprite.isEnemy = true;
+
+    // Material setup
+    let enemyMat = new BABYLON.StandardMaterial("enemyMat", scene);
+    enemyMat.diffuseTexture = new BABYLON.Texture(config.enemyTexturePath, scene);
+    enemyMat.diffuseTexture.hasAlpha = true;
+    enemyMat.useAlphaFromDiffuseTexture = true;
+    enemyMat.backFaceCulling = false;
+    enemySprite.material = enemyMat;
+
+    // State management
+    const state = {
+        health: ENEMY_CONFIG.health,
+        lastShotTime: 0,
+        isAggro: false,
+        spawnPoint: new BABYLON.Vector3(x, y, z),
+        targetPoint: null,
+        currentSpeed: ENEMY_CONFIG.moveSpeed,
+        animationTime: Math.random() * Math.PI * 2,
+        isStrafing: false,
+        strafeDirection: 1,
+        lastStrafeChange: Date.now(),
+        isJumping: false,
+        jumpStartTime: 0,
+        attackChargeStart: 0
+    };
+
+    function updateBehavior() {
+        const camera = scene.getCameraByName("FPSCamera");
+        const distanceToPlayer = BABYLON.Vector3.Distance(
+            enemySprite.position, 
+            camera.position
+        );
+
+        // Aggro logic
+        if (distanceToPlayer < ENEMY_CONFIG.aggroRange) {
+            state.isAggro = true;
+        } else if (distanceToPlayer > ENEMY_CONFIG.aggroRange * 1.5) {
+            state.isAggro = false;
+            returnToSpawn();
+        }
+
+        if (state.isAggro) {
+            handleCombatBehavior(camera, distanceToPlayer);
+        } else {
+            handlePatrolBehavior();
+        }
+
+        // Apply animations
+        updateBounceAnimation();
+        updateJumpAnimation();
+    }
+
+    function handleCombatBehavior(camera, distanceToPlayer) {
+        const currentTime = Date.now();
+
+        // Shooting logic
+        if (distanceToPlayer < ENEMY_CONFIG.shootRange && 
+            currentTime - state.lastShotTime > ENEMY_CONFIG.shootInterval) {
+            if (state.attackChargeStart === 0) {
+                state.attackChargeStart = currentTime; // Start charging attack
+            } else if (currentTime - state.attackChargeStart > ENEMY_CONFIG.attackChargeTime) {
+                shoot(camera);
+                state.lastShotTime = currentTime;
+                state.attackChargeStart = 0; // Reset charge
+            }
+        }
+
+        // Randomize strafing
+        if (currentTime - state.lastStrafeChange > 2000) {
+            state.isStrafing = Math.random() > 0.3;
+            state.strafeDirection = Math.random() > 0.5 ? 1 : -1;
+            state.lastStrafeChange = currentTime;
+        }
+
+        // Calculate movement
+        const dirToPlayer = camera.position.subtract(enemySprite.position);
+        dirToPlayer.y = 0; // Keep movement on ground plane
+        dirToPlayer.normalize();
+
+        // Dynamic positioning
+        if (distanceToPlayer < ENEMY_CONFIG.shootRange * 0.5) {
+            // Back up
+            enemySprite.position.subtractInPlace(
+                dirToPlayer.scale(ENEMY_CONFIG.moveSpeed)
+            );
+        } else if (distanceToPlayer > ENEMY_CONFIG.shootRange * 0.8) {
+            // Advance
+            enemySprite.position.addInPlace(
+                dirToPlayer.scale(ENEMY_CONFIG.sprintSpeed)
+            );
+        }
+
+        // Apply strafing
+        if (state.isStrafing) {
+            const strafeDir = BABYLON.Vector3.Cross(
+                dirToPlayer, 
+                BABYLON.Vector3.Up()
+            );
+            enemySprite.position.addInPlace(
+                strafeDir.scale(ENEMY_CONFIG.moveSpeed * state.strafeDirection * ENEMY_CONFIG.strafeIntensity)
+            );
+        }
+
+        // Random jump
+        if (!state.isJumping && Math.random() < 0.01) {
+            state.isJumping = true;
+            state.jumpStartTime = currentTime;
+        }
+    }
+
+    function handlePatrolBehavior() {
+        if (!state.targetPoint || 
+            BABYLON.Vector3.Distance(enemySprite.position, state.targetPoint) < 1) {
+            // Generate new patrol point
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 5 + Math.random() * 10;
+            state.targetPoint = new BABYLON.Vector3(
+                state.spawnPoint.x + Math.cos(angle) * distance,
+                state.spawnPoint.y,
+                state.spawnPoint.z + Math.sin(angle) * distance
+            );
+        }
+
+        // Move towards patrol point
+        const dirToTarget = state.targetPoint.subtract(enemySprite.position);
+        dirToTarget.normalize();
+        enemySprite.position.addInPlace(
+            dirToTarget.scale(ENEMY_CONFIG.moveSpeed * 0.5)
+        );
+    }
+
+    function returnToSpawn() {
+        state.targetPoint = state.spawnPoint;
+    }
+
+    function updateBounceAnimation() {
+        state.animationTime += ENEMY_CONFIG.bounceSpeed;
+        const scale = 1 + Math.sin(state.animationTime) * ENEMY_CONFIG.bounceAmount;
+        enemySprite.scaling = new BABYLON.Vector3(scale, scale, scale);
+    }
+
+    function updateJumpAnimation() {
+        if (state.isJumping) {
+            const jumpProgress = (Date.now() - state.jumpStartTime) / 1000;
+            const jumpHeight = Math.sin(jumpProgress * Math.PI) * ENEMY_CONFIG.jumpHeight;
+            enemySprite.position.y = state.spawnPoint.y + jumpHeight;
+
+            if (jumpProgress >= 1) {
+                state.isJumping = false;
+            }
+        }
+    }
+
+    function shoot(camera) {
+        createEnemyShotEffect(scene, { mesh: enemySprite }, camera);
+        playerHealth -= ENEMY_DAMAGE;
+        updatePlayerHealthUI();
+        
+        if (playerHealth <= 0) {
+            console.log("Player is dead! Game Over.");
+            playerHealth = 0;
+            updatePlayerHealthUI();
+            document.getElementById("gameOver").style.display = "flex";
+            engine.stopRenderLoop();
+        }
+    }
+
+    // Enemy object
+    const enemyObj = {
+        mesh: enemySprite,
+        health: state.health,
+        lastShotTime: state.lastShotTime,
+        takeDamage: (amount) => {
+            state.health -= amount;
+            if (state.health <= 0) {
+                console.log("Enemy defeated!");
+                enemySprite.dispose();
+                enemies = enemies.filter(e => e.mesh !== enemySprite);
+            }
+        }
+    };
+
+    // Register update loop
+    scene.registerBeforeRender(() => {
+        if (state.health > 0) {
+            updateBehavior();
+        }
+    });
+
+    // Add to global enemies array
+    enemies.push(enemyObj);
+
+    return enemyObj;
+}
+
+    // Create and run the scene
+    createScene().then(scene => {
+      window.addEventListener("keydown", (event) => {
+        if (event.key >= "1" && event.key <= "3") {
+          currentWeapon = parseInt(event.key) - 1;
+          console.log("Switched to " + weapons[currentWeapon]);
+        }
+      });
+      engine.runRenderLoop(() => {
+        scene.render();
+      });
+    });
+    window.addEventListener("resize", () => {
+      engine.resize();
+    });
+  </script>
+<!-- Audio Element for Background Music -->
+<audio id="backgroundMusic" loop>
+  <source src="background.mp3" type="audio/mpeg">
+  Your browser does not support the audio element.
+</audio>
+
+<!-- Music Toggle Button -->
+<button id="musicToggle" class="crosshair-button" style="bottom: 60px; right: 10px;">
+  Toggle Music
+</button>
+  <!-- Optional additional GUI logic -->
+  <script src="gui.js"></script>
+</body>
+</html>

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recycle Rumble: Space-Age Training Simulator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #000 url('background.png') no-repeat center center fixed;
+            background-size: cover;
+            color: #8DF7FF;
+            overflow: hidden;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 600px;
+            margin: 0 auto;
+            background-color: rgba(0, 20, 40, 0.8);
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 195, 255, 0.7);
+            border: 2px solid #0077AA;
+            border-radius: 10px;
+        }
+        
+        .conveyor {
+            position: absolute;
+            top: 120px;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            background: repeating-linear-gradient(
+                45deg,
+                #111922,
+                #111922 10px,
+                #071118 10px,
+                #071118 20px
+            );
+            border-top: 4px solid #0077AA;
+            border-bottom: 4px solid #0077AA;
+            animation: moveConveyor 5s linear infinite;
+            box-shadow: 0 0 15px rgba(0, 195, 255, 0.5) inset;
+        }
+        
+        @keyframes moveConveyor {
+            0% { background-position: 0 0; }
+            100% { background-position: 40px 0; }
+        }
+        
+        .bins-container {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px;
+        }
+        
+        .bin {
+            width: 110px;
+            height: 130px;
+            background-color: rgba(10, 30, 50, 0.9);
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            box-shadow: 0 0 15px rgba(0, 195, 255, 0.3);
+            border: 2px solid #0077AA;
+        }
+        
+        .bin:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 225, 255, 0.7);
+        }
+        
+        .bin-label {
+            color: #fff;
+            font-weight: bold;
+            background-color: #0077AA;
+            width: 100%;
+            text-align: center;
+            padding: 8px 0;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            text-shadow: 0 0 5px rgba(0, 195, 255, 0.7);
+            letter-spacing: 1px;
+        }
+        
+        .item {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            cursor: grab;
+            z-index: 10;
+            background-size: 80% 80%;
+            background-repeat: no-repeat;
+            background-position: center;
+            transition: transform 0.15s ease;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        
+        .item:active {
+            transform: scale(1.25);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+        }
+        
+        .score-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: rgba(0, 30, 60, 0.9);
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 195, 255, 0.6);
+            font-weight: bold;
+            font-size: 1.2em;
+            border: 2px solid #0077AA;
+        }
+        
+        .title-banner {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background-color: rgba(0, 30, 60, 0.9);
+            padding: 10px 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 195, 255, 0.6);
+            font-weight: bold;
+            font-size: 1.2em;
+            border: 2px solid #0077AA;
+            color: #8DF7FF;
+            text-shadow: 0 0 5px rgba(0, 195, 255, 0.7);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 10, 30, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #8DF7FF;
+            font-size: 3em;
+            z-index: 100;
+            display: none;
+            text-shadow: 0 0 10px rgba(0, 195, 255, 0.8);
+        }
+        
+        button {
+            margin-top: 20px;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            background-color: #0077AA;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 195, 255, 0.6);
+            text-shadow: 0 0 5px rgba(0, 195, 255, 0.7);
+        }
+        
+        button:hover {
+            background-color: #00A3E0;
+            box-shadow: 0 0 15px rgba(0, 225, 255, 0.8);
+            transform: scale(1.05);
+        }
+        
+        #score { color: #00FFAA; }
+        #lives { color: #FF5577; }
+        #time { color: #FFDD00; }
+        
+        .scanner-line {
+            position: absolute;
+            height: 2px;
+            width: 100%;
+            background-color: rgba(0, 255, 255, 0.7);
+            top: 145px;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.9);
+            animation: scanAnimation 1.5s infinite;
+            z-index: 5;
+        }
+        
+        @keyframes scanAnimation {
+            0% { opacity: 0.2; }
+            50% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="title-banner">RECYCLE STATION ALPHA</div>
+        
+        <div class="score-container">
+            <div>SCORE: <span id="score">0</span></div>
+            <div>ENERGY: <span id="lives">3</span></div>
+            <div>TIME: <span id="time">60</span>s</div>
+        </div>
+        
+        <div class="conveyor"></div>
+        <div class="scanner-line"></div>
+        
+        <div class="bins-container">
+            <div class="bin" data-type="plastic">
+                <div class="bin-label">PLASTIC</div>
+            </div>
+            <div class="bin" data-type="metal">
+                <div class="bin-label">METAL</div>
+            </div>
+            <div class="bin" data-type="garbage">
+                <div class="bin-label">WASTE</div>
+            </div>
+        </div>
+        
+        <div class="game-over">
+            <div id="game-over-text">SIMULATION COMPLETE</div>
+            <div id="final-score" style="font-size: 0.5em;">FINAL SCORE: 0</div>
+            <button id="restart-button">RESTART SIMULATION</button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const gameContainer = document.querySelector('.game-container');
+            const binsContainer = document.querySelector('.bins-container');
+            const bins = document.querySelectorAll('.bin');
+            const scoreElement = document.getElementById('score');
+            const livesElement = document.getElementById('lives');
+            const timeElement = document.getElementById('time');
+            const gameOverScreen = document.querySelector('.game-over');
+            const finalScoreElement = document.getElementById('final-score');
+            const restartButton = document.getElementById('restart-button');
+            
+            let score = 0;
+            let lives = 3;
+            let timeLeft = 60;
+            let gameRunning = true;
+            let easterEggTriggered = false;
+            let itemInterval;
+            
+            const itemTypes = [
+                { type: 'plastic', image: 'plastic.png', glow: 'rgba(0, 180, 255, 0.8)' },
+                { type: 'metal', image: 'metal.png', glow: 'rgba(200, 200, 200, 0.8)' },
+                { type: 'garbage', image: 'garbage.png', glow: 'rgba(80, 200, 80, 0.8)' }
+            ];
+            
+            const imagePreload = {};
+            itemTypes.forEach(item => {
+                imagePreload[item.type] = new Image();
+                imagePreload[item.type].src = item.image;
+            });
+            
+            let touchOffset = { x: 0, y: 0 };
+            
+            function createItem() {
+                if (!gameRunning) return;
+                
+                const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                const item = document.createElement('div');
+                item.className = 'item';
+                item.dataset.type = randomType.type;
+                
+                item.style.backgroundImage = `url(${randomType.image})`;
+                
+                // Space-age looking items with glows
+                switch (randomType.type) {
+                    case 'plastic':
+                        item.style.boxShadow = `0 0 15px ${randomType.glow}`;
+                        item.style.backgroundColor = 'rgba(0, 100, 200, 0.3)';
+                        break;
+                    case 'metal':
+                        item.style.boxShadow = `0 0 15px ${randomType.glow}`;
+                        item.style.backgroundColor = 'rgba(180, 180, 200, 0.3)';
+                        break;
+                    case 'garbage':
+                        item.style.boxShadow = `0 0 15px ${randomType.glow}`;
+                        item.style.backgroundColor = 'rgba(50, 150, 50, 0.3)';
+                        break;
+                }
+                
+                item.style.left = '-80px';
+                item.style.top = '105px';
+                
+                gameContainer.appendChild(item);
+                
+                item.addEventListener('mousedown', startDrag);
+                item.addEventListener('touchstart', startDragTouch, { passive: false });
+                
+                // Varying speeds for items
+                const speed = 1.5 + Math.random() * 3.5;
+                const moveInterval = setInterval(() => {
+                    if (!gameRunning) {
+                        clearInterval(moveInterval);
+                        return;
+                    }
+                    
+                    const currentLeft = parseFloat(item.style.left);
+                    if (currentLeft > gameContainer.clientWidth) {
+                        clearInterval(moveInterval);
+                        gameContainer.removeChild(item);
+                        decrementLives();
+                    } else {
+                        item.style.left = (currentLeft + speed) + 'px';
+                    }
+                }, 30);
+            }
+            
+            function startDrag(e) {
+                const item = e.target;
+                
+                const startX = e.clientX - item.getBoundingClientRect().left;
+                const startY = e.clientY - item.getBoundingClientRect().top;
+                
+                item.style.zIndex = "100";
+                item.style.transform = "scale(1.1)";
+                
+                function moveItem(e) {
+                    const gameRect = gameContainer.getBoundingClientRect();
+                    const x = e.clientX - gameRect.left - startX;
+                    const y = e.clientY - gameRect.top - startY;
+                    
+                    const maxX = gameRect.width - item.clientWidth;
+                    const maxY = gameRect.height - item.clientHeight;
+                    
+                    item.style.left = Math.max(0, Math.min(maxX, x)) + 'px';
+                    item.style.top = Math.max(0, Math.min(maxY, y)) + 'px';
+                }
+                
+                function stopDrag() {
+                    document.removeEventListener('mousemove', moveItem);
+                    document.removeEventListener('mouseup', stopDrag);
+                    
+                    checkBinDrop(item);
+                    
+                    item.style.zIndex = "10";
+                    item.style.transform = "scale(1)";
+                }
+                
+                document.addEventListener('mousemove', moveItem);
+                document.addEventListener('mouseup', stopDrag);
+            }
+            
+            function startDragTouch(e) {
+                e.preventDefault();
+                const item = e.target;
+                const touch = e.touches[0];
+                
+                const itemRect = item.getBoundingClientRect();
+                touchOffset.x = touch.clientX - itemRect.left;
+                touchOffset.y = touch.clientY - itemRect.top;
+                
+                item.style.zIndex = "100";
+                item.style.transform = "scale(1.1)";
+                
+                function moveItemTouch(e) {
+                    const touch = e.touches[0];
+                    const gameRect = gameContainer.getBoundingClientRect();
+                    
+                    const x = touch.clientX - gameRect.left - touchOffset.x;
+                    const y = touch.clientY - gameRect.top - touchOffset.y;
+                    
+                    const maxX = gameRect.width - item.clientWidth;
+                    const maxY = gameRect.height - item.clientHeight;
+                    
+                    item.style.left = Math.max(0, Math.min(maxX, x)) + 'px';
+                    item.style.top = Math.max(0, Math.min(maxY, y)) + 'px';
+                }
+                
+                function stopDragTouch() {
+                    document.removeEventListener('touchmove', moveItemTouch);
+                    document.removeEventListener('touchend', stopDragTouch);
+                    
+                    checkBinDrop(item);
+                    
+                    item.style.zIndex = "10";
+                    item.style.transform = "scale(1)";
+                }
+                
+                document.addEventListener('touchmove', moveItemTouch, { passive: false });
+                document.addEventListener('touchend', stopDragTouch);
+            }
+            
+            function checkBinDrop(item) {
+                const itemRect = item.getBoundingClientRect();
+                const itemType = item.dataset.type;
+                let dropped = false;
+                
+                bins.forEach(bin => {
+                    const binRect = bin.getBoundingClientRect();
+                    const binType = bin.dataset.type;
+                    
+                    const itemCenterX = itemRect.left + itemRect.width / 2;
+                    const itemCenterY = itemRect.top + itemRect.height / 2;
+                    
+                    if (
+                        itemCenterX >= binRect.left &&
+                        itemCenterX <= binRect.right &&
+                        itemCenterY >= binRect.top &&
+                        itemCenterY <= binRect.bottom
+                    ) {
+                        if (itemType === binType) {
+                            incrementScore();
+                            bin.style.boxShadow = "0 0 30px rgba(0, 255, 100, 0.8)";
+                            setTimeout(() => bin.style.boxShadow = "0 0 15px rgba(0, 195, 255, 0.3)", 300);
+                            
+                            if (score >= 50 && !easterEggTriggered) {
+                                triggerEasterEgg();
+                            }
+                        } else {
+                            decrementLives();
+                            bin.style.boxShadow = "0 0 30px rgba(255, 50, 50, 0.8)";
+                            setTimeout(() => bin.style.boxShadow = "0 0 15px rgba(0, 195, 255, 0.3)", 300);
+                        }
+                        
+                        gameContainer.removeChild(item);
+                        dropped = true;
+                    }
+                });
+                
+                if (!dropped) {
+                    item.style.top = '105px';
+                    item.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
+                    item.style.left = '0px';
+                    setTimeout(() => {
+                        item.style.transition = 'transform 0.15s ease';
+                    }, 500);
+                }
+            }
+            
+            function incrementScore() {
+                score += 10;
+                scoreElement.textContent = score;
+                
+                // Flash score
+                scoreElement.style.textShadow = "0 0 10px rgba(0, 255, 100, 0.9)";
+                setTimeout(() => {
+                    scoreElement.style.textShadow = "";
+                }, 300);
+            }
+            
+            function decrementLives() {
+                lives--;
+                livesElement.textContent = lives;
+                
+                // Flash lives
+                livesElement.style.textShadow = "0 0 10px rgba(255, 50, 50, 0.9)";
+                setTimeout(() => {
+                    livesElement.style.textShadow = "";
+                }, 300);
+                
+                if (lives <= 0) {
+                    endGame();
+                }
+            }
+            
+            function updateTimer() {
+                timeLeft--;
+                timeElement.textContent = timeLeft;
+                
+                if (timeLeft <= 10) {
+                    timeElement.style.color = "#FF3333";
+                    timeElement.style.textShadow = "0 0 10px rgba(255, 50, 50, 0.7)";
+                }
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }
+            
+            function endGame() {
+                gameRunning = false;
+                
+                document.querySelectorAll('.item').forEach(item => {
+                    gameContainer.removeChild(item);
+                });
+                
+                finalScoreElement.textContent = `FINAL SCORE: ${score}`;
+                gameOverScreen.style.display = 'flex';
+            }
+            
+            function startGame() {
+                score = 0;
+                lives = 3;
+                timeLeft = 60;
+                gameRunning = true;
+                easterEggTriggered = false;
+                
+                scoreElement.textContent = score;
+                livesElement.textContent = lives;
+                timeElement.textContent = timeLeft;
+                timeElement.style.color = "#FFDD00";
+                timeElement.style.textShadow = "";
+                
+                gameOverScreen.style.display = 'none';
+                
+                // Random spawn intervals between 1-2.5 seconds
+                const createItemWithRandomDelay = () => {
+                    if (!gameRunning) return;
+                    
+                    createItem();
+                    const nextDelay = 1000 + Math.random() * 1500;
+                    setTimeout(createItemWithRandomDelay, nextDelay);
+                };
+                
+                createItemWithRandomDelay();
+                
+                const timerInterval = setInterval(() => {
+                    if (!gameRunning) {
+                        clearInterval(timerInterval);
+                        return;
+                    }
+                    updateTimer();
+                }, 1000);
+            }
+            
+            function triggerEasterEgg() {
+                easterEggTriggered = true;
+                
+                const notification = document.createElement('div');
+                notification.style.position = 'absolute';
+                notification.style.top = '50%';
+                notification.style.left = '50%';
+                notification.style.transform = 'translate(-50%, -50%)';
+                notification.style.background = 'rgba(0, 50, 100, 0.9)';
+                notification.style.color = '#8DF7FF';
+                notification.style.padding = '20px';
+                notification.style.borderRadius = '10px';
+                notification.style.boxShadow = '0 0 30px rgba(0, 195, 255, 0.9)';
+                notification.style.textAlign = 'center';
+                notification.style.zIndex = '200';
+                notification.style.border = '2px solid #00A3E0';
+                notification.innerHTML = '<strong>EFFICIENCY BOOST ACTIVATED!</strong><br>Recycling now worth double points!';
+                
+                gameContainer.appendChild(notification);
+                
+                // Modify incrementScore function to double points
+                const originalIncrementScore = incrementScore;
+                incrementScore = function() {
+                    score += 20; // Double the points
+                    scoreElement.textContent = score;
+                    
+                    // Flash score
+                    scoreElement.style.textShadow = "0 0 10px rgba(0, 255, 200, 0.9)";
+                    setTimeout(() => {
+                        scoreElement.style.textShadow = "";
+                    }, 300);
+                };
+                
+                // After 10 seconds, revert to original scoring
+                setTimeout(() => {
+                    incrementScore = originalIncrementScore;
+                    gameContainer.removeChild(notification);
+                    
+                    const endNotification = document.createElement('div');
+                    endNotification.style.position = 'absolute';
+                    endNotification.style.top = '50%';
+                    endNotification.style.left = '50%';
+                    endNotification.style.transform = 'translate(-50%, -50%)';
+                    endNotification.style.background = 'rgba(0, 50, 100, 0.9)';
+                    endNotification.style.color = '#8DF7FF';
+                    endNotification.style.padding = '20px';
+                    endNotification.style.borderRadius = '10px';
+                    endNotification.style.boxShadow = '0 0 30px rgba(0, 195, 255, 0.9)';
+                    endNotification.style.textAlign = 'center';
+                    endNotification.style.zIndex = '200';
+                    endNotification.style.border = '2px solid #00A3E0';
+                    endNotification.innerHTML = '<strong>EFFICIENCY BOOST DEACTIVATED</strong>';
+                    
+                    gameContainer.appendChild(endNotification);
+                    
+                    setTimeout(() => {
+                        gameContainer.removeChild(endNotification);
+                    }, 2000);
+                }, 10000);
+            }
+            
+            // Hidden Feature: Rapid Fire Mode (Click the score 5 times quickly)
+            let clickCount = 0;
+            let lastClickTime = 0;
+            scoreElement.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - lastClickTime < 500) {
+                    clickCount++;
+                    if (clickCount >= 5) {
+                        clickCount = 0;
+                        
+                        const notification = document.createElement('div');
+                        notification.style.position = 'absolute';
+                        notification.style.top = '50%';
+                        notification.style.left = '50%';
+                        notification.style.transform = 'translate(-50%, -50%)';
+                        notification.style.background = 'rgba(100, 0, 100, 0.9)';
+                        notification.style.color = '#FF99FF';
+                        notification.style.padding = '20px';
+                        notification.style.borderRadius = '10px';
+                        notification.style.boxShadow = '0 0 30px rgba(255, 0, 255, 0.9)';
+                        notification.style.textAlign = 'center';
+                        notification.style.zIndex = '200';
+                        notification.style.border = '2px solid #CC00CC';
+                        notification.innerHTML = '<strong>HYPER MODE ACTIVATED!</strong><br>Increased item flow rate!';
+                        
+                        gameContainer.appendChild(notification);
+                        
+                        setTimeout(() => {
+                            gameContainer.removeChild(notification);
+                        }, 3000);
+                        
+                        // Increase item spawn rate for 15 seconds
+                        const createRapidItems = () => {
+                            if (!gameRunning) return;
+                            createItem();
+                            setTimeout(createRapidItems, 400);
+                        };
+                        
+                        createRapidItems();
+                        
+                        setTimeout(() => {
+                            // Will naturally return to normal spawn rate
+                        }, 15000);
+                    }
+                } else {
+                    clickCount = 1;
+                }
+                lastClickTime = now;
+            });
+            
+            // Start the game
+            startGame();
+            
+            // Restart button
+            restartButton.addEventListener('click', startGame);
+        });
+    </script>
+</body>
+</html>

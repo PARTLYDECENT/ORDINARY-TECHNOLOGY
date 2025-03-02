@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALIEN ASCENSION</title>
+    <style>
+        @keyframes glitch {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(-5px, 5px); }
+            50% { transform: translate(5px, -5px); }
+            75% { transform: translate(-2px, 2px); }
+            100% { transform: translate(0, 0); }
+        }
+        
+        body {
+            background: black;
+            overflow: hidden;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #game-ui {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #alienTitle {
+            font-size: 2.5rem;
+            padding: 20px;
+            border: 3px solid #00ff00;
+            border-radius: 10px;
+            background: rgba(0, 255, 0, 0.1);
+            animation: glitch 0.2s infinite;
+            text-shadow: 2px 2px red, -2px -2px blue;
+            filter: drop-shadow(0 0 10px #00ff00);
+            margin-bottom: 20px;
+        }
+        
+        .glitch-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            color: rgba(0, 255, 0, 0.1);
+            font-size: 2rem;
+            pointer-events: none;
+            z-index: -1;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #startButton {
+            padding: 15px 30px;
+            border: 3px solid #ff0000;
+            background: black;
+            color: #ff0000;
+            font-size: 1.5rem;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            transition: 0.3s;
+            animation: glitch 0.2s infinite;
+        }
+        
+        #startButton:hover {
+            background: #ff0000;
+            color: black;
+        }
+        
+        #gameArea {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: black;
+            overflow: hidden;
+        }
+        
+        .player {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2300ff00"><path d="M12 2L8 10H16L12 2zM4 14l8 8 8-8H4z"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 5;
+            transition: transform 0.2s;
+        }
+        
+        .platform {
+            position: absolute;
+            background: linear-gradient(to right, #00ff00, #008800);
+            border-radius: 5px;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        
+        .enemy {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ff0000"><path d="M12 1L1 23h22L12 1zm0 10a2 2 0 100 4 2 2 0 000-4z"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 3;
+        }
+        
+        .artifact {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffff00"><circle cx="12" cy="12" r="10"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 2;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff00;
+            font-size: 1rem;
+            z-index: 20;
+        }
+        
+        #gameOver, #levelComplete {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #ff0000;
+            padding: 20px;
+            font-size: 2rem;
+            text-align: center;
+            z-index: 30;
+        }
+        
+        #continueButton, #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: 2px solid #00ff00;
+            background: black;
+            color: #00ff00;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-ui">
+            <div id="alienTitle">ALIEN ASCENSION</div>
+            <button id="startButton">PRESS START</button>
+        </div>
+        <div class="glitch-bg"></div>
+        <div id="gameArea">
+            <div id="hud">
+                Level: <span id="levelDisplay">1</span> | 
+                Score: <span id="scoreDisplay">0</span> | 
+                Artifacts: <span id="artifactDisplay">0</span>/3
+            </div>
+            <div id="gameOver">
+                GAME OVER
+                <div>Final Score: <span id="finalScore">0</span></div>
+                <button id="restartButton">RESTART</button>
+            </div>
+            <div id="levelComplete">
+                LEVEL COMPLETE
+                <div>Artifacts Collected: <span id="levelArtifacts">0</span>/3</div>
+                <button id="continueButton">CONTINUE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        // Function sandwich pattern - all game functions in one self-executing wrapper
+        // Shared game state
+        const G = {
+            level: 1,
+            score: 0,
+            artifacts: 0,
+            levelArtifacts: 0,
+            totalArtifacts: 3,
+            gravityForce: 0.5,
+            jumpForce: -12,
+            player: { x: 0, y: 0, width: 40, height: 40, velocityX: 0, velocityY: 0, jumping: false },
+            platforms: [],
+            enemies: [],
+            collectibles: [],
+            keys: { ArrowLeft: false, ArrowRight: false, ArrowUp: false },
+            gameRunning: false,
+            alienChars: "⏃⎅⟒⟟⍜⎍⌰⌇⋏⍙⏚⏁⊑⊬⊰⊇⊗⋔⋏⋒⋓⋖⋗",
+            animationFrame: null,
+        };
+        
+        // DOM elements
+        const $$ = (id) => document.getElementById(id);
+        const $ = {
+            gameUI: $$('game-ui'),
+            gameArea: $$('gameArea'),
+            alienTitle: $$('alienTitle'),
+            startButton: $$('startButton'),
+            glitchBg: document.querySelector('.glitch-bg'),
+            levelDisplay: $$('levelDisplay'),
+            scoreDisplay: $$('scoreDisplay'),
+            artifactDisplay: $$('artifactDisplay'),
+            gameOver: $$('gameOver'),
+            finalScore: $$('finalScore'),
+            restartButton: $$('restartButton'),
+            levelComplete: $$('levelComplete'),
+            levelArtifacts: $$('levelArtifacts'),
+            continueButton: $$('continueButton'),
+        };
+        
+        // ===== GAME UTILITIES =====
+        function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+        
+        function generateAlienText(length) {
+            return Array(length).fill(0).map(() => G.alienChars[rand(0, G.alienChars.length - 1)]).join('');
+        }
+        
+        function updateGlitchBg() {
+            $.glitchBg.textContent = generateAlienText(100);
+            $.alienTitle.style.color = `rgb(${rand(0,255)}, ${rand(150,255)}, ${rand(0,150)})`;
+        }
+        
+        function createEl(type, className) {
+            const el = document.createElement('div');
+            el.className = className;
+            $.gameArea.appendChild(el);
+            return el;
+        }
+        
+        function removeEl(el) {
+            if (el && el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        }
+        
+        function isColliding(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+        
+        // ===== GAME SETUP =====
+        function initLevel() {
+            // Clear existing elements
+            G.platforms.forEach(p => removeEl(p.el));
+            G.enemies.forEach(e => removeEl(e.el));
+            G.collectibles.forEach(c => removeEl(c.el));
+            
+            // Reset arrays
+            G.platforms = [];
+            G.enemies = [];
+            G.collectibles = [];
+            G.levelArtifacts = 0;
+            
+            // Position player
+            G.player.x = 50;
+            G.player.y = 300;
+            G.player.velocityX = 0;
+            G.player.velocityY = 0;
+            G.player.jumping = false;
+            
+            // Create game area elements based on level
+            const gameWidth = window.innerWidth;
+            const gameHeight = window.innerHeight;
+            
+            // Create platforms (more challenging with higher levels)
+            const platformCount = 5 + G.level;
+            for (let i = 0; i < platformCount; i++) {
+                const width = rand(100, 200);
+                const x = i === 0 ? 20 : rand(0, gameWidth - width);
+                const y = i === 0 ? 400 : rand(100, gameHeight - 100);
+                
+                const platform = {
+                    x, y, width, height: 20,
+                    el: createEl('div', 'platform')
+                };
+                
+                G.platforms.push(platform);
+                updateElement(platform);
+            }
+            
+            // Create enemies (more with higher levels)
+            const enemyCount = Math.min(G.level, 8);
+            for (let i = 0; i < enemyCount; i++) {
+                const enemy = {
+                    x: rand(50, gameWidth - 50),
+                    y: rand(50, gameHeight - 150),
+                    width: 30, height: 30,
+                    velocityX: (G.level * 0.5) * (Math.random() > 0.5 ? 1 : -1),
+                    el: createEl('div', 'enemy')
+                };
+                
+                G.enemies.push(enemy);
+                updateElement(enemy);
+            }
+            
+            // Create artifacts
+            for (let i = 0; i < G.totalArtifacts; i++) {
+                const artifact = {
+                    x: rand(50, gameWidth - 50),
+                    y: rand(50, gameHeight - 150),
+                    width: 20, height: 20,
+                    collected: false,
+                    el: createEl('div', 'artifact')
+                };
+                
+                G.collectibles.push(artifact);
+                updateElement(artifact);
+            }
+            
+            // Create player element if it doesn't exist
+            if (!G.player.el) {
+                G.player.el = createEl('div', 'player');
+            }
+            
+            // Ensure player is added back to game area (in case we're resetting)
+            if (!G.player.el.parentNode) {
+                $.gameArea.appendChild(G.player.el);
+            }
+            
+            updateElement(G.player);
+            updateHUD();
+        }
+        
+        function updateElement(obj) {
+            if (obj.el) {
+                obj.el.style.left = `${obj.x}px`;
+                obj.el.style.top = `${obj.y}px`;
+                if (obj.width) obj.el.style.width = `${obj.width}px`;
+                if (obj.height) obj.el.style.height = `${obj.height}px`;
+            }
+        }
+        
+        function updateHUD() {
+            $.levelDisplay.textContent = G.level;
+            $.scoreDisplay.textContent = G.score;
+            $.artifactDisplay.textContent = G.levelArtifacts;
+        }
+        
+        // ===== GAME LOOP =====
+        function gameLoop() {
+            if (!G.gameRunning) return;
+            
+            updatePlayer();
+            updateEnemies();
+            checkCollisions();
+            
+            G.animationFrame = requestAnimationFrame(gameLoop);
+        }
+        
+        function updatePlayer() {
+            // Handle player input
+            if (G.keys.ArrowLeft) G.player.velocityX = Math.max(G.player.velocityX - 1, -8);
+            else if (G.keys.ArrowRight) G.player.velocityX = Math.min(G.player.velocityX + 1, 8);
+            else G.player.velocityX *= 0.9; // Friction
+            
+            // Apply gravity
+            G.player.velocityY += G.gravityForce;
+            
+            // Update position
+            G.player.x += G.player.velocityX;
+            G.player.y += G.player.velocityY;
+            
+            // Check boundaries
+            const gameWidth = window.innerWidth;
+            const gameHeight = window.innerHeight;
+            
+            if (G.player.x < 0) G.player.x = 0;
+            if (G.player.x + G.player.width > gameWidth) G.player.x = gameWidth - G.player.width;
+            
+            // Death if falling off screen
+            if (G.player.y > gameHeight) {
+                endGame();
+                return;
+            }
+            
+            // Apply player rotation based on velocity
+            let rotation = G.player.velocityX * 3;
+            G.player.el.style.transform = `rotate(${rotation}deg)`;
+            
+            updateElement(G.player);
+        }
+        
+        function updateEnemies() {
+            const gameWidth = window.innerWidth;
+            
+            G.enemies.forEach(enemy => {
+                enemy.x += enemy.velocityX;
+                
+                // Bounce off walls
+                if (enemy.x <= 0 || enemy.x + enemy.width >= gameWidth) {
+                    enemy.velocityX *= -1;
+                }
+                
+                updateElement(enemy);
+            });
+        }
+        
+        function checkCollisions() {
+            let onPlatform = false;
+            
+            // Check platform collisions
+            G.platforms.forEach(platform => {
+                if (G.player.velocityY > 0 && // Falling
+                    G.player.y + G.player.height > platform.y && 
+                    G.player.y < platform.y &&
+                    G.player.x + G.player.width > platform.x && 
+                    G.player.x < platform.x + platform.width) {
+                    
+                    G.player.y = platform.y - G.player.height;
+                    G.player.velocityY = 0;
+                    G.player.jumping = false;
+                    onPlatform = true;
+                }
+            });
+            
+            // Allow jump if on platform
+            if (onPlatform && G.keys.ArrowUp && !G.player.jumping) {
+                G.player.velocityY = G.jumpForce;
+                G.player.jumping = true;
+            }
+            
+            // Check enemy collisions
+            G.enemies.forEach(enemy => {
+                if (isColliding(G.player, enemy)) {
+                    endGame();
+                    return;
+                }
+            });
+            
+            // Check artifact collisions
+            G.collectibles.forEach(artifact => {
+                if (!artifact.collected && isColliding(G.player, artifact)) {
+                    artifact.collected = true;
+                    artifact.el.style.display = 'none';
+                    G.levelArtifacts++;
+                    G.artifacts++;
+                    G.score += 100 * G.level;
+                    updateHUD();
+                    
+                    if (G.levelArtifacts >= G.totalArtifacts) {
+                        completeLevel();
+                    }
+                }
+            });
+        }
+        
+        function completeLevel() {
+            G.gameRunning = false;
+            cancelAnimationFrame(G.animationFrame);
+            
+            $.levelArtifacts.textContent = G.levelArtifacts;
+            $.levelComplete.style.display = 'block';
+        }
+        
+        function nextLevel() {
+            $.levelComplete.style.display = 'none';
+            G.level++;
+            initLevel();
+            G.gameRunning = true;
+            G.animationFrame = requestAnimationFrame(gameLoop);
+        }
+        
+        function endGame() {
+            G.gameRunning = false;
+            cancelAnimationFrame(G.animationFrame);
+            
+            $.finalScore.textContent = G.score;
+            $.gameOver.style.display = 'block';
+        }
+        
+        function restartGame() {
+            $.gameOver.style.display = 'none';
+            
+            G.level = 1;
+            G.score = 0;
+            G.artifacts = 0;
+            
+            initLevel();
+            G.gameRunning = true;
+            G.animationFrame = requestAnimationFrame(gameLoop);
+        }
+        
+        // ===== EVENT HANDLERS =====
+        function setupEventListeners() {
+            // Title screen glitch effect
+            setInterval(updateGlitchBg, 500);
+            
+            // Start button
+            $.startButton.addEventListener('click', () => {
+                $.gameUI.style.display = 'none';
+                $.gameArea.style.display = 'block';
+                
+                initLevel();
+                G.gameRunning = true;
+                gameLoop();
+            });
+            
+            // Keyboard input
+            window.addEventListener('keydown', (e) => {
+                if (G.keys.hasOwnProperty(e.code)) {
+                    G.keys[e.code] = true;
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (G.keys.hasOwnProperty(e.code)) {
+                    G.keys[e.code] = false;
+                }
+            });
+            
+            // Game UI buttons
+            $.continueButton.addEventListener('click', nextLevel);
+            $.restartButton.addEventListener('click', restartGame);
+            
+            // Resize handling
+            window.addEventListener('resize', () => {
+                if (G.gameRunning) {
+                    initLevel();
+                }
+            });
+        }
+        
+        // Initialize everything
+        updateGlitchBg();
+        setupEventListeners();
+    })();
+    </script>
+</body>
+</html>

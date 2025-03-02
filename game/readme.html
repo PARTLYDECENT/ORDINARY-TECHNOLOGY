@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spacecraft Interface Module</title>
+  <!-- Load a futuristic font -->
+  <link href="https://fonts.googleapis.com/css?family=Orbitron" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #000; /* Dark background */
+    }
+    /* Fullscreen canvas for the cosmic/starfield background */
+    #glCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    /* Spacecraft control panel overlay */
+    #interface {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 5; /* Increased z-index to ensure it's above the crawl container */
+      color: #0ff;
+      font-family: 'Orbitron', sans-serif;
+      text-shadow: 0 0 10px #0ff;
+    }
+    #interface h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+    #interface .status {
+      font-size: 1.2em;
+      margin: 5px 0;
+    }
+    #clock {
+      margin-top: 20px;
+      font-size: 1.5em;
+    }
+    #simulate-btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: rgba(0,255,255,0.2);
+      border: 1px solid #0ff;
+      color: #0ff;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    #simulate-btn:hover {
+      background: rgba(0,255,255,0.4);
+    }
+    /* Media panel styling: video at top-right and two inline images at bottom */
+    #media-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 300px;
+      z-index: 3;
+    }
+    #media-panel video {
+      width: 100%;
+      border: 2px solid #0ff;
+      box-shadow: 0 0 10px #0ff;
+    }
+    #image-container {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    #image-container img {
+      width: 48%;
+      border: 2px solid #0ff;
+      box-shadow: 0 0 10px #0ff;
+    }
+    /* Animated crawling text overlay */
+    #crawl-container {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      transform: translateX(-50%);
+      overflow: hidden;
+      z-index: 4; /* Lower than #interface */
+    }
+    #crawl-text {
+      position: absolute;
+      top: 100%; /* Start offscreen at the bottom */
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      max-width: 800px;
+      text-align: left;
+      color: #ffffff; /* Bright white text */
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.2em;
+      line-height: 1.6;
+      text-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff; /* Glow effect */
+      animation: crawlUp 60s linear infinite; /* Slower animation */
+    }
+    @keyframes crawlUp {
+      0% {
+        top: 100%; /* Start at the bottom */
+      }
+      100% {
+        top: -200%; /* Scroll up and disappear */
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- WebGL canvas for the cosmic/starfield background -->
+  <canvas id="glCanvas"></canvas>
+  
+  <!-- Spacecraft Interface Panel -->
+  <div id="interface">
+    <h1>SPACECRAFT INTERFACE MODULE</h1>
+    <div class="status">Engine: <span id="engine-status">Online</span></div>
+    <div class="status">Shield: <span id="shield-status">Active</span></div>
+    <div class="status">Navigation: <span id="nav-status">Engaged</span></div>
+    <div class="status">Life Support: <span id="life-status">Online</span></div>
+    <div class="status">Communications: <span id="comm-status">Online</span></div>
+    <div class="status">Warp Drive: <span id="warp-status">Standby</span></div>
+    <div class="status">Sensor Array: <span id="sensor-status">Active</span></div>
+    <div class="status">Auxiliary Power: <span id="power-status">Online</span></div>
+    <div id="clock">00:00:00</div>
+    <button id="simulate-btn">Run Systems Check</button>
+  </div>
+  
+  <!-- Media Panel: Video at top-right and two inline images at bottom -->
+  <div id="media-panel">
+    <video id="readme-video" src="readme.mp4" autoplay loop muted playsinline></video>
+    <div id="image-container">
+      <img src="readme1.jpg" alt="Readme Image 1">
+      <img src="readme2.jpg" alt="Readme Image 2">
+    </div>
+  </div>
+  
+  <!-- Animated crawling text overlay -->
+  <div id="crawl-container">
+    <div id="crawl-text">
+      <h1>Controls and Player Abilities</h1>
+      <p><strong>Controls:</strong></p>
+      <ul>
+        <li><strong>W, A, S, D</strong> – Move the camera around the map.</li>
+        <li><strong>Mouse Click</strong> – Place buildings or select NPCs.</li>
+        <li><strong>L Key</strong> – Toggle between placing a Turret or Light Post.</li>
+        <li><strong>1–5 Keys</strong> – Select different building types for placement:
+          <ul>
+            <li><strong>1:</strong> Building Type 0 (Generates Uranium)</li>
+            <li><strong>2:</strong> Building Type 1 (Generates Water)</li>
+            <li><strong>3:</strong> Building Type 2 (Generates Iron)</li>
+            <li><strong>4:</strong> Building Type 3</li>
+            <li><strong>5:</strong> Building Type 4</li>
+          </ul>
+        </li>
+        <li><strong>7 Key</strong> – Spawn a friendly NPC (up to a maximum of 10).</li>
+        <li><strong>8 Key</strong> – Spawn a turret at a random building location.</li>
+        <li><strong>G Key</strong> – Spawn the enemy base (if not already spawned).</li>
+      </ul>
+      <p><strong>Player Abilities:</strong></p>
+      <ul>
+        <li><strong>Place Buildings:</strong>
+          <ul>
+            <li><strong>Turrets:</strong> Defensive structures that shoot at enemies.</li>
+            <li><strong>Light Posts:</strong> Decorative structures with light effects.</li>
+            <li><strong>Resource Generators:</strong> Buildings that generate resources over time:
+              <ul>
+                <li><strong>Type 0:</strong> Generates Uranium every 10 seconds.</li>
+                <li><strong>Type 1:</strong> Generates Water every 5 seconds.</li>
+                <li><strong>Type 2:</strong> Generates Iron every 7 seconds.</li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>Spawn NPCs:</strong> Friendly NPCs patrol the area and can be selected/commanded to move.</li>
+        <li><strong>Resource Management:</strong> Collect and manage resources (Iron, Water, Uranium) generated by buildings.</li>
+        <li><strong>Defend Against Enemies:</strong>
+          <ul>
+            <li>Turrets automatically target and shoot at enemy NPCs.</li>
+            <li>Enemy NPCs spawn from the enemy base and attack friendly NPCs.</li>
+          </ul>
+        </li>
+        <li><strong>UFO Enemy Spawn:</strong> When Water reaches 100, UFO enemies spawn (up to a maximum of 3).</li>
+        <li><strong>Custom Cursor:</strong> A unique cursor with animations and effects.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- WebGL fragment shader for a cosmic starfield -->
+  <script id="fragShader" type="x-shader/x-fragment">
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float u_time;
+uniform vec2 u_resolution;
+
+// Simple pseudo-random function based on coordinates
+float random(vec2 st) {
+  return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
+void main(){
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  // Move stars slowly downward over time
+  st.y += u_time * 0.05;
+  
+  // Create a smooth cosmic gradient
+  vec3 bg = mix(vec3(0.0, 0.05, 0.1), vec3(0.0, 0.15, 0.3), st.y);
+  
+  // Generate stars: bright dots appear randomly
+  float star = step(0.995, random(floor(st * 200.0)));
+  vec3 color = bg + star * vec3(1.0, 1.0, 1.0);
+  
+  gl_FragColor = vec4(color, 1.0);
+}
+  </script>
+
+  <!-- WebGL initialization and interface functionality -->
+  <script>
+    (function(){
+      // Set up the canvas and WebGL context
+      var canvas = document.getElementById('glCanvas');
+      var gl = canvas.getContext('webgl');
+      if (!gl) {
+        console.error('WebGL not supported');
+        return;
+      }
+      
+      // Resize canvas to always fill the window
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      }
+      window.addEventListener('resize', resize);
+      resize();
+      
+      // Vertex shader: renders a full-screen triangle
+      var vertexShaderSrc = `
+        attribute vec2 a_position;
+        void main(){
+          gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+      `;
+      
+      // Get the fragment shader source from the HTML
+      var fragShaderSrc = document.getElementById('fragShader').textContent;
+      
+      // Helper: compile a shader of a given type
+      function compileShader(source, type) {
+        var shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('Error compiling shader:', gl.getShaderInfoLog(shader));
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+      
+      var vertexShader = compileShader(vertexShaderSrc, gl.VERTEX_SHADER);
+      var fragmentShader = compileShader(fragShaderSrc, gl.FRAGMENT_SHADER);
+      
+      // Link the shaders into a program
+      var program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Error linking program:', gl.getProgramInfoLog(program));
+        return;
+      }
+      gl.useProgram(program);
+      
+      // Create a full-screen triangle
+      var vertices = new Float32Array([
+        -1, -1,
+         3, -1,
+        -1,  3
+      ]);
+      var buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+      
+      var posAttrib = gl.getAttribLocation(program, "a_position");
+      gl.enableVertexAttribArray(posAttrib);
+      gl.vertexAttribPointer(posAttrib, 2, gl.FLOAT, false, 0, 0);
+      
+      // Set up uniforms for time and resolution
+      var u_time = gl.getUniformLocation(program, "u_time");
+      var u_resolution = gl.getUniformLocation(program, "u_resolution");
+      var startTime = Date.now();
+      
+      // Render loop
+      function render() {
+        var elapsed = (Date.now() - startTime) / 1000.0;
+        gl.uniform1f(u_time, elapsed);
+        gl.uniform2f(u_resolution, canvas.width, canvas.height);
+        
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        requestAnimationFrame(render);
+      }
+      render();
+      
+      // -- Interface Module Functions --
+      // Update digital clock every second
+      function updateClock() {
+        var clockEl = document.getElementById('clock');
+        var now = new Date();
+        var h = ("0" + now.getHours()).slice(-2);
+        var m = ("0" + now.getMinutes()).slice(-2);
+        var s = ("0" + now.getSeconds()).slice(-2);
+        clockEl.textContent = h + ":" + m + ":" + s;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+      
+      // Function to get a random status from predefined statuses
+      function getRandomStatus() {
+        var statuses = ["Online", "Offline", "Engaged", "Standby", "Active", "Inactive"];
+        return statuses[Math.floor(Math.random() * statuses.length)];
+      }
+      
+      // Simulate a systems check when the button is clicked, updating statuses
+      var simulateBtn = document.getElementById('simulate-btn');
+      simulateBtn.addEventListener('click', function(){
+        document.getElementById('engine-status').textContent = getRandomStatus();
+        document.getElementById('shield-status').textContent = getRandomStatus();
+        document.getElementById('nav-status').textContent = getRandomStatus();
+        document.getElementById('life-status').textContent = getRandomStatus();
+        document.getElementById('comm-status').textContent = getRandomStatus();
+        document.getElementById('warp-status').textContent = getRandomStatus();
+        document.getElementById('sensor-status').textContent = getRandomStatus();
+        document.getElementById('power-status').textContent = getRandomStatus();
+        simulateBtn.textContent = "Running...";
+        setTimeout(function(){
+          simulateBtn.textContent = "Run Systems Check";
+        }, 1000);
+      });
+    })();
+  </script>
+</body>
+</html>

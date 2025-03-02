@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reality Glitch</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: monospace;
+            background-color: #000;
+            color: #0f0;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #player {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #f00;
+            border-radius: 50%;
+            transition: transform 0.1s linear;
+        }
+        
+        .entity {
+            position: absolute;
+            background-color: rgba(0, 255, 255, 0.7);
+            border: 1px solid #0ff;
+        }
+        
+        #score-container {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            padding: 5px;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        #message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 2px solid #0f0;
+            display: none;
+            z-index: 1000;
+            max-width: 80%;
+            text-align: center;
+        }
+        
+        .glitch {
+            animation: glitch 0.3s infinite;
+        }
+        
+        @keyframes glitch {
+            0% { opacity: 1; transform: translate(0); }
+            20% { opacity: 0.8; transform: translate(-2px, 2px); }
+            40% { opacity: 0.9; transform: translate(2px, -2px); }
+            60% { opacity: 1; transform: translate(-2px, -2px); }
+            80% { opacity: 0.8; transform: translate(2px, 2px); }
+            100% { opacity: 1; transform: translate(0); }
+        }
+        
+        #debug-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        #hidden-input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="player"></div>
+        <div id="score-container">
+            Score: <span id="score">0</span> | Level: <span id="level">1</span> | Stability: <span id="stability">100</span>%
+        </div>
+        <div id="message-box"></div>
+        <div id="debug-info"></div>
+        <input type="text" id="hidden-input">
+    </div>
+
+    <script>
+        // Core game variables
+        const player = document.getElementById('player');
+        const gameContainer = document.getElementById('game-container');
+        const scoreDisplay = document.getElementById('score');
+        const levelDisplay = document.getElementById('level');
+        const stabilityDisplay = document.getElementById('stability');
+        const messageBox = document.getElementById('message-box');
+        const debugInfo = document.getElementById('debug-info');
+        const hiddenInput = document.getElementById('hidden-input');
+        
+        let score = 0;
+        let level = 1;
+        let stability = 100;
+        let playerX = window.innerWidth / 2;
+        let playerY = window.innerHeight / 2;
+        let entities = [];
+        let gameActive = true;
+        let mouseControlEnabled = true;
+        let inversedControls = false;
+        let lastFrameTime = 0;
+        let dimensionalShift = false;
+        let secretCode = "";
+        let secretCodeInput = "";
+        let timeFactorMultiplier = 1;
+        
+        // Initialize game
+        function initGame() {
+            updatePlayerPosition();
+            generateRandomEntities(5);
+            window.requestAnimationFrame(gameLoop);
+            secretCode = generateSecretCode();
+            console.log("Secret code:", secretCode);
+            
+            // Add subtle hint in debug
+            debugInfo.textContent = `v0.${secretCode.length}.${secretCode.charCodeAt(0)}`;
+            
+            // Start stability decay
+            setInterval(() => {
+                if (gameActive && stability > 0) {
+                    stability = Math.max(0, stability - 0.5);
+                    stabilityDisplay.textContent = Math.floor(stability);
+                    
+                    if (stability < 30) {
+                        document.body.classList.add('glitch');
+                    } else {
+                        document.body.classList.remove('glitch');
+                    }
+                    
+                    if (stability <= 0) {
+                        realityCollapse();
+                    }
+                }
+            }, 1000);
+        }
+        
+        // Game loop
+        function gameLoop(timestamp) {
+            if (!gameActive) return;
+            
+            const deltaTime = (timestamp - lastFrameTime) / 1000 * timeFactorMultiplier;
+            lastFrameTime = timestamp;
+            
+            updateEntities(deltaTime);
+            checkCollisions();
+            
+            window.requestAnimationFrame(gameLoop);
+        }
+        
+        // Random entities generation
+        function generateRandomEntities(count) {
+            for (let i = 0; i < count; i++) {
+                createEntity();
+            }
+        }
+        
+        function createEntity() {
+            const entity = document.createElement('div');
+            entity.classList.add('entity');
+            
+            const size = Math.random() * 30 + 10;
+            const x = Math.random() * (window.innerWidth - size);
+            const y = Math.random() * (window.innerHeight - size);
+            
+            entity.style.width = `${size}px`;
+            entity.style.height = `${size}px`;
+            entity.style.left = `${x}px`;
+            entity.style.top = `${y}px`;
+            
+            const behaviorType = Math.floor(Math.random() * 4);
+            const speedFactor = Math.random() * 50 + 30;
+            
+            const entityData = {
+                element: entity,
+                x: x,
+                y: y,
+                size: size,
+                speedX: (Math.random() - 0.5) * speedFactor,
+                speedY: (Math.random() - 0.5) * speedFactor,
+                behaviorType: behaviorType,
+                phase: Math.random() * Math.PI * 2,
+                amplitude: Math.random() * 100 + 50,
+                frequency: Math.random() * 2 + 0.5
+            };
+            
+            entities.push(entityData);
+            gameContainer.appendChild(entity);
+        }
+        
+        // Update entity positions
+        function updateEntities(deltaTime) {
+            entities.forEach(entity => {
+                switch(entity.behaviorType) {
+                    case 0: // Linear movement with bouncing
+                        entity.x += entity.speedX * deltaTime;
+                        entity.y += entity.speedY * deltaTime;
+                        
+                        if (entity.x <= 0 || entity.x >= window.innerWidth - entity.size) {
+                            entity.speedX *= -1;
+                            destabilize(1);
+                        }
+                        
+                        if (entity.y <= 0 || entity.y >= window.innerHeight - entity.size) {
+                            entity.speedY *= -1;
+                            destabilize(1);
+                        }
+                        break;
+                        
+                    case 1: // Sine wave movement
+                        entity.phase += deltaTime * entity.frequency;
+                        entity.x += entity.speedX * deltaTime;
+                        entity.y = entity.y + Math.sin(entity.phase) * entity.amplitude * deltaTime;
+                        
+                        if (entity.x <= 0 || entity.x >= window.innerWidth - entity.size) {
+                            entity.speedX *= -1;
+                            destabilize(1);
+                        }
+                        break;
+                        
+                    case 2: // Follow player
+                        const dx = playerX - entity.x;
+                        const dy = playerY - entity.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist > 5) {
+                            entity.x += dx / dist * entity.speedX * 0.1 * deltaTime;
+                            entity.y += dy / dist * entity.speedY * 0.1 * deltaTime;
+                        }
+                        break;
+                        
+                    case 3: // Teleporting
+                        if (Math.random() < 0.005) {
+                            entity.x = Math.random() * (window.innerWidth - entity.size);
+                            entity.y = Math.random() * (window.innerHeight - entity.size);
+                            destabilize(3);
+                        }
+                        break;
+                }
+                
+                // Update DOM element position
+                entity.element.style.left = `${entity.x}px`;
+                entity.element.style.top = `${entity.y}px`;
+            });
+        }
+        
+        // Player movement via mouse
+        function updatePlayerPosition() {
+            player.style.left = `${playerX - 10}px`;
+            player.style.top = `${playerY - 10}px`;
+        }
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!mouseControlEnabled || !gameActive) return;
+            
+            if (inversedControls) {
+                playerX = window.innerWidth - e.clientX;
+                playerY = window.innerHeight - e.clientY;
+            } else {
+                playerX = e.clientX;
+                playerY = e.clientY;
+            }
+            
+            updatePlayerPosition();
+        });
+        
+        // Collision detection
+        function checkCollisions() {
+            const playerRadius = 10;
+            
+            entities.forEach((entity, index) => {
+                const entityCenterX = entity.x + entity.size / 2;
+                const entityCenterY = entity.y + entity.size / 2;
+                
+                const dx = playerX - entityCenterX;
+                const dy = playerY - entityCenterY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < playerRadius + entity.size / 2) {
+                    // Collision occurred
+                    handleCollision(entity, index);
+                }
+            });
+        }
+        
+        // Handle collisions with entities
+        function handleCollision(entity, index) {
+            score += 10;
+            scoreDisplay.textContent = score;
+            
+            // Remove collided entity
+            gameContainer.removeChild(entity.element);
+            entities.splice(index, 1);
+            
+            // Add some stability back
+            stability = Math.min(100, stability + 5);
+            stabilityDisplay.textContent = Math.floor(stability);
+            
+            // Create new entity
+            createEntity();
+            
+            // Level up check
+            if (score >= level * 100) {
+                levelUp();
+            }
+            
+            // Random reality glitch
+            if (Math.random() < 0.3) {
+                triggerRandomGlitch();
+            }
+        }
+        
+        // Level up
+        function levelUp() {
+            level++;
+            levelDisplay.textContent = level;
+            
+            showMessage(`LEVEL ${level}: REALITY SHIFTING`, 2000);
+            
+            // Add more entities
+            generateRandomEntities(2);
+            
+            // Increase difficulty
+            timeFactorMultiplier += 0.2;
+            
+            // Random level effects
+            if (level % 3 === 0) {
+                inversedControls = !inversedControls;
+                showMessage("CONTROL INVERSION", 2000);
+            }
+            
+            if (level % 5 === 0) {
+                dimensionalShift = !dimensionalShift;
+                document.body.style.filter = dimensionalShift ? "invert(100%) hue-rotate(180deg)" : "none";
+                showMessage("DIMENSIONAL SHIFT", 2000);
+            }
+        }
+        
+        // Destabilize reality
+        function destabilize(amount) {
+            stability = Math.max(0, stability - amount);
+            stabilityDisplay.textContent = Math.floor(stability);
+            
+            if (stability <= 0) {
+                realityCollapse();
+            }
+        }
+        
+        // Random glitches
+        function triggerRandomGlitch() {
+            const glitchType = Math.floor(Math.random() * 5);
+            
+            switch (glitchType) {
+                case 0: // Screen shake
+                    gameContainer.classList.add('glitch');
+                    setTimeout(() => {
+                        gameContainer.classList.remove('glitch');
+                    }, 1000);
+                    break;
+                    
+                case 1: // Reverse gravity for entities
+                    entities.forEach(entity => {
+                        entity.speedY *= -1;
+                    });
+                    showMessage("GRAVITY FLUX", 1000);
+                    break;
+                    
+                case 2: // Time slowdown
+                    const oldTimeFactor = timeFactorMultiplier;
+                    timeFactorMultiplier = 0.3;
+                    showMessage("TEMPORAL ANOMALY", 1000);
+                    setTimeout(() => {
+                        timeFactorMultiplier = oldTimeFactor;
+                    }, 3000);
+                    break;
+                    
+                case 3: // Entity acceleration
+                    entities.forEach(entity => {
+                        entity.speedX *= 1.5;
+                        entity.speedY *= 1.5;
+                    });
+                    showMessage("KINETIC SURGE", 1000);
+                    break;
+                    
+                case 4: // Secret hint
+                    showMessage(`DECIPHER: ${getSecretHint()}`, 2000);
+                    break;
+            }
+            
+            destabilize(2);
+        }
+        
+        // Reality collapse
+        function realityCollapse() {
+            gameActive = false;
+            showMessage("REALITY COLLAPSE... GAME OVER", 0);
+            document.body.style.backgroundColor = "#f00";
+            
+            setTimeout(() => {
+                messageBox.innerHTML += "<br><br>Restart? [SPACE]";
+                
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space' && !gameActive) {
+                        resetGame();
+                    }
+                }, { once: true });
+            }, 3000);
+        }
+        
+        // Show message
+        function showMessage(text, duration) {
+            messageBox.textContent = text;
+            messageBox.style.display = 'block';
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    messageBox.style.display = 'none';
+                }, duration);
+            }
+        }
+        
+        // Reset game
+        function resetGame() {
+            // Clear existing entities
+            entities.forEach(entity => {
+                gameContainer.removeChild(entity.element);
+            });
+            
+            entities = [];
+            score = 0;
+            level = 1;
+            stability = 100;
+            gameActive = true;
+            timeFactorMultiplier = 1;
+            inversedControls = false;
+            dimensionalShift = false;
+            
+            // Reset display
+            scoreDisplay.textContent = score;
+            levelDisplay.textContent = level;
+            stabilityDisplay.textContent = stability;
+            document.body.style.backgroundColor = "#000";
+            document.body.style.filter = "none";
+            document.body.classList.remove('glitch');
+            messageBox.style.display = 'none';
+            
+            // Restart game
+            initGame();
+        }
+        
+        // Secret code functions
+        function generateSecretCode() {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            let code = "";
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+        
+        function getSecretHint() {
+            const hintIndex = Math.floor(Math.random() * secretCode.length);
+            return `Letter ${hintIndex + 1} is '${secretCode[hintIndex]}'`;
+        }
+        
+        // Listen for secret code input
+        document.addEventListener('keydown', (e) => {
+            if (!gameActive) return;
+            
+            if (e.key.match(/[a-zA-Z]/)) {
+                secretCodeInput += e.key.toUpperCase();
+                
+                // Keep only the last N characters where N is the length of the secret code
+                if (secretCodeInput.length > secretCode.length) {
+                    secretCodeInput = secretCodeInput.substring(secretCodeInput.length - secretCode.length);
+                }
+                
+                // Check if code matches
+                if (secretCodeInput === secretCode) {
+                    unlockSecretMode();
+                }
+            }
+        });
+        
+        function unlockSecretMode() {
+            showMessage("REALITY BREACH: GOD MODE UNLOCKED", 3000);
+            player.style.boxShadow = "0 0 20px #ff0, 0 0 40px #ff0";
+            stability = 999;
+            stabilityDisplay.textContent = "∞";
+            
+            // Add some special effects
+            document.body.style.backgroundImage = "linear-gradient(to bottom, #000, #003)";
+            
+            // Spawn a bunch of new entities
+            generateRandomEntities(20);
+            
+            // Easter egg message in console
+            console.log("You've broken through the veil of reality. Congratulations.");
+        }
+        
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            // Destabilize reality when window resizes
+            destabilize(10);
+            showMessage("DIMENSIONAL BREACH", 1000);
+        });
+        
+        // Start game
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>

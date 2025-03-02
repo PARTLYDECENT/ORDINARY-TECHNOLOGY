@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quantum Bubble Chaos</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            touch-action: none;
+        }
+        #gameCanvas {
+            cursor: crosshair;
+        }
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            user-select: none;
+        }
+        #blackholeCharge {
+            width: 100px;
+            height: 10px;
+            border: 1px solid white;
+            margin-top: 5px;
+        }
+        #chargeBar {
+            width: 0%;
+            height: 100%;
+            background: #00ff88;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        Score: <span id="score">0</span><br>
+        Time: <span id="timer">60</span><br>
+        Blackhole Charge:
+        <div id="blackholeCharge">
+            <div id="chargeBar"></div>
+        </div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width = window.innerWidth;
+let height = canvas.height = window.innerHeight;
+
+// Game state
+let score = 0;
+let timeLeft = 60;
+let isBlackholeActive = false;
+let blackholeCharge = 0;
+let bubbles = [];
+const BUBBLE_TYPES = {
+    DEFAULT: 0,
+    SPLITTING: 1,
+    EXPLOSIVE: 2,
+    IMMUNE: 3
+};
+
+class Bubble {
+    constructor(x, y) {
+        this.x = x || Math.random() * width;
+        this.y = y || Math.random() * height;
+        this.radius = Math.random() * 30 + 20;
+        this.vx = (Math.random() - 0.5) * 5;
+        this.vy = (Math.random() - 0.5) * 5;
+        this.type = Math.random() < 0.85 ? BUBBLE_TYPES.DEFAULT : 
+                   Math.random() < 0.6 ? BUBBLE_TYPES.SPLITTING :
+                   Math.random() < 0.75 ? BUBBLE_TYPES.EXPLOSIVE : 
+                   BUBBLE_TYPES.IMMUNE;
+        this.health = this.type === BUBBLE_TYPES.IMMUNE ? 3 : 1;
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.getColor();
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.stroke();
+        
+        if (this.type === BUBBLE_TYPES.IMMUNE) {
+            ctx.fillStyle = 'white';
+            ctx.font = `${this.radius/2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('❌', this.x, this.y + this.radius/4);
+        }
+    }
+
+    getColor() {
+        const colors = {
+            [BUBBLE_TYPES.DEFAULT]: `rgba(100, 150, 255, 0.7)`,
+            [BUBBLE_TYPES.SPLITTING]: `rgba(255, 100, 200, 0.7)`,
+            [BUBBLE_TYPES.EXPLOSIVE]: `rgba(255, 200, 100, 0.7)`,
+            [BUBBLE_TYPES.IMMUNE]: `rgba(100, 255, 150, 0.7)`
+        };
+        return colors[this.type];
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Bounce off walls
+        if (this.x < this.radius || this.x > width - this.radius) this.vx *= -1;
+        if (this.y < this.radius || this.y > height - this.radius) this.vy *= -1;
+    }
+}
+
+// Game mechanics
+function createBubble(x, y) {
+    bubbles.push(new Bubble(x, y));
+}
+
+function popBubble(index) {
+    const bubble = bubbles[index];
+    
+    if (bubble.type === BUBBLE_TYPES.SPLITTING) {
+        for (let i = 0; i < 3; i++) {
+            createBubble(bubble.x, bubble.y);
+        }
+    }
+    
+    if (bubble.type === BUBBLE_TYPES.EXPLOSIVE) {
+        bubbles.forEach((b, i) => {
+            if (i !== index && distance(b.x, b.y, bubble.x, bubble.y) < 100) {
+                popBubble(i);
+            }
+        });
+    }
+    
+    bubbles.splice(index, 1);
+    score += 10;
+    document.getElementById('score').textContent = score;
+}
+
+function distance(x1, y1, x2, y2) {
+    return Math.hypot(x2 - x1, y2 - y1);
+}
+
+// Input handling
+canvas.addEventListener('mousedown', handleClick);
+canvas.addEventListener('mousemove', (e) => {
+    if (isBlackholeActive) {
+        applyBlackholeEffect(e.clientX, e.clientY);
+    }
+});
+canvas.addEventListener('mouseup', () => isBlackholeActive = false);
+
+function handleClick(e) {
+    if (blackholeCharge >= 100) {
+        isBlackholeActive = true;
+        blackholeCharge = 0;
+        return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+        const bubble = bubbles[i];
+        if (distance(mouseX, mouseY, bubble.x, bubble.y) < bubble.radius) {
+            if (bubble.type === BUBBLE_TYPES.IMMUNE) {
+                bubble.health--;
+                if (bubble.health <= 0) popBubble(i);
+                return;
+            }
+            popBubble(i);
+            return;
+        }
+    }
+}
+
+function applyBlackholeEffect(x, y) {
+    bubbles.forEach(bubble => {
+        const angle = Math.atan2(y - bubble.y, x - bubble.x);
+        const force = 10;
+        bubble.vx += Math.cos(angle) * force;
+        bubble.vy += Math.sin(angle) * force;
+        
+        if (distance(x, y, bubble.x, bubble.y) < 50) {
+            const index = bubbles.indexOf(bubble);
+            if (index !== -1) popBubble(index);
+        }
+    });
+}
+
+// Game loop
+function update() {
+    bubbles.forEach(bubble => bubble.update());
+    
+    // Spawn bubbles
+    if (Math.random() < 0.1) createBubble();
+    
+    // Update blackhole charge
+    if (!isBlackholeActive && blackholeCharge < 100) {
+        blackholeCharge += 0.5;
+        document.getElementById('chargeBar').style.width = blackholeCharge + '%';
+    }
+}
+
+function draw() {
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+    
+    bubbles.forEach(bubble => bubble.draw());
+    
+    if (isBlackholeActive) {
+        ctx.beginPath();
+        ctx.arc(canvas.width/2, canvas.height/2, 30, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
+        ctx.fill();
+    }
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+// Start game
+for (let i = 0; i < 10; i++) createBubble();
+gameLoop();
+
+// Timer
+setInterval(() => {
+    if (timeLeft <= 0) {
+        alert(`Game Over! Score: ${score}`);
+        location.reload();
+    }
+    timeLeft--;
+    document.getElementById('timer').textContent = timeLeft;
+}, 1000);
+
+// Resize handler
+window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recycling Sorting Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #e0f7fa;
+            overflow: hidden;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .conveyor {
+            position: absolute;
+            top: 100px;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background: repeating-linear-gradient(
+                45deg,
+                #666666,
+                #666666 10px,
+                #444444 10px,
+                #444444 20px
+            );
+            border-top: 4px solid #888;
+            border-bottom: 4px solid #888;
+        }
+        
+        .bins-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px;
+        }
+        
+        .bin {
+            width: 100px;
+            height: 120px;
+            background-color: #555;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .bin-label {
+            color: white;
+            font-weight: bold;
+            background-color: #333;
+            width: 100%;
+            text-align: center;
+            padding: 5px 0;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }
+        
+        .item {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            cursor: grab;
+            z-index: 10;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .score-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 2em;
+            z-index: 100;
+            display: none;
+        }
+        
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score-container">
+            <div>Score: <span id="score">0</span></div>
+            <div>Lives: <span id="lives">3</span></div>
+            <div>Time: <span id="time">60</span>s</div>
+        </div>
+        
+        <div class="conveyor"></div>
+        
+        <div class="bins-container">
+            <div class="bin" data-type="plastic">
+                <div class="bin-label">PLASTIC</div>
+            </div>
+            <div class="bin" data-type="metal">
+                <div class="bin-label">METAL</div>
+            </div>
+            <div class="bin" data-type="garbage">
+                <div class="bin-label">GARBAGE</div>
+            </div>
+        </div>
+        
+        <div class="game-over">
+            <div id="game-over-text">Game Over!</div>
+            <div id="final-score">Final Score: 0</div>
+            <button id="restart-button">Play Again</button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const gameContainer = document.querySelector('.game-container');
+            const binsContainer = document.querySelector('.bins-container');
+            const bins = document.querySelectorAll('.bin');
+            const scoreElement = document.getElementById('score');
+            const livesElement = document.getElementById('lives');
+            const timeElement = document.getElementById('time');
+            const gameOverScreen = document.querySelector('.game-over');
+            const finalScoreElement = document.getElementById('final-score');
+            const restartButton = document.getElementById('restart-button');
+            
+            let score = 0;
+            let lives = 3;
+            let timeLeft = 60;
+            let gameRunning = true;
+            
+            // Using placeholder images
+            const itemTypes = [
+                { type: 'plastic', image: '/api/placeholder/60/60' },
+                { type: 'metal', image: '/api/placeholder/60/60' },
+                { type: 'garbage', image: '/api/placeholder/60/60' }
+            ];
+            
+            // For touch screens
+            let touchOffset = { x: 0, y: 0 };
+            
+            function createItem() {
+                if (!gameRunning) return;
+                
+                const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                const item = document.createElement('div');
+                item.className = 'item';
+                item.dataset.type = randomType.type;
+                
+                // Set item appearance based on type
+                item.style.backgroundImage = `url(${randomType.image})`;
+                if (randomType.type === 'plastic') {
+                    item.style.backgroundColor = 'rgba(0, 150, 255, 0.7)';
+                } else if (randomType.type === 'metal') {
+                    item.style.backgroundColor = 'rgba(180, 180, 180, 0.7)';
+                } else {
+                    item.style.backgroundColor = 'rgba(100, 70, 40, 0.7)';
+                }
+                
+                // Position on conveyor
+                item.style.left = '-60px';
+                item.style.top = '100px';
+                
+                gameContainer.appendChild(item);
+                
+                // Make item draggable
+                item.addEventListener('mousedown', startDrag);
+                item.addEventListener('touchstart', startDragTouch, { passive: false });
+                
+                // Move along conveyor
+                const speed = 1 + Math.random() * 2;
+                const moveInterval = setInterval(() => {
+                    if (!gameRunning) {
+                        clearInterval(moveInterval);
+                        return;
+                    }
+                    
+                    const currentLeft = parseFloat(item.style.left);
+                    if (currentLeft > gameContainer.clientWidth) {
+                        // Item missed
+                        clearInterval(moveInterval);
+                        gameContainer.removeChild(item);
+                        decrementLives();
+                    } else {
+                        item.style.left = (currentLeft + speed) + 'px';
+                    }
+                }, 30);
+            }
+            
+            function startDrag(e) {
+                const item = e.target;
+                
+                // Set initial position
+                const startX = e.clientX - item.getBoundingClientRect().left;
+                const startY = e.clientY - item.getBoundingClientRect().top;
+                
+                // Increase z-index to keep it above other items
+                item.style.zIndex = "100";
+                
+                function moveItem(e) {
+                    const gameRect = gameContainer.getBoundingClientRect();
+                    const x = e.clientX - gameRect.left - startX;
+                    const y = e.clientY - gameRect.top - startY;
+                    
+                    // Keep item within game container
+                    const maxX = gameRect.width - item.clientWidth;
+                    const maxY = gameRect.height - item.clientHeight;
+                    
+                    item.style.left = Math.max(0, Math.min(maxX, x)) + 'px';
+                    item.style.top = Math.max(0, Math.min(maxY, y)) + 'px';
+                }
+                
+                function stopDrag() {
+                    document.removeEventListener('mousemove', moveItem);
+                    document.removeEventListener('mouseup', stopDrag);
+                    
+                    // Check if item is over a bin
+                    checkBinDrop(item);
+                    
+                    // Reset z-index
+                    item.style.zIndex = "10";
+                }
+                
+                document.addEventListener('mousemove', moveItem);
+                document.addEventListener('mouseup', stopDrag);
+            }
+            
+            function startDragTouch(e) {
+                e.preventDefault();
+                const item = e.target;
+                const touch = e.touches[0];
+                
+                // Calculate offset
+                const itemRect = item.getBoundingClientRect();
+                touchOffset.x = touch.clientX - itemRect.left;
+                touchOffset.y = touch.clientY - itemRect.top;
+                
+                // Increase z-index
+                item.style.zIndex = "100";
+                
+                function moveItemTouch(e) {
+                    const touch = e.touches[0];
+                    const gameRect = gameContainer.getBoundingClientRect();
+                    
+                    const x = touch.clientX - gameRect.left - touchOffset.x;
+                    const y = touch.clientY - gameRect.top - touchOffset.y;
+                    
+                    // Keep item within game container
+                    const maxX = gameRect.width - item.clientWidth;
+                    const maxY = gameRect.height - item.clientHeight;
+                    
+                    item.style.left = Math.max(0, Math.min(maxX, x)) + 'px';
+                    item.style.top = Math.max(0, Math.min(maxY, y)) + 'px';
+                }
+                
+                function stopDragTouch() {
+                    document.removeEventListener('touchmove', moveItemTouch);
+                    document.removeEventListener('touchend', stopDragTouch);
+                    
+                    // Check if item is over a bin
+                    checkBinDrop(item);
+                    
+                    // Reset z-index
+                    item.style.zIndex = "10";
+                }
+                
+                document.addEventListener('touchmove', moveItemTouch, { passive: false });
+                document.addEventListener('touchend', stopDragTouch);
+            }
+            
+            function checkBinDrop(item) {
+                const itemRect = item.getBoundingClientRect();
+                const itemType = item.dataset.type;
+                let dropped = false;
+                
+                bins.forEach(bin => {
+                    const binRect = bin.getBoundingClientRect();
+                    const binType = bin.dataset.type;
+                    
+                    // Check if item center is over bin
+                    const itemCenterX = itemRect.left + itemRect.width / 2;
+                    const itemCenterY = itemRect.top + itemRect.height / 2;
+                    
+                    if (
+                        itemCenterX >= binRect.left &&
+                        itemCenterX <= binRect.right &&
+                        itemCenterY >= binRect.top &&
+                        itemCenterY <= binRect.bottom
+                    ) {
+                        // Item dropped in a bin
+                        if (itemType === binType) {
+                            // Correct bin
+                            incrementScore();
+                        } else {
+                            // Wrong bin
+                            decrementLives();
+                        }
+                        
+                        gameContainer.removeChild(item);
+                        dropped = true;
+                    }
+                });
+                
+                // If not dropped in any bin, return to conveyor
+                if (!dropped) {
+                    item.style.top = '100px';
+                }
+            }
+            
+            function incrementScore() {
+                score += 10;
+                scoreElement.textContent = score;
+            }
+            
+            function decrementLives() {
+                lives--;
+                livesElement.textContent = lives;
+                
+                if (lives <= 0) {
+                    endGame();
+                }
+            }
+            
+            function updateTimer() {
+                timeLeft--;
+                timeElement.textContent = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }
+            
+            function endGame() {
+                gameRunning = false;
+                
+                // Remove all items
+                document.querySelectorAll('.item').forEach(item => {
+                    gameContainer.removeChild(item);
+                });
+                
+                // Show game over screen
+                finalScoreElement.textContent = `Final Score: ${score}`;
+                gameOverScreen.style.display = 'flex';
+            }
+            
+            function startGame() {
+                score = 0;
+                lives = 3;
+                timeLeft = 60;
+                gameRunning = true;
+                
+                scoreElement.textContent = score;
+                livesElement.textContent = lives;
+                timeElement.textContent = timeLeft;
+                
+                gameOverScreen.style.display = 'none';
+                
+                // Start creating items
+                const itemInterval = setInterval(() => {
+                    if (!gameRunning) {
+                        clearInterval(itemInterval);
+                        return;
+                    }
+                    createItem();
+                }, 2000);
+                
+                // Start timer
+                const timerInterval = setInterval(() => {
+                    if (!gameRunning) {
+                        clearInterval(timerInterval);
+                        return;
+                    }
+                    updateTimer();
+                }, 1000);
+            }
+            
+            // Start the game
+            startGame();
+            
+            // Restart button
+            restartButton.addEventListener('click', startGame);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Image to Music Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        #upload {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #imagePreview {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #progressBar {
+            width: 100%;
+            height: 20px;
+            background-color: #ecf0f1;
+            margin-top: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #progressFill {
+            width: 0%;
+            height: 100%;
+            background-color: #2ecc71;
+            transition: width 0.3s;
+        }
+        #errorMessage {
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #songDuration {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Enhanced Image to Music Converter</h1>
+        <input type="file" id="upload" accept="image/*">
+        <div>
+            <label for="durationSelect">Song Duration: </label>
+            <select id="durationSelect">
+                <option value="15">15 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60">1 minute</option>
+                <option value="120">2 minutes</option>
+                <option value="300">5 minutes</option>
+            </select>
+        </div>
+        <div class="controls">
+            <button id="convertButton" disabled>Convert to Music</button>
+            <button id="playButton" disabled>Play Music</button>
+            <button id="stopButton" disabled>Stop Music</button>
+            <button id="exportButton" disabled>Export Audio</button>
+        </div>
+        <img id="imagePreview" style="display: none;">
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <div id="songDuration"></div>
+        <div id="errorMessage"></div>
+    </div>
+
+    <script>
+        let audioContext;
+        let currentSource;
+        let audioBuffer;
+        
+       const scales = {
+    // Existing scales
+    cMajor: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25],
+    aMinor: [220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00],
+    gMajor: [196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 369.99, 392.00],
+    ePhrygian: [164.81, 174.61, 196.00, 220.00, 246.94, 261.63, 293.66, 329.63],
+    fLydian: [174.61, 196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 349.23],
+    dDorian: [146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63, 293.66],
+    
+    // Additional scales
+    dMinor: [146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63, 293.66],
+    bFlatMajor: [233.08, 261.63, 293.66, 311.13, 349.23, 392.00, 440.00, 466.16],
+    eMajor: [164.81, 185.00, 207.65, 220.00, 246.94, 277.18, 311.13, 329.63],
+    gMinor: [196.00, 220.00, 233.08, 261.63, 293.66, 311.13, 349.23, 392.00],
+    fSharpMinor: [185.00, 207.65, 220.00, 246.94, 277.18, 293.66, 329.63, 369.99],
+    bMajor: [246.94, 277.18, 311.13, 329.63, 369.99, 415.30, 466.16, 493.88],
+    cSharpMinor: [138.59, 155.56, 164.81, 185.00, 207.65, 220.00, 246.94, 277.18],
+    
+    // Modal scales
+    gMixolydian: [196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00],
+    aAeolian: [220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00], 
+    bLocrian: [246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88],
+    
+    // Pentatonic scales (using 5 notes but doubled at octave for 8 total)
+    cPentatonic: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25],
+    aPentatonic: [220.00, 246.94, 293.66, 329.63, 392.00, 440.00, 493.88, 587.33],
+    
+    // Blues scales (6 notes with repeats to make 8)
+    cBlues: [261.63, 293.66, 311.13, 329.63, 392.00, 440.00, 523.25, 587.33],
+    gBlues: [196.00, 220.00, 233.08, 246.94, 293.66, 329.63, 392.00, 440.00],
+    
+    // Jazz/complex scales
+    dDiminished: [146.83, 155.56, 174.61, 185.00, 207.65, 220.00, 246.94, 261.63],
+    cWholeTone: [261.63, 293.66, 329.63, 369.99, 415.30, 466.16, 523.25, 587.33],
+    
+    // World music scales
+    hirajoshi: [261.63, 293.66, 311.13, 392.00, 415.30, 523.25, 587.33, 622.25], // Japanese
+    insen: [261.63, 277.18, 329.63, 392.00, 440.00, 523.25, 554.37, 659.25],     // Japanese
+    arabian: [261.63, 277.18, 329.63, 349.23, 392.00, 415.30, 493.88, 523.25]    // Middle Eastern
+};
+   
+        
+        // Current scale to use
+        let currentScale = scales.aMajor;
+
+        const uploadInput = document.getElementById('upload');
+        const durationSelect = document.getElementById('durationSelect');
+        const convertButton = document.getElementById('convertButton');
+        const playButton = document.getElementById('playButton');
+        const stopButton = document.getElementById('stopButton');
+        const exportButton = document.getElementById('exportButton');
+        const imagePreview = document.getElementById('imagePreview');
+        const progressFill = document.getElementById('progressFill');
+        const songDuration = document.getElementById('songDuration');
+        const errorMessage = document.getElementById('errorMessage');
+
+        uploadInput.addEventListener('change', previewImage);
+        convertButton.addEventListener('click', convertToMusic);
+        playButton.addEventListener('click', playMusic);
+        stopButton.addEventListener('click', stopMusic);
+        exportButton.addEventListener('click', exportAudio);
+
+        function previewImage() {
+            const file = uploadInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    imagePreview.src = event.target.result;
+                    imagePreview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+                convertButton.disabled = false;
+                resetAudio();
+            }
+        }
+
+        function resetAudio() {
+            if (currentSource) {
+                currentSource.stop();
+                currentSource = null;
+            }
+            audioBuffer = null;
+            playButton.disabled = true;
+            stopButton.disabled = true;
+            exportButton.disabled = true;
+            progressFill.style.width = '0%';
+            songDuration.textContent = '';
+            errorMessage.textContent = '';
+        }
+
+        function convertToMusic() {
+            resetAudio();
+            const file = uploadInput.files[0];
+            if (!file) {
+                showError("Please upload an image.");
+                return;
+            }
+
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                progressFill.style.width = '5%';
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        progressFill.style.width = '10%';
+                        createMusic(img);
+                    }
+                    img.onerror = function() {
+                        showError("Failed to load image. Please try another.");
+                    }
+                    img.src = event.target.result;
+                }
+                reader.onerror = function() {
+                    showError("Failed to read file. Please try again.");
+                }
+                reader.readAsDataURL(file);
+            } catch (error) {
+                showError("An error occurred: " + error.message);
+            }
+        }
+
+        function createMusic(img) {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Set canvas size to image dimensions (up to a reasonable maximum)
+                const maxDimension = 1000; // Limit to prevent performance issues
+                let width = img.width;
+                let height = img.height;
+                
+                // Scale image if it's too large
+                const aspectRatio = width / height;
+                if (width > maxDimension) {
+                    width = maxDimension;
+                    height = width / aspectRatio;
+                }
+                if (height > maxDimension) {
+                    height = maxDimension;
+                    width = height * aspectRatio;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                progressFill.style.width = '20%';
+                
+                // Get image data
+                const imgData = ctx.getImageData(0, 0, width, height).data;
+                
+                // Select scale based on image colors
+                selectScaleFromImage(imgData);
+                
+                // Extract musical data using full image analysis
+                const notesData = extractMusicalData(imgData, width, height);
+                
+                progressFill.style.width = '50%';
+                
+                // Generate audio
+                generateEnhancedAudio(notesData);
+            } catch (error) {
+                showError("Failed to process image: " + error.message);
+            }
+        }
+        
+        function selectScaleFromImage(imgData) {
+            // Calculate color statistics to select an appropriate scale
+            let totalR = 0, totalG = 0, totalB = 0;
+            let pixelCount = 0;
+            
+            // Sample pixels to avoid performance issues with very large images
+            const sampleStep = Math.max(1, Math.floor(imgData.length / 4000));
+            
+            for (let i = 0; i < imgData.length; i += sampleStep * 4) {
+                const r = imgData[i];
+                const g = imgData[i + 1];
+                const b = imgData[i + 2];
+                
+                totalR += r;
+                totalG += g;
+                totalB += b;
+                pixelCount++;
+            }
+            
+            // Calculate average colors
+            const avgR = totalR / pixelCount;
+            const avgG = totalG / pixelCount;
+            const avgB = totalB / pixelCount;
+            
+            // Determine dominant color
+            const maxAvg = Math.max(avgR, avgG, avgB);
+            
+            // Select scale based on dominant color and relations between colors
+            if (maxAvg === avgR) {
+                // Red dominant
+                currentScale = avgG > avgB ? scales.cMajor : scales.gMajor;
+            } else if (maxAvg === avgG) {
+                // Green dominant
+                currentScale = avgR > avgB ? scales.fLydian : scales.ePhrygian;
+            } else {
+                // Blue dominant
+                currentScale = avgR > avgG ? scales.aMinor : scales.dDorian;
+            }
+        }
+        
+        function extractMusicalData(imgData, width, height) {
+            const notes = [];
+            const durations = [];
+            const volumes = [];
+            
+            // Determine how many data points to extract based on selected duration
+            const targetDuration = parseInt(durationSelect.value);
+            const notesPerSecond = 4; // Average notes per second
+            const targetNoteCount = targetDuration * notesPerSecond;
+            
+            // Calculate image sections
+            const totalPixels = width * height;
+            const pixelsPerNote = Math.max(1, Math.floor(totalPixels / targetNoteCount));
+            
+            // Different sampling patterns based on image dimensions
+            let samplingPattern;
+            if (width > height * 1.5) {
+                // Wide image - horizontal focus
+                samplingPattern = createHorizontalSamplingPattern(width, height, targetNoteCount);
+            } else if (height > width * 1.5) {
+                // Tall image - vertical focus
+                samplingPattern = createVerticalSamplingPattern(width, height, targetNoteCount);
+            } else {
+                // Balanced image - spiral pattern
+                samplingPattern = createSpiralSamplingPattern(width, height, targetNoteCount);
+            }
+            
+            // Extract data using sampling pattern
+            for (let i = 0; i < samplingPattern.length; i++) {
+                const { x, y } = samplingPattern[i];
+                const pixelIndex = (y * width + x) * 4;
+                
+                if (pixelIndex < imgData.length - 4) {
+                    const r = imgData[pixelIndex];
+                    const g = imgData[pixelIndex + 1];
+                    const b = imgData[pixelIndex + 2];
+                    
+                    // Calculate musical properties
+                    const brightness = (r + g + b) / 765; // 0-1
+                    
+                    // Note selection influenced by colors
+                    const noteIndex = Math.floor(brightness * currentScale.length);
+                    const frequency = currentScale[noteIndex % currentScale.length];
+                    
+                    // Duration determined by color variations
+                    const colorVariance = Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
+                    const duration = 0.1 + (colorVariance / 765) * 0.4;
+                    
+                    // Volume influenced by green (natural volume perception)
+                    const volume = 0.3 + (g / 255) * 0.6;
+                    
+                    notes.push(frequency);
+                    durations.push(duration);
+                    volumes.push(volume);
+                }
+            }
+            
+            return { notes, durations, volumes };
+        }
+        
+        function createHorizontalSamplingPattern(width, height, count) {
+            const pattern = [];
+            const rows = Math.min(height, Math.ceil(Math.sqrt(count)));
+            const pointsPerRow = Math.ceil(count / rows);
+            
+            for (let r = 0; r < rows; r++) {
+                const y = Math.floor(height * (r + 0.5) / rows);
+                
+                for (let p = 0; p < pointsPerRow; p++) {
+                    if (pattern.length >= count) break;
+                    
+                    // Zigzag pattern for more interesting music
+                    const direction = r % 2 === 0 ? 1 : -1;
+                    const offset = r % 2 === 0 ? 0 : width - 1;
+                    const x = Math.floor(offset + direction * (width * p / pointsPerRow));
+                    
+                    pattern.push({ x, y });
+                }
+            }
+            
+            return pattern;
+        }
+        
+        function createVerticalSamplingPattern(width, height, count) {
+            const pattern = [];
+            const columns = Math.min(width, Math.ceil(Math.sqrt(count)));
+            const pointsPerColumn = Math.ceil(count / columns);
+            
+            for (let c = 0; c < columns; c++) {
+                const x = Math.floor(width * (c + 0.5) / columns);
+                
+                for (let p = 0; p < pointsPerColumn; p++) {
+                    if (pattern.length >= count) break;
+                    
+                    // Zigzag pattern for more interesting music
+                    const direction = c % 2 === 0 ? 1 : -1;
+                    const offset = c % 2 === 0 ? 0 : height - 1;
+                    const y = Math.floor(offset + direction * (height * p / pointsPerColumn));
+                    
+                    pattern.push({ x, y });
+                }
+            }
+            
+            return pattern;
+        }
+        
+        function createSpiralSamplingPattern(width, height, count) {
+            const pattern = [];
+            const centerX = Math.floor(width / 2);
+            const centerY = Math.floor(height / 2);
+            const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
+            
+            for (let i = 0; i < count; i++) {
+                // Convert i to angle and radius
+                const angle = (i * 0.5) % (2 * Math.PI);
+                const radius = (i / count) * maxDist;
+                
+                // Convert polar to cartesian coordinates
+                let x = Math.floor(centerX + radius * Math.cos(angle));
+                let y = Math.floor(centerY + radius * Math.sin(angle));
+                
+                // Ensure coordinates are within bounds
+                x = Math.max(0, Math.min(width - 1, x));
+                y = Math.max(0, Math.min(height - 1, y));
+                
+                pattern.push({ x, y });
+            }
+            
+            return pattern;
+        }
+
+        function generateEnhancedAudio(notesData) {
+            try {
+                const { notes, durations, volumes } = notesData;
+                
+                // Calculate total duration
+                const totalDuration = durations.reduce((sum, duration) => sum + duration, 0);
+                const targetDuration = parseInt(durationSelect.value);
+                
+                // Adjust note durations to match target if needed
+                let durationMultiplier = 1;
+                if (totalDuration > 0) {
+                    durationMultiplier = targetDuration / totalDuration;
+                }
+                
+                // Create audio buffer
+                audioBuffer = audioContext.createBuffer(1, audioContext.sampleRate * targetDuration, audioContext.sampleRate);
+                const channelData = audioBuffer.getChannelData(0);
+                
+                let currentTime = 0;
+                const progressIncrement = 50 / notes.length; // 50% to 100% during generation
+                
+                // Generate the audio samples
+                for (let i = 0; i < notes.length; i++) {
+                    const frequency = notes[i];
+                    const duration = durations[i] * durationMultiplier;
+                    const volume = volumes[i];
+                    
+                    if (currentTime >= targetDuration) break;
+                    
+                    const startSample = Math.floor(currentTime * audioContext.sampleRate);
+                    const endSample = Math.min(
+                        Math.floor((currentTime + duration) * audioContext.sampleRate),
+                        channelData.length
+                    );
+                    
+                    // Add notes with improved ADSR envelope
+                    const attackTime = 0.01 + (volume * 0.02);
+                    const releaseTime = 0.05 + (duration * 0.1);
+                    const attackSamples = Math.floor(attackTime * audioContext.sampleRate);
+                    const releaseSamples = Math.floor(releaseTime * audioContext.sampleRate);
+                    
+                    for (let j = startSample; j < endSample; j++) {
+                        const t = (j - startSample) / audioContext.sampleRate;
+                        const samplePosition = j - startSample;
+                        const noteSamples = endSample - startSample;
+                        
+                        // Calculate envelope
+                        let envelope = 1;
+                        if (samplePosition < attackSamples) {
+                            envelope = samplePosition / attackSamples; // Attack phase
+                        } else if (samplePosition > noteSamples - releaseSamples) {
+                            envelope = (noteSamples - samplePosition) / releaseSamples; // Release phase
+                        }
+                        
+                        // Add vibrato and harmonic enrichment
+                        const vibratoFreq = 5 + (i % 3);
+                        const vibratoDepth = 2 + (Math.sin(i) * 2);
+                        const vibrato = 1 + (Math.sin(2 * Math.PI * vibratoFreq * t) * vibratoDepth / 1000);
+                        
+                        // Base tone with harmonics
+                        const fundamental = Math.sin(2 * Math.PI * frequency * t * vibrato);
+                        const harmonic1 = Math.sin(2 * Math.PI * frequency * 2 * t) * 0.3;
+                        const harmonic2 = Math.sin(2 * Math.PI * frequency * 3 * t) * 0.15;
+                        
+                        // Mix the sound
+                        channelData[j] += (fundamental + harmonic1 + harmonic2) * volume * envelope * 0.4;
+                    }
+                    
+                    currentTime += duration;
+                    progressFill.style.width = `${50 + (i + 1) * progressIncrement}%`;
+                }
+                
+                // Normalize audio to prevent clipping
+                normalizeAudio(channelData);
+                
+                // Update UI
+                progressFill.style.width = '100%';
+                songDuration.textContent = `Song Duration: ${Math.round(currentTime * 10) / 10} seconds`;
+                playButton.disabled = false;
+                stopButton.disabled = false;
+                exportButton.disabled = false;
+            } catch (error) {
+                showError("Failed to generate audio: " + error.message);
+            }
+        }
+        
+        function normalizeAudio(channelData) {
+            // Find the maximum amplitude
+            let maxAmplitude = 0;
+            for (let i = 0; i < channelData.length; i++) {
+                const absValue = Math.abs(channelData[i]);
+                if (absValue > maxAmplitude) {
+                    maxAmplitude = absValue;
+                }
+            }
+            
+            // Normalize if needed
+            if (maxAmplitude > 0.99) {
+                const gain = 0.9 / maxAmplitude;
+                for (let i = 0; i < channelData.length; i++) {
+                    channelData[i] *= gain;
+                }
+            }
+        }
+
+        function playMusic() {
+            if (!audioBuffer) {
+                showError("No audio to play. Please convert an image first.");
+                return;
+            }
+            try {
+                if (currentSource) {
+                    currentSource.stop();
+                }
+                currentSource = audioContext.createBufferSource();
+                currentSource.buffer = audioBuffer;
+                currentSource.connect(audioContext.destination);
+                currentSource.start();
+            } catch (error) {
+                showError("Failed to play audio: " + error.message);
+            }
+        }
+
+        function stopMusic() {
+            if (currentSource) {
+                currentSource.stop();
+                currentSource = null;
+            }
+        }
+        
+        function exportAudio() {
+            if (!audioBuffer) {
+                showError("No audio to export. Please convert an image first.");
+                return;
+            }
+            
+            try {
+                // Create an offline audio context
+                const offlineCtx = new OfflineAudioContext(
+                    audioBuffer.numberOfChannels,
+                    audioBuffer.length,
+                    audioBuffer.sampleRate
+                );
+                
+                // Create a buffer source node
+                const source = offlineCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(offlineCtx.destination);
+                source.start(0);
+                
+                // Render the audio
+                offlineCtx.startRendering().then(renderedBuffer => {
+                    // Convert to WAV
+                    const wavData = audioBufferToWav(renderedBuffer);
+                    const blob = new Blob([wavData], { type: 'audio/wav' });
+                    
+                    // Create download link
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const fileName = 'image-music-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.wav';
+                    
+                    a.href = url;
+                    a.download = fileName;
+                    a.click();
+                    
+                    // Clean up
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                }).catch(err => {
+                    showError("Failed to export audio: " + err.message);
+                });
+            } catch (error) {
+                showError("Failed to export audio: " + error.message);
+            }
+        }
+        
+        // Function to convert AudioBuffer to WAV format
+        function audioBufferToWav(buffer) {
+            const numChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const format = 1; // PCM
+            const bitDepth = 16;
+            
+            let result;
+            if (numChannels === 2) {
+                result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
+            } else {
+                result = buffer.getChannelData(0);
+            }
+            
+            return encodeWAV(result, format, sampleRate, numChannels, bitDepth);
+        }
+        
+        function interleave(leftChannel, rightChannel) {
+            const length = leftChannel.length + rightChannel.length;
+            const result = new Float32Array(length);
+            
+            let inputIndex = 0;
+            for (let i = 0; i < length; ) {
+                result[i++] = leftChannel[inputIndex];
+                result[i++] = rightChannel[inputIndex];
+                inputIndex++;
+            }
+            return result;
+        }
+        
+        function encodeWAV(samples, format, sampleRate, numChannels, bitDepth) {
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numChannels * bytesPerSample;
+            
+            const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+            const view = new DataView(buffer);
+            
+            // RIFF identifier
+            writeString(view, 0, 'RIFF');
+            // File length
+            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+            // RIFF type
+            writeString(view, 8, 'WAVE');
+            // Format chunk identifier
+            writeString(view, 12, 'fmt ');
+            // Format chunk length
+            view.setUint32(16, 16, true);
+            // Sample format (raw)
+            view.setUint16(20, format, true);
+            // Channel count
+            view.setUint16(22, numChannels, true);
+            // Sample rate
+            view.setUint32(24, sampleRate, true);
+            // Byte rate (sample rate * block align)
+            view.setUint32(28, sampleRate * blockAlign, true);
+            // Block align (channel count * bytes per sample)
+            view.setUint16(32, blockAlign, true);
+            // Bits per sample
+            view.setUint16(34, bitDepth, true);
+            // Data chunk identifier
+            writeString(view, 36, 'data');
+            // Data chunk length
+            view.setUint32(40, samples.length * bytesPerSample, true);
+            
+            // Write the data
+            floatTo16BitPCM(view, 44, samples);
+            
+            return buffer;
+        }
+        
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+        
+        function floatTo16BitPCM(output, offset, input) {
+            for (let i = 0; i < input.length; i++, offset += 2) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+        }
+    </script>
+</body>
+</html>

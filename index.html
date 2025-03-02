@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neuromantic Player</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+    
+    :root {
+      --primary: #ff4b00;
+      --secondary: #00ffd0;
+      --bg-dark: #0a0b0c;
+      --bg-light: #121416;
+      --text: #e0e0e0;
+      --accent: #ff00e4;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+    
+    header {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 2rem;
+      position: relative;
+      text-transform: uppercase;
+      color: var(--primary);
+    }
+    
+    header::after {
+      content: 'PLAYER';
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--secondary);
+      clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
+    }
+    
+    .player-container {
+      width: 90%;
+      max-width: 800px;
+      background: var(--bg-light);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .player-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+    }
+    
+    .track-info {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      padding: 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .track-title {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: var(--primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .track-number {
+      font-size: 0.8rem;
+      color: var(--secondary);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+    }
+    
+    .progress-container {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      position: relative;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      width: 0%;
+      position: relative;
+    }
+    
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      right: -4px;
+      top: -3px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--secondary);
+      box-shadow: 0 0 10px var(--secondary);
+      transform: scale(0);
+      transition: transform 0.2s;
+    }
+    
+    .progress-container:hover .progress-bar::after {
+      transform: scale(1);
+    }
+    
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 1.5rem;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      padding: 1rem 1.5rem;
+    }
+    
+    .controls button {
+      background: none;
+      border: none;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      padding: 0.5rem;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    
+    .controls button::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 2px;
+      background: var(--primary);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s;
+    }
+    
+    .controls button:hover {
+      color: var(--primary);
+    }
+    
+    .controls button:hover::before {
+      transform: scaleX(1);
+    }
+    
+    .controls button:active {
+      transform: translateY(2px);
+    }
+    
+    canvas {
+      width: 100%;
+      height: 200px; /* Increased height */
+      display: block;
+    }
+    
+    .visualizer-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 200px; /* Increased height */
+      pointer-events: none; /* Ensure clicks pass through to the video */
+    }
+    
+    .visualizer-controls {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.25rem;
+      padding: 0.5rem;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    
+    .visualizer-controls button {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      padding: 0.25rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    
+    .visualizer-controls button:hover {
+      color: var(--text);
+    }
+    
+    .visualizer-controls button.active {
+      color: var(--secondary);
+      position: relative;
+    }
+    
+    .visualizer-controls button.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 25%;
+      width: 50%;
+      height: 2px;
+      background: var(--secondary);
+    }
+    
+    .playlist-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0.75rem;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .playlist-toggle:hover {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    
+    .playlist-toggle::before,
+    .playlist-toggle::after {
+      content: '';
+      height: 1px;
+      background: var(--secondary);
+      flex: 1;
+    }
+    
+    .playlist-container {
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      scrollbar-width: thin;
+      scrollbar-color: var(--primary) transparent;
+    }
+    
+    .playlist-container::-webkit-scrollbar {
+      width: 4px;
+    }
+    
+    .playlist-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    .playlist-container::-webkit-scrollbar-thumb {
+      background: var(--primary);
+    }
+    
+    .playlist-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .playlist-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .playlist-item.active {
+      background: rgba(255, 75, 0, 0.1);
+    }
+    
+    .playlist-item span:first-child {
+      color: var(--primary);
+      font-size: 0.7rem;
+      width: 1.5rem;
+    }
+    
+    .playlist-item span:last-child {
+      font-size: 0.8rem;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    
+    .playlist-item.active span:last-child {
+      color: var(--primary);
+    }
+    
+    .background-video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+    }
+    
+    @media (max-width: 600px) {
+      .track-info {
+        padding: 1rem;
+      }
+      
+      .controls, .time-display {
+        padding: 0.5rem 1rem;
+      }
+      
+      canvas {
+        height: 150px; /* Adjusted for smaller screens */
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Background video element -->
+  <video class="background-video" autoplay loop muted playsinline>
+    <source src="backgroundmusic.mp4" type="video/mp4">
+  </video>
+  
+  <header>Neuromantic</header>
+  <div class="player-container">
+  
+    <div class="visualizer-container">
+      <canvas id="visualizer"></canvas>
+    </div>
+  
+    <audio id="musicPlayer" src="track1.mp3"></audio>
+    <div class="track-info">
+      <div class="track-title" id="trackTitle">Liquid Dreams</div>
+      <div class="track-number"><span id="currentTrackNum">1</span>/20</div>
+    </div>
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="time-display">
+      <span id="currentTime">0:00</span>
+      <span id="totalTime">0:00</span>
+    </div>
+    <div class="controls">
+      <button id="prevTrack">Prev</button>
+      <button id="playPause">Play</button>
+      <button id="nextTrack">Next</button>
+    </div>
+    
+    <div class="visualizer-controls">
+      <button id="viz1" class="active">Bars</button>
+      <button id="viz2">Circles</button>
+      <button id="viz3">Wave</button>
+      <button id="viz4">Stars</button>
+      <button id="viz5">Spectrum</button>
+    </div>
+    <button class="playlist-toggle" id="playlistToggle">Playlist</button>
+    <div class="playlist-container" id="playlist" style="display:none;"></div>
+  </div>
+  <script>
+    const musicPlayer = document.getElementById('musicPlayer');
+    const playPauseButton = document.getElementById('playPause');
+    const prevTrackButton = document.getElementById('prevTrack');
+    const nextTrackButton = document.getElementById('nextTrack');
+    const trackTitle = document.getElementById('trackTitle');
+    const currentTrackNum = document.getElementById('currentTrackNum');
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+    const playlistContainer = document.getElementById('playlist');
+    const playlistToggle = document.getElementById('playlistToggle');
+    const progressBar = document.getElementById('progressBar');
+    const progressContainer = document.getElementById('progressContainer');
+    const currentTimeDisplay = document.getElementById('currentTime');
+    const totalTimeDisplay = document.getElementById('totalTime');
+    
+    // Set canvas dimensions to match its display size
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    
+    // Track list - 20 songs
+    const tracks = [
+      { src: 'track1.wav', title: 'Liquid Dreams' },
+      { src: 'track2.wav', title: 'Neon Flow' },
+      { src: 'track3.wav', title: 'Cosmic Wave' },
+      { src: 'track4.wav', title: 'Digital Sunrise' },
+      { src: 'track5.wav', title: 'Quantum Beat' },
+      { src: 'track6.wav', title: 'Cyberspace Odyssey' },
+      { src: 'track7.wav', title: 'Neural Network' },
+      { src: 'track8.wav', title: 'Binary Echoes' },
+      { src: 'track9.wav', title: 'Virtual Reality' },
+      { src: 'track10.wav', title: 'Holographic Memory' },
+      { src: 'track11.wav', title: 'Singularity' },
+      { src: 'track12.wav', title: 'Electric Dreams' },
+      { src: 'track13.wav', title: 'Synthwave Journey' },
+      { src: 'track14.wav', title: 'Galactic Pulse' },
+      { src: 'track15.wav', title: 'Cyber Dawn' },
+      { src: 'track16.wav', title: 'Ethereal Code' },
+      { src: 'track17.mp3', title: 'Alternatives' },
+      { src: 'track18.wav', title: 'Astral Projection' },
+      { src: 'track19.wav', title: 'Plasma Field' },
+      { src: 'track20.wav', title: 'Quantum Resonance' }
+    ];
+    
+    let currentTrackIndex = 0;
+    let currentVisualizer = 1;
+    let animationId = null;
+
+    // Initialize audio context and analyzer
+    let audioContext;
+    let analyser;
+    let source;
+    let dataArray;
+    let bufferLength;
+
+    // Initialize audio context on user interaction
+    function initAudio() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        source = audioContext.createMediaElementSource(musicPlayer);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 512;
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+      }
+    }
+
+    // Format time in minutes:seconds
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? '0' + secs : secs}`;
+    }
+
+    // Update progress bar
+    function updateProgress() {
+      if (!musicPlayer.duration) return;
+      
+      const percent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
+      progressBar.style.width = `${percent}%`;
+      
+      currentTimeDisplay.textContent = formatTime(musicPlayer.currentTime);
+      totalTimeDisplay.textContent = formatTime(musicPlayer.duration);
+    }
+
+    // Load track
+    function loadTrack(index) {
+      if (index < 0) index = tracks.length - 1;
+      if (index >= tracks.length) index = 0;
+      
+      currentTrackIndex = index;
+      musicPlayer.src = tracks[index].src;
+      trackTitle.textContent = tracks[index].title;
+      currentTrackNum.textContent = index + 1;
+      
+      // Update active playlist item
+      document.querySelectorAll('.playlist-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      
+      const activeItem = document.querySelector(`.playlist-item[data-index="${index}"]`);
+      if (activeItem) {
+        activeItem.classList.add('active');
+        // Scroll to active item
+        activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      
+      musicPlayer.load();
+    }
+
+    // Create playlist
+    function createPlaylist() {
+      playlistContainer.innerHTML = '';
+      tracks.forEach((track, index) => {
+        const item = document.createElement('div');
+        item.className = 'playlist-item';
+        if (index === currentTrackIndex) item.classList.add('active');
+        item.setAttribute('data-index', index);
+        
+        const trackNumber = document.createElement('span');
+        trackNumber.textContent = (index + 1).toString().padStart(2, '0');
+        
+        const trackName = document.createElement('span');
+        trackName.textContent = track.title;
+        
+        item.appendChild(trackNumber);
+        item.appendChild(trackName);
+        
+        item.addEventListener('click', () => {
+          loadTrack(index);
+          playTrack();
+        });
+        
+        playlistContainer.appendChild(item);
+      });
+    }
+
+    // Toggle playlist visibility
+    playlistToggle.addEventListener('click', () => {
+      if (playlistContainer.style.display === 'none') {
+        playlistContainer.style.display = 'block';
+        playlistToggle.textContent = 'Hide Playlist';
+      } else {
+        playlistContainer.style.display = 'none';
+        playlistToggle.textContent = 'Playlist';
+      }
+    });
+
+    // Play track
+    function playTrack() {
+      initAudio();
+      audioContext.resume().then(() => {
+        musicPlayer.play();
+        playPauseButton.textContent = 'Pause';
+        if (!animationId) {
+          renderVisualizer();
+        }
+      });
+    }
+
+    // Pause track
+    function pauseTrack() {
+      musicPlayer.pause();
+      playPauseButton.textContent = 'Play';
+    }
+    
+    // Play/Pause button
+    playPauseButton.addEventListener('click', () => {
+      if (musicPlayer.paused) {
+        playTrack();
+      } else {
+        pauseTrack();
+      }
+    });
+
+    // Previous track
+    prevTrackButton.addEventListener('click', () => {
+      loadTrack(currentTrackIndex - 1);
+      playTrack();
+    });
+
+    // Next track
+    nextTrackButton.addEventListener('click', () => {
+      loadTrack(currentTrackIndex + 1);
+      playTrack();
+    });
+
+    // Track ended event
+    musicPlayer.addEventListener('ended', () => {
+      loadTrack(currentTrackIndex + 1);
+      playTrack();
+    });
+
+    // Update time displays
+    musicPlayer.addEventListener('timeupdate', updateProgress);
+    
+    // Duration changed (metadata loaded)
+    musicPlayer.addEventListener('durationchange', () => {
+      totalTimeDisplay.textContent = formatTime(musicPlayer.duration);
+    });
+    
+    // Click on progress bar to seek
+    progressContainer.addEventListener('click', (e) => {
+      const clickPosition = (e.offsetX / progressContainer.offsetWidth);
+      musicPlayer.currentTime = clickPosition * musicPlayer.duration;
+    });
+    
+  // --- Visualizer ---
+
+function renderVisualizer() {
+  if (!audioContext) return;
+
+  animationId = requestAnimationFrame(renderVisualizer);
+  
+  analyser.getByteFrequencyData(dataArray);
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  switch (currentVisualizer) {
+    case 1: drawHolographicBars(); break;
+    case 2: drawQuantumCircles(); break;
+    case 3: drawNeuralWave(); break;
+    case 4: drawGalacticStars(); break;
+    case 5: draw4DSpectrum(); break;
+  }
+}
+
+// --- Advanced Visualizations ---
+
+function drawHolographicBars() {
+  const barWidth = (canvas.width / bufferLength) * 2.5;
+  let x = 0;
+
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = dataArray[i];
+    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+    gradient.addColorStop(0, `rgba(${barHeight + 100}, 50, 255, 0.8)`);
+    gradient.addColorStop(1, `rgba(50, ${barHeight + 100}, 255, 0.2)`);
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+
+    // Holographic effect
+    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.5})`;
+    ctx.strokeRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+
+    x += barWidth + 1;
+  }
+}
+
+function drawQuantumCircles() {
+  for (let i = 0; i < bufferLength; i++) {
+    const angle = Math.PI * 2 * i / bufferLength;
+    const radius = dataArray[i] / 255 * Math.min(canvas.width, canvas.height) / 4;
+    const x = canvas.width / 2 + Math.cos(angle) * radius;
+    const y = canvas.height / 2 + Math.sin(angle) * radius;
+
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
+    gradient.addColorStop(0, `hsla(${i * 360 / bufferLength}, 100%, 50%, 1)`);
+    gradient.addColorStop(1, `hsla(${i * 360 / bufferLength}, 100%, 50%, 0)`);
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Quantum entanglement effect
+    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.8})`;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(canvas.width / 2, canvas.height / 2);
+    ctx.stroke();
+  }
+}
+
+function drawNeuralWave() {
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+
+  ctx.beginPath();
+
+  let x = 0;
+  const sliceWidth = canvas.width * 1.0 / bufferLength;
+
+  for (let i = 0; i < bufferLength; i++) {
+    const v = dataArray[i] / 128.0;
+    const y = v * canvas.height / 2;
+
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+
+    // Neural nodes
+    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.8)`;
+    ctx.beginPath();
+    ctx.arc(x, y, v * 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    x += sliceWidth;
+  }
+
+  ctx.lineTo(canvas.width, canvas.height / 2);
+  ctx.stroke();
+
+  // Synaptic connections
+  for (let i = 0; i < bufferLength; i += 10) {
+    ctx.beginPath();
+    ctx.moveTo(i * sliceWidth, dataArray[i] / 128.0 * canvas.height / 2);
+    ctx.lineTo((i + 10) * sliceWidth, dataArray[i + 10] / 128.0 * canvas.height / 2);
+    ctx.strokeStyle = `rgba(0, 255, 255, ${Math.random() * 0.5})`;
+    ctx.stroke();
+  }
+}
+
+function drawGalacticStars() {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  for (let i = 0; i < bufferLength; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const size = dataArray[i] / 255 * 3;
+
+    // Star
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Galactic dust
+    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.1)`;
+    ctx.fillRect(x - size * 2, y - size * 2, size * 4, size * 4);
+  }
+
+  // Nebula effect
+  const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
+  gradient.addColorStop(0, 'rgba(255, 0, 255, 0)');
+  gradient.addColorStop(1, `rgba(0, 0, 255, ${Math.random() * 0.2})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function draw4DSpectrum() {
+  const barWidth = canvas.width / bufferLength;
+  
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = dataArray[i];
+    const x = i * barWidth;
+    const hue = i / bufferLength * 360;
+
+    // 3D effect
+    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
+    gradient.addColorStop(1, `hsla(${hue}, 100%, 80%, 0.2)`);
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+    // 4D time distortion
+    ctx.globalAlpha = Math.sin(Date.now() / 1000 + i / bufferLength * Math.PI * 2) * 0.5 + 0.5;
+    ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 50%, 0.5)`;
+    ctx.fillRect(x, canvas.height - barHeight * 0.5, barWidth, barHeight * 0.5);
+    ctx.globalAlpha = 1;
+  }
+}
+
+
+    // --- Visualizer Controls ---
+
+    document.getElementById('viz1').addEventListener('click', () => {
+      currentVisualizer = 1;
+      updateVisualizerButtons();
+    });
+
+    document.getElementById('viz2').addEventListener('click', () => {
+      currentVisualizer = 2;
+      updateVisualizerButtons();
+    });
+
+    document.getElementById('viz3').addEventListener('click', () => {
+      currentVisualizer = 3;
+      updateVisualizerButtons();
+    });
+
+    document.getElementById('viz4').addEventListener('click', () => {
+      currentVisualizer = 4;
+      updateVisualizerButtons();
+    });
+
+    document.getElementById('viz5').addEventListener('click', () => {
+      currentVisualizer = 5;
+      updateVisualizerButtons();
+    });
+
+    function updateVisualizerButtons() {
+      document.querySelectorAll('.visualizer-controls button').forEach(button => {
+        button.classList.remove('active');
+      });
+      document.getElementById(`viz${currentVisualizer}`).classList.add('active');
+    }
+    
+    // Load first track on page load
+    loadTrack(currentTrackIndex);
+    createPlaylist();
+  </script>
+</body>
+</html>

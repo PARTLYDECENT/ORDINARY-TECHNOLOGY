@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Advanced Drawing & Image Importer</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Roboto', sans-serif;
+      background-color: #2c3e50;
+      color: #ecf0f1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      background: #34495e;
+      padding: 10px;
+      text-align: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.8em;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+      background: #34495e;
+      width: 100%;
+    }
+    .toolbar label,
+    .toolbar button,
+    .toolbar input[type="color"],
+    .toolbar input[type="range"],
+    .toolbar input[type="file"] {
+      background: #ecf0f1;
+      border: none;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    .toolbar button:hover {
+      background: #bdc3c7;
+    }
+    canvas {
+      border: 2px solid #ecf0f1;
+      background: #fff;
+      margin-top: 10px;
+      cursor: crosshair;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .container {
+      width: 90%;
+      max-width: 1000px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Advanced Drawing & Image Importer</h1>
+  </header>
+  <div class="container">
+    <div class="toolbar">
+      <label>Color:
+        <input type="color" id="colorPicker" value="#000000">
+      </label>
+      <label>Brush Size:
+        <input type="range" id="brushSize" min="1" max="50" value="5">
+      </label>
+      <button id="eraserBtn">Eraser</button>
+      <button id="undoBtn">Undo</button>
+      <button id="clearBtn">Clear</button>
+      <label>Import Image:
+        <input type="file" id="importImage" accept="image/*">
+      </label>
+      <button id="exportBtn">Export</button>
+    </div>
+    <canvas id="drawingCanvas" width="800" height="500"></canvas>
+  </div>
+  
+  <script>
+    const canvas = document.getElementById("drawingCanvas");
+    const ctx = canvas.getContext("2d");
+    let drawing = false;
+    let brushColor = "#000000";
+    let brushSize = 5;
+    let usingEraser = false;
+    
+    // History for undo functionality
+    let undoStack = [];
+    
+    // Save current canvas state to the undo stack
+    function saveState() {
+      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      if (undoStack.length > 50) {
+        undoStack.shift();
+      }
+    }
+    
+    // Save the initial state
+    saveState();
+    
+    canvas.addEventListener("mousedown", (e) => {
+      drawing = true;
+      ctx.beginPath();
+      ctx.moveTo(e.offsetX, e.offsetY);
+      saveState();
+    });
+    canvas.addEventListener("mouseup", () => {
+      drawing = false;
+      ctx.beginPath();
+    });
+    canvas.addEventListener("mousemove", draw);
+    
+    function draw(event) {
+      if (!drawing) return;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = "round";
+      if (usingEraser) {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = brushColor;
+      }
+      ctx.lineTo(event.offsetX, event.offsetY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(event.offsetX, event.offsetY);
+    }
+    
+    document.getElementById("colorPicker").addEventListener("input", (e) => {
+      brushColor = e.target.value;
+      usingEraser = false; // disable eraser when a color is chosen
+      document.getElementById("eraserBtn").style.backgroundColor = "#ecf0f1";
+    });
+    
+    document.getElementById("brushSize").addEventListener("input", (e) => {
+      brushSize = e.target.value;
+    });
+    
+    document.getElementById("eraserBtn").addEventListener("click", () => {
+      usingEraser = !usingEraser;
+      document.getElementById("eraserBtn").style.backgroundColor = usingEraser ? "#95a5a6" : "#ecf0f1";
+    });
+    
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      saveState();
+    });
+    
+    document.getElementById("undoBtn").addEventListener("click", () => {
+      if (undoStack.length > 1) {
+        undoStack.pop();
+        const previousState = undoStack[undoStack.length - 1];
+        ctx.putImageData(previousState, 0, 0);
+      }
+    });
+    
+    document.getElementById("importImage").addEventListener("change", function(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const img = new Image();
+        img.onload = function() {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          saveState();
+        };
+        img.src = URL.createObjectURL(file);
+      }
+    });
+    
+    document.getElementById("exportBtn").addEventListener("click", exportCanvas);
+    
+    function exportCanvas() {
+      const link = document.createElement("a");
+      link.download = "drawing.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+  </script>
+</body>
+</html>

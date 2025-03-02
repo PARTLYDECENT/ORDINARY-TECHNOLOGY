@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enhanced Sprite Walker & Exporter</title>
+  <style>
+    body {
+      background: #222;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #controls {
+      margin-bottom: 20px;
+    }
+    label {
+      display: inline-block;
+      margin: 10px;
+    }
+    canvas {
+      background: transparent;
+      border: 1px solid #fff;
+      margin-top: 10px;
+    }
+    #exportResult {
+      margin-top: 20px;
+    }
+    button {
+      padding: 8px 16px;
+      margin-top: 10px;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Enhanced Sprite Walker & Exporter</h1>
+  <div id="controls">
+    <input type="file" id="spriteUpload" accept="image/*"><br>
+    <label>
+      Wave Amplitude:
+      <input type="range" id="waveAmplitude" min="0" max="10" step="0.1" value="3">
+    </label>
+    <label>
+      Bobbing Amplitude:
+      <input type="range" id="bobbingAmplitude" min="0" max="20" step="1" value="5">
+    </label>
+    <label>
+      Animation Speed:
+      <input type="range" id="animationSpeed" min="0.1" max="5" step="0.1" value="1">
+    </label>
+    <br>
+    <label>
+      Rotation Amplitude (°):
+      <input type="range" id="rotationAmplitude" min="0" max="45" step="1" value="10">
+    </label>
+    <label>
+      Scaling Amplitude:
+      <input type="range" id="scaleAmplitude" min="0" max="0.5" step="0.01" value="0.1">
+    </label>
+    <label>
+      Enable Pixel Warping:
+      <input type="checkbox" id="pixelWarpCheckbox" checked>
+    </label>
+    <br>
+    <label>
+      Capture FPS:
+      <input type="range" id="captureFPS" min="10" max="60" step="1" value="20">
+    </label>
+    <label>
+      Export Duration (s):
+      <input type="range" id="exportDuration" min="1" max="10" step="1" value="3">
+    </label>
+    <br>
+    <button id="exportButton">Export as GIF</button>
+  </div>
+  <canvas id="spriteCanvas" width="400" height="400"></canvas>
+  <div id="exportResult"></div>
+
+  <!-- Include gifshot for GIF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.3.2/gifshot.min.js"></script>
+  <script>
+    // DOM Elements
+    const fileInput = document.getElementById('spriteUpload');
+    const canvas = document.getElementById('spriteCanvas');
+    const ctx = canvas.getContext('2d');
+    const exportButton = document.getElementById('exportButton');
+    const exportResult = document.getElementById('exportResult');
+    const waveSlider = document.getElementById('waveAmplitude');
+    const bobSlider = document.getElementById('bobbingAmplitude');
+    const speedSlider = document.getElementById('animationSpeed');
+    const rotationSlider = document.getElementById('rotationAmplitude');
+    const scaleSlider = document.getElementById('scaleAmplitude');
+    const pixelWarpCheckbox = document.getElementById('pixelWarpCheckbox');
+    const captureFPSSlider = document.getElementById('captureFPS');
+    const exportDurationSlider = document.getElementById('exportDuration');
+
+    // Global variables
+    let sprite = new Image();
+    let spriteLoaded = false;
+    let frame = 0;
+    let exporting = false;
+
+    // Handle file upload
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          sprite.src = event.target.result;
+        }
+        reader.readAsDataURL(file);
+      }
+    });
+
+    sprite.onload = () => {
+      spriteLoaded = true;
+      frame = 0;
+      animate();
+    };
+
+    // Draw a single frame using current settings
+    function drawFrame(currentFrame) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Retrieve control values
+      const waveAmplitude = parseFloat(waveSlider.value);
+      const bobbingAmplitude = parseFloat(bobSlider.value);
+      const animSpeed = parseFloat(speedSlider.value);
+      const rotationAmplitude = parseFloat(rotationSlider.value); // in degrees
+      const scaleAmplitude = parseFloat(scaleSlider.value);
+      const pixelWarpEnabled = pixelWarpCheckbox.checked;
+
+      // Calculate basic offsets
+      const offsetX = 20 * Math.sin(currentFrame * 0.1 * animSpeed);
+      const offsetY = bobbingAmplitude * Math.sin(currentFrame * 0.2 * animSpeed);
+
+      // Calculate rotation (convert degrees to radians) and scaling oscillation
+      const angle = rotationAmplitude * Math.sin(currentFrame * 0.1 * animSpeed) * Math.PI / 180;
+      const scaleFactor = 1 + scaleAmplitude * Math.sin(currentFrame * 0.15 * animSpeed);
+
+      // Draw sprite with transformations
+      ctx.save();
+      // Translate to center position with bobbing/side-shift
+      const spriteCenterX = canvas.width / 2 + offsetX;
+      const spriteCenterY = canvas.height / 2 + offsetY;
+      ctx.translate(spriteCenterX, spriteCenterY);
+      ctx.rotate(angle);
+      ctx.scale(scaleFactor, scaleFactor);
+      ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
+      ctx.restore();
+
+      // Apply pixel warping effect if enabled
+      if (pixelWarpEnabled) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const width = canvas.width, height = canvas.height;
+        const output = ctx.createImageData(width, height);
+
+        for (let y = 0; y < height; y++) {
+          // Horizontal shift per row based on sine wave
+          const shift = Math.sin((y + currentFrame * 2) * 0.1 * animSpeed) * waveAmplitude;
+          for (let x = 0; x < width; x++) {
+            const srcX = Math.floor(x + shift);
+            if (srcX < 0 || srcX >= width) continue;
+            const srcIndex = (y * width + srcX) * 4;
+            const destIndex = (y * width + x) * 4;
+            output.data[destIndex]     = data[srcIndex];
+            output.data[destIndex + 1] = data[srcIndex + 1];
+            output.data[destIndex + 2] = data[srcIndex + 2];
+            output.data[destIndex + 3] = data[srcIndex + 3];
+          }
+        }
+        ctx.putImageData(output, 0, 0);
+      }
+    }
+
+    // Live animation loop for preview
+    function animate() {
+      if (!spriteLoaded || exporting) return;
+      drawFrame(frame);
+      frame++;
+      requestAnimationFrame(animate);
+    }
+
+    // Export the current animation as a GIF
+    exportButton.addEventListener('click', () => {
+      if (!spriteLoaded) return;
+      exporting = true;
+      exportResult.innerHTML = 'Exporting GIF... please wait.';
+      const captureFPS = parseFloat(captureFPSSlider.value);
+      const exportDuration = parseFloat(exportDurationSlider.value);
+      const totalFrames = Math.floor(exportDuration * captureFPS);
+      const intervalTime = 1000 / captureFPS; // milliseconds per frame
+      const capturedFrames = [];
+      let exportFrame = 0;
+      const originalFrame = frame;  // Save live animation frame
+
+      function captureNextFrame() {
+        if (exportFrame < totalFrames) {
+          // Draw frame without clearing export flag interference
+          drawFrame(exportFrame);
+          capturedFrames.push(canvas.toDataURL());
+          exportFrame++;
+          setTimeout(captureNextFrame, intervalTime);
+        } else {
+          // Use gifshot to compile frames into a GIF
+          gifshot.createGIF({
+            images: capturedFrames,
+            gifWidth: canvas.width,
+            gifHeight: canvas.height,
+            interval: 1 / captureFPS,
+            numWorkers: 2
+          }, (obj) => {
+            if (!obj.error) {
+              const image = obj.image;
+              const animatedImage = document.createElement('img');
+              animatedImage.src = image;
+              exportResult.innerHTML = '';
+              exportResult.appendChild(animatedImage);
+            } else {
+              exportResult.innerHTML = 'Error creating GIF.';
+            }
+            exporting = false;
+            frame = originalFrame;
+            animate();
+          });
+        }
+      }
+      captureNextFrame();
+    });
+  </script>
+</body>
+</html>
