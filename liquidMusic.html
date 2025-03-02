@@ -351,7 +351,7 @@
 <body>
   <!-- Background video element -->
   <video class="background-video" autoplay loop muted playsinline>
-    <source src="backgroundmusic.mp4" type="video/mp4">
+    <source src="video1.mp4" type="video/mp4" />
   </video>
   
   <header>Neuromantic</header>
@@ -714,15 +714,58 @@ function drawGalacticStars() {
     const y = Math.random() * canvas.height;
     const size = dataArray[i] / 255 * 3;
 
-    // Star
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fill();
+    // Initialize stars once
+    if (!initialized) {
+      for (let i = 0; i < maxStars; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          baseSize: Math.random() * 2 + 1
+        });
+      }
+      initialized = true;
+    }
 
-    // Galactic dust
-    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.1)`;
-    ctx.fillRect(x - size * 2, y - size * 2, size * 4, size * 4);
-  }
+    // Add smooth trailing effect
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Use additive blending for glowing effect
+    ctx.globalCompositeOperation = 'lighter';
+    
+    for (let i = 0; i < maxStars; i++) {
+      const star = stars[i];
+      const dataIndex = Math.floor((i / maxStars) * bufferLength);
+      
+      // Update position with velocity
+      star.x = (star.x + star.vx + canvas.width) % canvas.width;
+      star.y = (star.y + star.vy + canvas.height) % canvas.height;
+      
+      // Smooth size interpolation
+      const targetRadius = (dataArray[dataIndex] / 255) * 3 + star.baseSize;
+      const currentRadius = targetRadius * 0.3 + star.baseSize * 0.7;
+      
+      // Create gradient for glowing effect
+      const gradient = ctx.createRadialGradient(
+        star.x, star.y, 0, 
+        star.x, star.y, currentRadius
+      );
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${dataArray[dataIndex]/255}`);
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+      // Draw enhanced star
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, currentRadius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+
+    // Reset blending mode
+    ctx.globalCompositeOperation = 'source-over';
+  };
+})();
 
   // Nebula effect
   const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
