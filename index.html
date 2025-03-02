@@ -5,10 +5,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ORDINARY TECHNOLOGY ACCESS PANEL</title>
+    <!-- Add a base URL tag to help with path resolution -->
+    <base href="https://partlydecent.github.io/GAMEHUBORDINARY/" />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://partlydecent.github.io/GAMEHUBORDINARY/style.css">
-
-
+    <!-- Use absolute path for CSS -->
+    <link rel="stylesheet" href="https://partlydecent.github.io/GAMEHUBORDINARY/style.css" />
 </head>
 
 <body>
@@ -36,6 +37,10 @@
     </div>
 
     <script>
+        // Preload audio to avoid issues
+        const warpSound = new Audio('https://partlydecent.github.io/GAMEHUBORDINARY/warp_sound.mp3');
+        warpSound.load(); // Preload the audio
+
         const webglCanvas = document.getElementById('webglCanvas');
         webglCanvas.width = window.innerWidth;
         webglCanvas.height = window.innerHeight;
@@ -135,36 +140,48 @@
 
         // Navigation functions
         function navigateToGame() {
-            animateButtonAndNavigate('.play-button', 'game.html');
+            animateButtonAndNavigate('.play-button', 'https://partlydecent.github.io/GAMEHUBORDINARY/game.html');
         }
 
         function navigateToVideoPlayer() {
-            animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'videoPlayer.html');
+            animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'https://partlydecent.github.io/GAMEHUBORDINARY/videoPlayer.html');
         }
 
         function navigateToLiquidMusic() {
-            animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'liquidMusic.html');
+            animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'https://partlydecent.github.io/GAMEHUBORDINARY/liquidMusic.html');
         }
 
         function navigateToAI() {
-            animateButtonAndNavigate('.ai-button', 'ai.html');
+            animateButtonAndNavigate('.ai-button', 'https://partlydecent.github.io/GAMEHUBORDINARY/ai.html');
         }
 
         function animateButtonAndNavigate(selector, url) {
-            const button = typeof selector === 'string' ? document.querySelector(selector) : selector;
-            const warp = document.createElement('div');
-            warp.classList.add('warp-distortion');
-            document.body.appendChild(warp);
-            const audio = new Audio('warp_sound.mp3');
-            audio.play();
+            try {
+                const button = typeof selector === 'string' ? document.querySelector(selector) : selector;
+                const warp = document.createElement('div');
+                warp.classList.add('warp-distortion');
+                document.body.appendChild(warp);
+                
+                // Use preloaded audio and handle failures gracefully
+                try {
+                    warpSound.currentTime = 0; // Reset audio to start
+                    warpSound.play().catch(e => console.log('Audio play failed:', e));
+                } catch (e) {
+                    console.log('Audio error:', e);
+                }
 
-            button.style.transform = 'scale(0.9)';
-            setTimeout(() => {
-                button.style.transform = 'scale(1)';
+                button.style.transform = 'scale(0.9)';
                 setTimeout(() => {
-                    window.location.href = url;
-                }, 500);
-            }, 100);
+                    button.style.transform = 'scale(1)';
+                    setTimeout(() => {
+                        window.location.href = url;
+                    }, 500);
+                }, 100);
+            } catch (e) {
+                console.error('Navigation error:', e);
+                // Fallback direct navigation if animation fails
+                window.location.href = url;
+            }
         }
 
         // Console input handling
@@ -197,7 +214,8 @@
                     const newShaderCode = input.substring(7);
                     updateShader(newShaderCode);
                 } else if (easterEggs[input]) {
-                    window.location.href = easterEggs[input];
+                    // Use absolute paths for easter eggs
+                    window.location.href = 'https://partlydecent.github.io/GAMEHUBORDINARY/' + easterEggs[input];
                 } else {
                     alert('UNKNOWN COMMAND: ' + input);
                 }
@@ -207,39 +225,43 @@
 
         // Function to update the fragment shader
         function updateShader(newShaderCode) {
-            const newFragmentShaderSource = `
-        precision mediump float;
-        uniform float u_time;
-        void main() {
-          ${newShaderCode}
-        }
-      `;
+            try {
+                const newFragmentShaderSource = `
+                  precision mediump float;
+                  uniform float u_time;
+                  void main() {
+                    ${newShaderCode}
+                  }
+                `;
 
-            // Create new shader
-            const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
-            if (!newFragmentShader) return;
+                // Create new shader
+                const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
+                if (!newFragmentShader) return;
 
-            // Create new program
-            const newProgram = createProgram(gl, vertexShader, newFragmentShader);
-            if (!newProgram) {
-                gl.deleteShader(newFragmentShader);
-                return;
+                // Create new program
+                const newProgram = createProgram(gl, vertexShader, newFragmentShader);
+                if (!newProgram) {
+                    gl.deleteShader(newFragmentShader);
+                    return;
+                }
+
+                // Delete old shader and program
+                gl.deleteShader(fragmentShader);
+                gl.deleteProgram(program);
+
+                // Update shader and program
+                fragmentShader = newFragmentShader;
+                program = newProgram;
+
+                // Update attribute and uniform locations
+                positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+                timeUniformLocation = gl.getUniformLocation(program, "u_time");
+
+                // Restart render loop if necessary
+                time = 0;
+            } catch (e) {
+                console.error('Shader update error:', e);
             }
-
-            // Delete old shader and program
-            gl.deleteShader(fragmentShader);
-            gl.deleteProgram(program);
-
-            // Update shader and program
-            fragmentShader = newFragmentShader;
-            program = newProgram;
-
-            // Update attribute and uniform locations
-            positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-            timeUniformLocation = gl.getUniformLocation(program, "u_time");
-
-            // Restart render loop if necessary
-            time = 0;
         }
 
         // Initial improved shader simulation using a space effect
