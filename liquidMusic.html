@@ -186,7 +186,7 @@
     
     canvas {
       width: 100%;
-      height: 200px; /* Increased height */
+      height: 200px;
       display: block;
     }
     
@@ -195,8 +195,8 @@
       top: 0;
       left: 0;
       width: 100%;
-      height: 200px; /* Increased height */
-      pointer-events: none; /* Ensure clicks pass through to the video */
+      height: 200px;
+      pointer-events: none;
     }
     
     .visualizer-controls {
@@ -343,7 +343,7 @@
       }
       
       canvas {
-        height: 150px; /* Adjusted for smaller screens */
+        height: 150px;
       }
     }
   </style>
@@ -598,208 +598,203 @@
       musicPlayer.currentTime = clickPosition * musicPlayer.duration;
     });
     
-  // --- Visualizer ---
+    // --- Visualizer ---
+    // Create persistent storage for stars
+    const stars = Array.from({ length: 512 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      baseSize: Math.random() * 2 + 1
+    }));
 
-function renderVisualizer() {
-  if (!audioContext) return;
+    function renderVisualizer() {
+      if (!audioContext) return;
 
-  animationId = requestAnimationFrame(renderVisualizer);
-  
-  analyser.getByteFrequencyData(dataArray);
-  
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  switch (currentVisualizer) {
-    case 1: drawHolographicBars(); break;
-    case 2: drawQuantumCircles(); break;
-    case 3: drawNeuralWave(); break;
-    case 4: drawGalacticStars(); break;
-    case 5: draw4DSpectrum(); break;
-  }
-}
-
-// --- Advanced Visualizations ---
-
-function drawHolographicBars() {
-  const barWidth = (canvas.width / bufferLength) * 2.5;
-  let x = 0;
-
-  for (let i = 0; i < bufferLength; i++) {
-    const barHeight = dataArray[i];
-    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-    gradient.addColorStop(0, `rgba(${barHeight + 100}, 50, 255, 0.8)`);
-    gradient.addColorStop(1, `rgba(50, ${barHeight + 100}, 255, 0.2)`);
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-
-    // Holographic effect
-    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.5})`;
-    ctx.strokeRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-
-    x += barWidth + 1;
-  }
-}
-
-function drawQuantumCircles() {
-  for (let i = 0; i < bufferLength; i++) {
-    const angle = Math.PI * 2 * i / bufferLength;
-    const radius = dataArray[i] / 255 * Math.min(canvas.width, canvas.height) / 4;
-    const x = canvas.width / 2 + Math.cos(angle) * radius;
-    const y = canvas.height / 2 + Math.sin(angle) * radius;
-
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
-    gradient.addColorStop(0, `hsla(${i * 360 / bufferLength}, 100%, 50%, 1)`);
-    gradient.addColorStop(1, `hsla(${i * 360 / bufferLength}, 100%, 50%, 0)`);
-
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Quantum entanglement effect
-    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.8})`;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(canvas.width / 2, canvas.height / 2);
-    ctx.stroke();
-  }
-}
-
-function drawNeuralWave() {
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-
-  ctx.beginPath();
-
-  let x = 0;
-  const sliceWidth = canvas.width * 1.0 / bufferLength;
-
-  for (let i = 0; i < bufferLength; i++) {
-    const v = dataArray[i] / 128.0;
-    const y = v * canvas.height / 2;
-
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-
-    // Neural nodes
-    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.8)`;
-    ctx.beginPath();
-    ctx.arc(x, y, v * 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    x += sliceWidth;
-  }
-
-  ctx.lineTo(canvas.width, canvas.height / 2);
-  ctx.stroke();
-
-  // Synaptic connections
-  for (let i = 0; i < bufferLength; i += 10) {
-    ctx.beginPath();
-    ctx.moveTo(i * sliceWidth, dataArray[i] / 128.0 * canvas.height / 2);
-    ctx.lineTo((i + 10) * sliceWidth, dataArray[i + 10] / 128.0 * canvas.height / 2);
-    ctx.strokeStyle = `rgba(0, 255, 255, ${Math.random() * 0.5})`;
-    ctx.stroke();
-  }
-}
-
-   // Visualizer 4: Stars (Enhanced)
-const renderStars = (() => {
-  // Persistent star storage with motion parameters
-  const stars = [];
-  let initialized = false;
-  const maxStars = 512; // Reduced for better performance
-  
-  return function() {
-    // Initialize stars once
-    if (!initialized) {
-      for (let i = 0; i < maxStars; i++) {
-        stars.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          vx: (Math.random() - 0.5) * 0.3,
-          vy: (Math.random() - 0.5) * 0.3,
-          baseSize: Math.random() * 2 + 1
-        });
+      animationId = requestAnimationFrame(renderVisualizer);
+      
+      analyser.getByteFrequencyData(dataArray);
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      switch (currentVisualizer) {
+        case 1: drawHolographicBars(); break;
+        case 2: drawQuantumCircles(); break;
+        case 3: drawNeuralWave(); break;
+        case 4: drawGalacticStars(); break;
+        case 5: draw4DSpectrum(); break;
       }
-      initialized = true;
     }
 
-    // Add smooth trailing effect
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // --- Advanced Visualizations ---
 
-    // Use additive blending for glowing effect
-    ctx.globalCompositeOperation = 'lighter';
-    
-    for (let i = 0; i < maxStars; i++) {
-      const star = stars[i];
-      const dataIndex = Math.floor((i / maxStars) * bufferLength);
-      
-      // Update position with velocity
-      star.x = (star.x + star.vx + canvas.width) % canvas.width;
-      star.y = (star.y + star.vy + canvas.height) % canvas.height;
-      
-      // Smooth size interpolation
-      const targetRadius = (dataArray[dataIndex] / 255) * 3 + star.baseSize;
-      const currentRadius = targetRadius * 0.3 + star.baseSize * 0.7;
-      
-      // Create gradient for glowing effect
-      const gradient = ctx.createRadialGradient(
-        star.x, star.y, 0, 
-        star.x, star.y, currentRadius
-      );
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${dataArray[dataIndex]/255}`);
-      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    function drawHolographicBars() {
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let x = 0;
 
-      // Draw enhanced star
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i];
+        const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+        gradient.addColorStop(0, `rgba(${barHeight + 100}, 50, 255, 0.8)`);
+        gradient.addColorStop(1, `rgba(50, ${barHeight + 100}, 255, 0.2)`);
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+
+        // Holographic effect
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.5})`;
+        ctx.strokeRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+
+        x += barWidth + 1;
+      }
+    }
+
+    function drawQuantumCircles() {
+      for (let i = 0; i < bufferLength; i++) {
+        const angle = Math.PI * 2 * i / bufferLength;
+        const radius = dataArray[i] / 255 * Math.min(canvas.width, canvas.height) / 4;
+        const x = canvas.width / 2 + Math.cos(angle) * radius;
+        const y = canvas.height / 2 + Math.sin(angle) * radius;
+
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
+        gradient.addColorStop(0, `hsla(${i * 360 / bufferLength}, 100%, 50%, 1)`);
+        gradient.addColorStop(1, `hsla(${i * 360 / bufferLength}, 100%, 50%, 0)`);
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Quantum entanglement effect
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.8})`;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(canvas.width / 2, canvas.height / 2);
+        ctx.stroke();
+      }
+    }
+
+    function drawNeuralWave() {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+
       ctx.beginPath();
-      ctx.arc(star.x, star.y, currentRadius, 0, Math.PI * 2);
-      ctx.fillStyle = gradient;
-      ctx.fill();
+
+      let x = 0;
+      const sliceWidth = canvas.width * 1.0 / bufferLength;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * canvas.height / 2;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+
+        // Neural nodes
+        ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.8)`;
+        ctx.beginPath();
+        ctx.arc(x, y, v * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        x += sliceWidth;
+      }
+
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      // Synaptic connections
+      for (let i = 0; i < bufferLength; i += 10) {
+        if (i + 10 < bufferLength) {
+          ctx.beginPath();
+          ctx.moveTo(i * sliceWidth, dataArray[i] / 128.0 * canvas.height / 2);
+          ctx.lineTo((i + 10) * sliceWidth, dataArray[i + 10] / 128.0 * canvas.height / 2);
+          ctx.strokeStyle = `rgba(0, 255, 255, ${Math.random() * 0.5})`;
+          ctx.stroke();
+        }
+      }
     }
-// Reset blending mode
-ctx.globalCompositeOperation = 'source-over';
-};
 
-// Nebula effect
-const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
-gradient.addColorStop(0, 'rgba(255, 0, 255, 0)');
-gradient.addColorStop(1, `rgba(0, 0, 255, ${Math.random() * 0.2})`);
-ctx.fillStyle = gradient;
-ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function drawGalacticStars() {
+      // Add smooth trailing effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-function draw4DSpectrum() {
-  const barWidth = canvas.width / bufferLength;
-  
-  for (let i = 0; i < bufferLength; i++) {
-    const barHeight = dataArray[i];
-    const x = i * barWidth;
-    const hue = i / bufferLength * 360;
+      // Use additive blending for glowing effect
+      ctx.globalCompositeOperation = 'lighter';
+      
+      for (let i = 0; i < stars.length; i++) {
+        const star = stars[i];
+        const dataIndex = Math.floor((i / stars.length) * bufferLength);
+        
+        // Update position with velocity
+        star.x = (star.x + star.vx + canvas.width) % canvas.width;
+        star.y = (star.y + star.vy + canvas.height) % canvas.height;
+        
+        // Smooth size interpolation
+        const targetRadius = (dataArray[dataIndex] / 255) * 3 + star.baseSize;
+        const currentRadius = targetRadius * 0.3 + star.baseSize * 0.7;
+        
+        // Create gradient for glowing effect
+        const gradient = ctx.createRadialGradient(
+          star.x, star.y, 0, 
+          star.x, star.y, currentRadius
+        );
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${dataArray[dataIndex]/255})`);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-    // 3D effect
-    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
-    gradient.addColorStop(1, `hsla(${hue}, 100%, 80%, 0.2)`);
+        // Draw enhanced star
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, currentRadius, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+      // Nebula effect
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2, 
+        canvas.height / 2, 
+        0, 
+        canvas.width / 2, 
+        canvas.height / 2, 
+        canvas.width / 2
+      );
+      gradient.addColorStop(0, 'rgba(255, 0, 255, 0)');
+      gradient.addColorStop(1, `rgba(0, 0, 255, ${Math.random() * 0.2})`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Reset blending mode
+      ctx.globalCompositeOperation = 'source-over';
+    }
 
-    // 4D time distortion
-    ctx.globalAlpha = Math.sin(Date.now() / 1000 + i / bufferLength * Math.PI * 2) * 0.5 + 0.5;
-    ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 50%, 0.5)`;
-    ctx.fillRect(x, canvas.height - barHeight * 0.5, barWidth, barHeight * 0.5);
-    ctx.globalAlpha = 1;
-  }
-}
+    function draw4DSpectrum() {
+      const barWidth = canvas.width / bufferLength;
+      
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i];
+        const x = i * barWidth;
+        const hue = i / bufferLength * 360;
 
+        // 3D effect
+        const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+        gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
+        gradient.addColorStop(1, `hsla(${hue}, 100%, 80%, 0.2)`);
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+        // 4D time distortion
+        ctx.globalAlpha = Math.sin(Date.now() / 1000 + i / bufferLength * Math.PI * 2) * 0.5 + 0.5;
+        ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 50%, 0.5)`;
+        ctx.fillRect(x, canvas.height - barHeight * 0.5, barWidth, barHeight * 0.5);
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // --- Visualizer Controls ---
-
     document.getElementById('viz1').addEventListener('click', () => {
       currentVisualizer = 1;
       updateVisualizerButtons();
