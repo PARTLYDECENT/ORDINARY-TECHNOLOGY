@@ -107,6 +107,7 @@
         // Look up attribute and uniform locations
         let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
         let timeUniformLocation = gl.getUniformLocation(program, "u_time");
+        let resolutionUniformLocation;
 
         // Set up vertex data
         const positionBuffer = gl.createBuffer();
@@ -123,7 +124,13 @@
         let time = 0;
 
         function render() {
-            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            // Update canvas dimensions if they changed
+            if (webglCanvas.width !== window.innerWidth || webglCanvas.height !== window.innerHeight) {
+                webglCanvas.width = window.innerWidth;
+                webglCanvas.height = window.innerHeight;
+                gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            }
+
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -134,6 +141,12 @@
             gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
             gl.uniform1f(timeUniformLocation, time);
+            
+            // Set resolution uniform if it exists
+            if (resolutionUniformLocation !== undefined && resolutionUniformLocation !== null) {
+                gl.uniform2f(resolutionUniformLocation, webglCanvas.width, webglCanvas.height);
+            }
+            
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
             time += 0.01;
 
@@ -236,6 +249,7 @@
                 const newFragmentShaderSource = `
                   precision mediump float;
                   uniform float u_time;
+                  uniform vec2 u_resolution;
                   void main() {
                     ${newShaderCode}
                   }
@@ -263,6 +277,7 @@
                 // Update attribute and uniform locations
                 positionAttributeLocation = gl.getAttribLocation(program, "a_position");
                 timeUniformLocation = gl.getUniformLocation(program, "u_time");
+                resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
                 // Restart render loop if necessary
                 time = 0;
@@ -271,148 +286,217 @@
             }
         }
 
-        // Initial raymarching shader
+        // Set initial cosmic nebula shader
         updateShader(`
-// Constants for raymarching
-const int MAX_STEPS = 100;
-const float MAX_DIST = 100.0;
-const float SURF_DIST = 0.001;
+// Get the normalized coordinates and fix aspect ratio
+vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+float aspect = u_resolution.x / u_resolution.y;
+uv.x *= aspect;
 
-// SDF (Signed Distance Field) for a sphere
-float sdSphere(vec3 p, float r) {
-    return length(p) - r;
-}
+// Create multiple layers of space-time distortion
+float time = u_time * 0.3;
 
-// SDF for a box
-float sdBox(vec3 p, vec3 b) {
-    vec3 d = abs(p) - b;
-    return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
-}
-
-// SDF for a torus
-float sdTorus(vec3 p, vec2 t) {
-    vec2 q = vec2(length(p.xz) - t.x, p.y);
-    return length(q) - t.y;
-}
-
-// Simple smooth minimum function for blending shapes
-float smin(float a, float b, float k) {
-    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-    return mix(b, a, h) - k * h * (1.0 - h);
-}
-
-// Main scene distance function
-float getSceneDistance(vec3 p) {
-    // Animate position based on time
-    vec3 spherePos = vec3(sin(u_time) * 2.0, cos(u_time * 0.5) * 1.5, 0.0);
-    vec3 boxPos = vec3(-2.0, sin(u_time) * 1.0, cos(u_time) * 2.0);
+// Function to create a cosmic noise pattern
+float noise(vec2 p) {
+    vec2 ip = floor(p);
+    vec2 fp = fract(p);
+    float d = 1.0e10;
     
-    // Define primitives
-    float sphere = sdSphere(p - spherePos, 1.0);
-    float box = sdBox(p - boxPos, vec3(0.8));
-    float torus = sdTorus(p - vec3(1.5, 0.0, 2.0), vec2(1.0, 0.3));
-    
-    // Breathing animation effect
-    float pulse = 0.5 + 0.5 * sin(u_time * 0.5);
-    sphere *= mix(0.8, 1.2, pulse);
-    
-    // Combine shapes with smooth blending
-    float d = smin(sphere, box, 1.0);
-    d = smin(d, torus, 1.0);
-    
-    // Ground plane
-    float ground = p.y + 1.5;
-    
-    return min(d, ground);
-}
-
-// Get the normal at point p
-vec3 getNormal(vec3 p) {
-    float d = getSceneDistance(p);
-    vec2 e = vec2(0.001, 0.0);
-    
-    vec3 n = d - vec3(
-        getSceneDistance(p - e.xyy),
-        getSceneDistance(p - e.yxy),
-        getSceneDistance(p - e.yyx)
-    );
-    
-    return normalize(n);
-}
-
-// Raymarching function
-float raymarch(vec3 ro, vec3 rd) {
-    float dO = 0.0;
-    
-    for(int i = 0; i < MAX_STEPS; i++) {
-        vec3 p = ro + rd * dO;
-        float dS = getSceneDistance(p);
-        dO += dS;
-        if(dS < SURF_DIST || dO > MAX_DIST) break;
+    for (int i = -1; i <= 1; i++) {
+        for (int j = -1; j <= 1; j++) {
+            vec2 cell = ip + vec2(i, j);
+            vec2 offset = sin(cell * 0.15 + time + sin(cell.yx * 0.3));
+            vec2 r = cell + offset + 0.5 - fp;
+            float d2 = dot(r, r);
+            d = min(d, d2);
+        }
     }
     
-    return dO;
+    return sqrt(d);
 }
 
-// Main function body
-vec2 uv = gl_FragCoord.xy / vec2(800.0, 600.0);
-uv = uv * 2.0 - 1.0;
-uv.x *= 800.0 / 600.0; // Aspect ratio correction
-
-// Camera setup
-vec3 ro = vec3(0.0, 0.0, -5.0); // Ray origin (camera position)
-vec3 rd = normalize(vec3(uv, 1.0)); // Ray direction
-
-// Rotate camera around the scene
-float camAngle = u_time * 0.3;
-mat2 camRotation = mat2(cos(camAngle), -sin(camAngle), sin(camAngle), cos(camAngle));
-ro.xz = camRotation * ro.xz;
-rd.xz = camRotation * rd.xz;
-
-// Perform raymarching
-float d = raymarch(ro, rd);
-
-// Initialize color to background gradient
-vec3 color = mix(
-    vec3(0.1, 0.2, 0.3), // Darker tech color from original
-    vec3(1.0, 0.8, 0.5), // Lighter warm tech tone from original
-    max(0.0, 1.0 - d * 0.06) // Fade out with distance
-);
-
-// If we hit something
-if(d < MAX_DIST) {
-    vec3 p = ro + rd * d; // Point position
-    vec3 n = getNormal(p); // Surface normal
+// Function to create turbulent fractal noise
+float fbm(vec2 uv) {
+    float f = 0.0;
+    float amplitude = 0.5;
+    float frequency = 2.0;
     
-    // Lighting
-    vec3 lightDir = normalize(vec3(1.0, 2.0, 3.0));
-    float diffuse = max(0.0, dot(n, lightDir));
+    for (int i = 0; i < 6; i++) {
+        f += amplitude * noise(uv * frequency);
+        amplitude *= 0.5;
+        frequency *= 2.0;
+        uv += f * 0.1;
+    }
     
-    // Pulse effect from original shader
-    float pulse = 0.5 + 0.5 * sin(u_time * 0.5);
-    float pulseEffect = sin(u_time * 0.3) * 0.2 + 0.8;
+    return f;
+}
+
+// Create a starfield
+float stars(vec2 uv) {
+    vec2 cell = floor(uv * 200.0);
+    float d = fract(sin(cell.x * 153.3 + cell.y * 87.5) * 4783.3);
+    float star = smoothstep(0.9, 1.0, d) * 0.5 + smoothstep(0.975, 1.0, d) * 0.5;
     
-    // Apply lighting and effects to color
-    color = mix(
-        vec3(0.1, 0.2, 0.3), // Dark color
-        vec3(1.0, 0.8, 0.5), // Light color
-        diffuse * pulse    // Lighting affected by pulse
+    // Make stars twinkle
+    star *= 0.5 + 0.5 * sin(time * 2.0 + d * 6.28);
+    
+    return star;
+}
+
+// Dynamic cosmic nebula
+vec3 nebula(vec2 uv) {
+    // Create multiple layers of turbulent noise
+    float noise1 = fbm(uv * 1.0 + time * 0.1);
+    float noise2 = fbm(uv * 2.0 - time * 0.15);
+    float noise3 = fbm(uv * 4.0 + time * 0.05);
+    
+    // Base noise for the nebula shape
+    float nebulaNoise = pow(noise1 * noise2, 1.0) * 2.0;
+    
+    // Create energy flow patterns
+    vec2 flow = vec2(
+        fbm(uv + vec2(0.0, time * 0.1)),
+        fbm(uv + vec2(time * 0.1, 0.0))
     );
     
-    // Add ambient occlusion approximation
-    float ao = clamp(p.y + 1.5, 0.0, 1.0);
-    color *= mix(0.5, 1.0, ao);
+    // Create turbulence with the flow
+    float turbulence = fbm(uv + flow);
     
-    // Apply pulse effect to final color
-    color *= pulseEffect;
+    // Create dynamic color mixing
+    float r = fbm(uv + turbulence * 0.5 + vec2(time * 0.1, 0.0));
+    float g = fbm(uv + turbulence * 0.4 + vec2(0.0, time * 0.05));
+    float b = fbm(uv + turbulence * 0.6 + vec2(-time * 0.1, 0.0));
+    
+    // Create cosmic nebula colors
+    vec3 color = mix(
+        vec3(0.1, 0.2, 0.5),  // Deep blue/purple
+        vec3(0.8, 0.3, 0.6),  // Pink/magenta
+        nebulaNoise
+    );
+    
+    // Add cyan/teal highlights
+    color = mix(
+        color,
+        vec3(0.1, 0.8, 0.8),
+        pow(r, 2.0) * 0.5
+    );
+    
+    // Add gold/orange accents
+    color = mix(
+        color,
+        vec3(0.9, 0.6, 0.2),
+        pow(g, 4.0) * 0.5
+    );
+    
+    // Electric blue energy threads
+    float energyLines = pow(abs(sin(r * 20.0 + time)), 20.0) * 0.5 + 
+                        pow(abs(sin(g * 15.0 - time * 0.5)), 20.0) * 0.5;
+    color += vec3(0.1, 0.4, 1.0) * energyLines;
+    
+    // Add depth and darkness to create more contrast
+    color *= 0.6 + 0.6 * pow(turbulence, 2.0);
+    
+    // Energy pulses
+    float pulses = pow(sin(time * 0.5) * 0.5 + 0.5, 2.0);
+    color *= 0.8 + 0.2 * pulses;
+    
+    return color;
 }
 
-// Vignette effect (darkening around edges)
-float vignette = 1.0 - dot(uv * 0.5, uv * 0.5);
-color *= vignette;
+// Create energy beams
+float energyBeams(vec2 uv) {
+    float beams = 0.0;
+    
+    // Rotating center point for the beams
+    vec2 center = vec2(0.5 * aspect, 0.5) + vec2(sin(time * 0.5) * 0.1, cos(time * 0.4) * 0.1);
+    
+    // Calculate distance from center
+    vec2 dir = uv - center;
+    float dist = length(dir);
+    
+    // Normalize direction
+    dir /= dist;
+    
+    // Create several rotating beams
+    for (int i = 0; i < 3; i++) {
+        float angle = time * (0.1 + float(i) * 0.05) + float(i) * 2.0;
+        vec2 beamDir = vec2(cos(angle), sin(angle));
+        
+        // Calculate how aligned the current pixel is with the beam direction
+        float alignment = pow(max(0.0, dot(dir, beamDir)), 40.0);
+        
+        // Make the beam fade out from the center
+        float fadeOut = smoothstep(1.5, 0.0, dist);
+        
+        // Add this beam to the total
+        beams += alignment * fadeOut * 0.5;
+    }
+    
+    return beams;
+}
 
-// Output final color
-gl_FragColor = vec4(color, 1.0);
+// Create wormhole/portal effect
+float wormhole(vec2 uv) {
+    vec2 center = vec2(0.5 * aspect, 0.5);
+    float dist = length(uv - center);
+    
+    // Create circular ripples emanating from center
+    float ripples = sin(dist * 20.0 - time * 2.0) * 0.5 + 0.5;
+    
+    // Portal intensity decreases with distance
+    float portal = smoothstep(0.8, 0.0, dist) * ripples;
+    
+    return portal * 0.3;
+}
+
+// Electric vortex tendrils
+float vortexTendrils(vec2 uv) {
+    vec2 center = vec2(0.5 * aspect, 0.5);
+    vec2 dir = uv - center;
+    float dist = length(dir);
+    
+    // Angle from center
+    float angle = atan(dir.y, dir.x);
+    
+    // Create spiraling tendrils
+    float spiral = sin(angle * 8.0 + dist * 10.0 - time * 2.0);
+    float tendrils = pow(max(0.0, spiral), 2.0) * smoothstep(1.0, 0.0, dist) * 0.3;
+    
+    return tendrils;
+}
+
+// Combine all effects
+vec3 starField = vec3(stars(uv));
+vec3 nebulaEffect = nebula(uv);
+vec3 beamsEffect = vec3(0.5, 0.8, 1.0) * energyBeams(uv);
+vec3 wormholeEffect = mix(
+    vec3(0.9, 0.3, 0.8),  // Magenta
+    vec3(0.3, 0.7, 1.0),  // Cyan
+    sin(time) * 0.5 + 0.5
+) * wormhole(uv);
+vec3 tendrilsEffect = mix(
+    vec3(0.0, 0.6, 1.0),  // Blue
+    vec3(0.8, 0.3, 1.0),  // Purple
+    sin(time * 0.7) * 0.5 + 0.5
+) * vortexTendrils(uv);
+
+// Combine all effects with their proper layering
+vec3 finalColor = starField;
+finalColor = mix(finalColor, nebulaEffect, 0.8);
+finalColor += beamsEffect;
+finalColor += wormholeEffect;
+finalColor += tendrilsEffect;
+
+// Add a subtle vignette effect to darken the edges
+float vignette = smoothstep(1.0, 0.3, length((uv - vec2(0.5 * aspect, 0.5)) * 1.5));
+finalColor *= vignette;
+
+// Add subtle pulsing to the entire scene
+float globalPulse = 0.9 + 0.1 * sin(time * 0.4);
+finalColor *= globalPulse;
+
+// Output the final color
+gl_FragColor = vec4(finalColor, 1.0);
 `);
 
         // Resize canvas on window resize
