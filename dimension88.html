@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Orb</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #0cf;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        canvas {
+            border: 2px solid #0cf;
+            box-shadow: 0 0 20px #0cf;
+            background-color: #000024;
+        }
+        .ui {
+            width: 600px;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .game-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        #quantum-states {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+        .overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        h1 {
+            color: #0cf;
+            font-size: 36px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #0cf;
+        }
+        button {
+            background-color: #0cf;
+            color: #001;
+            border: none;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #09f;
+        }
+        .level-text {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #0cf;
+        }
+        .instructions {
+            width: 80%;
+            max-width: 500px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        /* Added for the game completion screen */
+        #game-complete {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+        .completion-text {
+            font-size: 28px;
+            color: #0cf;
+            text-align: center;
+            margin: 20px 0;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { text-shadow: 0 0 5px #0cf; }
+            50% { text-shadow: 0 0 20px #0cf, 0 0 30px #0cf; }
+            100% { text-shadow: 0 0 5px #0cf; }
+        }
+        #continue-button {
+            background-color: #0ff;
+            font-size: 18px;
+            padding: 15px 30px;
+            animation: glow 1.5s infinite alternate;
+        }
+        @keyframes glow {
+            from { box-shadow: 0 0 5px #0cf; }
+            to { box-shadow: 0 0 20px #0cf, 0 0 30px #0cf; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="game-canvas" width="600" height="600"></canvas>
+    <div class="ui">
+        <div class="game-info">
+            <div id="level">Level: 1</div>
+            <div id="quantum-states">States: 1</div>
+        </div>
+        <div class="controls">
+            <div id="energy">Energy: 100</div>
+        </div>
+    </div>
+
+    <!-- Overlays -->
+    <div id="start-screen" class="overlay active">
+        <h1>QUANTUM ORB</h1>
+        <div class="instructions">
+            Navigate the orb through quantum space. Collect entangled particles, avoid quantum destabilizers, and reach the exit gate.
+            <br><br>
+            Click to create a quantum copy of your orb in a superposition state. Orbs share the same fate - if one dies, all die. If one exits, all must exit.
+            <br><br>
+            WASD or Arrow Keys to move. SPACE to entangle/collapse orbs.
+        </div>
+        <button id="start-button">START GAME</button>
+    </div>
+
+    <div id="level-complete" class="overlay">
+        <h1>LEVEL COMPLETE</h1>
+        <div id="level-stats" class="level-text">Quantum States Used: 0</div>
+        <button id="next-level">NEXT LEVEL</button>
+    </div>
+
+    <div id="game-over" class="overlay">
+        <h1>QUANTUM COLLAPSE</h1>
+        <div class="level-text">Your orbs have destabilized</div>
+        <button id="restart-game">TRY AGAIN</button>
+    </div>
+
+    <!-- New Game Completion Overlay -->
+    <div id="game-complete" class="overlay">
+        <h1>QUANTUM MASTERY ACHIEVED</h1>
+        <div class="completion-text">You have mastered all quantum realms!</div>
+        <div class="completion-text">Prepare for the next phase...</div>
+        <button id="continue-button">CONTINUE THE JOURNEY</button>
+    </div>
+
+    <script>
+        // Quantum-inspired game using functional paradigms from the article
+        
+        // ============= Core Game State and Constants =============
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const GRID_SIZE = 20;
+        const CELL_SIZE = canvas.width / GRID_SIZE;
+        const MAX_LEVEL = 3; // Define the maximum level
+
+        // Bitwise entity type flags (inspired by Entangled State Encoding)
+        const TYPES = {
+            EMPTY:      0b0000000000000000,
+            PLAYER:     0b0000000000000001,
+            WALL:       0b0000000000000010,
+            EXIT:       0b0000000000000100,
+            PARTICLE:   0b0000000000001000,
+            ENEMY:      0b0000000000010000,
+            FIELD:      0b0000000000100000,
+            TRAP:       0b0000000001000000,
+            PORTAL:     0b0000000010000000,
+            DESTRUCTIBLE:0b0000000100000000
+        };
+
+        // Immutable initial game state
+        const createInitialState = () => ({
+            level: 1,
+            energy: 100,
+            quantumStates: 1,
+            maxStates: 3,
+            grid: Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(TYPES.EMPTY)),
+            entities: [],
+            playerEntities: [],
+            isActive: true,
+            keysPressed: new Set(),
+            timers: {},
+            gameTime: 0
+        });
+
+        // Current game state (treated as immutable)
+        let state = createInitialState();
+
+        // ============= Pure Entity Creation Functions =============
+        
+        // Create an entity with position and type (pure)
+        const createEntity = (x, y, type, properties = {}) => ({
+            id: Math.random().toString(36).substr(2, 9),
+            x, 
+            y,
+            type,
+            velocity: { x: 0, y: 0 },
+            radius: 0.4,
+            color: '#0cf',
+            entangled: false,
+            ...properties
+        });
+
+        // ============= Level Generation (Procedural) =============
+        
+        // Generate a level using recursive patterns (inspired by Recursive World Generation)
+        const generateLevel = (level) => {
+            // Create a new grid
+            const grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(TYPES.EMPTY));
+            const entities = [];
+            
+            // Add walls around the perimeter
+            for (let i = 0; i < GRID_SIZE; i++) {
+                grid[0][i] = TYPES.WALL;
+                grid[GRID_SIZE-1][i] = TYPES.WALL;
+                grid[i][0] = TYPES.WALL;
+                grid[i][GRID_SIZE-1] = TYPES.WALL;
+                
+                entities.push(createEntity(0, i, TYPES.WALL, { color: '#035' }));
+                entities.push(createEntity(GRID_SIZE-1, i, TYPES.WALL, { color: '#035' }));
+                entities.push(createEntity(i, 0, TYPES.WALL, { color: '#035' }));
+                entities.push(createEntity(i, GRID_SIZE-1, TYPES.WALL, { color: '#035' }));
+            }
+            
+            // Generate level-specific structures using bitwise Hilbert-inspired patterns
+            const seed = level * 12345;
+            const patternSeed = (seed ^ (seed >> 8)) & 0xFF;
+            
+            // Use bitwise operations to create level features
+            for (let y = 2; y < GRID_SIZE - 2; y++) {
+                for (let x = 2; x < GRID_SIZE - 2; x++) {
+                    // Quantum-inspired procedural generation
+                    const hash = ((x * 31) ^ (y * 17) ^ patternSeed) & 0xFF;
+                    const pattern = hash & 0x0F;
+                    
+                    if (pattern === 1 && level > 1) {
+                        grid[y][x] = TYPES.WALL;
+                        entities.push(createEntity(x, y, TYPES.WALL, { color: '#035' }));
+                    } else if (pattern === 2) {
+                        entities.push(createEntity(x, y, TYPES.PARTICLE, { 
+                            color: '#ff3', 
+                            radius: 0.2,
+                            value: 10,
+                            pulse: true
+                        }));
+                    } else if (pattern === 3 && level >= 2) {
+                        entities.push(createEntity(x, y, TYPES.FIELD, { 
+                            color: 'rgba(255, 0, 255, 0.2)', 
+                            radius: 0.8,
+                            effect: 'slow'
+                        }));
+                    } else if (pattern === 4 && level >= 3) {
+                        entities.push(createEntity(x, y, TYPES.TRAP, { 
+                            color: 'rgba(255, 0, 0, 0.3)', 
+                            radius: 0.5,
+                            damage: 20,
+                            triggerRadius: 0.7
+                        }));
+                    }
+                }
+            }
+            
+            // Add exit gate in a deterministic but level-dependent position
+            const exitX = 2 + (level % (GRID_SIZE - 4));
+            const exitY = GRID_SIZE - 3;
+            entities.push(createEntity(exitX, exitY, TYPES.EXIT, { 
+                color: '#0f0', 
+                radius: 0.5,
+                pulse: true
+            }));
+            
+            // Add player at a fixed starting position
+            const playerEntity = createEntity(2, 2, TYPES.PLAYER, { 
+                color: '#0cf', 
+                radius: 0.4,
+                isPlayer: true
+            });
+            
+            // Return the grid and entities as a new state update
+            return {
+                grid,
+                entities,
+                playerEntities: [playerEntity],
+                maxStates: 1 + level
+            };
+        };
+
+        // ============= Pure Game Update Functions =============
+        
+        // Handle player input (pure)
+        const processInput = (state) => {
+            // Process movement first using a pure function
+            const movePlayer = (player, dx, dy) => {
+                // Create new velocity based on input
+                return {
+                    ...player,
+                    velocity: { 
+                        x: dx, 
+                        y: dy 
+                    }
+                };
+            };
+            
+            // Map players with new velocities based on input
+            const players = state.playerEntities.map(player => {
+                // Check for arrow key or WASD input
+                if (state.keysPressed.has('ArrowUp') || state.keysPressed.has('w')) {
+                    return movePlayer(player, 0, -1);
+                } else if (state.keysPressed.has('ArrowDown') || state.keysPressed.has('s')) {
+                    return movePlayer(player, 0, 1);
+                } else if (state.keysPressed.has('ArrowLeft') || state.keysPressed.has('a')) {
+                    return movePlayer(player, -1, 0);
+                } else if (state.keysPressed.has('ArrowRight') || state.keysPressed.has('d')) {
+                    return movePlayer(player, 1, 0);
+                } else {
+                    return movePlayer(player, 0, 0);
+                }
+            });
+            
+            // Handle space bar for quantum superposition (create a copy)
+            const spacePressed = state.keysPressed.has(' ');
+            const spaceWasHandled = state.spaceHandled || false;
+            
+            let newPlayers = [...players];
+            let newEnergy = state.energy;
+            let newQuantumStates = state.quantumStates;
+            
+            if (spacePressed && !spaceWasHandled && newPlayers.length < state.maxStates && newEnergy >= 20) {
+                // Find the first player to duplicate (quantum superposition)
+                const playerToDuplicate = newPlayers[0];
+                
+                // Create a new entangled player at the same position
+                const newPlayer = {
+                    ...playerToDuplicate,
+                    id: Math.random().toString(36).substr(2, 9),
+                    entangled: true
+                };
+                
+                // All players become entangled when there are multiples
+                newPlayers = newPlayers.map(p => ({ ...p, entangled: true }));
+                newPlayers.push(newPlayer);
+                
+                // Quantum operations cost energy
+                newEnergy -= 20;
+                newQuantumStates += 1;
+            }
+            
+            // Return a new state with updated players and input handling flag
+            return {
+                ...state,
+                playerEntities: newPlayers,
+                energy: newEnergy,
+                quantumStates: newQuantumStates,
+                spaceHandled: spacePressed
+            };
+        };
+        
+        // Update entity positions (pure)
+        const updateEntities = (state) => {
+            // Update all entities (currently only players move)
+            const updatedPlayers = state.playerEntities.map(entity => {
+                if (entity.type !== TYPES.PLAYER) return entity;
+                
+                // Calculate new position
+                const newX = entity.x + entity.velocity.x * 0.1;
+                const newY = entity.y + entity.velocity.y * 0.1;
+                
+                // Apply field effects (slow)
+                const fieldEffect = state.entities.find(e => 
+                    e.type === TYPES.FIELD && 
+                    Math.hypot(e.x - entity.x, e.y - entity.y) < e.radius + entity.radius
+                );
+                
+                const speedMultiplier = fieldEffect ? 0.5 : 1;
+                
+                // Check for collisions with walls
+                const collides = state.entities.some(e => 
+                    e.type === TYPES.WALL && 
+                    Math.hypot(e.x - newX, e.y - newY) < e.radius + entity.radius
+                );
+                
+                // Only update position if no collision
+                return {
+                    ...entity,
+                    x: collides ? entity.x : entity.x + entity.velocity.x * 0.1 * speedMultiplier,
+                    y: collides ? entity.y : entity.y + entity.velocity.y * 0.1 * speedMultiplier
+                };
+            });
+            
+            return {
+                ...state,
+                playerEntities: updatedPlayers
+            };
+        };
+        
+        // Handle collisions and interactions (pure)
+        const processInteractions = (state) => {
+            let newState = { ...state };
+            let newEnergy = state.energy;
+            let allPlayersExited = false;
+            let playerDied = false;
+            
+            // Process each player's interactions
+            const updatedPlayers = [];
+            const remainingEntities = [...state.entities];
+            
+            for (const player of state.playerEntities) {
+                // Check for particle collection
+                const particleIndex = remainingEntities.findIndex(e => 
+                    e.type === TYPES.PARTICLE && 
+                    Math.hypot(e.x - player.x, e.y - player.y) < e.radius + player.radius
+                );
+                
+                if (particleIndex !== -1) {
+                    // Collect the particle
+                    newEnergy += remainingEntities[particleIndex].value;
+                    remainingEntities.splice(particleIndex, 1);
+                }
+                
+                // Check for trap activation
+                const trapEntity = remainingEntities.find(e => 
+                    e.type === TYPES.TRAP && 
+                    Math.hypot(e.x - player.x, e.y - player.y) < e.triggerRadius
+                );
+                
+                if (trapEntity) {
+                    newEnergy -= trapEntity.damage;
+                    if (newEnergy <= 0) {
+                        playerDied = true;
+                    }
+                }
+                
+                // Check for exit
+                const reachedExit = remainingEntities.some(e => 
+                    e.type === TYPES.EXIT && 
+                    Math.hypot(e.x - player.x, e.y - player.y) < e.radius + player.radius
+                );
+                
+                if (!reachedExit) {
+                    updatedPlayers.push(player);
+                }
+                
+                // All players must exit for level completion
+                allPlayersExited = updatedPlayers.length === 0;
+            }
+            
+            // Quantum principle: If one player dies, all die (entanglement)
+            if (playerDied) {
+                // Game over state
+                newState = {
+                    ...newState,
+                    isActive: false,
+                    gameOver: true
+                };
+            } else if (allPlayersExited) {
+                // Level complete state
+                newState = {
+                    ...newState,
+                    isActive: false,
+                    levelComplete: true,
+                    // Check if this was the final level
+                    gameComplete: state.level >= MAX_LEVEL
+                };
+            } else {
+                // Continue gameplay with updated state
+                newState = {
+                    ...newState,
+                    playerEntities: updatedPlayers,
+                    entities: remainingEntities,
+                    energy: newEnergy
+                };
+            }
+            
+            return newState;
+        };
+        
+        // Main game update function using functional composition (pipeline)
+        const updateGame = (state, deltaTime) => {
+            if (!state.isActive) return state;
+            
+            // Apply each pure function in sequence (functional pipeline)
+            return [
+                processInput,
+                updateEntities,
+                processInteractions,
+                s => ({ ...s, gameTime: s.gameTime + deltaTime }) // Update game time
+            ].reduce((s, fn) => fn(s), state);
+        };
+        
+        // ============= Rendering Functions =============
+        
+        // Pure rendering function
+        const renderGame = (state) => {
+            // Clear canvas
+            ctx.fillStyle = '#000024';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw entities
+            state.entities.forEach(entity => {
+                drawEntity(entity, state.gameTime);
+            });
+            
+            // Draw players
+            state.playerEntities.forEach(player => {
+                drawEntity(player, state.gameTime);
+            });
+            
+            // Update UI elements
+            document.getElementById('level').textContent = `Level: ${state.level}`;
+            document.getElementById('energy').textContent = `Energy: ${Math.max(0, Math.floor(state.energy))}`;
+            document.getElementById('quantum-states').textContent = `States: ${state.quantumStates}/${state.maxStates}`;
+        };
+        
+        // Draw an entity
+        const drawEntity = (entity, gameTime) => {
+            ctx.save();
+            
+            // Calculate screen position
+            const screenX = entity.x * CELL_SIZE;
+            const screenY = entity.y * CELL_SIZE;
+            const radius = entity.radius * CELL_SIZE;
+            
+            // Apply visual effects
+            let color = entity.color;
+            
+            // Pulse effect for certain entities
+            if (entity.pulse) {
+                const pulse = Math.sin(gameTime * 0.01) * 0.2 + 0.8;
+                ctx.globalAlpha = pulse;
+            }
+            
+            // Quantum entanglement visual effects
+            if (entity.entangled) {
+                // Draw quantum entanglement effects
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, radius * 1.3, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Quantum fluctuation
+                const fluctuation = Math.sin(gameTime * 0.02 + entity.id.charCodeAt(0)) * 0.1 + 0.9;
+                ctx.globalAlpha = fluctuation;
+            }
+            
+            // Fill main entity shape
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            
+            if (entity.type === TYPES.PLAYER) {
+                // Draw player as circle
+                ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+            } else if (entity.type === TYPES.WALL) {
+                // Draw wall as square
+                ctx.fillRect(screenX - radius, screenY - radius, radius * 2, radius * 2);
+            } else if (entity.type === TYPES.EXIT) {
+                // Draw exit as diamond
+                ctx.beginPath();
+                ctx.moveTo(screenX, screenY - radius);
+                ctx.lineTo(screenX + radius, screenY);
+                ctx.lineTo(screenX, screenY + radius);
+                ctx.lineTo(screenX - radius, screenY);
+                ctx.closePath();
+            } else if (entity.type === TYPES.FIELD) {
+                // Draw field as gradient circle
+                const gradient = ctx.createRadialGradient(
+                    screenX, screenY, 0,
+                    screenX, screenY, radius
+                );
+                gradient.addColorStop(0, 'rgba(255, 0, 255, 0.6)');
+                gradient.addColorStop(1, 'rgba(255, 0, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+            } else if (entity.type === TYPES.TRAP) {
+                // Draw trap as pulsing red X
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(screenX - radius * 0.7, screenY - radius * 0.7);
+                ctx.lineTo(screenX + radius * 0.7, screenY + radius * 0.7);
+                ctx.moveTo(screenX + radius * 0.7, screenY - radius * 0.7);
+                ctx.lineTo(screenX - radius * 0.7, screenY + radius * 0.7);
+                ctx.stroke();
+                return;
+            } else {
+                // Draw other entities as circles
+                ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+            }
+            
+            ctx.fill();
+            ctx.restore();
+        };
+        
+        // ============= Game Loop and Input Handling =============
+        
+        // Initialize the game
+        const initGame = (level = 1) => {
+            // Create a fresh state with the level
+            state = {
+                ...createInitialState(),
+                level
+            };
+            
+            // Generate the level
+            const levelData = generateLevel(level);
+            
+            // Update state with level data
+            state = {
+                ...state,
+                ...levelData
+            };
+            
+            // Hide overlays
+            document.querySelectorAll('.overlay').forEach(el => {
+                el.classList.remove('active');
+            });
+        };
+        
+        // Game loop
+        let lastTime = 0;
+        const gameLoop = (timestamp) => {
+            // Calculate delta time
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            // Update game state
+            state = updateGame(state, deltaTime);
+            
+            // Render the game
+            renderGame(state);
+            
+            // Check game state for overlays
+            if (state.levelComplete) {
+                if (state.gameComplete) {
+                    // Show game completion overlay
+                    document.getElementById('game-complete').classList.add('active');
+                } else {
+                    // Show level completion overlay
+                    document.getElementById('level-stats').textContent = `Quantum States Used: ${state.quantumStates}`;
+                    document.getElementById('level-complete').classList.add('active');
+                }
+            } else if (state.gameOver) {
+                document.getElementById('game-over').classList.add('active');
+            }
+            
+            // Continue loop
+            requestAnimationFrame(gameLoop);
+        };
+        
+        // Input handling
+        window.addEventListener('keydown', (e) => {
+            state.keysPressed.add(e.key);
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            state.keysPressed.delete(e.key);
+            if (e.key === ' ') {
+                state.spaceHandled = false;
+            }
+        });
+        
+        // UI buttons
+        document.getElementById('start-button').addEventListener('click', () => {
+            initGame(1);
+            requestAnimationFrame(gameLoop);
+        });
+        
+        document.getElementById('next-level').addEventListener('click', () => {
+            initGame(state.level + 1);
+        });
+        
+        document.getElementById('restart-game').addEventListener('click', () => {
+            initGame(state.level);
+        });
+        
+        // Game completion handler - redirect to step1.html
+        document.getElementById('continue-button').addEventListener('click', () => {
+            // Add visual effect before redirecting
+            document.getElementById('game-complete').style.transition = 'opacity 2s';
+            document.getElementById('game-complete').style.opacity = '0';
+            
+            // Dramatic pause before redirect
+            setTimeout(() => {
+                window.location.href = 'step1.html';
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
