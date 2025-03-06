@@ -2,510 +2,326 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ORDINARY TECHNOLOGY ACCESS PANEL</title>
-    <!-- Add a base URL tag to help with path resolution -->
-    <base href="https://partlydecent.github.io/GAMEHUBORDINARY/" />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
-    <!-- Use absolute path for CSS -->
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORDINARY TECHNOLOGY ACCESS PANEL</title>
+  <!-- Add a base URL tag to help with path resolution -->
+  <base href="https://partlydecent.github.io/GAMEHUBORDINARY/" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
+  <!-- Use absolute path for CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <canvas id="webglCanvas"></canvas>
-    <div class="grid"></div>
-    <div class="container">
-        <h1>ORDINARY TECHNOLOGY ACCESS PANEL</h1>
-        <h1>BUILDING THE FUTURE</h1>
-        <div class="beta">BETA</div>
-        <div class="button-container">
-            <button class="play-button" onclick="navigateToGame()">
-                ENTER DIMENSION
-            </button>
-            <button class="play-button" onclick="navigateToVideoPlayer()">
-                WATCH VIDEOS
-            </button>
-            <button class="play-button" onclick="navigateToLiquidMusic()">
-                LIQUID MUSIC
-            </button>
-            <button class="play-button" onclick="navigateToDimension88()">
-                DIMENSION 88
-            </button>
-            <button class="ai-button" onclick="navigateToAI()">AI</button>
-        </div>
+  <canvas id="webglCanvas"></canvas>
+  <div class="grid"></div>
+  <div class="container">
+    <h1>ORDINARY TECHNOLOGY ACCESS PANEL</h1>
+    <h1>BUILDING THE FUTURE</h1>
+    <div class="beta">BETA</div>
+    <div class="button-container">
+      <button class="play-button" onclick="navigateToGame()">ENTER DIMENSION</button>
+      <button class="play-button" onclick="navigateToVideoPlayer()">WATCH VIDEOS</button>
+      <button class="play-button" onclick="navigateToLiquidMusic()">LIQUID MUSIC</button>
+      <button class="play-button" onclick="navigateToDimension88()">DIMENSION 88</button>
+      <button class="ai-button" onclick="navigateToAI()">AI</button>
     </div>
-    <div class="console">
-        <input type="text" id="consoleInput" placeholder="ENTER COMMAND..." onkeydown="handleConsoleInput(event)" />
-    </div>
+  </div>
+  <div class="console">
+    <input type="text" id="consoleInput" placeholder="ENTER COMMAND..." onkeydown="handleConsoleInput(event)" />
+  </div>
 
-    <script>
-        // Preload audio to avoid issues
-        const warpSound = new Audio('https://partlydecent.github.io/GAMEHUBORDINARY/warp_sound.mp3');
-        warpSound.load(); // Preload the audio
+  <script>
+    // Preload audio to avoid issues
+    const warpSound = new Audio('https://partlydecent.github.io/GAMEHUBORDINARY/warp_sound.mp3');
+    warpSound.load(); // Preload the audio
 
-        const webglCanvas = document.getElementById('webglCanvas');
-        webglCanvas.width = window.innerWidth;
-        webglCanvas.height = window.innerHeight;
-        const gl = webglCanvas.getContext('webgl');
+    const webglCanvas = document.getElementById('webglCanvas');
+    webglCanvas.width = window.innerWidth;
+    webglCanvas.height = window.innerHeight;
+    const gl = webglCanvas.getContext('webgl');
 
-        if (!gl) {
-            alert("WebGL not supported in this browser.");
-        }
+    if (!gl) {
+      alert("WebGL not supported in this browser.");
+    }
 
-        // Vertex shader source
-        const vertexShaderSource = `
+    // Vertex shader source
+    const vertexShaderSource = `
       attribute vec4 a_position;
       void main() {
         gl_Position = a_position;
       }
     `;
 
-        // Fragment shader source (initial, will be updated)
-        let fragmentShaderSource = `
+    // New futuristic fragment shader source
+    let fragmentShaderSource = `
       precision mediump float;
       uniform float u_time;
+      
       void main() {
-        vec2 uv = gl_FragCoord.xy / vec2(800.0, 600.0);
-        float color = sin(u_time + uv.x * 10.0) * 0.5 + 0.5;
-        gl_FragColor = vec4(color, color, color, 1.0);
+          vec2 resolution = vec2(800.0, 600.0);
+          vec2 uv = gl_FragCoord.xy / resolution;
+          uv = uv * 2.0 - 1.0;
+          uv.x *= resolution.x / resolution.y;
+      
+          // Rotate uv coordinates based on time
+          float angle = u_time * 0.3;
+          float s = sin(angle);
+          float c = cos(angle);
+          uv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c);
+      
+          // Create a grid pattern
+          vec2 grid = abs(fract(uv * 5.0) - 0.5);
+          float line = smoothstep(0.48, 0.5, min(grid.x, grid.y));
+      
+          // Background gradient from deep space blue to neon violet
+          vec3 baseColor = mix(vec3(0.0, 0.0, 0.2), vec3(0.2, 0.0, 0.4), uv.y + 0.5);
+      
+          // Futuristic neon pulse effect
+          float neon = sin(u_time * 2.0 + length(uv) * 10.0) * 0.5 + 0.5;
+      
+          // Combine the grid with the gradient and neon glow
+          vec3 color = baseColor + vec3(neon * 0.3) + vec3(line);
+      
+          // Add a vignette effect to darken the edges
+          float vignette = smoothstep(1.0, 0.5, length(uv));
+          color *= vignette;
+      
+          gl_FragColor = vec4(color, 1.0);
       }
     `;
 
-        // Function to create and compile a shader
-        function createShader(gl, type, source) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
-                gl.deleteShader(shader);
-                return null;
-            }
-            return shader;
-        }
-
-        // Function to create a program
-        function createProgram(gl, vertexShader, fragmentShader) {
-            const program = gl.createProgram();
-            gl.attachShader(program, vertexShader);
-            gl.attachShader(program, fragmentShader);
-            gl.linkProgram(program);
-            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                console.error('Program link error:', gl.getProgramInfoLog(program));
-                gl.deleteProgram(program);
-                return null;
-            }
-            return program;
-        }
-
-        // Initialize shaders and program
-        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-        let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-        let program = createProgram(gl, vertexShader, fragmentShader);
-
-        // Look up attribute and uniform locations
-        let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-        let timeUniformLocation = gl.getUniformLocation(program, "u_time");
-        let resolutionUniformLocation;
-
-        // Set up vertex data
-        const positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        const positions = [
-            -1, 1,
-            -1, -1,
-            1, 1,
-            1, -1,
-        ];
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-        // Render loop
-        let time = 0;
-
-        function render() {
-            // Update canvas dimensions if they changed
-            if (webglCanvas.width !== window.innerWidth || webglCanvas.height !== window.innerHeight) {
-                webglCanvas.width = window.innerWidth;
-                webglCanvas.height = window.innerHeight;
-                gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-            }
-
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.useProgram(program);
-            gl.enableVertexAttribArray(positionAttributeLocation);
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-            gl.uniform1f(timeUniformLocation, time);
-            
-            // Set resolution uniform if it exists
-            if (resolutionUniformLocation !== undefined && resolutionUniformLocation !== null) {
-                gl.uniform2f(resolutionUniformLocation, webglCanvas.width, webglCanvas.height);
-            }
-            
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            time += 0.01;
-
-            requestAnimationFrame(render);
-        }
-        render();
-
-        // Navigation functions
-        function navigateToGame() {
-            animateButtonAndNavigate('.play-button', 'https://partlydecent.github.io/GAMEHUBORDINARY/game.html');
-        }
-
-        function navigateToVideoPlayer() {
-            animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'https://partlydecent.github.io/GAMEHUBORDINARY/videoPlayer.html');
-        }
-
-        function navigateToLiquidMusic() {
-            animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'https://partlydecent.github.io/GAMEHUBORDINARY/liquidMusic.html');
-        }
-
-        function navigateToDimension88() {
-            animateButtonAndNavigate(document.querySelectorAll('.play-button')[3], 'https://partlydecent.github.io/GAMEHUBORDINARY/dimension88.html');
-        }
-
-        function navigateToAI() {
-            animateButtonAndNavigate('.ai-button', 'https://partlydecent.github.io/GAMEHUBORDINARY/ai.html');
-        }
-
-        function animateButtonAndNavigate(selector, url) {
-            try {
-                const button = typeof selector === 'string' ? document.querySelector(selector) : selector;
-                const warp = document.createElement('div');
-                warp.classList.add('warp-distortion');
-                document.body.appendChild(warp);
-                
-                // Use preloaded audio and handle failures gracefully
-                try {
-                    warpSound.currentTime = 0; // Reset audio to start
-                    warpSound.play().catch(e => console.log('Audio play failed:', e));
-                } catch (e) {
-                    console.log('Audio error:', e);
-                }
-
-                button.style.transform = 'scale(0.9)';
-                setTimeout(() => {
-                    button.style.transform = 'scale(1)';
-                    setTimeout(() => {
-                        window.location.href = url;
-                    }, 500);
-                }, 100);
-            } catch (e) {
-                console.error('Navigation error:', e);
-                // Fallback direct navigation if animation fails
-                window.location.href = url;
-            }
-        }
-
-        // Console input handling
-        function handleConsoleInput(event) {
-            if (event.key === 'Enter') {
-                const input = event.target.value.toLowerCase();
-                const easterEggs = {
-                    'ali3n': 'easteregg.html',
-                    'zombie1': 'egg1.html',
-                    'valve2': 'egg2.html',
-                    'unr3al': 'egg3.html',
-                    'phant0m': 'egg4.html',
-                    'shadow5': 'egg5.html',
-                    'glitchx': 'egg6.html',
-                    'oblivion7': 'egg7.html',
-                    'cyb3rpunk': 'egg8.html',
-                    'n3on9': 'egg9.html',
-                    'matrix10': 'egg10.html',
-                    'quantum11': 'egg11.html',
-                    'nebula12': 'egg12.html',
-                    'vortex13': 'egg13.html',
-                    'enigma14': 'egg14.html',
-                    'paradox15': 'egg15.html',
-                    'synapse16': 'egg16.html',
-                    'zenith17': 'egg17.html',
-                }
-
-                // Update shader code if command starts with "shader "
-                if (input.startsWith('shader ')) {
-                    const newShaderCode = input.substring(7);
-                    updateShader(newShaderCode);
-                } else if (easterEggs[input]) {
-                    // Use absolute paths for easter eggs
-                    window.location.href = 'https://partlydecent.github.io/GAMEHUBORDINARY/' + easterEggs[input];
-                } else {
-                    alert('UNKNOWN COMMAND: ' + input);
-                }
-                event.target.value = '';
-            }
-        }
-
-        // Function to update the fragment shader
-        function updateShader(newShaderCode) {
-            try {
-                const newFragmentShaderSource = `
-                  precision mediump float;
-                  uniform float u_time;
-                  uniform vec2 u_resolution;
-                  void main() {
-                    ${newShaderCode}
-                  }
-                `;
-
-                // Create new shader
-                const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
-                if (!newFragmentShader) return;
-
-                // Create new program
-                const newProgram = createProgram(gl, vertexShader, newFragmentShader);
-                if (!newProgram) {
-                    gl.deleteShader(newFragmentShader);
-                    return;
-                }
-
-                // Delete old shader and program
-                gl.deleteShader(fragmentShader);
-                gl.deleteProgram(program);
-
-                // Update shader and program
-                fragmentShader = newFragmentShader;
-                program = newProgram;
-
-                // Update attribute and uniform locations
-                positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-                timeUniformLocation = gl.getUniformLocation(program, "u_time");
-                resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
-
-                // Restart render loop if necessary
-                time = 0;
-            } catch (e) {
-                console.error('Shader update error:', e);
-            }
-        }
-
-        // Set initial cosmic nebula shader
-        updateShader(`
-// Get the normalized coordinates and fix aspect ratio
-vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-float aspect = u_resolution.x / u_resolution.y;
-uv.x *= aspect;
-
-// Create multiple layers of space-time distortion
-float time = u_time * 0.3;
-
-// Function to create a cosmic noise pattern
-float noise(vec2 p) {
-    vec2 ip = floor(p);
-    vec2 fp = fract(p);
-    float d = 1.0e10;
-    
-    for (int i = -1; i <= 1; i++) {
-        for (int j = -1; j <= 1; j++) {
-            vec2 cell = ip + vec2(i, j);
-            vec2 offset = sin(cell * 0.15 + time + sin(cell.yx * 0.3));
-            vec2 r = cell + offset + 0.5 - fp;
-            float d2 = dot(r, r);
-            d = min(d, d2);
-        }
+    // Function to create and compile a shader
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
     }
-    
-    return sqrt(d);
-}
 
-// Function to create turbulent fractal noise
-float fbm(vec2 uv) {
-    float f = 0.0;
-    float amplitude = 0.5;
-    float frequency = 2.0;
-    
-    for (int i = 0; i < 6; i++) {
-        f += amplitude * noise(uv * frequency);
-        amplitude *= 0.5;
-        frequency *= 2.0;
-        uv += f * 0.1;
+    // Function to create a program
+    function createProgram(gl, vertexShader, fragmentShader) {
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program));
+        gl.deleteProgram(program);
+        return null;
+      }
+      return program;
     }
-    
-    return f;
-}
 
-// Create a starfield
-float stars(vec2 uv) {
-    vec2 cell = floor(uv * 200.0);
-    float d = fract(sin(cell.x * 153.3 + cell.y * 87.5) * 4783.3);
-    float star = smoothstep(0.9, 1.0, d) * 0.5 + smoothstep(0.975, 1.0, d) * 0.5;
-    
-    // Make stars twinkle
-    star *= 0.5 + 0.5 * sin(time * 2.0 + d * 6.28);
-    
-    return star;
-}
+    // Initialize shaders and program
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+    let program = createProgram(gl, vertexShader, fragmentShader);
 
-// Dynamic cosmic nebula
-vec3 nebula(vec2 uv) {
-    // Create multiple layers of turbulent noise
-    float noise1 = fbm(uv * 1.0 + time * 0.1);
-    float noise2 = fbm(uv * 2.0 - time * 0.15);
-    float noise3 = fbm(uv * 4.0 + time * 0.05);
-    
-    // Base noise for the nebula shape
-    float nebulaNoise = pow(noise1 * noise2, 1.0) * 2.0;
-    
-    // Create energy flow patterns
-    vec2 flow = vec2(
-        fbm(uv + vec2(0.0, time * 0.1)),
-        fbm(uv + vec2(time * 0.1, 0.0))
-    );
-    
-    // Create turbulence with the flow
-    float turbulence = fbm(uv + flow);
-    
-    // Create dynamic color mixing
-    float r = fbm(uv + turbulence * 0.5 + vec2(time * 0.1, 0.0));
-    float g = fbm(uv + turbulence * 0.4 + vec2(0.0, time * 0.05));
-    float b = fbm(uv + turbulence * 0.6 + vec2(-time * 0.1, 0.0));
-    
-    // Create cosmic nebula colors
-    vec3 color = mix(
-        vec3(0.1, 0.2, 0.5),  // Deep blue/purple
-        vec3(0.8, 0.3, 0.6),  // Pink/magenta
-        nebulaNoise
-    );
-    
-    // Add cyan/teal highlights
-    color = mix(
-        color,
-        vec3(0.1, 0.8, 0.8),
-        pow(r, 2.0) * 0.5
-    );
-    
-    // Add gold/orange accents
-    color = mix(
-        color,
-        vec3(0.9, 0.6, 0.2),
-        pow(g, 4.0) * 0.5
-    );
-    
-    // Electric blue energy threads
-    float energyLines = pow(abs(sin(r * 20.0 + time)), 20.0) * 0.5 + 
-                        pow(abs(sin(g * 15.0 - time * 0.5)), 20.0) * 0.5;
-    color += vec3(0.1, 0.4, 1.0) * energyLines;
-    
-    // Add depth and darkness to create more contrast
-    color *= 0.6 + 0.6 * pow(turbulence, 2.0);
-    
-    // Energy pulses
-    float pulses = pow(sin(time * 0.5) * 0.5 + 0.5, 2.0);
-    color *= 0.8 + 0.2 * pulses;
-    
-    return color;
-}
+    // Look up attribute and uniform locations
+    let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+    let timeUniformLocation = gl.getUniformLocation(program, "u_time");
 
-// Create energy beams
-float energyBeams(vec2 uv) {
-    float beams = 0.0;
-    
-    // Rotating center point for the beams
-    vec2 center = vec2(0.5 * aspect, 0.5) + vec2(sin(time * 0.5) * 0.1, cos(time * 0.4) * 0.1);
-    
-    // Calculate distance from center
-    vec2 dir = uv - center;
-    float dist = length(dir);
-    
-    // Normalize direction
-    dir /= dist;
-    
-    // Create several rotating beams
-    for (int i = 0; i < 3; i++) {
-        float angle = time * (0.1 + float(i) * 0.05) + float(i) * 2.0;
-        vec2 beamDir = vec2(cos(angle), sin(angle));
-        
-        // Calculate how aligned the current pixel is with the beam direction
-        float alignment = pow(max(0.0, dot(dir, beamDir)), 40.0);
-        
-        // Make the beam fade out from the center
-        float fadeOut = smoothstep(1.5, 0.0, dist);
-        
-        // Add this beam to the total
-        beams += alignment * fadeOut * 0.5;
+    // Set up vertex data
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    const positions = [
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    // Render loop
+    let time = 0;
+
+    function render() {
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.useProgram(program);
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.uniform1f(timeUniformLocation, time);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      time += 0.01;
+
+      requestAnimationFrame(render);
     }
-    
-    return beams;
-}
+    render();
 
-// Create wormhole/portal effect
-float wormhole(vec2 uv) {
-    vec2 center = vec2(0.5 * aspect, 0.5);
-    float dist = length(uv - center);
-    
-    // Create circular ripples emanating from center
-    float ripples = sin(dist * 20.0 - time * 2.0) * 0.5 + 0.5;
-    
-    // Portal intensity decreases with distance
-    float portal = smoothstep(0.8, 0.0, dist) * ripples;
-    
-    return portal * 0.3;
-}
+    // Navigation functions
+    function navigateToGame() {
+      animateButtonAndNavigate('.play-button', 'https://partlydecent.github.io/GAMEHUBORDINARY/game.html');
+    }
 
-// Electric vortex tendrils
-float vortexTendrils(vec2 uv) {
-    vec2 center = vec2(0.5 * aspect, 0.5);
-    vec2 dir = uv - center;
-    float dist = length(dir);
-    
-    // Angle from center
-    float angle = atan(dir.y, dir.x);
-    
-    // Create spiraling tendrils
-    float spiral = sin(angle * 8.0 + dist * 10.0 - time * 2.0);
-    float tendrils = pow(max(0.0, spiral), 2.0) * smoothstep(1.0, 0.0, dist) * 0.3;
-    
-    return tendrils;
-}
+    function navigateToVideoPlayer() {
+      animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'https://partlydecent.github.io/GAMEHUBORDINARY/videoPlayer.html');
+    }
 
-// Combine all effects
-vec3 starField = vec3(stars(uv));
-vec3 nebulaEffect = nebula(uv);
-vec3 beamsEffect = vec3(0.5, 0.8, 1.0) * energyBeams(uv);
-vec3 wormholeEffect = mix(
-    vec3(0.9, 0.3, 0.8),  // Magenta
-    vec3(0.3, 0.7, 1.0),  // Cyan
-    sin(time) * 0.5 + 0.5
-) * wormhole(uv);
-vec3 tendrilsEffect = mix(
-    vec3(0.0, 0.6, 1.0),  // Blue
-    vec3(0.8, 0.3, 1.0),  // Purple
-    sin(time * 0.7) * 0.5 + 0.5
-) * vortexTendrils(uv);
+    function navigateToLiquidMusic() {
+      animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'https://partlydecent.github.io/GAMEHUBORDINARY/liquidMusic.html');
+    }
 
-// Combine all effects with their proper layering
-vec3 finalColor = starField;
-finalColor = mix(finalColor, nebulaEffect, 0.8);
-finalColor += beamsEffect;
-finalColor += wormholeEffect;
-finalColor += tendrilsEffect;
+    function navigateToDimension88() {
+      animateButtonAndNavigate(document.querySelectorAll('.play-button')[3], 'https://partlydecent.github.io/GAMEHUBORDINARY/dimension88.html');
+    }
 
-// Add a subtle vignette effect to darken the edges
-float vignette = smoothstep(1.0, 0.3, length((uv - vec2(0.5 * aspect, 0.5)) * 1.5));
-finalColor *= vignette;
+    function navigateToAI() {
+      animateButtonAndNavigate('.ai-button', 'https://partlydecent.github.io/GAMEHUBORDINARY/ai.html');
+    }
 
-// Add subtle pulsing to the entire scene
-float globalPulse = 0.9 + 0.1 * sin(time * 0.4);
-finalColor *= globalPulse;
+    function animateButtonAndNavigate(selector, url) {
+      try {
+        const button = typeof selector === 'string' ? document.querySelector(selector) : selector;
+        const warp = document.createElement('div');
+        warp.classList.add('warp-distortion');
+        document.body.appendChild(warp);
 
-// Output the final color
-gl_FragColor = vec4(finalColor, 1.0);
-`);
+        // Use preloaded audio and handle failures gracefully
+        try {
+          warpSound.currentTime = 0;
+          warpSound.play().catch(e => console.log('Audio play failed:', e));
+        } catch (e) {
+          console.log('Audio error:', e);
+        }
 
-        // Resize canvas on window resize
-        window.addEventListener('resize', () => {
-            webglCanvas.width = window.innerWidth;
-            webglCanvas.height = window.innerHeight;
-            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-        });
-    </script>
+        button.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          button.style.transform = 'scale(1)';
+          setTimeout(() => {
+            window.location.href = url;
+          }, 500);
+        }, 100);
+      } catch (e) {
+        console.error('Navigation error:', e);
+        window.location.href = url;
+      }
+    }
+
+    // Console input handling
+    function handleConsoleInput(event) {
+      if (event.key === 'Enter') {
+        const input = event.target.value.toLowerCase();
+        const easterEggs = {
+          'ali3n': 'easteregg.html',
+          'zombie1': 'egg1.html',
+          'valve2': 'egg2.html',
+          'unr3al': 'egg3.html',
+          'phant0m': 'egg4.html',
+          'shadow5': 'egg5.html',
+          'glitchx': 'egg6.html',
+          'oblivion7': 'egg7.html',
+          'cyb3rpunk': 'egg8.html',
+          'n3on9': 'egg9.html',
+          'matrix10': 'egg10.html',
+          'quantum11': 'egg11.html',
+          'nebula12': 'egg12.html',
+          'vortex13': 'egg13.html',
+          'enigma14': 'egg14.html',
+          'paradox15': 'egg15.html',
+          'synapse16': 'egg16.html',
+          'zenith17': 'egg17.html',
+        };
+
+        // Update shader code if command starts with "shader "
+        if (input.startsWith('shader ')) {
+          const newShaderCode = input.substring(7);
+          updateShader(newShaderCode);
+        } else if (easterEggs[input]) {
+          window.location.href = 'https://partlydecent.github.io/GAMEHUBORDINARY/' + easterEggs[input];
+        } else {
+          alert('UNKNOWN COMMAND: ' + input);
+        }
+        event.target.value = '';
+      }
+    }
+
+    // Function to update the fragment shader dynamically
+    function updateShader(newShaderCode) {
+      try {
+        const newFragmentShaderSource = `
+          precision mediump float;
+          uniform float u_time;
+          void main() {
+            ${newShaderCode}
+          }
+        `;
+        const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
+        if (!newFragmentShader) return;
+
+        const newProgram = createProgram(gl, vertexShader, newFragmentShader);
+        if (!newProgram) {
+          gl.deleteShader(newFragmentShader);
+          return;
+        }
+
+        gl.deleteShader(fragmentShader);
+        gl.deleteProgram(program);
+
+        fragmentShader = newFragmentShader;
+        program = newProgram;
+
+        positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+        timeUniformLocation = gl.getUniformLocation(program, "u_time");
+
+        time = 0;
+      } catch (e) {
+        console.error('Shader update error:', e);
+      }
+    }
+
+    // Apply the new futuristic shader immediately on load
+    updateShader(`
+      // New futuristic shader:
+      vec2 resolution = vec2(800.0, 600.0);
+      vec2 uv = gl_FragCoord.xy / resolution;
+      uv = uv * 2.0 - 1.0;
+      uv.x *= resolution.x / resolution.y;
+
+      // Rotate uv coordinates based on time
+      float angle = u_time * 0.3;
+      float s = sin(angle);
+      float c = cos(angle);
+      uv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c);
+
+      // Create a grid pattern
+      vec2 grid = abs(fract(uv * 5.0) - 0.5);
+      float line = smoothstep(0.48, 0.5, min(grid.x, grid.y));
+
+      // Background gradient from deep space blue to neon violet
+      vec3 baseColor = mix(vec3(0.0, 0.0, 0.2), vec3(0.2, 0.0, 0.4), uv.y + 0.5);
+
+      // Futuristic neon pulse effect
+      float neon = sin(u_time * 2.0 + length(uv) * 10.0) * 0.5 + 0.5;
+
+      // Combine the grid with the gradient and neon glow
+      vec3 color = baseColor + vec3(neon * 0.3) + vec3(line);
+
+      // Add a vignette effect to darken the edges
+      float vignette = smoothstep(1.0, 0.5, length(uv));
+      color *= vignette;
+
+      gl_FragColor = vec4(color, 1.0);
+    `);
+
+    // Resize canvas on window resize
+    window.addEventListener('resize', () => {
+      webglCanvas.width = window.innerWidth;
+      webglCanvas.height = window.innerHeight;
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    });
+  </script>
 </body>
 
 </html>
