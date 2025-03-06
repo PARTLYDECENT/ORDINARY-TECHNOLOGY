@@ -9,7 +9,7 @@
     <base href="https://partlydecent.github.io/GAMEHUBORDINARY/" />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
     <!-- Use absolute path for CSS -->
-<link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -271,71 +271,149 @@
             }
         }
 
-        // Initial improved shader simulation using a space effect
+        // Initial raymarching shader
         updateShader(`
-    vec2 uv = gl_FragCoord.xy / vec2(800.0, 600.0); // Normalize coordinates
+// Constants for raymarching
+const int MAX_STEPS = 100;
+const float MAX_DIST = 100.0;
+const float SURF_DIST = 0.001;
 
-    // Transform into a spherical system
-    vec2 p = -1.0 + 2.0 * uv;
-    p.x *= 800.0 / 600.0;
-    float r = length(p);
-    float z = sqrt(1.0 - r * r);
-    vec3 coord = vec3(p.x, p.y, z); // Spherical coordinates
+// SDF (Signed Distance Field) for a sphere
+float sdSphere(vec3 p, float r) {
+    return length(p) - r;
+}
 
-    // Rotate in 3D space along multiple axes with time-based speed adjustments
-    float a = u_time * 0.3;  // Slow rotation
-    float b = u_time * 0.5;  // Faster rotation on another axis
-    float c = u_time * 0.7;  // Even faster rotation on a third axis
+// SDF for a box
+float sdBox(vec3 p, vec3 b) {
+    vec3 d = abs(p) - b;
+    return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
+}
 
-    float cosa = cos(a);
-    float sina = sin(a);
-    float cosb = cos(b);
-    float sinb = sin(b);
-    float cosc = cos(c);
-    float sinc = sin(c);
+// SDF for a torus
+float sdTorus(vec3 p, vec2 t) {
+    vec2 q = vec2(length(p.xz) - t.x, p.y);
+    return length(q) - t.y;
+}
 
-    // Rotation matrices for all 3 axes (X, Y, Z)
-    mat3 rotX = mat3(1.0, 0.0, 0.0, 0.0, cosa, -sina, 0.0, sina, cosa);
-    mat3 rotY = mat3(cosb, 0.0, sinb, 0.0, 1.0, 0.0, -sinb, 0.0, cosb);
-    mat3 rotZ = mat3(cosc, -sinc, 0.0, sinc, cosc, 0.0, 0.0, 0.0, 1.0);
+// Simple smooth minimum function for blending shapes
+float smin(float a, float b, float k) {
+    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    return mix(b, a, h) - k * h * (1.0 - h);
+}
 
-    // Apply rotation in all axes
-    coord = rotX * coord;
-    coord = rotY * coord;
-    coord = rotZ * coord;
+// Main scene distance function
+float getSceneDistance(vec3 p) {
+    // Animate position based on time
+    vec3 spherePos = vec3(sin(u_time) * 2.0, cos(u_time * 0.5) * 1.5, 0.0);
+    vec3 boxPos = vec3(-2.0, sin(u_time) * 1.0, cos(u_time) * 2.0);
+    
+    // Define primitives
+    float sphere = sdSphere(p - spherePos, 1.0);
+    float box = sdBox(p - boxPos, vec3(0.8));
+    float torus = sdTorus(p - vec3(1.5, 0.0, 2.0), vec2(1.0, 0.3));
+    
+    // Breathing animation effect
+    float pulse = 0.5 + 0.5 * sin(u_time * 0.5);
+    sphere *= mix(0.8, 1.2, pulse);
+    
+    // Combine shapes with smooth blending
+    float d = smin(sphere, box, 1.0);
+    d = smin(d, torus, 1.0);
+    
+    // Ground plane
+    float ground = p.y + 1.5;
+    
+    return min(d, ground);
+}
 
-    // Introduce a dynamic "pulse" effect based on time (breathing animation)
-    float pulse = 0.5 + 0.5 * sin(u_time * 0.5);  // Slow breathing animation
-
-    // Apply the pulse effect to distort the coordinates, creating an organic vibe
-    coord *= pulse;
-
-    // Noise to distort the final effect
-    float noise = fract(sin(dot(coord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-    float distortion = noise * 0.1 + 0.9;  // Noise-based distortion factor
-
-    // Modify coordinates further using the noise distortion
-    coord.x += distortion * 0.1;
-    coord.y += distortion * 0.1;
-
-    // Intensity based on the length from the center of the "sphere"
-    float intensity = 1.0 - r * r;
-
-    // Apply color transformation: dynamic, evolving, organic palette
-    vec3 color = mix(
-        vec3(0.1, 0.2, 0.3),  // Darker shades
-        vec3(1.0, 0.8, 0.5),  // Lighter, warm tech tones
-        intensity * pulse     // Control brightness by intensity and pulse
+// Get the normal at point p
+vec3 getNormal(vec3 p) {
+    float d = getSceneDistance(p);
+    vec2 e = vec2(0.001, 0.0);
+    
+    vec3 n = d - vec3(
+        getSceneDistance(p - e.xyy),
+        getSceneDistance(p - e.yxy),
+        getSceneDistance(p - e.yyx)
     );
+    
+    return normalize(n);
+}
 
-    // Additional "pulsing" effect based on time to alter color slightly
+// Raymarching function
+float raymarch(vec3 ro, vec3 rd) {
+    float dO = 0.0;
+    
+    for(int i = 0; i < MAX_STEPS; i++) {
+        vec3 p = ro + rd * dO;
+        float dS = getSceneDistance(p);
+        dO += dS;
+        if(dS < SURF_DIST || dO > MAX_DIST) break;
+    }
+    
+    return dO;
+}
+
+// Main function body
+vec2 uv = gl_FragCoord.xy / vec2(800.0, 600.0);
+uv = uv * 2.0 - 1.0;
+uv.x *= 800.0 / 600.0; // Aspect ratio correction
+
+// Camera setup
+vec3 ro = vec3(0.0, 0.0, -5.0); // Ray origin (camera position)
+vec3 rd = normalize(vec3(uv, 1.0)); // Ray direction
+
+// Rotate camera around the scene
+float camAngle = u_time * 0.3;
+mat2 camRotation = mat2(cos(camAngle), -sin(camAngle), sin(camAngle), cos(camAngle));
+ro.xz = camRotation * ro.xz;
+rd.xz = camRotation * rd.xz;
+
+// Perform raymarching
+float d = raymarch(ro, rd);
+
+// Initialize color to background gradient
+vec3 color = mix(
+    vec3(0.1, 0.2, 0.3), // Darker tech color from original
+    vec3(1.0, 0.8, 0.5), // Lighter warm tech tone from original
+    max(0.0, 1.0 - d * 0.06) // Fade out with distance
+);
+
+// If we hit something
+if(d < MAX_DIST) {
+    vec3 p = ro + rd * d; // Point position
+    vec3 n = getNormal(p); // Surface normal
+    
+    // Lighting
+    vec3 lightDir = normalize(vec3(1.0, 2.0, 3.0));
+    float diffuse = max(0.0, dot(n, lightDir));
+    
+    // Pulse effect from original shader
+    float pulse = 0.5 + 0.5 * sin(u_time * 0.5);
     float pulseEffect = sin(u_time * 0.3) * 0.2 + 0.8;
+    
+    // Apply lighting and effects to color
+    color = mix(
+        vec3(0.1, 0.2, 0.3), // Dark color
+        vec3(1.0, 0.8, 0.5), // Light color
+        diffuse * pulse    // Lighting affected by pulse
+    );
+    
+    // Add ambient occlusion approximation
+    float ao = clamp(p.y + 1.5, 0.0, 1.0);
+    color *= mix(0.5, 1.0, ao);
+    
+    // Apply pulse effect to final color
     color *= pulseEffect;
+}
 
-    // Final output with a smooth transition in time for the animation
-    gl_FragColor = vec4(color, 1.0);
+// Vignette effect (darkening around edges)
+float vignette = 1.0 - dot(uv * 0.5, uv * 0.5);
+color *= vignette;
+
+// Output final color
+gl_FragColor = vec4(color, 1.0);
 `);
-
 
         // Resize canvas on window resize
         window.addEventListener('resize', () => {
