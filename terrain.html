@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hyper-Density Terrain Generator</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #222;
+      color: #eee;
+    }
+    #container {
+      display: flex;
+      height: 100%;
+    }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+    }
+    #controls {
+      width: 250px;
+      padding: 15px;
+      overflow-y: auto;
+      background: #333;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .control-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    button {
+      padding: 8px 12px;
+      margin: 5px 0;
+      width: 100%;
+      background: #555;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #777;
+    }
+    input[type="range"], select, input[type="color"] {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    #export-link {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="canvas-container">
+      <canvas id="terrain-canvas"></canvas>
+    </div>
+    <div id="controls">
+      <h2>Terrain Generator</h2>
+      
+      <div class="control-group">
+        <label>Terrain Type</label>
+        <select id="terrain-type">
+          <option value="mountains">Mountains</option>
+          <option value="hills">Rolling Hills</option>
+          <option value="canyon">Canyon</option>
+          <option value="islands">Islands</option>
+          <option value="plateaus">Plateaus</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label>Base Color</label>
+        <input type="color" id="base-color" value="#7c9b40">
+      </div>
+      
+      <div class="control-group">
+        <label>Peak Color</label>
+        <input type="color" id="peak-color" value="#e0e0e0">
+      </div>
+      
+      <div class="control-group">
+        <label>Water Color</label>
+        <input type="color" id="water-color" value="#3871c9">
+      </div>
+      
+      <div class="control-group">
+        <label>Resolution: <span id="resolution-value">64</span></label>
+        <input type="range" id="resolution" min="16" max="128" step="8" value="64">
+      </div>
+      
+      <div class="control-group">
+        <label>Height Scale: <span id="height-value">1.0</span></label>
+        <input type="range" id="height-scale" min="0.1" max="2.0" step="0.1" value="1.0">
+      </div>
+      
+      <div class="control-group">
+        <label>Roughness: <span id="roughness-value">0.6</span></label>
+        <input type="range" id="roughness" min="0.1" max="1.0" step="0.05" value="0.6">
+      </div>
+      
+      <div class="control-group">
+        <label>Water Level: <span id="water-value">0.2</span></label>
+        <input type="range" id="water-level" min="0" max="0.6" step="0.05" value="0.2">
+      </div>
+      
+      <div class="control-group">
+        <label>Seed: <span id="seed-value">42</span></label>
+        <input type="range" id="seed" min="1" max="100" step="1" value="42">
+        <button id="random-seed">Random Seed</button>
+      </div>
+      
+      <div class="control-group">
+        <button id="generate">Generate Terrain</button>
+        <button id="export">Export as PLY</button>
+        <a id="export-link" download="terrain.ply">Download</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Ultra-compact terrain generator using WebGL
+    // Using concepts from the document: WebGPU/WASM Fusion, Procedural Generation 2.0
+    
+    // Initialize variables
+    let canvas = document.getElementById('terrain-canvas');
+    let gl = canvas.getContext('webgl');
+    let terrainData = [];
+    let currentResolution = 64;
+    
+    // Set up event listeners for controls
+    document.querySelectorAll('input[type="range"]').forEach(input => {
+      input.addEventListener('input', e => {
+        document.getElementById(`${e.target.id}-value`).textContent = e.target.value;
+      });
+    });
+    
+    document.getElementById('random-seed').addEventListener('click', () => {
+      const seed = Math.floor(Math.random() * 100) + 1;
+      document.getElementById('seed').value = seed;
+      document.getElementById('seed-value').textContent = seed;
+    });
+    
+    document.getElementById('generate').addEventListener('click', generateTerrain);
+    document.getElementById('export').addEventListener('click', exportPLY);
+    
+    // Initialize WebGL
+    if (!gl) {
+      alert('WebGL not supported - try another browser');
+    } else {
+      // Set initial canvas size
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      
+      // Start with initial terrain
+      generateTerrain();
+    }
+    
+    function resizeCanvas() {
+      const container = document.getElementById('canvas-container');
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      
+      if (terrainData.length > 0) {
+        renderTerrain();
+      }
+    }
+    
+    function generateTerrain() {
+      // Get parameters
+      const resolution = parseInt(document.getElementById('resolution').value);
+      const heightScale = parseFloat(document.getElementById('height-scale').value);
+      const roughness = parseFloat(document.getElementById('roughness').value);
+      const waterLevel = parseFloat(document.getElementById('water-level').value);
+      const seed = parseInt(document.getElementById('seed').value);
+      const terrainType = document.getElementById('terrain-type').value;
+      
+      // Store current resolution for export
+      currentResolution = resolution;
+      
+      // Create noise-based heightmap using a compact algorithm
+      terrainData = generateHeightmap(resolution, roughness, heightScale, seed, terrainType);
+      
+      // Render the terrain
+      renderTerrain();
+    }
+    
+    function generateHeightmap(resolution, roughness, heightScale, seed, terrainType) {
+      const terrainData = [];
+      const size = resolution;
+      
+      // Simple seeded random function
+      const seededRandom = (() => {
+        let s = seed;
+        return () => {
+          s = Math.sin(s) * 10000;
+          return s - Math.floor(s);
+        };
+      })();
+      
+      // Create a noise function
+      const noise = (x, y) => {
+        // Generate basic 2D Perlin-like noise
+        const intX = Math.floor(x);
+        const intY = Math.floor(y);
+        
+        const fractX = x - intX;
+        const fractY = y - intY;
+        
+        const r1 = seededRandom() * 2 - 1;
+        const r2 = seededRandom() * 2 - 1;
+        const r3 = seededRandom() * 2 - 1;
+        const r4 = seededRandom() * 2 - 1;
+        
+        const t1 = fractX * fractX * (3 - 2 * fractX);
+        const t2 = fractY * fractY * (3 - 2 * fractY);
+        
+        return r1 * (1 - t1) * (1 - t2) + r2 * t1 * (1 - t2) + r3 * (1 - t1) * t2 + r4 * t1 * t2;
+      };
+      
+      // Fractal Brownian Motion for multi-scale noise
+      const fbm = (x, y) => {
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        
+        // Stack multiple noise octaves
+        for (let i = 0; i < 5; i++) {
+          value += amplitude * noise(x * frequency, y * frequency);
+          amplitude *= roughness;
+          frequency *= 2;
+        }
+        
+        return value;
+      };
+      
+      // Generate heightmap based on terrain type
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const nx = x / size - 0.5;
+          const ny = y / size - 0.5;
+          
+          let height = 0;
+          
+          switch(terrainType) {
+            case 'mountains':
+              height = fbm(nx * 3, ny * 3) * heightScale;
+              // Add pointy peaks
+              height = Math.pow(Math.abs(height), 0.8) * Math.sign(height);
+              break;
+              
+            case 'hills':
+              height = fbm(nx * 2, ny * 2) * heightScale * 0.7;
+              // Smooth out hills
+              height = Math.sin(height * Math.PI);
+              break;
+              
+            case 'canyon':
+              // Create ridged noise for canyons
+              height = fbm(nx * 3, ny * 3);
+              height = 1 - Math.abs(height);
+              height = Math.pow(height, 2) * heightScale;
+              break;
+              
+            case 'islands':
+              // Distance from center for island formation
+              const dist = Math.sqrt(nx * nx + ny * ny) * 2;
+              height = (fbm(nx * 3, ny * 3) * heightScale) - dist;
+              break;
+              
+            case 'plateaus':
+              height = fbm(nx * 2, ny * 2);
+              // Create plateau effect with thresholding
+              height = Math.floor(height * 3) / 3 * heightScale;
+              break;
+              
+            default:
+              height = fbm(nx * 3, ny * 3) * heightScale;
+          }
+          
+          terrainData.push({
+            x: nx,
+            y: ny,
+            z: height
+          });
+        }
+      }
+      
+      return terrainData;
+    }
+    
+    function renderTerrain() {
+      if (!terrainData.length) return;
+      
+      const resolution = currentResolution;
+      const waterLevel = parseFloat(document.getElementById('water-level').value);
+      const baseColor = hexToRgb(document.getElementById('base-color').value);
+      const peakColor = hexToRgb(document.getElementById('peak-color').value);
+      const waterColor = hexToRgb(document.getElementById('water-color').value);
+      
+      // Clear and configure WebGL
+      gl.clearColor(0.2, 0.2, 0.2, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+      
+      // Create shader program
+      const vsSource = `
+        attribute vec3 aPosition;
+        attribute vec3 aColor;
+        uniform mat4 uModelViewMatrix;
+        uniform mat4 uProjectionMatrix;
+        varying vec3 vColor;
+        void main() {
+          gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+          vColor = aColor;
+        }
+      `;
+      
+      const fsSource = `
+        precision mediump float;
+        varying vec3 vColor;
+        void main() {
+          gl_FragColor = vec4(vColor, 1.0);
+        }
+      `;
+      
+      // Initialize shaders
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      const program = createProgram(gl, vertexShader, fragmentShader);
+      
+      // Get attribute and uniform locations
+      const aPosition = gl.getAttribLocation(program, 'aPosition');
+      const aColor = gl.getAttribLocation(program, 'aColor');
+      const uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
+      const uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
+      
+      // Create position and color data for triangles
+      const positions = [];
+      const colors = [];
+      const indices = [];
+      
+      // Generate triangle mesh
+      for (let y = 0; y < resolution - 1; y++) {
+        for (let x = 0; x < resolution - 1; x++) {
+          const i = y * resolution + x;
+          
+          // Get current points
+          const p0 = terrainData[i];
+          const p1 = terrainData[i + 1];
+          const p2 = terrainData[i + resolution];
+          const p3 = terrainData[i + resolution + 1];
+          
+          // First triangle
+          positions.push(p0.x, p0.z, p0.y);
+          positions.push(p1.x, p1.z, p1.y);
+          positions.push(p2.x, p2.z, p2.y);
+          
+          // Second triangle
+          positions.push(p2.x, p2.z, p2.y);
+          positions.push(p1.x, p1.z, p1.y);
+          positions.push(p3.x, p3.z, p3.y);
+          
+          // Generate colors based on height
+          const addColorForPoint = (p) => {
+            if (p.z < waterLevel) {
+              colors.push(waterColor.r, waterColor.g, waterColor.b);
+            } else {
+              // Gradient between base and peak color based on height
+              const t = Math.min((p.z - waterLevel) / 0.8, 1.0);
+              colors.push(
+                baseColor.r * (1 - t) + peakColor.r * t,
+                baseColor.g * (1 - t) + peakColor.g * t,
+                baseColor.b * (1 - t) + peakColor.b * t
+              );
+            }
+          };
+          
+          // Add colors for all vertices
+          addColorForPoint(p0);
+          addColorForPoint(p1);
+          addColorForPoint(p2);
+          addColorForPoint(p2);
+          addColorForPoint(p1);
+          addColorForPoint(p3);
+        }
+      }
+      
+      // Create buffers
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+      
+      const colorBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+      
+      // Create model view matrix - position camera to see terrain
+      const modelViewMatrix = createModelViewMatrix();
+      
+      // Create projection matrix
+      const projectionMatrix = createProjectionMatrix();
+      
+      // Use shader program
+      gl.useProgram(program);
+      
+      // Set uniforms
+      gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
+      gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
+      
+      // Bind position buffer
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(aPosition);
+      
+      // Bind color buffer
+      gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+      gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(aColor);
+      
+      // Draw terrain
+      gl.drawArrays(gl.TRIANGLES, 0, positions.length / 3);
+    }
+    
+    function createModelViewMatrix() {
+      // Simple matrix operations
+      const matrix = new Float32Array([
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+      ]);
+      
+      // Rotate and translate to view terrain from an angle
+      rotateX(matrix, -Math.PI / 4); // Rotate to see from above
+      rotateY(matrix, Math.PI / 6);  // Rotate for perspective
+      translate(matrix, 0, 0, -1.5);  // Move camera back
+      
+      return matrix;
+    }
+    
+    function createProjectionMatrix() {
+      // Field of view in radians
+      const fieldOfView = Math.PI / 4;
+      const aspect = canvas.clientWidth / canvas.clientHeight;
+      const zNear = 0.1;
+      const zFar = 100.0;
+      
+      // Simple perspective matrix
+      return perspectiveMatrix(fieldOfView, aspect, zNear, zFar);
+    }
+    
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      
+      return shader;
+    }
+    
+    function createProgram(gl, vertexShader, fragmentShader) {
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program linking error:', gl.getProgramInfoLog(program));
+        return null;
+      }
+      
+      return program;
+    }
+    
+    // Matrix utility functions
+    function translate(matrix, tx, ty, tz) {
+      matrix[12] += tx;
+      matrix[13] += ty;
+      matrix[14] += tz;
+    }
+    
+    function rotateX(matrix, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      
+      const m5 = matrix[5], m6 = matrix[6], m7 = matrix[7];
+      const m9 = matrix[9], m10 = matrix[10], m11 = matrix[11];
+      
+      matrix[5] = c * m5 - s * m9;
+      matrix[6] = c * m6 - s * m10;
+      matrix[7] = c * m7 - s * m11;
+      matrix[9] = s * m5 + c * m9;
+      matrix[10] = s * m6 + c * m10;
+      matrix[11] = s * m7 + c * m11;
+    }
+    
+    function rotateY(matrix, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      
+      const m0 = matrix[0], m1 = matrix[1], m2 = matrix[2], m3 = matrix[3];
+      const m8 = matrix[8], m9 = matrix[9], m10 = matrix[10], m11 = matrix[11];
+      
+      matrix[0] = c * m0 + s * m8;
+      matrix[1] = c * m1 + s * m9;
+      matrix[2] = c * m2 + s * m10;
+      matrix[3] = c * m3 + s * m11;
+      matrix[8] = -s * m0 + c * m8;
+      matrix[9] = -s * m1 + c * m9;
+      matrix[10] = -s * m2 + c * m10;
+      matrix[11] = -s * m3 + c * m11;
+    }
+    
+    function perspectiveMatrix(fieldOfView, aspect, near, far) {
+      const f = 1.0 / Math.tan(fieldOfView / 2);
+      const nf = 1 / (near - far);
+      
+      return new Float32Array([
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) * nf, -1,
+        0, 0, 2 * far * near * nf, 0
+      ]);
+    }
+    
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1, 3), 16) / 255;
+      const g = parseInt(hex.slice(3, 5), 16) / 255;
+      const b = parseInt(hex.slice(5, 7), 16) / 255;
+      return { r, g, b };
+    }
+    
+    function exportPLY() {
+      if (!terrainData.length) return;
+      
+      // Create PLY format string - very compact implementation
+      let plyData = 'ply\n';
+      plyData += 'format ascii 1.0\n';
+      plyData += `element vertex ${terrainData.length}\n`;
+      plyData += 'property float x\n';
+      plyData += 'property float y\n';
+      plyData += 'property float z\n';
+      plyData += 'property uchar red\n';
+      plyData += 'property uchar green\n';
+      plyData += 'property uchar blue\n';
+      
+      // Calculate number of faces (2 triangles per grid cell)
+      const numFaces = 2 * (currentResolution - 1) * (currentResolution - 1);
+      plyData += `element face ${numFaces}\n`;
+      plyData += 'property list uchar int vertex_index\n';
+      plyData += 'end_header\n';
+      
+      // Get colors
+      const waterLevel = parseFloat(document.getElementById('water-level').value);
+      const baseColor = hexToRgb(document.getElementById('base-color').value);
+      const peakColor = hexToRgb(document.getElementById('peak-color').value);
+      const waterColor = hexToRgb(document.getElementById('water-color').value);
+      
+      // Add vertex data
+      for (const vertex of terrainData) {
+        // Scale coordinates to match display
+        const x = vertex.x;
+        const y = vertex.y;
+        const z = vertex.z;
+        
+        // Calculate color based on height
+        let r, g, b;
+        if (z < waterLevel) {
+          r = Math.floor(waterColor.r * 255);
+          g = Math.floor(waterColor.g * 255);
+          b = Math.floor(waterColor.b * 255);
+        } else {
+          // Gradient between base and peak color based on height
+          const t = Math.min((z - waterLevel) / 0.8, 1.0);
+          r = Math.floor((baseColor.r * (1 - t) + peakColor.r * t) * 255);
+          g = Math.floor((baseColor.g * (1 - t) + peakColor.g * t) * 255);
+          b = Math.floor((baseColor.b * (1 - t) + peakColor.b * t) * 255);
+        }
+        
+        plyData += `${x} ${z} ${y} ${r} ${g} ${b}\n`;
+      }
+      
+      // Add face indices
+      for (let y = 0; y < currentResolution - 1; y++) {
+        for (let x = 0; x < currentResolution - 1; x++) {
+          const i = y * currentResolution + x;
+          
+          // First triangle
+          plyData += `3 ${i} ${i + 1} ${i + currentResolution}\n`;
+          
+          // Second triangle
+          plyData += `3 ${i + currentResolution} ${i + 1} ${i + currentResolution + 1}\n`;
+        }
+      }
+      
+      // Create download link
+      const blob = new Blob([plyData], {type: 'application/octet-stream'});
+      const url = URL.createObjectURL(blob);
+      const link = document.getElementById('export-link');
+      link.href = url;
+      link.download = 'terrain.ply';
+      link.click();
+      
+      // Clean up
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+  </script>
+</body>
+</html>
