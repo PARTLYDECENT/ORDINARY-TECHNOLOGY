@@ -35,23 +35,25 @@
       position: relative;
     }
     
-    /* Background Animation */
+    /* Neural Network Background Animation - REPLACEMENT */
     .background-animation {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: linear-gradient(45deg, #ff4b00, #00ffd0, #ff00e4, #00ffd0);
-      background-size: 600% 600%;
-      animation: gradientAnimation 30s ease infinite;
       z-index: -1;
+      overflow: hidden;
+      background: var(--bg-dark);
     }
     
-    @keyframes gradientAnimation {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
+    #neural-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.8;
     }
     
     header {
@@ -357,6 +359,233 @@
       }
     }
   </style>
+</head>
+<body>
+  <div class="background-animation">
+    <canvas id="neural-canvas"></canvas>
+  </div>
+  
+  <!-- Rest of your content goes here -->
+  <header>NEUROMANTIC</header>
+  <div class="player-container">
+    <!-- Player content would go here -->
+  </div>
+
+  <script>
+    // Neural Network Visualization
+    const canvas = document.getElementById('neural-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas dimensions
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    
+    // Colors from CSS variables
+    const colors = {
+      primary: '#ff4b00',
+      secondary: '#00ffd0',
+      accent: '#ff00e4',
+      dark: '#0a0b0c'
+    };
+    
+    // Neural network parameters
+    const neuralNetwork = {
+      nodes: [],
+      connections: [],
+      layers: 5,
+      nodesPerLayer: 8,
+      connectionProbability: 0.3,
+      nodeSize: 2,
+      pulseSpeed: 0.002,
+      flowSpeed: 0.5
+    };
+    
+    // Initialize neural network
+    function initNetwork() {
+      neuralNetwork.nodes = [];
+      neuralNetwork.connections = [];
+      
+      // Create nodes in layers
+      for (let layer = 0; layer < neuralNetwork.layers; layer++) {
+        const layerWidth = canvas.width * 0.8;
+        const startX = canvas.width * 0.1;
+        const y = (canvas.height / (neuralNetwork.layers + 1)) * (layer + 1);
+        
+        // Random nodes per layer (more variation)
+        const nodesInThisLayer = neuralNetwork.nodesPerLayer + Math.floor(Math.random() * 4);
+        
+        for (let i = 0; i < nodesInThisLayer; i++) {
+          const x = startX + (layerWidth / (nodesInThisLayer - 1)) * i;
+          
+          // Add some randomness to position
+          const randomOffsetX = Math.random() * 30 - 15;
+          const randomOffsetY = Math.random() * 30 - 15;
+          
+          neuralNetwork.nodes.push({
+            x: x + randomOffsetX,
+            y: y + randomOffsetY,
+            layer,
+            size: neuralNetwork.nodeSize + Math.random() * 1.5,
+            pulse: Math.random() * Math.PI * 2,
+            activity: 0.1 + Math.random() * 0.3
+          });
+        }
+      }
+      
+      // Additional nodes scattered randomly for depth
+      for (let i = 0; i < 20; i++) {
+        neuralNetwork.nodes.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          layer: Math.floor(Math.random() * neuralNetwork.layers),
+          size: neuralNetwork.nodeSize * 0.8,
+          pulse: Math.random() * Math.PI * 2,
+          activity: 0.05 + Math.random() * 0.1
+        });
+      }
+      
+      // Create connections between nodes
+      for (let i = 0; i < neuralNetwork.nodes.length; i++) {
+        const nodeA = neuralNetwork.nodes[i];
+        
+        for (let j = 0; j < neuralNetwork.nodes.length; j++) {
+          const nodeB = neuralNetwork.nodes[j];
+          
+          // Connect preferentially to next layer, with some random connections for richness
+          if ((nodeB.layer === nodeA.layer + 1 || Math.random() < 0.05) && 
+              Math.random() < neuralNetwork.connectionProbability) {
+            
+            neuralNetwork.connections.push({
+              from: i,
+              to: j,
+              activity: 0.1 + Math.random() * 0.4,
+              pulseOffset: Math.random() * Math.PI * 2,
+              flowPosition: Math.random(),
+              flowParticles: []
+            });
+          }
+        }
+      }
+    }
+    
+    // Draw the neural network
+    function drawNetwork(timestamp) {
+      // Clear canvas with semi-transparent background for trail effect
+      ctx.fillStyle = 'rgba(10, 11, 12, 0.15)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Update and draw connections
+      for (const connection of neuralNetwork.connections) {
+        const nodeA = neuralNetwork.nodes[connection.from];
+        const nodeB = neuralNetwork.nodes[connection.to];
+        
+        // Calculate distance and angle
+        const dx = nodeB.x - nodeA.x;
+        const dy = nodeB.y - nodeA.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Update pulse
+        connection.flowPosition += neuralNetwork.flowSpeed / distance;
+        if (connection.flowPosition > 1) connection.flowPosition = 0;
+        
+        // Get activity (0-1)
+        const activity = 0.2 + 0.8 * Math.sin(timestamp * 0.001 + connection.pulseOffset) * connection.activity;
+        
+        // Draw connection line
+        ctx.beginPath();
+        ctx.moveTo(nodeA.x, nodeA.y);
+        ctx.lineTo(nodeB.x, nodeB.y);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${activity * 0.15})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+        
+        // Draw pulse traveling along the connection
+        const pulseX = nodeA.x + dx * connection.flowPosition;
+        const pulseY = nodeA.y + dy * connection.flowPosition;
+        
+        // Determine pulse color based on activity
+        let pulseColor;
+        if (activity > 0.7) {
+          pulseColor = colors.primary;
+        } else if (activity > 0.4) {
+          pulseColor = colors.secondary;
+        } else {
+          pulseColor = colors.accent;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(pulseX, pulseY, 1.5 * activity, 0, Math.PI * 2);
+        ctx.fillStyle = pulseColor;
+        ctx.fill();
+        
+        // Glow effect
+        ctx.beginPath();
+        ctx.arc(pulseX, pulseY, 3 * activity, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${
+          pulseColor === colors.primary ? '255, 75, 0' : 
+          pulseColor === colors.secondary ? '0, 255, 208' : '255, 0, 228'
+        }, ${activity * 0.3})`;
+        ctx.fill();
+      }
+      
+      // Update and draw nodes
+      for (const node of neuralNetwork.nodes) {
+        // Update pulse
+        node.pulse += neuralNetwork.pulseSpeed;
+        
+        // Calculate activity (0-1)
+        const activity = 0.2 + Math.sin(timestamp * 0.001 + node.pulse) * node.activity;
+        
+        // Draw node
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
+        
+        // Determine node color based on layer and activity
+        let nodeColor;
+        if (node.layer % 3 === 0) {
+          nodeColor = colors.primary;
+        } else if (node.layer % 3 === 1) {
+          nodeColor = colors.secondary;
+        } else {
+          nodeColor = colors.accent;
+        }
+        
+        ctx.fillStyle = nodeColor;
+        ctx.fill();
+        
+        // Draw glow effect
+        const glowSize = node.size * (1 + activity * 2);
+        const gradient = ctx.createRadialGradient(
+          node.x, node.y, node.size,
+          node.x, node.y, glowSize
+        );
+        gradient.addColorStop(0, `rgba(${
+          nodeColor === colors.primary ? '255, 75, 0' : 
+          nodeColor === colors.secondary ? '0, 255, 208' : '255, 0, 228'
+        }, ${0.7 * activity})`);
+        gradient.addColorStop(1, `rgba(${
+          nodeColor === colors.primary ? '255, 75, 0' : 
+          nodeColor === colors.secondary ? '0, 255, 208' : '255, 0, 228'
+        }, 0)`);
+        
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
+      
+      requestAnimationFrame(drawNetwork);
+    }
+    
+    // Initialize and start animation
+    initNetwork();
+    requestAnimationFrame(drawNetwork);
+  </script>
 </head>
 <body>
   <!-- Background animated gradient element -->
