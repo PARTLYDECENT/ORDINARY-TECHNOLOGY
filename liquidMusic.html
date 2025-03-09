@@ -576,73 +576,177 @@
     }
   }
 }
-   function drawQuantumCircles() {
-  // Use performance time to drive dynamic animations
+function drawNeuralNetwork() {
+  // Use performance time for animations
   const t = performance.now() / 1000;
-  for (let i = 0; i < bufferLength; i++) {
-    // Base angle with a slight time-based offset for subtle motion
-    const angle = (Math.PI * 2 * i / bufferLength) + (Math.sin(t + i) * 0.05);
-    // Base radius scaled from audio data with an additional pulsating factor
-    const baseRadius = dataArray[i] / 255 * Math.min(canvas.width, canvas.height) / 4;
-    const pulsate = 1 + 0.2 * Math.sin(t * 3 + i);
-    const radius = baseRadius * pulsate;
-    // Calculate circle center positions around the canvas center
-    const x = canvas.width / 2 + Math.cos(angle) * radius;
-    const y = canvas.height / 2 + Math.sin(angle) * radius;
+  
+  // Define our neural network structure
+  const layers = [4, 6, 6, 4]; // Neurons per layer
+  const layerSpacing = canvas.width / (layers.length + 1);
+  const neurons = [];
+  
+  // Clear canvas with a dark background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Create neurons
+  for (let layer = 0; layer < layers.length; layer++) {
+    const neuronCount = layers[layer];
+    const layerX = (layer + 1) * layerSpacing;
     
-    // Create an enhanced radial gradient with three stops for smooth color transitions
-    const hue = (i * 360 / bufferLength + t * 40) % 360;
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 60%, 1)`);
-    gradient.addColorStop(0.7, `hsla(${(hue + 30) % 360}, 100%, 55%, 0.7)`);
-    gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 100%, 50%, 0)`);
-
-    // Draw the primary circle with the custom gradient
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Use a sine-based modulation for stroke opacity for smooth, rhythmic transitions
-    const strokeOpacity = (Math.sin(t + i / 10) * 0.5 + 0.5).toFixed(2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${strokeOpacity})`;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(canvas.width / 2, canvas.height / 2);
-    ctx.stroke();
-
-    // Add a secondary, larger arc for that extra uncanny glow effect
-    ctx.beginPath();
-    ctx.arc(x, y, radius / 4, 0, Math.PI * 2);
-    ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${strokeOpacity})`;
-    ctx.stroke();
+    if (!neurons[layer]) neurons[layer] = [];
+    
+    for (let n = 0; n < neuronCount; n++) {
+      // Use audio data to influence neuron activation levels
+      const dataIndex = Math.floor(i / layers.length * bufferLength) % bufferLength;
+      const activation = dataArray[dataIndex] / 255;
+      
+      // Position neurons vertically centered in layer
+      const spacing = canvas.height / (neuronCount + 1);
+      const neuronY = (n + 1) * spacing;
+      
+      // Add some subtle movement to neurons
+      const offsetX = Math.sin(t + n * 0.5) * 5;
+      const offsetY = Math.cos(t + n * 0.3) * 5;
+      
+      neurons[layer][n] = {
+        x: layerX + offsetX,
+        y: neuronY + offsetY,
+        activation: activation
+      };
+      
+      // Draw neuron node
+      const radius = 10 + (activation * 10);
+      const hue = (layer * 60 + n * 15 + t * 20) % 360;
+      
+      // Create glowing effect for active neurons
+      const gradient = ctx.createRadialGradient(
+        neurons[layer][n].x, neurons[layer][n].y, 0,
+        neurons[layer][n].x, neurons[layer][n].y, radius * 2
+      );
+      gradient.addColorStop(0, `hsla(${hue}, 100%, 70%, 1)`);
+      gradient.addColorStop(0.6, `hsla(${hue}, 100%, 60%, 0.7)`);
+      gradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
+      
+      ctx.beginPath();
+      ctx.arc(neurons[layer][n].x, neurons[layer][n].y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+  }
+  
+  // Draw connections between neurons
+  for (let layer = 0; layer < layers.length - 1; layer++) {
+    for (let n1 = 0; n1 < neurons[layer].length; n1++) {
+      for (let n2 = 0; n2 < neurons[layer + 1].length; n2++) {
+        const sourceNeuron = neurons[layer][n1];
+        const targetNeuron = neurons[layer + 1][n2];
+        
+        // Calculate weighted connection based on activations
+        const weight = (sourceNeuron.activation + targetNeuron.activation) / 2;
+        
+        // Use weight to determine connection opacity and width
+        const opacity = weight * 0.8 + 0.1;
+        const lineWidth = weight * 2 + 0.5;
+        
+        // Animate signal pulses along connections
+        const pulsePosition = (t * 2) % 1;
+        const pulseSize = 2 + weight * 3;
+        
+        // Draw the connection line
+        ctx.beginPath();
+        ctx.moveTo(sourceNeuron.x, sourceNeuron.y);
+        ctx.lineTo(targetNeuron.x, targetNeuron.y);
+        ctx.strokeStyle = `rgba(100, 200, 255, ${opacity})`;
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+        
+        // Draw pulse animation along the connection
+        const pulseX = sourceNeuron.x + (targetNeuron.x - sourceNeuron.x) * pulsePosition;
+        const pulseY = sourceNeuron.y + (targetNeuron.y - sourceNeuron.y) * pulsePosition;
+        
+        ctx.beginPath();
+        ctx.arc(pulseX, pulseY, pulseSize, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${(layer * 50 + t * 30) % 360}, 100%, 70%, ${weight})`;
+        ctx.fill();
+      }
+    }
+  }
+  
+  // Add data flow effect that follows audio rhythm
+  for (let i = 0; i < bufferLength; i += 20) {
+    const intensity = dataArray[i] / 255;
+    if (intensity > 0.5) {
+      const sourceLayer = Math.floor(Math.random() * (layers.length - 1));
+      const sourceNeuron = Math.floor(Math.random() * neurons[sourceLayer].length);
+      const targetNeuron = Math.floor(Math.random() * neurons[sourceLayer + 1].length);
+      
+      if (neurons[sourceLayer][sourceNeuron] && neurons[sourceLayer + 1][targetNeuron]) {
+        ctx.beginPath();
+        ctx.moveTo(neurons[sourceLayer][sourceNeuron].x, neurons[sourceLayer][sourceNeuron].y);
+        ctx.lineTo(neurons[sourceLayer + 1][targetNeuron].x, neurons[sourceLayer + 1][targetNeuron].y);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity})`;
+        ctx.lineWidth = intensity * 3;
+        ctx.stroke();
+      }
+    }
   }
 }
 
-
-    function drawNeuralWave() {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.beginPath();
-
-      const sliceWidth = canvas.width / bufferLength;
+   function drawCosmicBloom() {
+  const t = performance.now() / 1000;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Set composite mode for ethereal glow effects
+  ctx.globalCompositeOperation = 'lighter';
+  
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  
+  for (let i = 0; i < bufferLength; i++) {
+    // Base angle offset, modulated by time for subtle rotation
+    const angle = (Math.PI * 2 * i / bufferLength) + (t * 0.5);
+    const audioLevel = dataArray[i] / 255;
+    // Base radius is dynamically scaled by audio level
+    const baseRadius = audioLevel * Math.min(canvas.width, canvas.height) / 3;
+    const bloomX = centerX + Math.cos(angle) * baseRadius;
+    const bloomY = centerY + Math.sin(angle) * baseRadius;
+    
+    // Create multiple fractal branches for each audio bin
+    for (let j = 0; j < 6; j++) {
+      const branchOffset = j * 10 * audioLevel;
+      const branchAngle = angle + j * 0.15;
+      const branchRadius = baseRadius + branchOffset;
+      const branchX = centerX + Math.cos(branchAngle) * branchRadius;
+      const branchY = centerY + Math.sin(branchAngle) * branchRadius;
       
-      for (let i = 0, x = 0; i < bufferLength; i++, x += sliceWidth) {
-        const v = dataArray[i] / 128.0;
-        const y = v * canvas.height / 2;
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-
-        ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.8)`;
-        ctx.beginPath();
-        ctx.arc(x, y, v * 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.lineTo(canvas.width, canvas.height / 2);
-      ctx.stroke();
+      // Dynamic hue based on index, time, and branch iteration
+      const hue = (i * 360 / bufferLength + t * 80 + j * 20) % 360;
+      // Create a radial gradient for the bloom with multiple stops
+      const bloomGradient = ctx.createRadialGradient(branchX, branchY, 0, branchX, branchY, 20);
+      bloomGradient.addColorStop(0, `hsla(${hue}, 100%, 70%, 0.95)`);
+      bloomGradient.addColorStop(0.7, `hsla(${(hue+20)%360}, 100%, 60%, 0.5)`);
+      bloomGradient.addColorStop(1, `hsla(${(hue+40)%360}, 100%, 50%, 0)`);
+      
+      ctx.fillStyle = bloomGradient;
+      ctx.beginPath();
+      ctx.arc(branchX, branchY, 20, 0, Math.PI * 2);
+      ctx.fill();
     }
+    
+    // Draw a hyper line connecting the canvas center to the primary bloom point
+    ctx.strokeStyle = `hsla(${(i * 360 / bufferLength + t * 60) % 360}, 100%, 65%, 0.7)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(bloomX, bloomY);
+    ctx.stroke();
+  }
+  
+  // Restore default composite operation
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 
     function drawGalacticStars() {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
