@@ -498,159 +498,228 @@
       $('totalTime').textContent = formatTime(musicPlayer.duration);
     }
 
-// Modernized Visualizer Rendering Functions
-function renderVisualizer() {
-  if (!audioContext) return;
-  animationId = requestAnimationFrame(renderVisualizer);
+// Hyper-Efficient WebGL Audio Visualizer for 2026
+
+// Assumes these globals are defined elsewhere:
+// audioContext, analyser, bufferLength, dataArray, currentVisualizer
+// Also, a <canvas id="canvas"> element exists in your HTML.
+
+const canvas = document.getElementById('canvas');
+const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+if (!gl) {
+  alert("WebGL is not supported on this device.");
+}
+
+// ------------------------
+// Shader Sources
+// ------------------------
+const vertexShaderSource = `#version 300 es
+in vec2 a_position;
+out vec2 v_uv;
+void main() {
+  // Map positions from [-1,1] to [0,1]
+  v_uv = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0, 1);
+}
+`;
+
+const fragmentShaderSource = `#version 300 es
+precision mediump float;
+in vec2 v_uv;
+out vec4 outColor;
+
+uniform float u_time;
+uniform int u_mode;
+uniform vec2 u_resolution;
+uniform sampler2D u_audioTex;
+
+// Returns a normalized audio value at a given x coordinate (0.0 to 1.0)
+float getAudioValue(float x) {
+  return texture(u_audioTex, vec2(x, 0.5)).r;
+}
+
+void main() {
+  vec2 st = v_uv;
+  vec3 color = vec3(0.0);
+  
+  // Visualization Mode Switch
+  if (u_mode == 1) {
+    // Holographic Bars Effect:
+    float barWidth = 1.0 / float(textureSize(u_audioTex, 0).x);
+    float index = floor(st.x / barWidth);
+    float audioVal = getAudioValue(index * barWidth);
+    float barHeight = audioVal;
+    if (st.y < barHeight) {
+      float t = u_time * 2.0;
+      color = vec3(sin(t + index) * 0.5 + 0.5, 0.5, cos(t + index) * 0.5 + 0.5);
+    }
+  } else if (u_mode == 2) {
+    // Quantum Circles:
+    vec2 center = u_resolution * 0.5;
+    vec2 pos = st * u_resolution;
+    float angle = atan(pos.y - center.y, pos.x - center.x);
+    float dist = distance(pos, center);
+    float audioVal = getAudioValue((angle + 3.1415) / 6.2830);
+    float radius = audioVal * 100.0;
+    if (abs(dist - radius) < 5.0) {
+      color = vec3(0.8, 0.2, 0.9);
+    }
+  } else if (u_mode == 3) {
+    // Neural Wave:
+    float wave = sin((st.x + u_time) * 10.0) * 0.5 + 0.5;
+    if (st.y < wave) {
+      color = vec3(0.2, 0.9, 1.0);
+    }
+  } else if (u_mode == 4) {
+    // Galactic Stars:
+    // Use a pseudo-random hash based on st and time for star flicker
+    float star = step(0.995, fract(sin(dot(st * u_time, vec2(12.9898, 78.233))) * 43758.5453));
+    color = vec3(star);
+  } else if (u_mode == 5) {
+    // 4D Spectrum:
+    float hue = mod(st.x + u_time * 0.1, 1.0);
+    // Simple hue-to-RGB conversion (for demo purposes)
+    color = vec3(abs(hue - 0.5) * 2.0, 0.5, 1.0);
+  }
+  
+  outColor = vec4(color, 1.0);
+}
+`;
+
+// ------------------------
+// Shader Compilation Helpers
+// ------------------------
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error('Shader compile failed:', gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+function createProgram(gl, vertexShader, fragmentShader) {
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vertexShader);
+  gl.attachShader(prog, fragmentShader);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error('Program link failed:', gl.getProgramInfoLog(prog));
+    gl.deleteProgram(prog);
+    return null;
+  }
+  return prog;
+}
+
+const program = createProgram(gl, vertexShader, fragmentShader);
+gl.useProgram(program);
+
+// ------------------------
+// Setup Fullscreen Quad
+// ------------------------
+const positions = new Float32Array([
+  -1, -1,
+   1, -1,
+  -1,  1,
+  -1,  1,
+   1, -1,
+   1,  1,
+]);
+const positionBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+const aPositionLocation = gl.getAttribLocation(program, 'a_position');
+gl.enableVertexAttribArray(aPositionLocation);
+gl.vertexAttribPointer(aPositionLocation, 2, gl.FLOAT, false, 0, 0);
+
+// ------------------------
+// Get Uniform Locations
+// ------------------------
+const uTimeLocation = gl.getUniformLocation(program, 'u_time');
+const uModeLocation = gl.getUniformLocation(program, 'u_mode');
+const uResolutionLocation = gl.getUniformLocation(program, 'u_resolution');
+const uAudioTexLocation = gl.getUniformLocation(program, 'u_audioTex');
+
+// ------------------------
+// Audio Texture Setup
+// ------------------------
+// Create a 1D texture to hold audio frequency data.
+const audioTexture = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, audioTexture);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+// bufferLength is the number of frequency bins from your analyser.
+const audioTexWidth = bufferLength;
+const audioTexHeight = 1;
+gl.texImage2D(
+  gl.TEXTURE_2D,
+  0,
+  gl.LUMINANCE,
+  audioTexWidth,
+  audioTexHeight,
+  0,
+  gl.LUMINANCE,
+  gl.UNSIGNED_BYTE,
+  null
+);
+
+// ------------------------
+// Canvas & Viewport Resize
+// ------------------------
+function resizeCanvas() {
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ------------------------
+// Render Loop
+// ------------------------
+function render() {
+  requestAnimationFrame(render);
+  
+  // Update audio frequency data (from Web Audio API)
   analyser.getByteFrequencyData(dataArray);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Use a high-resolution time value for dynamic effects
-  const currentTime = performance.now() / 1000;
+  // Update audio texture with new frequency data
+  gl.bindTexture(gl.TEXTURE_2D, audioTexture);
+  gl.texSubImage2D(
+    gl.TEXTURE_2D,
+    0,
+    0,
+    0,
+    audioTexWidth,
+    audioTexHeight,
+    gl.LUMINANCE,
+    gl.UNSIGNED_BYTE,
+    dataArray
+  );
   
-  // Wrap each visualizer function to pass the current time
-  const vizFuncs = [
-    () => drawHolographicBars(currentTime),
-    () => drawQuantumCircles(currentTime),
-    () => drawNeuralWave(currentTime),
-    () => drawGalacticStars(currentTime),
-    () => draw4DSpectrum(currentTime)
-  ];
+  // Set uniform values
+  gl.uniform1f(uTimeLocation, performance.now() * 0.001);
+  gl.uniform1i(uModeLocation, currentVisualizer); // Modes: 1 to 5
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, audioTexture);
+  gl.uniform1i(uAudioTexLocation, 0);
   
-  vizFuncs[currentVisualizer - 1]();
+  // Draw the full-screen quad
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
 
-function drawHolographicBars(time) {
-  const barWidth = (canvas.width / bufferLength) * 2.5;
-  
-  for (let i = 0, x = 0; i < bufferLength; i++, x += barWidth + 1) {
-    const barHeight = dataArray[i];
-    // Ensure color values stay within bounds
-    const safeValue = Math.min(barHeight + 100, 255);
-    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-    gradient.addColorStop(0, `rgba(${safeValue}, 50, 255, 0.8)`);
-    gradient.addColorStop(1, `rgba(50, ${safeValue}, 255, 0.2)`);
+render();
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-    // Use a sine-based modulation instead of random opacity
-    const opacity = (Math.sin(time + i / 10) * 0.5 + 0.5).toFixed(2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-    ctx.strokeRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-  }
-}
-
-function drawQuantumCircles(time) {
-  for (let i = 0; i < bufferLength; i++) {
-    const angle = (Math.PI * 2 * i) / bufferLength;
-    const radius = (dataArray[i] / 255) * Math.min(canvas.width, canvas.height) / 4;
-    const x = canvas.width / 2 + Math.cos(angle) * radius;
-    const y = canvas.height / 2 + Math.sin(angle) * radius;
-
-    // Pulsating radial gradient with time-based hue shift
-    const hue = (i * 360 / bufferLength + time * 20) % 360;
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
-    gradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
-
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Draw connecting line with dynamic opacity
-    const lineOpacity = (Math.sin(time + i / bufferLength * Math.PI * 2) * 0.5 + 0.5).toFixed(2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${lineOpacity})`;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(canvas.width / 2, canvas.height / 2);
-    ctx.stroke();
-  }
-}
-
-function drawNeuralWave(time) {
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-  ctx.beginPath();
-
-  const sliceWidth = canvas.width / bufferLength;
-  
-  for (let i = 0, x = 0; i < bufferLength; i++, x += sliceWidth) {
-    const v = dataArray[i] / 128.0;
-    const y = v * canvas.height / 2;
-
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-
-    // Color circles using a time and index based hue
-    const hue = (i / bufferLength * 360 + time * 30) % 360;
-    ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.8)`;
-    ctx.beginPath();
-    ctx.arc(x, y, v * 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.lineTo(canvas.width, canvas.height / 2);
-  ctx.stroke();
-}
-
-function drawGalacticStars(time) {
-  // Slightly fade the canvas to create a trailing effect
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = 'lighter';
-  
-  for (let i = 0; i < 100; i++) {
-    const x = Math.random() * canvas.width;
-    const y = Math.random() * canvas.height;
-    const dataIndex = Math.floor((i / 100) * bufferLength);
-    const radius = (dataArray[dataIndex] / 255) * 3 + 1;
-    
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    // Modulate star opacity using both audio data and a sine wave based on time
-    const opacity = ((dataArray[dataIndex] / 255) * (Math.sin(time + i) * 0.5 + 0.5)).toFixed(2);
-    gradient.addColorStop(0, `rgba(255, 255, 255, ${opacity})`);
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = gradient;
-    ctx.fill();
-  }
-  
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-function draw4DSpectrum(time) {
-  const barWidth = canvas.width / bufferLength;
-  
-  for (let i = 0; i < bufferLength; i++) {
-    const barHeight = dataArray[i];
-    const x = i * barWidth;
-    const hue = (i / bufferLength * 360 + time * 20) % 360;
-
-    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
-    gradient.addColorStop(1, `hsla(${hue}, 100%, 80%, 0.2)`);
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-
-    // Overlay with a dynamic alpha layer for extra depth
-    const alpha = (Math.sin(time + i / bufferLength * Math.PI * 2) * 0.5 + 0.5).toFixed(2);
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 50%, 0.5)`;
-    ctx.fillRect(x, canvas.height - barHeight * 0.5, barWidth, barHeight * 0.5);
-    ctx.globalAlpha = 1;
-  }
-}
-
-// Event Handlers
-function updateVisualizerButtons() {
-  document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
-    btn.classList.toggle('active', i + 1 === currentVisualizer);
-  });
-}
 
 
     // Event listeners
