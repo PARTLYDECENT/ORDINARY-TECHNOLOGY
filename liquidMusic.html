@@ -29,6 +29,15 @@
       overflow-x: hidden;
     }
     
+    #background-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+    }
+    
     header {
       font-size: 1.5rem;
       font-weight: 700;
@@ -185,22 +194,10 @@
     .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
     .playlist-item.active { background: rgba(255, 75, 0, 0.1); }
     .playlist-item.active span:last-child { color: var(--primary); }
-    
-    .background-video {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: -1;
-    }
   </style>
 </head>
 <body>
-  <video class="background-video" autoplay loop muted playsinline>
-    <source src="video1.mp4" type="video/mp4" />
-  </video>
+  <canvas id="background-canvas"></canvas>
   
   <header>Neuromantic</header>
   <div class="player-container">
@@ -246,9 +243,15 @@
     const progressBar = $('progressBar');
     const progressContainer = $('progressContainer');
     
+    // Background neural network setup
+    const bgCanvas = $('background-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    
     // Set canvas dimensions
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
+    bgCanvas.width = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
     
     // Track list
     const tracks = [
@@ -278,14 +281,22 @@
     let currentTrackIndex = 0;
     let currentVisualizer = 1;
     let animationId = null;
+    let bgAnimationId = null;
     let audioContext, analyser, source, dataArray, bufferLength;
-    const stars = Array.from({length: 512}, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3,
-      baseSize: Math.random() * 2 + 1
-    }));
+    
+    // Neural network background state
+    const neurons = [];
+    const connections = [];
+    const neuronCount = 80;
+    const layerCount = 5;
+    const colorSchemes = [
+      { neuron: '#ff4b00', connection: '#00ffd0' },
+      { neuron: '#00ffd0', connection: '#ff4b00' },
+      { neuron: '#ff00ff', connection: '#00ffff' },
+      { neuron: '#ffff00', connection: '#0088ff' }
+    ];
+    let currentColorScheme = 0;
+    let reactivityFactor = 0;
 
     // Helper functions
     const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
@@ -301,6 +312,124 @@
         analyser.fftSize = 512;
         bufferLength = analyser.frequencyBinCount;
         dataArray = new Uint8Array(bufferLength);
+      }
+    }
+
+    // Initialize neural network
+    function initNeuralNetwork() {
+      neurons.length = 0;
+      connections.length = 0;
+      
+      // Create neurons in layers
+      for (let layer = 0; layer < layerCount; layer++) {
+        const neuronsInLayer = layer === 0 || layer === layerCount - 1 ? 10 : 20;
+        const layerX = (bgCanvas.width / (layerCount - 1)) * layer;
+        
+        for (let i = 0; i < neuronsInLayer; i++) {
+          const ySpread = layer === 0 || layer === layerCount - 1 ? 0.6 : 0.8;
+          const y = bgCanvas.height * (0.5 - ySpread/2 + ySpread * (i / (neuronsInLayer - 1)));
+          
+          neurons.push({
+            x: layerX,
+            y,
+            layer,
+            size: Math.random() * 3 + 2,
+            pulse: 0,
+            speed: Math.random() * 0.02 + 0.01
+          });
+        }
+      }
+      
+      // Connect neurons between adjacent layers
+      for (let i = 0; i < neurons.length; i++) {
+        const from = neurons[i];
+        
+        // Connect to next layer
+        if (from.layer < layerCount - 1) {
+          const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
+          
+          // Connect to some neurons in next layer
+          for (let j = 0; j < nextLayer.length; j += 2) {
+            const to = nextLayer[j];
+            connections.push({
+              from,
+              to,
+              weight: Math.random(),
+              signal: 0
+            });
+          }
+        }
+      }
+    }
+
+    // Render neural network background
+    function renderNeuralBackground() {
+      if (!audioContext) {
+        bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+        return;
+      }
+      
+      bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+      analyser.getByteFrequencyData(dataArray);
+      
+      // Calculate overall audio reactivity
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      reactivityFactor = sum / (bufferLength * 255);
+      
+      // Clear with fade effect for trails
+      bgCtx.fillStyle = 'rgba(10, 11, 12, 0.1)';
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      
+      // Update neurons
+      neurons.forEach((neuron, i) => {
+        const freqIndex = Math.floor(i / neurons.length * bufferLength);
+        neuron.pulse = (dataArray[freqIndex] / 255) * 3 * reactivityFactor;
+        
+        // Draw neuron
+        const colors = colorSchemes[currentColorScheme];
+        bgCtx.fillStyle = colors.neuron;
+        bgCtx.beginPath();
+        bgCtx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse, 0, Math.PI * 2);
+        bgCtx.fill();
+      });
+      
+      // Draw connections with signals
+      connections.forEach(conn => {
+        const dx = conn.to.x - conn.from.x;
+        const dy = conn.to.y - conn.from.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Only draw if reasonable distance
+        if (distance < bgCanvas.width / 2) {
+          // Update signal position based on audio
+          conn.signal = (conn.signal + reactivityFactor * 0.05) % 1;
+          
+          // Calculate signal position
+          const signalX = conn.from.x + dx * conn.signal;
+          const signalY = conn.from.y + dy * conn.signal;
+          
+          // Draw connection line
+          bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
+          bgCtx.beginPath();
+          bgCtx.moveTo(conn.from.x, conn.from.y);
+          bgCtx.lineTo(conn.to.x, conn.to.y);
+          bgCtx.stroke();
+          
+          // Draw signal pulse
+          const colors = colorSchemes[currentColorScheme];
+          bgCtx.fillStyle = colors.connection;
+          bgCtx.beginPath();
+          bgCtx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
+          bgCtx.fill();
+        }
+      });
+      
+      // Occasionally change color scheme based on music intensity
+      if (Math.random() < 0.001 + reactivityFactor * 0.01) {
+        currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
       }
     }
 
@@ -456,26 +585,21 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.globalCompositeOperation = 'lighter';
       
-      stars.forEach((star, i) => {
-        const dataIndex = Math.floor((i / stars.length) * bufferLength);
+      for (let i = 0; i < 100; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const dataIndex = Math.floor((i / 100) * bufferLength);
+        const radius = (dataArray[dataIndex] / 255) * 3 + 1;
         
-        star.x = (star.x + star.vx + canvas.width) % canvas.width;
-        star.y = (star.y + star.vy + canvas.height) % canvas.height;
-        
-        const radius = (dataArray[dataIndex] / 255) * 3 + star.baseSize;
-        
-        const gradient = ctx.createRadialGradient(
-          star.x, star.y, 0, 
-          star.x, star.y, radius
-        );
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
         gradient.addColorStop(0, `rgba(255, 255, 255, ${dataArray[dataIndex]/255})`);
         gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
         ctx.beginPath();
-        ctx.arc(star.x, star.y, radius, 0, Math.PI * 2);
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = gradient;
         ctx.fill();
-      });
+      }
       
       ctx.globalCompositeOperation = 'source-over';
     }
@@ -536,9 +660,20 @@
       });
     });
 
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      initNeuralNetwork();
+    });
+
     // Initialize
     loadTrack(currentTrackIndex);
     createPlaylist();
+    initNeuralNetwork();
+    renderNeuralBackground();
   </script>
 </body>
 </html>
