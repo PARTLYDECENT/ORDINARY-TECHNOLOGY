@@ -35,17 +35,279 @@
       position: relative;
     }
     
-    /* Background Visualization Canvas */
-    canvas#backgroundViz {
+   /* Background Animation */
+    .background-animation {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
+      background: linear-gradient(45deg, #ff4b00, #00ffd0, #ff00e4, #00ffd0);
+      background-size: 600% 600%;
+      animation: gradientAnimation 30s ease infinite;
       z-index: -1;
     }
+
+    @keyframes gradientAnimation {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* Neural Network Container */
+    #neural-network {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Node styling */
+    .node {
+      position: absolute;
+      border-radius: 50%;
+      background-color: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+      transition: all 0.3s ease;
+    }
+
+    /* Connection styling */
+    .connection {
+      position: absolute;
+      background-color: rgba(255, 255, 255, 0.3);
+      transform-origin: 0 0;
+      z-index: -1;
+    }
+
+    /* Pulse animation for nodes */
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); opacity: 0.7; }
+    }
+
+    /* Data flow animation */
+    @keyframes dataFlow {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+
+    .data-particle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: white;
+      filter: blur(2px);
+    }
+
+    /* Title styling */
+    .network-title {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-family: Arial, sans-serif;
+      font-size: 1.5rem;
+      text-align: center;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="background-animation"></div>
+  <div id="neural-network"></div>
+  <div class="network-title">Neural Network Visualization</div>
+
+  <script>
+    // Neural Network Parameters
+    const layers = [8, 12, 15, 10, 6];
+    const totalLayers = layers.length;
+    const nodeSize = 10;
+    const networkContainer = document.getElementById('neural-network');
+    const nodes = [];
+    let connections = [];
+    const dataParticles = [];
+    const maxParticles = 50;
+
+    // Create the neural network
+    function createNeuralNetwork() {
+      // Calculate positions for all nodes
+      let layerX = 0;
+      for (let l = 0; l < totalLayers; l++) {
+        const nodesInLayer = layers[l];
+        const layerSpacing = window.innerWidth / (totalLayers + 1);
+        layerX = layerSpacing * (l + 1);
+
+        for (let n = 0; n < nodesInLayer; n++) {
+          const layerHeight = window.innerHeight * 0.6;
+          const nodeSpacing = layerHeight / (nodesInLayer + 1);
+          const nodeY = (window.innerHeight / 2) - (layerHeight / 2) + nodeSpacing * (n + 1);
+          
+          // Create node
+          const node = document.createElement('div');
+          node.className = 'node';
+          node.style.width = `${nodeSize}px`;
+          node.style.height = `${nodeSize}px`;
+          node.style.left = `${layerX}px`;
+          node.style.top = `${nodeY}px`;
+          
+          // Random pulse animation with delay
+          const animationDelay = Math.random() * 5;
+          node.style.animation = `pulse 3s ease-in-out ${animationDelay}s infinite`;
+          
+          networkContainer.appendChild(node);
+          nodes.push({
+            element: node,
+            x: layerX,
+            y: nodeY,
+            layer: l
+          });
+        }
+      }
+
+      // Create connections between layers
+      for (let l = 0; l < totalLayers - 1; l++) {
+        const currentLayerNodes = nodes.filter(node => node.layer === l);
+        const nextLayerNodes = nodes.filter(node => node.layer === l + 1);
+
+        for (let i = 0; i < currentLayerNodes.length; i++) {
+          for (let j = 0; j < nextLayerNodes.length; j++) {
+            if (Math.random() > 0.3) { // 70% chance to create a connection
+              const start = currentLayerNodes[i];
+              const end = nextLayerNodes[j];
+              createConnection(start, end);
+            }
+          }
+        }
+      }
+
+      // Start creating data particles
+      setInterval(createDataParticle, 200);
+    }
+
+    // Create connection between two nodes
+    function createConnection(startNode, endNode) {
+      const connection = document.createElement('div');
+      connection.className = 'connection';
+      
+      const dx = endNode.x - startNode.x;
+      const dy = endNode.y - startNode.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx);
+      
+      connection.style.width = `${length}px`;
+      connection.style.height = '1px';
+      connection.style.left = `${startNode.x + nodeSize / 2}px`;
+      connection.style.top = `${startNode.y + nodeSize / 2}px`;
+      connection.style.transform = `rotate(${angle}rad)`;
+      
+      networkContainer.appendChild(connection);
+      connections.push({
+        element: connection,
+        start: startNode,
+        end: endNode,
+        length: length
+      });
+    }
+
+    // Create data particle that travels along connections
+    function createDataParticle() {
+      if (dataParticles.length >= maxParticles) return;
+      
+      // Select random connection
+      if (connections.length === 0) return;
+      const connectionIndex = Math.floor(Math.random() * connections.length);
+      const connection = connections[connectionIndex];
+      
+      const particle = document.createElement('div');
+      particle.className = 'data-particle';
+      
+      // Random color
+      const colors = ['#ff4b00', '#00ffd0', '#ff00e4', 'white'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      particle.style.backgroundColor = color;
+      
+      // Set initial position at start node
+      let progress = 0;
+      const startX = connection.start.x + nodeSize / 2;
+      const startY = connection.start.y + nodeSize / 2;
+      
+      particle.style.left = `${startX}px`;
+      particle.style.top = `${startY}px`;
+      
+      networkContainer.appendChild(particle);
+      
+      const particleObj = {
+        element: particle,
+        connection: connection,
+        progress: 0,
+        speed: 0.5 + Math.random() * 1.5 // Random speed
+      };
+      
+      dataParticles.push(particleObj);
+    }
+
+    // Update data particles
+    function updateParticles() {
+      for (let i = dataParticles.length - 1; i >= 0; i--) {
+        const particle = dataParticles[i];
+        particle.progress += particle.speed / 100;
+        
+        if (particle.progress >= 1) {
+          // Remove particle
+          particle.element.remove();
+          dataParticles.splice(i, 1);
+        } else {
+          // Update position
+          const connection = particle.connection;
+          const startX = connection.start.x + nodeSize / 2;
+          const startY = connection.start.y + nodeSize / 2;
+          const endX = connection.end.x + nodeSize / 2;
+          const endY = connection.end.y + nodeSize / 2;
+          
+          const currentX = startX + (endX - startX) * particle.progress;
+          const currentY = startY + (endY - startY) * particle.progress;
+          
+          particle.element.style.left = `${currentX}px`;
+          particle.element.style.top = `${currentY}px`;
+          
+          // Make the particles grow and fade as they travel
+          const scale = 1 + Math.sin(particle.progress * Math.PI) * 0.5;
+          particle.element.style.transform = `scale(${scale})`;
+          particle.element.style.opacity = Math.sin(particle.progress * Math.PI);
+        }
+      }
+      
+      requestAnimationFrame(updateParticles);
+    }
+
+    // Handle window resize
+    function handleResize() {
+      // Remove all nodes and connections
+      nodes.forEach(node => node.element.remove());
+      connections.forEach(connection => connection.element.remove());
+      dataParticles.forEach(particle => particle.element.remove());
+      
+      nodes.length = 0;
+      connections.length = 0;
+      dataParticles.length = 0;
+      
+      // Recreate the network
+      createNeuralNetwork();
+    }
     
-    /* Existing Styles */
+    @keyframes gradientAnimation {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    
     header {
       font-size: 1.5rem;
       font-weight: 700;
@@ -349,325 +611,6 @@
       }
     }
   </style>
-</head>
-<body>
-  <!-- Background Visualization -->
-  <canvas id="backgroundViz"></canvas>
-  
-  <!-- The rest of your site content -->
-  <header>Neuromantic</header>
-  <div class="player-container">
-    <div class="visualizer-container">
-      <canvas id="visualizer"></canvas>
-    </div>
-    <audio id="musicPlayer" src="track1.mp3"></audio>
-    <div class="track-info">
-      <div class="track-title" id="trackTitle">Liquid Dreams</div>
-      <div class="track-number"><span id="currentTrackNum">1</span>/20</div>
-    </div>
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar"></div>
-    </div>
-    <div class="time-display">
-      <span id="currentTime">0:00</span>
-      <span id="totalTime">0:00</span>
-    </div>
-    <div class="controls">
-      <button id="prevTrack">Prev</button>
-      <button id="playPause">Play</button>
-      <button id="nextTrack">Next</button>
-    </div>
-    <div class="visualizer-controls">
-      <button id="viz1" class="active">Bars</button>
-      <button id="viz2">Circles</button>
-      <button id="viz3">Wave</button>
-      <button id="viz4">Stars</button>
-      <button id="viz5">Spectrum</button>
-    </div>
-    <button class="playlist-toggle" id="playlistToggle">Playlist</button>
-    <div class="playlist-container" id="playlist" style="display:none;"></div>
-  </div>
-  
-  <script>
-    // Neural Network Background Visualization
-    (function() {
-      const canvas = document.getElementById('backgroundViz');
-      const ctx = canvas.getContext('2d');
-  
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-  
-      const nodes = Array.from({ length: 50 }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        radius: 2 + Math.random() * 3,
-        speedX: (Math.random() - 0.5) * 1.5,
-        speedY: (Math.random() - 0.5) * 1.5
-      }));
-  
-      function drawViz() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        nodes.forEach(node => {
-          node.x += node.speedX;
-          node.y += node.speedY;
-  
-          if (node.x < 0 || node.x > canvas.width) node.speedX *= -1;
-          if (node.y < 0 || node.y > canvas.height) node.speedY *= -1;
-  
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(255, 75, 0, 0.7)';
-          ctx.fill();
-  
-          nodes.forEach(other => {
-            const dist = Math.hypot(node.x - other.x, node.y - other.y);
-            if (dist < 150) {
-              ctx.beginPath();
-              ctx.moveTo(node.x, node.y);
-              ctx.lineTo(other.x, other.y);
-              ctx.strokeStyle = `rgba(0, 255, 208, ${1 - dist / 150})`;
-              ctx.lineWidth = 0.5;
-              ctx.stroke();
-            }
-          });
-        });
-        requestAnimationFrame(drawViz);
-      }
-      drawViz();
-  
-      window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      });
-    })();
-  </script>
-</head>
-<body>
-  <div class="background-animation">
-    <canvas id="neural-canvas"></canvas>
-  </div>
-  
-  <!-- Rest of your content goes here -->
-  <header>NEUROMANTIC</header>
-  <div class="player-container">
-    <!-- Player content would go here -->
-  </div>
-
-  <script>
-    // Neural Network Visualization
-    const canvas = document.getElementById('neural-canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Set canvas dimensions
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-    
-    // Colors from CSS variables
-    const colors = {
-      primary: '#ff4b00',
-      secondary: '#00ffd0',
-      accent: '#ff00e4',
-      dark: '#0a0b0c'
-    };
-    
-    // Neural network parameters
-    const neuralNetwork = {
-      nodes: [],
-      connections: [],
-      layers: 5,
-      nodesPerLayer: 8,
-      connectionProbability: 0.3,
-      nodeSize: 2,
-      pulseSpeed: 0.002,
-      flowSpeed: 0.5
-    };
-    
-    // Initialize neural network
-    function initNetwork() {
-      neuralNetwork.nodes = [];
-      neuralNetwork.connections = [];
-      
-      // Create nodes in layers
-      for (let layer = 0; layer < neuralNetwork.layers; layer++) {
-        const layerWidth = canvas.width * 0.8;
-        const startX = canvas.width * 0.1;
-        const y = (canvas.height / (neuralNetwork.layers + 1)) * (layer + 1);
-        
-        // Random nodes per layer (more variation)
-        const nodesInThisLayer = neuralNetwork.nodesPerLayer + Math.floor(Math.random() * 4);
-        
-        for (let i = 0; i < nodesInThisLayer; i++) {
-          const x = startX + (layerWidth / (nodesInThisLayer - 1)) * i;
-          
-          // Add some randomness to position
-          const randomOffsetX = Math.random() * 30 - 15;
-          const randomOffsetY = Math.random() * 30 - 15;
-          
-          neuralNetwork.nodes.push({
-            x: x + randomOffsetX,
-            y: y + randomOffsetY,
-            layer,
-            size: neuralNetwork.nodeSize + Math.random() * 1.5,
-            pulse: Math.random() * Math.PI * 2,
-            activity: 0.1 + Math.random() * 0.3
-          });
-        }
-      }
-      
-      // Additional nodes scattered randomly for depth
-      for (let i = 0; i < 20; i++) {
-        neuralNetwork.nodes.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          layer: Math.floor(Math.random() * neuralNetwork.layers),
-          size: neuralNetwork.nodeSize * 0.8,
-          pulse: Math.random() * Math.PI * 2,
-          activity: 0.05 + Math.random() * 0.1
-        });
-      }
-      
-      // Create connections between nodes
-      for (let i = 0; i < neuralNetwork.nodes.length; i++) {
-        const nodeA = neuralNetwork.nodes[i];
-        
-        for (let j = 0; j < neuralNetwork.nodes.length; j++) {
-          const nodeB = neuralNetwork.nodes[j];
-          
-          // Connect preferentially to next layer, with some random connections for richness
-          if ((nodeB.layer === nodeA.layer + 1 || Math.random() < 0.05) && 
-              Math.random() < neuralNetwork.connectionProbability) {
-            
-            neuralNetwork.connections.push({
-              from: i,
-              to: j,
-              activity: 0.1 + Math.random() * 0.4,
-              pulseOffset: Math.random() * Math.PI * 2,
-              flowPosition: Math.random(),
-              flowParticles: []
-            });
-          }
-        }
-      }
-    }
-    
-    // Draw the neural network
-    function drawNetwork(timestamp) {
-      // Clear canvas with semi-transparent background for trail effect
-      ctx.fillStyle = 'rgba(10, 11, 12, 0.15)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Update and draw connections
-      for (const connection of neuralNetwork.connections) {
-        const nodeA = neuralNetwork.nodes[connection.from];
-        const nodeB = neuralNetwork.nodes[connection.to];
-        
-        // Calculate distance and angle
-        const dx = nodeB.x - nodeA.x;
-        const dy = nodeB.y - nodeA.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Update pulse
-        connection.flowPosition += neuralNetwork.flowSpeed / distance;
-        if (connection.flowPosition > 1) connection.flowPosition = 0;
-        
-        // Get activity (0-1)
-        const activity = 0.2 + 0.8 * Math.sin(timestamp * 0.001 + connection.pulseOffset) * connection.activity;
-        
-        // Draw connection line
-        ctx.beginPath();
-        ctx.moveTo(nodeA.x, nodeA.y);
-        ctx.lineTo(nodeB.x, nodeB.y);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${activity * 0.15})`;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-        
-        // Draw pulse traveling along the connection
-        const pulseX = nodeA.x + dx * connection.flowPosition;
-        const pulseY = nodeA.y + dy * connection.flowPosition;
-        
-        // Determine pulse color based on activity
-        let pulseColor;
-        if (activity > 0.7) {
-          pulseColor = colors.primary;
-        } else if (activity > 0.4) {
-          pulseColor = colors.secondary;
-        } else {
-          pulseColor = colors.accent;
-        }
-        
-        ctx.beginPath();
-        ctx.arc(pulseX, pulseY, 1.5 * activity, 0, Math.PI * 2);
-        ctx.fillStyle = pulseColor;
-        ctx.fill();
-        
-        // Glow effect
-        ctx.beginPath();
-        ctx.arc(pulseX, pulseY, 3 * activity, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${
-          pulseColor === colors.primary ? '255, 75, 0' : 
-          pulseColor === colors.secondary ? '0, 255, 208' : '255, 0, 228'
-        }, ${activity * 0.3})`;
-        ctx.fill();
-      }
-      
-      // Update and draw nodes
-      for (const node of neuralNetwork.nodes) {
-        // Update pulse
-        node.pulse += neuralNetwork.pulseSpeed;
-        
-        // Calculate activity (0-1)
-        const activity = 0.2 + Math.sin(timestamp * 0.001 + node.pulse) * node.activity;
-        
-        // Draw node
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
-        
-        // Determine node color based on layer and activity
-        let nodeColor;
-        if (node.layer % 3 === 0) {
-          nodeColor = colors.primary;
-        } else if (node.layer % 3 === 1) {
-          nodeColor = colors.secondary;
-        } else {
-          nodeColor = colors.accent;
-        }
-        
-        ctx.fillStyle = nodeColor;
-        ctx.fill();
-        
-        // Draw glow effect
-        const glowSize = node.size * (1 + activity * 2);
-        const gradient = ctx.createRadialGradient(
-          node.x, node.y, node.size,
-          node.x, node.y, glowSize
-        );
-        gradient.addColorStop(0, `rgba(${
-          nodeColor === colors.primary ? '255, 75, 0' : 
-          nodeColor === colors.secondary ? '0, 255, 208' : '255, 0, 228'
-        }, ${0.7 * activity})`);
-        gradient.addColorStop(1, `rgba(${
-          nodeColor === colors.primary ? '255, 75, 0' : 
-          nodeColor === colors.secondary ? '0, 255, 208' : '255, 0, 228'
-        }, 0)`);
-        
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-      }
-      
-      requestAnimationFrame(drawNetwork);
-    }
-    
-    // Initialize and start animation
-    initNetwork();
-    requestAnimationFrame(drawNetwork);
-  </script>
 </head>
 <body>
   <!-- Background animated gradient element -->
