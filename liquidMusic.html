@@ -498,140 +498,309 @@
       $('totalTime').textContent = formatTime(musicPlayer.duration);
     }
 
-    // Visualizer rendering functions
-    function renderVisualizer() {
-      if (!audioContext) return;
-      animationId = requestAnimationFrame(renderVisualizer);
-      analyser.getByteFrequencyData(dataArray);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      const vizFuncs = [
-        drawHolographicBars,
-        drawQuantumCircles,
-        drawNeuralWave,
-        drawGalacticStars,
-        draw4DSpectrum
-      ];
-      
-      vizFuncs[currentVisualizer - 1]();
-    }
+// Visualizer rendering functions
+function renderVisualizer() {
+  if (!audioContext) return;
+  animationId = requestAnimationFrame(renderVisualizer);
+  analyser.getByteFrequencyData(dataArray);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const vizFuncs = [
+    drawNeomorphicBars,
+    drawQuantumVortex,
+    drawNeuralPulse,
+    drawAmbientParticles,
+    drawSpectrumMesh
+  ];
+  
+  vizFuncs[currentVisualizer - 1]();
+}
 
-    function drawHolographicBars() {
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      
-      for (let i = 0, x = 0; i < bufferLength; i++, x += barWidth + 1) {
-        const barHeight = dataArray[i];
-        const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-        gradient.addColorStop(0, `rgba(${barHeight + 100}, 50, 255, 0.8)`);
-        gradient.addColorStop(1, `rgba(50, ${barHeight + 100}, 255, 0.2)`);
+function drawNeomorphicBars() {
+  const barWidth = (canvas.width / bufferLength) * 2.5;
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  
+  for (let i = 0, x = 0; i < bufferLength; i++, x += barWidth + 1) {
+    const barHeight = dataArray[i];
+    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+    
+    // Modern subtle color palette
+    gradient.addColorStop(0, `rgba(${barHeight/2}, ${barHeight/3 + 50}, ${barHeight/2 + 120}, 0.9)`);
+    gradient.addColorStop(1, `rgba(${barHeight/3 + 20}, ${barHeight/2 + 30}, ${barHeight + 50}, 0.4)`);
 
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.5})`;
-        ctx.strokeRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-      }
-    }
+    // Rounded bars with subtle shadow
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2, 4);
+    ctx.fill();
+    
+    // Subtle highlight on top
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.15)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2, 4);
+    ctx.stroke();
+  }
+  
+  ctx.shadowBlur = 0;
+}
 
-    function drawQuantumCircles() {
-      for (let i = 0; i < bufferLength; i++) {
-        const angle = Math.PI * 2 * i / bufferLength;
-        const radius = dataArray[i] / 255 * Math.min(canvas.width, canvas.height) / 4;
-        const x = canvas.width / 2 + Math.cos(angle) * radius;
-        const y = canvas.height / 2 + Math.sin(angle) * radius;
+function drawQuantumVortex() {
+  const time = Date.now() * 0.001;
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  
+  // Add a subtle background glow
+  const bgGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, canvas.height / 1.5);
+  bgGradient.addColorStop(0, 'rgba(20, 30, 60, 0.2)');
+  bgGradient.addColorStop(1, 'rgba(5, 10, 20, 0)');
+  ctx.fillStyle = bgGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw quantum particles
+  for (let i = 0; i < bufferLength; i += 2) {
+    const angle = Math.PI * 2 * i / bufferLength + time;
+    const radius = (dataArray[i] / 255) * Math.min(canvas.width, canvas.height) / 3;
+    const waveOffset = Math.sin(time * 2 + i * 0.1) * 20;
+    
+    const x = centerX + Math.cos(angle) * (radius + waveOffset);
+    const y = centerY + Math.sin(angle) * (radius + waveOffset);
+    
+    // Create particle with smooth gradient
+    const particleSize = dataArray[i] / 255 * 12 + 2;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, particleSize);
+    gradient.addColorStop(0, `hsla(${(i + time * 20) % 360}, 90%, 70%, 0.9)`);
+    gradient.addColorStop(0.6, `hsla(${(i + time * 20) % 360}, 80%, 40%, 0.6)`);
+    gradient.addColorStop(1, `hsla(${(i + time * 20) % 360}, 80%, 40%, 0)`);
 
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
-        gradient.addColorStop(0, `hsla(${i * 360 / bufferLength}, 100%, 50%, 1)`);
-        gradient.addColorStop(1, `hsla(${i * 360 / bufferLength}, 100%, 50%, 0)`);
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.8})`;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(canvas.width / 2, canvas.height / 2);
-        ctx.stroke();
-      }
-    }
-
-    function drawNeuralWave() {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, particleSize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Only draw connection lines for some particles to avoid clutter
+    if (i % 6 === 0 && dataArray[i] > 100) {
+      ctx.strokeStyle = `hsla(${(i + time * 20) % 360}, 80%, 60%, 0.15)`;
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-
-      const sliceWidth = canvas.width / bufferLength;
-      
-      for (let i = 0, x = 0; i < bufferLength; i++, x += sliceWidth) {
-        const v = dataArray[i] / 128.0;
-        const y = v * canvas.height / 2;
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-
-        ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.8)`;
-        ctx.beginPath();
-        ctx.arc(x, y, v * 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.moveTo(x, y);
+      ctx.lineTo(centerX, centerY);
       ctx.stroke();
     }
+  }
+}
 
-    function drawGalacticStars() {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.globalCompositeOperation = 'lighter';
+function drawNeuralPulse() {
+  const time = Date.now() * 0.001;
+  ctx.lineWidth = 2;
+  
+  // Create path for the main wave
+  ctx.beginPath();
+  const sliceWidth = canvas.width / bufferLength;
+  let avgAmplitude = 0;
+  
+  // Calculate average amplitude for global effects
+  for (let i = 0; i < bufferLength; i++) {
+    avgAmplitude += dataArray[i] / bufferLength;
+  }
+  
+  // Draw neural wave with enhanced nodes
+  for (let i = 0, x = 0; i < bufferLength; i++, x += sliceWidth) {
+    const v = dataArray[i] / 128.0;
+    const y = v * canvas.height / 2;
+    
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+    
+    // Only draw nodes at certain points to avoid overcrowding
+    if (i % 4 === 0) {
+      // Pulse effect based on time and data
+      const pulseSize = v * 3 + Math.sin(time * 3 + i * 0.2) * 2;
       
-      for (let i = 0; i < 100; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const dataIndex = Math.floor((i / 100) * bufferLength);
-        const radius = (dataArray[dataIndex] / 255) * 3 + 1;
-        
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${dataArray[dataIndex]/255})`);
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      // Create gradient for nodes
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, pulseSize);
+      gradient.addColorStop(0, `rgba(130, 210, 255, 0.9)`);
+      gradient.addColorStop(0.6, `rgba(70, 140, 240, 0.6)`);
+      gradient.addColorStop(1, `rgba(40, 80, 200, 0)`);
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, pulseSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  // Draw the main wave with gradient
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  gradient.addColorStop(0, `rgba(40, 100, 200, 0.6)`);
+  gradient.addColorStop(0.5, `rgba(80, 180, 255, 0.8)`);
+  gradient.addColorStop(1, `rgba(40, 100, 200, 0.6)`);
+  
+  ctx.strokeStyle = gradient;
+  ctx.stroke();
+  
+  // Add a subtle glow effect based on audio intensity
+  ctx.filter = `blur(${avgAmplitude / 30}px)`;
+  ctx.strokeStyle = `rgba(100, 180, 255, 0.2)`;
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  ctx.filter = 'none';
+}
 
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-      }
+function drawAmbientParticles() {
+  // Apply subtle fade effect instead of full clear
+  ctx.fillStyle = 'rgba(10, 15, 30, 0.12)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'screen';
+  
+  const time = Date.now() * 0.001;
+  
+  // Calculate average bass frequency for global effects
+  let bassAvg = 0;
+  for (let i = 0; i < 10; i++) {
+    bassAvg += dataArray[i] / 10;
+  }
+  const bassScale = bassAvg / 255;
+  
+  // Create dynamic particle grid
+  for (let i = 0; i < 120; i++) {
+    // Create semi-structured grid with organic movement
+    const gridSize = 12;
+    const baseX = (i % gridSize) * (canvas.width / gridSize);
+    const baseY = Math.floor(i / gridSize) * (canvas.height / gridSize);
+    
+    // Add organic movement
+    const noiseX = Math.sin(time * 0.5 + i * 0.1) * 20;
+    const noiseY = Math.cos(time * 0.4 + i * 0.13) * 20;
+    
+    const x = baseX + noiseX + Math.random() * 10;
+    const y = baseY + noiseY + Math.random() * 10;
+    
+    // Map to a frequency bin
+    const dataIndex = Math.floor((i / 120) * bufferLength);
+    const freqValue = dataArray[dataIndex] / 255;
+    
+    // Dynamic size based on frequency and bass
+    const radius = freqValue * 5 + bassScale * 3 + 0.5;
+    
+    // Modern color palette with time-based hue shift
+    const hue = (i * 3 + time * 10) % 360;
+    const saturation = 70 + freqValue * 30;
+    const lightness = 50 + freqValue * 30;
+    
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, ${freqValue * 0.9 + 0.1})`);
+    gradient.addColorStop(0.8, `hsla(${hue}, ${saturation-20}%, ${lightness-20}%, ${freqValue * 0.6})`);
+    gradient.addColorStop(1, `hsla(${hue}, ${saturation-30}%, ${lightness-30}%, 0)`);
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Add connections between some particles
+    if (i % 5 === 0 && i < 119) {
+      const nextIndex = i + 1;
+      const nextX = (nextIndex % gridSize) * (canvas.width / gridSize) + noiseX;
+      const nextY = Math.floor(nextIndex / gridSize) * (canvas.height / gridSize) + noiseY;
       
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(nextX, nextY);
+      ctx.strokeStyle = `hsla(${hue}, ${saturation-10}%, ${lightness+10}%, ${freqValue * 0.2})`;
+      ctx.lineWidth = freqValue * 1.5;
+      ctx.stroke();
+    }
+  }
+  
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawSpectrumMesh() {
+  const barWidth = canvas.width / bufferLength;
+  const time = Date.now() * 0.001;
+  
+  // Create a dynamic background gradient
+  const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bgGradient.addColorStop(0, 'rgba(20, 30, 50, 0.1)');
+  bgGradient.addColorStop(1, 'rgba(5, 10, 20, 0.1)');
+  ctx.fillStyle = bgGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Add subtle grid lines
+  ctx.strokeStyle = 'rgba(100, 120, 180, 0.1)';
+  ctx.lineWidth = 0.5;
+  
+  // Horizontal grid lines
+  for (let y = 0; y < canvas.height; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+  
+  // Draw the main spectrum
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = dataArray[i] * 1.2;
+    const x = i * barWidth;
+    const hue = i / bufferLength * 240 + time * 10;
+
+    // Create 3D-like effect with multiple layers
+    for (let j = 0; j < 3; j++) {
+      const layerHeight = barHeight * (1 - j * 0.2);
+      const layerY = canvas.height - layerHeight - j * 2;
+      const alpha = 1 - j * 0.3;
+      
+      const gradient = ctx.createLinearGradient(x, canvas.height, x, layerY);
+      gradient.addColorStop(0, `hsla(${hue}, 90%, 60%, ${alpha * 0.8})`);
+      gradient.addColorStop(1, `hsla(${hue}, 90%, 80%, ${alpha * 0.3})`);
+
+      ctx.fillStyle = gradient;
+      
+      // Create curved top for bars
+      ctx.beginPath();
+      ctx.moveTo(x, layerY + layerHeight);
+      ctx.lineTo(x, layerY + 5);
+      ctx.quadraticCurveTo(x + barWidth/2, layerY - 5, x + barWidth, layerY + 5);
+      ctx.lineTo(x + barWidth, layerY + layerHeight);
+      ctx.fill();
+      
+      // Add highlight to the top edge
+      ctx.beginPath();
+      ctx.moveTo(x, layerY + 5);
+      ctx.quadraticCurveTo(x + barWidth/2, layerY - 5, x + barWidth, layerY + 5);
+      ctx.strokeStyle = `hsla(${hue}, 90%, 80%, ${alpha * 0.8})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    
+    // Add reactive glow based on frequency intensity
+    if (dataArray[i] > 150) {
+      ctx.globalCompositeOperation = 'screen';
+      const glowSize = (dataArray[i] - 150) / 105 * 20;
+      const glowGradient = ctx.createRadialGradient(
+        x + barWidth/2, canvas.height - barHeight/2, 0,
+        x + barWidth/2, canvas.height - barHeight/2, glowSize
+      );
+      glowGradient.addColorStop(0, `hsla(${hue}, 90%, 70%, 0.3)`);
+      glowGradient.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
+      
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(x + barWidth/2, canvas.height - barHeight/2, glowSize, 0, Math.PI * 2);
+      ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
     }
+  }
+}
 
-    function draw4DSpectrum() {
-      const barWidth = canvas.width / bufferLength;
-      
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = dataArray[i];
-        const x = i * barWidth;
-        const hue = i / bufferLength * 360;
-
-        const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-        gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
-        gradient.addColorStop(1, `hsla(${hue}, 100%, 80%, 0.2)`);
-
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-
-        ctx.globalAlpha = Math.sin(Date.now() / 1000 + i / bufferLength * Math.PI * 2) * 0.5 + 0.5;
-        ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 50%, 0.5)`;
-        ctx.fillRect(x, canvas.height - barHeight * 0.5, barWidth, barHeight * 0.5);
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // Event Handlers
-    function updateVisualizerButtons() {
-      document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
-        btn.classList.toggle('active', i + 1 === currentVisualizer);
-      });
-    }
+// Event Handlers
+function updateVisualizerButtons() {
+  document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+    btn.classList.toggle('active', i + 1 === currentVisualizer);
+  });
+}
 
     // Event listeners
     playPauseBtn.addEventListener('click', () => musicPlayer.paused ? playTrack() : pauseTrack());
