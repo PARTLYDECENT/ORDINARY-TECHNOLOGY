@@ -498,228 +498,329 @@
       $('totalTime').textContent = formatTime(musicPlayer.duration);
     }
 
-// Hyper-Efficient WebGL Audio Visualizer for 2026
-
-// Assumes these globals are defined elsewhere:
-// audioContext, analyser, bufferLength, dataArray, currentVisualizer
-// Also, a <canvas id="canvas"> element exists in your HTML.
-
-const canvas = document.getElementById('canvas');
-const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-if (!gl) {
-  alert("WebGL is not supported on this device.");
-}
-
-// ------------------------
-// Shader Sources
-// ------------------------
-const vertexShaderSource = `#version 300 es
-in vec2 a_position;
-out vec2 v_uv;
-void main() {
-  // Map positions from [-1,1] to [0,1]
-  v_uv = a_position * 0.5 + 0.5;
-  gl_Position = vec4(a_position, 0, 1);
-}
-`;
-
-const fragmentShaderSource = `#version 300 es
-precision mediump float;
-in vec2 v_uv;
-out vec4 outColor;
-
-uniform float u_time;
-uniform int u_mode;
-uniform vec2 u_resolution;
-uniform sampler2D u_audioTex;
-
-// Returns a normalized audio value at a given x coordinate (0.0 to 1.0)
-float getAudioValue(float x) {
-  return texture(u_audioTex, vec2(x, 0.5)).r;
-}
-
-void main() {
-  vec2 st = v_uv;
-  vec3 color = vec3(0.0);
-  
-  // Visualization Mode Switch
-  if (u_mode == 1) {
-    // Holographic Bars Effect:
-    float barWidth = 1.0 / float(textureSize(u_audioTex, 0).x);
-    float index = floor(st.x / barWidth);
-    float audioVal = getAudioValue(index * barWidth);
-    float barHeight = audioVal;
-    if (st.y < barHeight) {
-      float t = u_time * 2.0;
-      color = vec3(sin(t + index) * 0.5 + 0.5, 0.5, cos(t + index) * 0.5 + 0.5);
-    }
-  } else if (u_mode == 2) {
-    // Quantum Circles:
-    vec2 center = u_resolution * 0.5;
-    vec2 pos = st * u_resolution;
-    float angle = atan(pos.y - center.y, pos.x - center.x);
-    float dist = distance(pos, center);
-    float audioVal = getAudioValue((angle + 3.1415) / 6.2830);
-    float radius = audioVal * 100.0;
-    if (abs(dist - radius) < 5.0) {
-      color = vec3(0.8, 0.2, 0.9);
-    }
-  } else if (u_mode == 3) {
-    // Neural Wave:
-    float wave = sin((st.x + u_time) * 10.0) * 0.5 + 0.5;
-    if (st.y < wave) {
-      color = vec3(0.2, 0.9, 1.0);
-    }
-  } else if (u_mode == 4) {
-    // Galactic Stars:
-    // Use a pseudo-random hash based on st and time for star flicker
-    float star = step(0.995, fract(sin(dot(st * u_time, vec2(12.9898, 78.233))) * 43758.5453));
-    color = vec3(star);
-  } else if (u_mode == 5) {
-    // 4D Spectrum:
-    float hue = mod(st.x + u_time * 0.1, 1.0);
-    // Simple hue-to-RGB conversion (for demo purposes)
-    color = vec3(abs(hue - 0.5) * 2.0, 0.5, 1.0);
-  }
-  
-  outColor = vec4(color, 1.0);
-}
-`;
-
-// ------------------------
-// Shader Compilation Helpers
-// ------------------------
-function createShader(gl, type, source) {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error('Shader compile failed:', gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-}
-
-const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-function createProgram(gl, vertexShader, fragmentShader) {
-  const prog = gl.createProgram();
-  gl.attachShader(prog, vertexShader);
-  gl.attachShader(prog, fragmentShader);
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-    console.error('Program link failed:', gl.getProgramInfoLog(prog));
-    gl.deleteProgram(prog);
-    return null;
-  }
-  return prog;
-}
-
-const program = createProgram(gl, vertexShader, fragmentShader);
-gl.useProgram(program);
-
-// ------------------------
-// Setup Fullscreen Quad
-// ------------------------
-const positions = new Float32Array([
-  -1, -1,
-   1, -1,
-  -1,  1,
-  -1,  1,
-   1, -1,
-   1,  1,
-]);
-const positionBuffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-const aPositionLocation = gl.getAttribLocation(program, 'a_position');
-gl.enableVertexAttribArray(aPositionLocation);
-gl.vertexAttribPointer(aPositionLocation, 2, gl.FLOAT, false, 0, 0);
-
-// ------------------------
-// Get Uniform Locations
-// ------------------------
-const uTimeLocation = gl.getUniformLocation(program, 'u_time');
-const uModeLocation = gl.getUniformLocation(program, 'u_mode');
-const uResolutionLocation = gl.getUniformLocation(program, 'u_resolution');
-const uAudioTexLocation = gl.getUniformLocation(program, 'u_audioTex');
-
-// ------------------------
-// Audio Texture Setup
-// ------------------------
-// Create a 1D texture to hold audio frequency data.
-const audioTexture = gl.createTexture();
-gl.bindTexture(gl.TEXTURE_2D, audioTexture);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-// bufferLength is the number of frequency bins from your analyser.
-const audioTexWidth = bufferLength;
-const audioTexHeight = 1;
-gl.texImage2D(
-  gl.TEXTURE_2D,
-  0,
-  gl.LUMINANCE,
-  audioTexWidth,
-  audioTexHeight,
-  0,
-  gl.LUMINANCE,
-  gl.UNSIGNED_BYTE,
-  null
-);
-
-// ------------------------
-// Canvas & Viewport Resize
-// ------------------------
-function resizeCanvas() {
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-// ------------------------
-// Render Loop
-// ------------------------
-function render() {
-  requestAnimationFrame(render);
-  
-  // Update audio frequency data (from Web Audio API)
+// Visualizer rendering functions
+function renderVisualizer() {
+  if (!audioContext) return;
+  animationId = requestAnimationFrame(renderVisualizer);
   analyser.getByteFrequencyData(dataArray);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Update audio texture with new frequency data
-  gl.bindTexture(gl.TEXTURE_2D, audioTexture);
-  gl.texSubImage2D(
-    gl.TEXTURE_2D,
-    0,
-    0,
-    0,
-    audioTexWidth,
-    audioTexHeight,
-    gl.LUMINANCE,
-    gl.UNSIGNED_BYTE,
-    dataArray
-  );
+  const vizFuncs = [
+    drawNeomorphicPulse,
+    drawFractalNebula,
+    drawAuroraWaveform,
+    drawCosmicParticles,
+    drawHyperSpectrogram
+  ];
   
-  // Set uniform values
-  gl.uniform1f(uTimeLocation, performance.now() * 0.001);
-  gl.uniform1i(uModeLocation, currentVisualizer); // Modes: 1 to 5
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, audioTexture);
-  gl.uniform1i(uAudioTexLocation, 0);
-  
-  // Draw the full-screen quad
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  vizFuncs[currentVisualizer - 1]();
 }
 
-render();
+function drawNeomorphicPulse() {
+  const barWidth = (canvas.width / bufferLength) * 2.5;
+  
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = 'rgba(0, 0, 255, 0.5)';
+  
+  for (let i = 0, x = 0; i < bufferLength; i++, x += barWidth + 1) {
+    const barHeight = dataArray[i];
+    const hue = 240 + (barHeight / 255) * 60;
+    
+    // Create soft shadow effect
+    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+    gradient.addColorStop(0, `hsla(${hue}, 80%, 60%, 0.9)`);
+    gradient.addColorStop(0.5, `hsla(${hue + 20}, 90%, 70%, 0.7)`);
+    gradient.addColorStop(1, `hsla(${hue + 40}, 100%, 80%, 0.4)`);
 
+    // Rounded bars with glow effect
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(x, canvas.height - barHeight / 1.8, barWidth, barHeight / 1.8, [barWidth/2, barWidth/2, 0, 0]);
+    ctx.fill();
+    
+    // Add reflective highlight
+    ctx.fillStyle = `rgba(255, 255, 255, ${barHeight / 1000})`;
+    ctx.beginPath();
+    ctx.roundRect(x, canvas.height - barHeight / 1.8, barWidth, barHeight / 10, [barWidth/2, barWidth/2, 0, 0]);
+    ctx.fill();
+  }
+  
+  ctx.shadowBlur = 0;
+}
+
+function drawFractalNebula() {
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  
+  // Create background glow
+  ctx.globalCompositeOperation = 'lighter';
+  
+  // Dynamic time factor for animation
+  const time = Date.now() / 3000;
+  
+  for (let i = 0; i < bufferLength; i += 2) {
+    const amplitude = dataArray[i] / 255;
+    const angle = (i / bufferLength) * Math.PI * 2 + time;
+    const distance = amplitude * Math.min(canvas.width, canvas.height) / 3;
+    
+    // Calculate fractal orbital positions
+    const orbitX = centerX + Math.cos(angle) * distance;
+    const orbitY = centerY + Math.sin(angle) * distance;
+    
+    // Inner particle
+    const innerRadius = amplitude * 10 + 2;
+    const gradient = ctx.createRadialGradient(orbitX, orbitY, 0, orbitX, orbitY, innerRadius * 2);
+    
+    // Use high contrast colors with alpha
+    const hue = (i / bufferLength) * 360;
+    gradient.addColorStop(0, `hsla(${hue}, 100%, 70%, 0.9)`);
+    gradient.addColorStop(0.7, `hsla(${hue + 30}, 100%, 60%, 0.4)`);
+    gradient.addColorStop(1, `hsla(${hue + 60}, 100%, 50%, 0)`);
+    
+    // Draw orbital node
+    ctx.beginPath();
+    ctx.arc(orbitX, orbitY, innerRadius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Add connecting tendrils
+    if (amplitude > 0.3) {
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(orbitX, orbitY);
+      
+      // Create electric gradient for lines
+      const lineGrad = ctx.createLinearGradient(centerX, centerY, orbitX, orbitY);
+      lineGrad.addColorStop(0, `hsla(${hue - 30}, 100%, 60%, 0)`);
+      lineGrad.addColorStop(0.5, `hsla(${hue}, 100%, 70%, ${amplitude / 2})`);
+      lineGrad.addColorStop(1, `hsla(${hue + 30}, 100%, 80%, 0)`);
+      
+      ctx.strokeStyle = lineGrad;
+      ctx.lineWidth = amplitude * 3;
+      ctx.stroke();
+    }
+  }
+  
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawAuroraWaveform() {
+  ctx.lineWidth = 2;
+  
+  // Create multi-layer aurora effect
+  const sliceWidth = canvas.width / bufferLength;
+  const layers = 4;
+  
+  for (let layer = 0; layer < layers; layer++) {
+    const layerOffset = (layer * 20) - 30;
+    
+    ctx.beginPath();
+    
+    // Set blend mode for glow effect
+    ctx.globalCompositeOperation = 'lighter';
+    
+    // Layer colors
+    const baseHue = (Date.now() / 50) % 360;
+    const hue = (baseHue + layer * 30) % 360;
+    const alpha = 0.7 - (layer * 0.15);
+    
+    for (let i = 0, x = 0; i < bufferLength; i++, x += sliceWidth) {
+      // Create wave effect with time-based variation
+      const time = Date.now() / 1000;
+      const v = dataArray[i] / 128.0;
+      const y = (v * canvas.height / 2) + Math.sin(i / 20 + time) * (20 - layer * 5) + layerOffset;
+      
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+      
+      // Add shimmer particles along the line
+      if (Math.random() > 0.8 && layer === 0) {
+        const particleSize = v * (Math.random() * 4 + 1);
+        const particleGrad = ctx.createRadialGradient(x, y, 0, x, y, particleSize);
+        
+        particleGrad.addColorStop(0, `hsla(${hue}, 100%, 90%, 0.9)`);
+        particleGrad.addColorStop(1, `hsla(${hue}, 100%, 70%, 0)`);
+        
+        ctx.fillStyle = particleGrad;
+        ctx.beginPath();
+        ctx.arc(x, y, particleSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // Add gradient to the auroras
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, `hsla(${hue}, 100%, 80%, 0)`);
+    gradient.addColorStop(0.5, `hsla(${hue}, 100%, 70%, ${alpha})`);
+    gradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
+    
+    ctx.strokeStyle = gradient;
+    ctx.stroke();
+  }
+  
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawCosmicParticles() {
+  // Apply fade effect instead of clear
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'lighter';
+  
+  // Create dynamic star field
+  const maxStars = 150;
+  const time = Date.now() / 1000;
+  
+  for (let i = 0; i < maxStars; i++) {
+    const dataIndex = Math.floor((i / maxStars) * bufferLength);
+    const amplitude = dataArray[dataIndex] / 255;
+    
+    // Use perlin-like noise for position (simulated)
+    const noiseX = Math.sin(i * 0.1 + time * 0.2) * 0.5 + 0.5;
+    const noiseY = Math.cos(i * 0.2 + time * 0.3) * 0.5 + 0.5;
+    
+    const x = noiseX * canvas.width;
+    const y = noiseY * canvas.height;
+    
+    // Responsive particle size
+    const baseSize = amplitude * 5 + 0.5;
+    const radius = baseSize * (Math.sin(time + i) * 0.3 + 0.7);
+    
+    // Create dynamic color with time variation
+    const hue = (time * 10 + i * 3) % 360;
+    const saturation = 80 + amplitude * 20;
+    const lightness = 50 + amplitude * 30;
+    
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * 2);
+    gradient.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, ${amplitude})`);
+    gradient.addColorStop(0.6, `hsla(${hue + 30}, ${saturation - 20}%, ${lightness - 20}%, ${amplitude * 0.5})`);
+    gradient.addColorStop(1, `hsla(${hue + 60}, ${saturation - 40}%, ${lightness - 40}%, 0)`);
+    
+    // Draw the star
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Add connecting lines between particles for higher amplitudes
+    if (amplitude > 0.7 && i > 0) {
+      const prevIndex = (i - 1) % maxStars;
+      const prevDataIndex = Math.floor((prevIndex / maxStars) * bufferLength);
+      const prevAmplitude = dataArray[prevDataIndex] / 255;
+      
+      const prevNoiseX = Math.sin(prevIndex * 0.1 + time * 0.2) * 0.5 + 0.5;
+      const prevNoiseY = Math.cos(prevIndex * 0.2 + time * 0.3) * 0.5 + 0.5;
+      
+      const prevX = prevNoiseX * canvas.width;
+      const prevY = prevNoiseY * canvas.height;
+      
+      // Only connect if they're somewhat close
+      const distance = Math.sqrt(Math.pow(x - prevX, 2) + Math.pow(y - prevY, 2));
+      if (distance < canvas.width * 0.2) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(prevX, prevY);
+        ctx.strokeStyle = `hsla(${hue}, 100%, 70%, ${amplitude * 0.2})`;
+        ctx.lineWidth = amplitude * 2;
+        ctx.stroke();
+      }
+    }
+  }
+  
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawHyperSpectrogram() {
+  const barWidth = canvas.width / bufferLength;
+  const time = Date.now() / 1000;
+  
+  // Create a 3D-like perspective
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = dataArray[i] * 1.2;
+    const x = i * barWidth;
+    
+    // Dynamic color shifting
+    const hue = ((i / bufferLength * 180) + time * 20) % 360;
+    
+    // Create depth illusion with multiple layers
+    for (let depth = 0; depth < 3; depth++) {
+      const depthFactor = 1 - (depth * 0.2);
+      const yOffset = depth * 5;
+      
+      // Calculate bar height with wave effect
+      const waveOffset = Math.sin(i / 20 + time * 2) * 10;
+      const adjustedHeight = barHeight * depthFactor + waveOffset;
+      
+      // Create subtle reflections and depth
+      const gradient = ctx.createLinearGradient(
+        x, canvas.height, 
+        x, canvas.height - adjustedHeight
+      );
+      
+      // Depth-based color and opacity
+      gradient.addColorStop(0, `hsla(${hue}, 100%, 60%, ${0.8 * depthFactor})`);
+      gradient.addColorStop(0.7, `hsla(${hue + 30}, 100%, 70%, ${0.5 * depthFactor})`);
+      gradient.addColorStop(1, `hsla(${hue + 60}, 100%, 80%, ${0.2 * depthFactor})`);
+      
+      ctx.fillStyle = gradient;
+      
+      // Add perspective with varying width
+      const perspectiveWidth = barWidth * (1 - depth * 0.1);
+      const perspectiveX = x + (barWidth - perspectiveWidth) / 2;
+      
+      // Draw with rounded tops
+      ctx.beginPath();
+      ctx.roundRect(
+        perspectiveX, 
+        canvas.height - adjustedHeight - yOffset,
+        perspectiveWidth, 
+        adjustedHeight,
+        [perspectiveWidth/2, perspectiveWidth/2, 0, 0]
+      );
+      ctx.fill();
+      
+      // Add light reflection for 3D effect
+      if (depth === 0 && adjustedHeight > 50) {
+        ctx.fillStyle = `hsla(${hue - 30}, 60%, 100%, ${dataArray[i] / 1000})`;
+        ctx.beginPath();
+        ctx.roundRect(
+          perspectiveX + perspectiveWidth * 0.3, 
+          canvas.height - adjustedHeight - yOffset,
+          perspectiveWidth * 0.4, 
+          adjustedHeight * 0.1,
+          [perspectiveWidth/4, perspectiveWidth/4, 0, 0]
+        );
+        ctx.fill();
+      }
+    }
+    
+    // Add frequency reactive glow at high amplitudes
+    if (dataArray[i] > 200) {
+      ctx.shadowBlur = dataArray[i] / 10;
+      ctx.shadowColor = `hsla(${hue}, 100%, 70%, 0.8)`;
+      
+      ctx.fillStyle = `hsla(${hue}, 100%, 90%, 0.3)`;
+      ctx.beginPath();
+      ctx.roundRect(
+        x,
+        canvas.height - barHeight,
+        barWidth,
+        barHeight,
+        [barWidth/2, barWidth/2, 0, 0]
+      );
+      ctx.fill();
+      
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+// Event Handlers
+function updateVisualizerButtons() {
+  document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+    btn.classList.toggle('active', i + 1 === currentVisualizer);
+  });
+}
 
 
     // Event listeners
