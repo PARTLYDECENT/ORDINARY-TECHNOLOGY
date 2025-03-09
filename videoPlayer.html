@@ -73,6 +73,7 @@
             border: 4px solid #00ffff;
             border-radius: 10px;
             overflow: hidden;
+            position: relative;
         }
 
         .video-container video {
@@ -116,16 +117,6 @@
             gap: 15px;
         }
 
-        .like-section {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .like-counter {
-            font-size: 1rem;
-        }
-
         .speed-panel {
             margin: 10px 0;
             display: flex;
@@ -140,60 +131,56 @@
             margin-left: 10px;
         }
 
-        .comments-section {
-            width: 90%;
-            max-width: 1000px;
-            margin-top: 20px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00ffff;
-            border-radius: 10px;
-        }
-
-        .comments-section textarea {
-            width: 100%;
-            height: 80px;
-            background: #111;
-            color: #00ffff;
-            border: 2px solid #00ffff;
-            padding: 5px;
-            resize: vertical;
-            font-family: 'Orbitron', sans-serif;
-        }
-
-        #commentsList {
-            list-style-type: none;
-            padding: 0;
-            margin-top: 15px;
-        }
-
-        #commentsList li {
-            background: rgba(0, 0, 0, 0.5);
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 5px;
-            border-left: 3px solid #00ffff;
+        .feature-panel {
+            margin: 10px 0;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
-        .delete-btn {
-            background: none;
-            border: 1px solid #ff3366;
-            color: #ff3366;
-            border-radius: 3px;
-            padding: 2px 5px;
-            font-size: 0.8rem;
-            margin-left: 10px;
+        .tracker-marker {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: rgba(0, 255, 255, 0.7);
+            box-shadow: 0 0 10px #00ffff;
+            pointer-events: all;
+            cursor: pointer;
+            z-index: 100;
+            transition: transform 0.2s;
         }
 
-        .delete-btn:hover {
-            background: rgba(255, 51, 102, 0.2);
+        .tracker-marker:hover {
+            transform: scale(1.5);
         }
 
-        .comment-text {
-            flex-grow: 1;
+        .focused-area {
+            position: absolute;
+            border: 3px solid #ff00ff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.7);
+        }
+
+        .ambient-border {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            border-radius: 6px;
+            box-shadow: inset 0 0 30px rgba(0, 255, 255, 0.5);
+            z-index: 5;
+            transition: box-shadow 1s ease;
+        }
+
+        .active-button {
+            background: rgba(255, 0, 255, 0.3);
+            border-color: #ff00ff;
         }
     </style>
 </head>
@@ -210,6 +197,7 @@
                 <source src="video1.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
             </video>
+            <div id="ambientBorder" class="ambient-border"></div>
         </div>
         <div class="video-info">
             <div class="video-title" id="videoTitle">Video 1</div>
@@ -221,10 +209,7 @@
             <div class="video-navigation">
                 <button id="prevVideo">Previous</button>
                 <button id="nextVideo">Next</button>
-            </div>
-            <div class="like-section">
-                <button id="likeButton">Like</button>
-                <div class="like-counter">Likes: <span id="likeCount">0</span></div>
+                <button id="downloadBtn">Download</button>
             </div>
         </div>
         <div class="speed-panel">
@@ -236,13 +221,12 @@
             <button data-speed="1.75">1.75x</button>
             <button data-speed="2.0">2.0x</button>
         </div>
+        <div class="feature-panel">
+            <button id="trackingBtn">Scene Tracking</button>
+            <button id="focusModeBtn">Precision Focus</button>
+            <button id="ambientGlowBtn">Edge Glow</button>
+        </div>
     </main>
-    <section class="comments-section">
-        <h2>Comments</h2>
-        <textarea id="commentInput" placeholder="Leave a comment..."></textarea>
-        <button id="postCommentBtn">Post</button>
-        <ul id="commentsList"></ul>
-    </section>
 
     <script>
         // Matrix background
@@ -275,77 +259,33 @@
         const cyclicVideo = document.getElementById("cyclicVideo");
         const videoTitle = document.getElementById("videoTitle");
         const videoCounter = document.getElementById("videoCounter");
-        const likeButton = document.getElementById("likeButton");
-        const likeCountSpan = document.getElementById("likeCount");
-        const commentsList = document.getElementById("commentsList");
-        const commentInput = document.getElementById("commentInput");
-        const postCommentBtn = document.getElementById("postCommentBtn");
         const speedButtons = document.querySelectorAll('.speed-panel button');
+        const downloadBtn = document.getElementById("downloadBtn");
+        const trackingBtn = document.getElementById("trackingBtn");
+        const focusModeBtn = document.getElementById("focusModeBtn");
+        const ambientGlowBtn = document.getElementById("ambientGlowBtn");
+        const videoContainer = document.querySelector('.video-container');
+        const ambientBorder = document.getElementById('ambientBorder');
 
-        // Initialize data structure
-        let videoData = JSON.parse(localStorage.getItem("alienVideoData")) || Array.from({ length: 20 }, (_, i) => ({
-            id: i + 1,
-            likes: 0,
-            comments: [],
-            liked: false
-        }));
-
-        // Save data to localStorage
-        function saveData() {
-            localStorage.setItem("alienVideoData", JSON.stringify(videoData));
-        }
+        // Feature flags
+        let trackingEnabled = false;
+        let focusModeEnabled = false;
+        let ambientGlowEnabled = false;
+        let trackerMarkers = [];
+        let focusedArea = null;
 
         // Update UI with current video data
         function updateUI() {
-            const currentVideo = videoData[currentVideoIndex];
-            
             // Update video source and title
             cyclicVideo.src = videoSources[currentVideoIndex];
             cyclicVideo.load();
             cyclicVideo.play();
             
-            videoTitle.textContent = `Video ${currentVideo.id}`;
-            videoCounter.textContent = currentVideo.id;
+            videoTitle.textContent = `Video ${currentVideoIndex + 1}`;
+            videoCounter.textContent = currentVideoIndex + 1;
             
-            // Update likes
-            likeCountSpan.textContent = currentVideo.likes;
-            
-            // Check if the video was already liked
-            if (currentVideo.liked) {
-                likeButton.disabled = true;
-                likeButton.style.opacity = "0.5";
-            } else {
-                likeButton.disabled = false;
-                likeButton.style.opacity = "1";
-            }
-            
-            // Update comments
-            commentsList.innerHTML = '';
-            currentVideo.comments.forEach((comment, index) => {
-                const commentItem = document.createElement("li");
-                
-                const commentText = document.createElement("div");
-                commentText.className = "comment-text";
-                commentText.textContent = comment;
-                commentItem.appendChild(commentText);
-                
-                const deleteBtn = document.createElement("button");
-                deleteBtn.className = "delete-btn";
-                deleteBtn.textContent = "Delete";
-                deleteBtn.onclick = () => {
-                    const password = prompt("Enter the developer password to delete this comment:");
-                    if (password === "yourPassword") {
-                        currentVideo.comments.splice(index, 1);
-                        saveData();
-                        updateUI();
-                    } else {
-                        alert("Incorrect password. You cannot delete this comment.");
-                    }
-                };
-                commentItem.appendChild(deleteBtn);
-                
-                commentsList.appendChild(commentItem);
-            });
+            // Clear tracking markers when changing videos
+            clearTrackingMarkers();
         }
 
         // Initialize
@@ -374,26 +314,254 @@
             updateUI();
         });
 
-        // Like button
-        likeButton.addEventListener("click", function() {
-            const currentVideo = videoData[currentVideoIndex];
-            currentVideo.likes += 1;
-            currentVideo.liked = true;
-            saveData();
-            updateUI();
+        // Download button
+        downloadBtn.addEventListener("click", function() {
+            const a = document.createElement('a');
+            a.href = videoSources[currentVideoIndex];
+            a.download = `video-${currentVideoIndex + 1}.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         });
 
-        // Post comment button
-        postCommentBtn.addEventListener("click", function() {
-            const commentText = commentInput.value.trim();
-            if (commentText === "") return;
+        // Scene Tracking
+        trackingBtn.addEventListener("click", function() {
+            trackingEnabled = !trackingEnabled;
+            this.classList.toggle('active-button');
             
-            const currentVideo = videoData[currentVideoIndex];
-            currentVideo.comments.push(commentText);
-            saveData();
-            updateUI();
-            commentInput.value = '';
+            if (trackingEnabled) {
+                generateTrackingMarkers();
+            } else {
+                clearTrackingMarkers();
+            }
         });
+
+        function generateTrackingMarkers() {
+            clearTrackingMarkers();
+            
+            // Generate 3-5 random markers
+            const numMarkers = Math.floor(Math.random() * 3) + 3;
+            const videoRect = cyclicVideo.getBoundingClientRect();
+            
+            for (let i = 0; i < numMarkers; i++) {
+                const marker = document.createElement('div');
+                marker.className = 'tracker-marker';
+                
+                // Random position within video bounds
+                const x = Math.random() * (videoRect.width - 30) + 15;
+                const y = Math.random() * (videoRect.height - 30) + 15;
+                
+                marker.style.left = `${x}px`;
+                marker.style.top = `${y}px`;
+                
+                // Add click handler
+                marker.addEventListener('click', function() {
+                    this.style.backgroundColor = '#ff00ff';
+                    setTimeout(() => {
+                        this.style.backgroundColor = 'rgba(0, 255, 255, 0.7)';
+                    }, 300);
+                });
+                
+                videoContainer.appendChild(marker);
+                trackerMarkers.push(marker);
+                
+                // Animate markers
+                animateMarker(marker);
+            }
+        }
+
+        function animateMarker(marker) {
+            let posX = parseFloat(marker.style.left);
+            let posY = parseFloat(marker.style.top);
+            let dirX = Math.random() * 2 - 1;
+            let dirY = Math.random() * 2 - 1;
+            const speed = 0.5;
+            
+            function moveMarker() {
+                if (!trackingEnabled) return;
+                
+                const videoRect = cyclicVideo.getBoundingClientRect();
+                posX += dirX * speed;
+                posY += dirY * speed;
+                
+                // Bounce off edges
+                if (posX < 15 || posX > videoRect.width - 15) {
+                    dirX *= -1;
+                    posX = Math.max(15, Math.min(videoRect.width - 15, posX));
+                }
+                
+                if (posY < 15 || posY > videoRect.height - 15) {
+                    dirY *= -1;
+                    posY = Math.max(15, Math.min(videoRect.height - 15, posY));
+                }
+                
+                marker.style.left = `${posX}px`;
+                marker.style.top = `${posY}px`;
+                
+                requestAnimationFrame(moveMarker);
+            }
+            
+            moveMarker();
+        }
+
+        function clearTrackingMarkers() {
+            trackerMarkers.forEach(marker => {
+                if (marker.parentNode) {
+                    marker.parentNode.removeChild(marker);
+                }
+            });
+            trackerMarkers = [];
+        }
+
+        // Precision Focus Mode
+        focusModeBtn.addEventListener("click", function() {
+            focusModeEnabled = !focusModeEnabled;
+            this.classList.toggle('active-button');
+            
+            if (!focusModeEnabled && focusedArea) {
+                videoContainer.removeChild(focusedArea);
+                focusedArea = null;
+            }
+        });
+
+        cyclicVideo.addEventListener("click", function(e) {
+            if (!focusModeEnabled) return;
+            
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Remove existing focus area
+            if (focusedArea) {
+                videoContainer.removeChild(focusedArea);
+            }
+            
+            // Create new focus area
+            focusedArea = document.createElement('div');
+            focusedArea.className = 'focused-area';
+            
+            const size = 80;
+            focusedArea.style.width = `${size}px`;
+            focusedArea.style.height = `${size}px`;
+            focusedArea.style.left = `${x - size/2}px`;
+            focusedArea.style.top = `${y - size/2}px`;
+            
+            videoContainer.appendChild(focusedArea);
+            
+            // Animate focus effect
+            animateFocusEffect(focusedArea);
+        });
+
+        function animateFocusEffect(element) {
+            let opacity = 1;
+            let size = 80;
+            
+            function animate() {
+                if (!focusModeEnabled || !element.parentNode) return;
+                
+                opacity -= 0.01;
+                size += 0.5;
+                
+                if (opacity <= 0) {
+                    videoContainer.removeChild(element);
+                    focusedArea = null;
+                    return;
+                }
+                
+                element.style.opacity = opacity;
+                element.style.width = `${size}px`;
+                element.style.height = `${size}px`;
+                element.style.left = `${parseFloat(element.style.left) - 0.25}px`;
+                element.style.top = `${parseFloat(element.style.top) - 0.25}px`;
+                
+                requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+
+        // Ambient Edge Glow
+        ambientGlowBtn.addEventListener("click", function() {
+            ambientGlowEnabled = !ambientGlowEnabled;
+            this.classList.toggle('active-button');
+            
+            if (ambientGlowEnabled) {
+                setupAmbientGlow();
+            } else {
+                ambientBorder.style.boxShadow = 'inset 0 0 30px rgba(0, 255, 255, 0.5)';
+            }
+        });
+
+        function setupAmbientGlow() {
+            if (!ambientGlowEnabled) return;
+            
+            const videoWidth = cyclicVideo.videoWidth;
+            const videoHeight = cyclicVideo.videoHeight;
+            
+            // Create offscreen canvas for color analysis
+            const offscreenCanvas = document.createElement('canvas');
+            const offCtx = offscreenCanvas.getContext('2d');
+            offscreenCanvas.width = 50;  // Small size for performance
+            offscreenCanvas.height = 50;
+            
+            function updateAmbientGlow() {
+                if (!ambientGlowEnabled) return;
+                
+                try {
+                    // Draw current video frame to canvas
+                    offCtx.drawImage(cyclicVideo, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                    
+                    // Get pixel data from the edges of the video
+                    const edgePixels = [];
+                    
+                    // Sample from top, right, bottom, and left edges
+                    const imageData = offCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                    const data = imageData.data;
+                    
+                    for (let i = 0; i < offscreenCanvas.width; i++) {
+                        // Top edge
+                        let idx = (i + 0 * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                        
+                        // Bottom edge
+                        idx = (i + (offscreenCanvas.height - 1) * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    }
+                    
+                    for (let i = 0; i < offscreenCanvas.height; i++) {
+                        // Left edge
+                        let idx = (0 + i * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                        
+                        // Right edge
+                        idx = ((offscreenCanvas.width - 1) + i * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    }
+                    
+                    // Calculate average color
+                    let totalR = 0, totalG = 0, totalB = 0;
+                    edgePixels.forEach(pixel => {
+                        totalR += pixel[0];
+                        totalG += pixel[1];
+                        totalB += pixel[2];
+                    });
+                    
+                    const avgR = Math.round(totalR / edgePixels.length);
+                    const avgG = Math.round(totalG / edgePixels.length);
+                    const avgB = Math.round(totalB / edgePixels.length);
+                    
+                    // Apply color to ambient border
+                    ambientBorder.style.boxShadow = `inset 0 0 30px rgba(${avgR}, ${avgG}, ${avgB}, 0.7)`;
+                } catch (e) {
+                    console.error("Error updating ambient glow", e);
+                }
+                
+                // Request next frame
+                requestAnimationFrame(updateAmbientGlow);
+            }
+            
+            updateAmbientGlow();
+        }
 
         // Back button function
         function goBack() {
@@ -404,6 +572,19 @@
         window.addEventListener('resize', function() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            
+            // Reposition tracking markers if active
+            if (trackingEnabled) {
+                clearTrackingMarkers();
+                generateTrackingMarkers();
+            }
+        });
+
+        // Initialize video events
+        cyclicVideo.addEventListener('play', function() {
+            if (ambientGlowEnabled) {
+                setupAmbientGlow();
+            }
         });
     </script>
 </body>
