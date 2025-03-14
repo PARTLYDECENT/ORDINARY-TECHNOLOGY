@@ -243,195 +243,523 @@
     const progressBar = $('progressBar');
     const progressContainer = $('progressContainer');
     
-    // Background neural network setup
-    const bgCanvas = $('background-canvas');
-    const bgCtx = bgCanvas.getContext('2d');
-    
-    // Set canvas dimensions
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    bgCanvas.width = window.innerWidth;
-    bgCanvas.height = window.innerHeight;
-    
-    // Track list
-    const tracks = [
-      { src: 'track1.wav', title: 'Liquid Dreams' },
-      { src: 'track2.wav', title: 'Neon Flow' },
-      { src: 'track3.wav', title: 'Cosmic Wave' },
-      { src: 'track4.wav', title: 'Digital Sunrise' },
-      { src: 'track5.wav', title: 'Quantum Beat' },
-      { src: 'track6.wav', title: 'Cyberspace Odyssey' },
-      { src: 'track7.wav', title: 'Neural Network' },
-      { src: 'track8.wav', title: 'Binary Echoes' },
-      { src: 'track9.wav', title: 'Virtual Reality' },
-      { src: 'track10.wav', title: 'Holographic Memory' },
-      { src: 'track11.wav', title: 'Singularity' },
-      { src: 'track12.wav', title: 'Electric Dreams' },
-      { src: 'track13.wav', title: 'Synthwave Journey' },
-      { src: 'track14.wav', title: 'Galactic Pulse' },
-      { src: 'track15.wav', title: 'Cyber Dawn' },
-      { src: 'track16.wav', title: 'Ethereal Code' },
-      { src: 'track17.mp3', title: 'Alternatives' },
-      { src: 'track18.wav', title: 'Astral Projection' },
-      { src: 'track19.wav', title: 'Plasma Field' },
-      { src: 'track20.wav', title: 'Quantum Resonance' }
-    ];
-    
-    // State variables
-    let currentTrackIndex = 0;
-    let currentVisualizer = 1;
-    let animationId = null;
-    let bgAnimationId = null;
-    let audioContext, analyser, source, dataArray, bufferLength;
-    
-    // Neural network background state
-    const neurons = [];
-    const connections = [];
-    const neuronCount = 80;
-    const layerCount = 5;
-    const colorSchemes = [
-      { neuron: '#ff4b00', connection: '#00ffd0' },
-      { neuron: '#00ffd0', connection: '#ff4b00' },
-      { neuron: '#ff00ff', connection: '#00ffff' },
-      { neuron: '#ffff00', connection: '#0088ff' }
-    ];
-    let currentColorScheme = 0;
-    let reactivityFactor = 0;
+    // 3D Neural Network Brain Visualization
+const bgCanvas = document.getElementById('background-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas: bgCanvas, alpha: true, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
 
-    // Helper functions
-    const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+// Scene setup
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 180;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x222222);
+scene.add(ambientLight);
+
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(1, 1, 1);
+scene.add(directionalLight);
+
+const pointLight = new THREE.PointLight(0xffffff, 1);
+pointLight.position.set(0, 0, 50);
+scene.add(pointLight);
+
+// Track list
+const tracks = [
+  { src: 'track1.wav', title: 'Liquid Dreams' },
+  { src: 'track2.wav', title: 'Neon Flow' },
+  { src: 'track3.wav', title: 'Cosmic Wave' },
+  { src: 'track4.wav', title: 'Digital Sunrise' },
+  { src: 'track5.wav', title: 'Quantum Beat' },
+  { src: 'track6.wav', title: 'Cyberspace Odyssey' },
+  { src: 'track7.wav', title: 'Neural Network' },
+  { src: 'track8.wav', title: 'Binary Echoes' },
+  { src: 'track9.wav', title: 'Virtual Reality' },
+  { src: 'track10.wav', title: 'Holographic Memory' },
+  { src: 'track11.wav', title: 'Singularity' },
+  { src: 'track12.wav', title: 'Electric Dreams' },
+  { src: 'track13.wav', title: 'Synthwave Journey' },
+  { src: 'track14.wav', title: 'Galactic Pulse' },
+  { src: 'track15.wav', title: 'Cyber Dawn' },
+  { src: 'track16.wav', title: 'Ethereal Code' },
+  { src: 'track17.mp3', title: 'Alternatives' },
+  { src: 'track18.wav', title: 'Astral Projection' },
+  { src: 'track19.wav', title: 'Plasma Field' },
+  { src: 'track20.wav', title: 'Quantum Resonance' }
+];
+
+// State variables
+let currentTrackIndex = 0;
+let currentVisualizer = 1;
+let animationId = null;
+let audioContext, analyser, source, dataArray, bufferLength;
+
+// Advanced 3D brain network state
+const brainNetwork = new THREE.Group();
+scene.add(brainNetwork);
+
+const neurons = [];
+const connections = [];
+const neuronCount = 350; // More neurons for complexity
+const colorSchemes = [
+  { neuron: 0xff4b00, connection: 0x00ffd0, secondary: 0x001f33 },
+  { neuron: 0x00ffd0, connection: 0xff4b00, secondary: 0x330019 },
+  { neuron: 0xff00ff, connection: 0x00ffff, secondary: 0x002233 },
+  { neuron: 0xffff00, connection: 0x0088ff, secondary: 0x220033 }
+];
+let currentColorScheme = 0;
+let reactivityFactor = 0;
+let rotationSpeed = 0.003;
+
+// Helper functions
+const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+
+// Audio context initialization
+function initAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    source = audioContext.createMediaElementSource(musicPlayer);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+    analyser.fftSize = 1024; // Higher resolution for better analysis
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+  }
+}
+
+// Create a brain-like neural network shape
+function initNeuralNetwork() {
+  // Clear previous network
+  while(brainNetwork.children.length > 0) {
+    brainNetwork.remove(brainNetwork.children[0]);
+  }
+  neurons.length = 0;
+  connections.length = 0;
+  
+  // Create neuron material
+  const colors = colorSchemes[currentColorScheme];
+  const neuronMaterial = new THREE.MeshPhongMaterial({
+    color: colors.neuron,
+    emissive: colors.neuron,
+    emissiveIntensity: 0.3,
+    specular: 0xffffff,
+    shininess: 100
+  });
+  
+  const neuronGeometry = new THREE.SphereGeometry(1, 16, 16);
+  
+  // Create neurons in a brain-like arrangement
+  for (let i = 0; i < neuronCount; i++) {
+    // Create brain-shaped distribution using parametric equations
+    const t = Math.random() * Math.PI * 2;
+    const u = Math.random() * Math.PI;
+    const v = Math.random() * 2 - 1;
     
-    // Audio context initialization
-    function initAudio() {
-      if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        source = audioContext.createMediaElementSource(musicPlayer);
-        source.connect(analyser);
-        analyser.connect(audioContext.destination);
-        analyser.fftSize = 512;
-        bufferLength = analyser.frequencyBinCount;
-        dataArray = new Uint8Array(bufferLength);
-      }
+    // Brain shape parameters
+    const a = 50, b = 30, c = 40;
+    
+    // Ellipsoid with perturbations to make it brain-like
+    let x = a * Math.sin(u) * Math.cos(t);
+    let y = b * Math.sin(u) * Math.sin(t);
+    let z = c * Math.cos(u);
+    
+    // Add some cerebral cortex-like folding
+    const fold = 5 * Math.sin(5 * u) * Math.sin(4 * t);
+    const rFactor = 1 + 0.2 * Math.sin(8 * t) * Math.sin(6 * u);
+    
+    x *= rFactor;
+    y *= rFactor;
+    z *= rFactor + fold * 0.05;
+    
+    // Create hemispheres with a dividing line
+    if (Math.random() > 0.5) {
+      x = Math.abs(x) * 0.9; // Right hemisphere
+    } else {
+      x = -Math.abs(x) * 0.9; // Left hemisphere
     }
-
-    // Initialize neural network
-    function initNeuralNetwork() {
-      neurons.length = 0;
-      connections.length = 0;
-      
-      // Create neurons in layers
-      for (let layer = 0; layer < layerCount; layer++) {
-        const neuronsInLayer = layer === 0 || layer === layerCount - 1 ? 10 : 20;
-        const layerX = (bgCanvas.width / (layerCount - 1)) * layer;
+    
+    // Create the neuron
+    const neuron = new THREE.Mesh(neuronGeometry, neuronMaterial.clone());
+    neuron.position.set(x, y, z);
+    
+    // Size variation
+    const size = Math.random() * 0.8 + 0.6;
+    neuron.scale.set(size, size, size);
+    
+    // Add to our collections
+    brainNetwork.add(neuron);
+    neurons.push({
+      mesh: neuron,
+      originalSize: size,
+      pulseSpeed: Math.random() * 0.04 + 0.01,
+      pulsePhase: Math.random() * Math.PI * 2,
+      originalPos: new THREE.Vector3(x, y, z)
+    });
+  }
+  
+  // Create connections between nearby neurons
+  const connectionMaterial = new THREE.LineBasicMaterial({
+    color: colors.connection,
+    transparent: true,
+    opacity: 0.4,
+    linewidth: 1
+  });
+  
+  // Create axon-like connections, more for nearby neurons
+  for (let i = 0; i < neurons.length; i++) {
+    const neuronA = neurons[i];
+    
+    // Connect to nearby neurons (up to 5 connections per neuron)
+    const potentialConnections = [];
+    
+    for (let j = 0; j < neurons.length; j++) {
+      if (i !== j) {
+        const neuronB = neurons[j];
+        const distance = neuronA.mesh.position.distanceTo(neuronB.mesh.position);
         
-        for (let i = 0; i < neuronsInLayer; i++) {
-          const ySpread = layer === 0 || layer === layerCount - 1 ? 0.6 : 0.8;
-          const y = bgCanvas.height * (0.5 - ySpread/2 + ySpread * (i / (neuronsInLayer - 1)));
-          
-          neurons.push({
-            x: layerX,
-            y,
-            layer,
-            size: Math.random() * 3 + 2,
-            pulse: 0,
-            speed: Math.random() * 0.02 + 0.01
+        // Only connect to relatively close neurons
+        if (distance < 30) {
+          potentialConnections.push({
+            neuron: neuronB,
+            distance: distance
           });
         }
       }
-      
-      // Connect neurons between adjacent layers
-      for (let i = 0; i < neurons.length; i++) {
-        const from = neurons[i];
-        
-        // Connect to next layer
-        if (from.layer < layerCount - 1) {
-          const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
-          
-          // Connect to some neurons in next layer
-          for (let j = 0; j < nextLayer.length; j += 2) {
-            const to = nextLayer[j];
-            connections.push({
-              from,
-              to,
-              weight: Math.random(),
-              signal: 0
-            });
-          }
-        }
-      }
     }
+    
+    // Sort by distance and take the closest few
+    potentialConnections.sort((a, b) => a.distance - b.distance);
+    const connectCount = Math.min(3, potentialConnections.length);
+    
+    for (let c = 0; c < connectCount; c++) {
+      const geometry = new THREE.BufferGeometry();
+      const points = [
+        neuronA.mesh.position.clone(),
+        potentialConnections[c].neuron.mesh.position.clone()
+      ];
+      geometry.setFromPoints(points);
+      
+      const line = new THREE.Line(geometry, connectionMaterial.clone());
+      line.userData = {
+        from: neuronA,
+        to: potentialConnections[c].neuron,
+        originalOpacity: 0.2 + Math.random() * 0.3,
+        pulsePhase: Math.random() * Math.PI * 2,
+        pulseSpeed: Math.random() * 0.05 + 0.02
+      };
+      
+      brainNetwork.add(line);
+      connections.push(line);
+    }
+  }
+  
+  // Add some lobes/hemispheric definition with grouped neuron clusters
+  addBrainLobe(30, 10, 10, 15, 12, 8); // Frontal lobe
+  addBrainLobe(-30, 10, 10, 15, 12, 8); // Other frontal lobe
+  addBrainLobe(25, -20, 5, 12, 10, 6);  // Temporal lobe
+  addBrainLobe(-25, -20, 5, 12, 10, 6); // Other temporal lobe
+  addBrainLobe(0, -25, 20, 15, 10, 10); // Occipital lobe
+  
+  // Add cerebellum-like structure
+  addBrainLobe(0, -15, -25, 20, 8, 10, true);
+}
 
-    // Render neural network background
-    function renderNeuralBackground() {
-      if (!audioContext) {
-        bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-        return;
-      }
+// Create a cluster of neurons to form brain lobes
+function addBrainLobe(x, y, z, radius, count, connectionCount, isCerebellum = false) {
+  const colors = colorSchemes[currentColorScheme];
+  const lobeNeurons = [];
+  const neuronGeometry = new THREE.SphereGeometry(1, 16, 16);
+  
+  // Material with lobe-specific color variation
+  const neuronMaterial = new THREE.MeshPhongMaterial({
+    color: colors.neuron,
+    emissive: colors.neuron,
+    emissiveIntensity: 0.3,
+    specular: 0xffffff,
+    shininess: 100
+  });
+  
+  // Create neurons for this lobe
+  for (let i = 0; i < count; i++) {
+    // Position within the lobe
+    let nx, ny, nz;
+    
+    if (isCerebellum) {
+      // Create folded pattern for cerebellum
+      const t = Math.random() * Math.PI * 2;
+      const r = radius * Math.random();
+      nx = x + r * Math.cos(t);
+      ny = y + r * Math.sin(t) * 0.5;
+      nz = z + Math.sin(t * 8) * 3; // Folded pattern
+    } else {
+      // Random position within lobe sphere
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      const r = radius * Math.pow(Math.random(), 0.3); // Concentrate toward center
       
-      bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-      analyser.getByteFrequencyData(dataArray);
-      
-      // Calculate overall audio reactivity
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      reactivityFactor = sum / (bufferLength * 255);
-      
-      // Clear with fade effect for trails
-      bgCtx.fillStyle = 'rgba(10, 11, 12, 0.1)';
-      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-      
-      // Update neurons
-      neurons.forEach((neuron, i) => {
-        const freqIndex = Math.floor(i / neurons.length * bufferLength);
-        neuron.pulse = (dataArray[freqIndex] / 255) * 3 * reactivityFactor;
+      nx = x + r * Math.sin(phi) * Math.cos(theta);
+      ny = y + r * Math.sin(phi) * Math.sin(theta);
+      nz = z + r * Math.cos(phi);
+    }
+    
+    // Create the neuron
+    const neuron = new THREE.Mesh(neuronGeometry, neuronMaterial.clone());
+    neuron.position.set(nx, ny, nz);
+    
+    // Size variation
+    const size = Math.random() * 0.7 + 0.5;
+    neuron.scale.set(size, size, size);
+    
+    // Add to our collections
+    brainNetwork.add(neuron);
+    const neuronData = {
+      mesh: neuron,
+      originalSize: size,
+      pulseSpeed: Math.random() * 0.04 + 0.01,
+      pulsePhase: Math.random() * Math.PI * 2,
+      originalPos: new THREE.Vector3(nx, ny, nz),
+      isLobe: true
+    };
+    
+    neurons.push(neuronData);
+    lobeNeurons.push(neuronData);
+  }
+  
+  // Create more dense connections within the lobe
+  const connectionMaterial = new THREE.LineBasicMaterial({
+    color: colors.connection,
+    transparent: true,
+    opacity: 0.5
+  });
+  
+  // Connect neurons within this lobe
+  for (let i = 0; i < lobeNeurons.length; i++) {
+    const neuronA = lobeNeurons[i];
+    
+    // Number of connections for this neuron
+    const connectCount = Math.floor(Math.random() * connectionCount) + 1;
+    
+    for (let c = 0; c < connectCount; c++) {
+      // Pick another random neuron in this lobe
+      const j = Math.floor(Math.random() * lobeNeurons.length);
+      if (i !== j) {
+        const neuronB = lobeNeurons[j];
         
-        // Draw neuron
-        const colors = colorSchemes[currentColorScheme];
-        bgCtx.fillStyle = colors.neuron;
-        bgCtx.beginPath();
-        bgCtx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse, 0, Math.PI * 2);
-        bgCtx.fill();
-      });
-      
-      // Draw connections with signals
-      connections.forEach(conn => {
-        const dx = conn.to.x - conn.from.x;
-        const dy = conn.to.y - conn.from.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const geometry = new THREE.BufferGeometry();
+        const points = [
+          neuronA.mesh.position.clone(),
+          neuronB.mesh.position.clone()
+        ];
+        geometry.setFromPoints(points);
         
-        // Only draw if reasonable distance
-        if (distance < bgCanvas.width / 2) {
-          // Update signal position based on audio
-          conn.signal = (conn.signal + reactivityFactor * 0.05) % 1;
-          
-          // Calculate signal position
-          const signalX = conn.from.x + dx * conn.signal;
-          const signalY = conn.from.y + dy * conn.signal;
-          
-          // Draw connection line
-          bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
-          bgCtx.beginPath();
-          bgCtx.moveTo(conn.from.x, conn.from.y);
-          bgCtx.lineTo(conn.to.x, conn.to.y);
-          bgCtx.stroke();
-          
-          // Draw signal pulse
-          const colors = colorSchemes[currentColorScheme];
-          bgCtx.fillStyle = colors.connection;
-          bgCtx.beginPath();
-          bgCtx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
-          bgCtx.fill();
-        }
-      });
-      
-      // Occasionally change color scheme based on music intensity
-      if (Math.random() < 0.001 + reactivityFactor * 0.01) {
-        currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+        const line = new THREE.Line(geometry, connectionMaterial.clone());
+        line.userData = {
+          from: neuronA,
+          to: neuronB,
+          originalOpacity: 0.3 + Math.random() * 0.4,
+          pulsePhase: Math.random() * Math.PI * 2,
+          pulseSpeed: Math.random() * 0.08 + 0.04,
+          isLobe: true
+        };
+        
+        brainNetwork.add(line);
+        connections.push(line);
       }
     }
+  }
+}
+
+// Main render function
+function renderNeuralNetwork() {
+  if (!audioContext) {
+    animationId = requestAnimationFrame(renderNeuralNetwork);
+    return;
+  }
+  
+  animationId = requestAnimationFrame(renderNeuralNetwork);
+  analyser.getByteFrequencyData(dataArray);
+  
+  // Calculate overall audio reactivity using frequency bands
+  let bassSum = 0;
+  let midSum = 0;
+  let trebleSum = 0;
+  
+  // Different frequency bands
+  for (let i = 0; i < bufferLength; i++) {
+    if (i < bufferLength * 0.1) {
+      bassSum += dataArray[i]; // Bass frequencies
+    } else if (i < bufferLength * 0.5) {
+      midSum += dataArray[i];  // Mid frequencies
+    } else {
+      trebleSum += dataArray[i]; // Treble frequencies
+    }
+  }
+  
+  const bassReactivity = bassSum / (bufferLength * 0.1 * 255);
+  const midReactivity = midSum / (bufferLength * 0.4 * 255);
+  const trebleReactivity = trebleSum / (bufferLength * 0.5 * 255);
+  reactivityFactor = (bassReactivity + midReactivity + trebleReactivity) / 3;
+  
+  // Adjust brain rotation based on bass
+  rotationSpeed = 0.002 + bassReactivity * 0.005;
+  brainNetwork.rotation.y += rotationSpeed;
+  brainNetwork.rotation.x = Math.sin(Date.now() * 0.0003) * 0.2;
+  
+  // Update neurons based on audio
+  neurons.forEach((neuron, i) => {
+    const time = Date.now() * 0.001;
+    const freqIndex = Math.floor(i / neurons.length * bufferLength);
+    const freqValue = dataArray[freqIndex] / 255;
+    
+    // Neuron pulse based on audio and its own rhythm
+    const pulse = 0.2 * freqValue * reactivityFactor + 
+                 0.1 * Math.sin(time * neuron.pulseSpeed + neuron.pulsePhase);
+    
+    // Scale the neuron with pulse
+    const scale = neuron.originalSize * (1 + pulse);
+    neuron.mesh.scale.set(scale, scale, scale);
+    
+    // Neurons can move slightly based on audio
+    if (reactivityFactor > 0.4) {
+      const moveAmount = 0.1 * reactivityFactor;
+      neuron.mesh.position.x = neuron.originalPos.x + (Math.random() - 0.5) * moveAmount;
+      neuron.mesh.position.y = neuron.originalPos.y + (Math.random() - 0.5) * moveAmount;
+      neuron.mesh.position.z = neuron.originalPos.z + (Math.random() - 0.5) * moveAmount;
+    }
+    
+    // Color reactivity
+    const colors = colorSchemes[currentColorScheme];
+    const material = neuron.mesh.material;
+    
+    // Blend color based on audio intensity
+    const r = ((colors.neuron >> 16) & 0xff) / 255;
+    const g = ((colors.neuron >> 8) & 0xff) / 255;
+    const b = (colors.neuron & 0xff) / 255;
+    
+    const sr = ((colors.secondary >> 16) & 0xff) / 255;
+    const sg = ((colors.secondary >> 8) & 0xff) / 255;
+    const sb = (colors.secondary & 0xff) / 255;
+    
+    // Blend between primary and secondary color based on audio
+    const blendFactor = Math.min(1, freqValue * 2);
+    material.color.setRGB(
+      r * (1 - blendFactor) + sr * blendFactor,
+      g * (1 - blendFactor) + sg * blendFactor,
+      b * (1 - blendFactor) + sb * blendFactor
+    );
+    
+    // Emissive intensity based on audio
+    material.emissiveIntensity = 0.2 + freqValue * 0.8;
+  });
+  
+  // Update connections
+  connections.forEach((connection, i) => {
+    // Update the line position to follow the neurons
+    const geometry = connection.geometry;
+    const positions = geometry.attributes.position.array;
+    
+    positions[0] = connection.userData.from.mesh.position.x;
+    positions[1] = connection.userData.from.mesh.position.y;
+    positions[2] = connection.userData.from.mesh.position.z;
+    
+    positions[3] = connection.userData.to.mesh.position.x;
+    positions[4] = connection.userData.to.mesh.position.y;
+    positions[5] = connection.userData.to.mesh.position.z;
+    
+    geometry.attributes.position.needsUpdate = true;
+    
+    // Neuron firing effect along the connection
+    const time = Date.now() * 0.001;
+    const freqIndex = Math.floor(i / connections.length * bufferLength);
+    const freqValue = dataArray[freqIndex] / 255;
+    
+    const pulseValue = Math.sin(time * connection.userData.pulseSpeed + connection.userData.pulsePhase);
+    const signalIntensity = (0.5 + 0.5 * pulseValue) * freqValue * 0.8 + 0.2;
+    
+    // Connection color and opacity based on audio
+    const colors = colorSchemes[currentColorScheme];
+    connection.material.opacity = connection.userData.originalOpacity * (0.2 + 0.8 * signalIntensity);
+    
+    // Make connections glow in reaction to strong audio signals
+    if (freqValue > 0.7) {
+      connection.material.color.setHex(colors.neuron); // Temporary color change for pulse effect
+    } else {
+      connection.material.color.setHex(colors.connection);
+    }
+  });
+  
+  // Occasionally change color scheme based on music intensity
+  if (Math.random() < 0.0005 + reactivityFactor * 0.001) {
+    currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+    updateNetworkColors();
+  }
+  
+  renderer.render(scene, camera);
+}
+
+// Update all materials when color scheme changes
+function updateNetworkColors() {
+  const colors = colorSchemes[currentColorScheme];
+  
+  // Update all neuron colors
+  neurons.forEach(neuron => {
+    neuron.mesh.material.color.setHex(colors.neuron);
+    neuron.mesh.material.emissive.setHex(colors.neuron);
+  });
+  
+  // Update all connection colors
+  connections.forEach(connection => {
+    connection.material.color.setHex(colors.connection);
+  });
+}
+
+// Window resize handler
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Initialize neural network and start rendering
+initNeuralNetwork();
+renderNeuralNetwork();
+
+// Apply post-processing for advanced visual effects
+const composer = new THREE.EffectComposer(renderer);
+const renderPass = new THREE.RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+// Bloom effect for glowing neurons
+const bloomPass = new THREE.UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.0,   // strength
+  0.4,   // radius
+  0.85   // threshold
+);
+composer.addPass(bloomPass);
+
+// Replace the simple render function with the composer version
+function renderWithEffects() {
+  if (!audioContext) {
+    animationId = requestAnimationFrame(renderWithEffects);
+    return;
+  }
+  
+  animationId = requestAnimationFrame(renderWithEffects);
+  analyser.getByteFrequencyData(dataArray);
+  
+  // All the neuron and connection updates from renderNeuralNetwork
+  // ... (code from renderNeuralNetwork)
+  
+  composer.render();
+}
+
+// Use the enhanced render function instead
+cancelAnimationFrame(animationId);
+renderWithEffects();
 
     // Track management
     function loadTrack(index) {
