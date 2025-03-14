@@ -196,447 +196,307 @@
     .playlist-item.active span:last-child { color: var(--primary); }
   </style>
 </head>
-// Replace your existing neural network background code with this
-// DOM elements
-const $ = id => document.getElementById(id);
-const musicPlayer = $('musicPlayer');
-const playPauseBtn = $('playPause');
-const canvas = $('visualizer');
-const ctx = canvas.getContext('2d');
-const progressBar = $('progressBar');
-const progressContainer = $('progressContainer');
-
-// Background neural network setup
-const bgCanvas = $('background-canvas');
-const bgCtx = bgCanvas.getContext('2d');
-
-// Set canvas dimensions
-canvas.width = canvas.offsetWidth;
-canvas.height = canvas.offsetHeight;
-bgCanvas.width = window.innerWidth;
-bgCanvas.height = window.innerHeight;
-
-// Track list
-const tracks = [
-  { src: 'track1.wav', title: 'Liquid Dreams' },
-  { src: 'track2.wav', title: 'Neon Flow' },
-  { src: 'track3.wav', title: 'Cosmic Wave' },
-  { src: 'track4.wav', title: 'Digital Sunrise' },
-  { src: 'track5.wav', title: 'Quantum Beat' },
-  { src: 'track6.wav', title: 'Cyberspace Odyssey' },
-  { src: 'track7.wav', title: 'Neural Network' },
-  { src: 'track8.wav', title: 'Binary Echoes' },
-  { src: 'track9.wav', title: 'Virtual Reality' },
-  { src: 'track10.wav', title: 'Holographic Memory' },
-  { src: 'track11.wav', title: 'Singularity' },
-  { src: 'track12.wav', title: 'Electric Dreams' },
-  { src: 'track13.wav', title: 'Synthwave Journey' },
-  { src: 'track14.wav', title: 'Galactic Pulse' },
-  { src: 'track15.wav', title: 'Cyber Dawn' },
-  { src: 'track16.wav', title: 'Ethereal Code' },
-  { src: 'track17.mp3', title: 'Alternatives' },
-  { src: 'track18.wav', title: 'Astral Projection' },
-  { src: 'track19.wav', title: 'Plasma Field' },
-  { src: 'track20.wav', title: 'Quantum Resonance' }
-];
-
-// State variables
-let currentTrackIndex = 0;
-let currentVisualizer = 1;
-let animationId = null;
-let bgAnimationId = null;
-let audioContext, analyser, source, dataArray, bufferLength;
-
-// 3D Neural Network State
-const nodes = [];
-const links = [];
-const NODE_COUNT = 80;
-const DEPTH = 200;
-let rotation = 0;
-let reactivity = 0;
-let pulseIntensity = 0;
-let cameraZ = 400;
-
-// Color schemes (blue to red gradients)
-const colorSchemes = [
-  { start: [0, 120, 255], end: [255, 50, 120], connection: [140, 80, 200] },
-  { start: [50, 200, 255], end: [255, 60, 80], connection: [180, 100, 255] },
-  { start: [0, 180, 240], end: [220, 40, 100], connection: [120, 140, 255] },
-];
-let currentColorScheme = 0;
-let transitionProgress = 0;
-let targetColorScheme = 0;
-let isTransitioning = false;
-
-// Helper functions
-const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-const lerp = (a, b, t) => a + (b - a) * t;
-const map = (value, min1, max1, min2, max2) => min2 + (max2 - min2) * ((value - min1) / (max1 - min1));
-const getColor = (start, end, t) => {
-  return `rgb(${
-    Math.floor(lerp(start[0], end[0], t))},${
-    Math.floor(lerp(start[1], end[1], t))},${
-    Math.floor(lerp(start[2], end[2], t))})`;
-};
-
-// Audio context initialization
-function initAudio() {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    source = audioContext.createMediaElementSource(musicPlayer);
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
-    analyser.fftSize = 512;
-    bufferLength = analyser.frequencyBinCount;
-    dataArray = new Uint8Array(bufferLength);
-  }
-}
-
-// 3D projection function
-function project3D(x, y, z) {
-  const fov = 450;
-  const scale = fov / (fov + z + cameraZ);
-  return {
-    x: (x * scale) + bgCanvas.width / 2,
-    y: (y * scale) + bgCanvas.height / 2,
-    scale: scale
-  };
-}
-
-// Initialize 3D neural network
-function initNeuralNetwork() {
-  nodes.length = 0;
-  links.length = 0;
+<body>
+  <canvas id="background-canvas"></canvas>
   
-  // Create nodes in 3D space
-  for (let i = 0; i < NODE_COUNT; i++) {
-    // Create nodes in a roughly spherical arrangement
-    const phi = Math.random() * Math.PI * 2;
-    const theta = Math.random() * Math.PI;
-    const radius = 50 + Math.random() * 100;
-    
-    // Convert spherical to cartesian coordinates
-    const x = radius * Math.sin(theta) * Math.cos(phi);
-    const y = radius * Math.sin(theta) * Math.sin(phi);
-    const z = radius * Math.cos(theta);
-    
-    nodes.push({
-      x, y, z,
-      size: Math.random() * 2 + 2,
-      pulse: 0,
-      speed: Math.random() * 0.02 + 0.01,
-      phase: Math.random() * Math.PI * 2,
-      frequency: Math.random() * 0.05 + 0.02
-    });
-  }
+  <header>Neuromantic</header>
+  <div class="player-container">
+    <div class="visualizer-container">
+      <canvas id="visualizer"></canvas>
+    </div>
   
-  // Create connections between nearby nodes
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
+    <audio id="musicPlayer" src="track1.mp3"></audio>
+    <div class="track-info">
+      <div class="track-title" id="trackTitle">Liquid Dreams</div>
+      <div class="track-number"><span id="currentTrackNum">1</span>/20</div>
+    </div>
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="time-display">
+      <span id="currentTime">0:00</span>
+      <span id="totalTime">0:00</span>
+    </div>
+    <div class="controls">
+      <button id="prevTrack">Prev</button>
+      <button id="playPause">Play</button>
+      <button id="nextTrack">Next</button>
+    </div>
     
-    // Find closest nodes
-    const distances = nodes.map((other, idx) => {
-      if (i === idx) return Infinity;
-      const dx = node.x - other.x;
-      const dy = node.y - other.y;
-      const dz = node.z - other.z;
-      return {
-        index: idx,
-        distance: Math.sqrt(dx*dx + dy*dy + dz*dz)
-      };
-    }).sort((a, b) => a.distance - b.distance);
+    <div class="visualizer-controls">
+      <button id="viz1" class="active">Bars</button>
+      <button id="viz2">Circles</button>
+      <button id="viz3">Wave</button>
+      <button id="viz4">Stars</button>
+      <button id="viz5">Spectrum</button>
+    </div>
+    <button class="playlist-toggle" id="playlistToggle">Playlist</button>
+    <div class="playlist-container" id="playlist" style="display:none;"></div>
+  </div>
+  <script>
+    // DOM elements
+    const $ = id => document.getElementById(id);
+    const musicPlayer = $('musicPlayer');
+    const playPauseBtn = $('playPause');
+    const canvas = $('visualizer');
+    const ctx = canvas.getContext('2d');
+    const progressBar = $('progressBar');
+    const progressContainer = $('progressContainer');
     
-    // Connect to closest 3-5 nodes
-    const connectCount = Math.floor(Math.random() * 3) + 3;
-    for (let j = 0; j < connectCount && j < 5; j++) {
-      links.push({
-        from: i,
-        to: distances[j].index,
-        strength: Math.random() * 0.5 + 0.2,
-        signal: Math.random(),
-        speed: Math.random() * 0.02 + 0.01
-      });
+    // Background neural network setup
+    const bgCanvas = $('background-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    
+    // Set canvas dimensions
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    bgCanvas.width = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
+    
+    // Track list
+    const tracks = [
+      { src: 'track1.wav', title: 'Liquid Dreams' },
+      { src: 'track2.wav', title: 'Neon Flow' },
+      { src: 'track3.wav', title: 'Cosmic Wave' },
+      { src: 'track4.wav', title: 'Digital Sunrise' },
+      { src: 'track5.wav', title: 'Quantum Beat' },
+      { src: 'track6.wav', title: 'Cyberspace Odyssey' },
+      { src: 'track7.wav', title: 'Neural Network' },
+      { src: 'track8.wav', title: 'Binary Echoes' },
+      { src: 'track9.wav', title: 'Virtual Reality' },
+      { src: 'track10.wav', title: 'Holographic Memory' },
+      { src: 'track11.wav', title: 'Singularity' },
+      { src: 'track12.wav', title: 'Electric Dreams' },
+      { src: 'track13.wav', title: 'Synthwave Journey' },
+      { src: 'track14.wav', title: 'Galactic Pulse' },
+      { src: 'track15.wav', title: 'Cyber Dawn' },
+      { src: 'track16.wav', title: 'Ethereal Code' },
+      { src: 'track17.mp3', title: 'Alternatives' },
+      { src: 'track18.wav', title: 'Astral Projection' },
+      { src: 'track19.wav', title: 'Plasma Field' },
+      { src: 'track20.wav', title: 'Quantum Resonance' }
+    ];
+    
+    // State variables
+    let currentTrackIndex = 0;
+    let currentVisualizer = 1;
+    let animationId = null;
+    let bgAnimationId = null;
+    let audioContext, analyser, source, dataArray, bufferLength;
+    
+    // Neural network background state
+    const neurons = [];
+    const connections = [];
+    const neuronCount = 80;
+    const layerCount = 5;
+    const colorSchemes = [
+      { neuron: '#ff4b00', connection: '#00ffd0' },
+      { neuron: '#00ffd0', connection: '#ff4b00' },
+      { neuron: '#ff00ff', connection: '#00ffff' },
+      { neuron: '#ffff00', connection: '#0088ff' }
+    ];
+    let currentColorScheme = 0;
+    let reactivityFactor = 0;
+
+    // Helper functions
+    const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+    
+    // Audio context initialization
+    function initAudio() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        source = audioContext.createMediaElementSource(musicPlayer);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 512;
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+      }
     }
-  }
-}
 
-// Render 3D neural network background
-function renderNeuralBackground() {
-  if (!audioContext) {
-    bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-    return;
-  }
-  
-  bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-  analyser.getByteFrequencyData(dataArray);
-  
-  // Calculate audio reactivity - more weight to lower frequencies
-  let bassPower = 0;
-  let midPower = 0;
-  for (let i = 0; i < bufferLength; i++) {
-    if (i < bufferLength * 0.1) {
-      bassPower += dataArray[i];
-    } else if (i < bufferLength * 0.5) {
-      midPower += dataArray[i];
-    }
-  }
-  
-  // Normalize
-  bassPower = bassPower / (bufferLength * 0.1 * 255);
-  midPower = midPower / (bufferLength * 0.4 * 255);
-  reactivity = bassPower * 0.7 + midPower * 0.3;
-  
-  // Update pulse intensity with smoothing
-  pulseIntensity = pulseIntensity * 0.95 + reactivity * 0.05;
-  
-  // Handle color scheme transitions
-  if (isTransitioning) {
-    transitionProgress += 0.02;
-    if (transitionProgress >= 1) {
-      currentColorScheme = targetColorScheme;
-      isTransitioning = false;
-      transitionProgress = 0;
-    }
-  } else if (Math.random() < 0.001 + reactivity * 0.01) {
-    // Trigger color transition based on audio intensity
-    targetColorScheme = (currentColorScheme + 1) % colorSchemes.length;
-    isTransitioning = true;
-    transitionProgress = 0;
-  }
-  
-  // Clear with fade effect for trails
-  bgCtx.fillStyle = 'rgba(6, 8, 12, 0.15)';
-  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-  
-  // Rotate the entire network
-  rotation += 0.002 + reactivity * 0.001;
-  const sinRot = Math.sin(rotation);
-  const cosRot = Math.cos(rotation);
-  
-  // Camera "breathes" with the music
-  cameraZ = 400 - reactivity * 50;
-  
-  // Compute projected coordinates for all nodes
-  const projectedNodes = nodes.map(node => {
-    // Apply rotation
-    const x1 = node.x * cosRot - node.z * sinRot;
-    const z1 = node.z * cosRot + node.x * sinRot;
-    
-    // Add some motion based on audio
-    const motionX = x1 + Math.sin(node.phase + Date.now() * node.frequency) * 5 * reactivity;
-    const motionY = node.y + Math.cos(node.phase + Date.now() * node.frequency) * 5 * reactivity;
-    const motionZ = z1;
-    
-    // Project to 2D
-    const projected = project3D(motionX, motionY, motionZ);
-    projected.originalZ = motionZ;
-    
-    // Calculate node pulse based on audio and depth
-    const depthFactor = map(motionZ, -DEPTH, DEPTH, 0.2, 1);
-    const pulseFactor = pulseIntensity * depthFactor * 5;
-    projected.size = (node.size + pulseFactor) * projected.scale;
-    
-    // Calculate color based on depth
-    let colorT = map(motionZ, -DEPTH, DEPTH, 0, 1);
-    if (isTransitioning) {
-      // Blend between color schemes during transition
-      const currScheme = colorSchemes[currentColorScheme];
-      const nextScheme = colorSchemes[targetColorScheme];
-      const blendedStart = [
-        lerp(currScheme.start[0], nextScheme.start[0], transitionProgress),
-        lerp(currScheme.start[1], nextScheme.start[1], transitionProgress),
-        lerp(currScheme.start[2], nextScheme.start[2], transitionProgress)
-      ];
-      const blendedEnd = [
-        lerp(currScheme.end[0], nextScheme.end[0], transitionProgress),
-        lerp(currScheme.end[1], nextScheme.end[1], transitionProgress),
-        lerp(currScheme.end[2], nextScheme.end[2], transitionProgress)
-      ];
-      projected.color = getColor(blendedStart, blendedEnd, colorT);
-    } else {
-      const scheme = colorSchemes[currentColorScheme];
-      projected.color = getColor(scheme.start, scheme.end, colorT);
-    }
-    
-    return projected;
-  });
-  
-  // Sort by Z for proper depth layering
-  const sortedIndices = projectedNodes.map((node, i) => i)
-    .sort((a, b) => nodes[a].z - nodes[b].z);
-  
-  // Draw connections first (behind nodes)
-  links.forEach(link => {
-    const from = projectedNodes[link.from];
-    const to = projectedNodes[link.to];
-    
-    // Calculate link opacity based on distance and Z-depth
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Only draw connections if nodes are visible and not too far apart
-    if (from.scale > 0.1 && to.scale > 0.1 && distance < bgCanvas.width * 0.5) {
-      // Average Z position determines connection color
-      const avgZ = (nodes[link.from].z + nodes[link.to].z) / 2;
-      const depthFactor = map(avgZ, -DEPTH, DEPTH, 0.1, 0.6);
+    // Initialize neural network
+    function initNeuralNetwork() {
+      neurons.length = 0;
+      connections.length = 0;
       
-      // Update signal position based on audio
-      link.signal = (link.signal + link.speed * (1 + reactivity)) % 1;
-      
-      // Calculate signal position
-      const signalX = from.x + dx * link.signal;
-      const signalY = from.y + dy * link.signal;
-      
-      // Draw connection with gradient
-      const gradient = bgCtx.createLinearGradient(from.x, from.y, to.x, to.y);
-      gradient.addColorStop(0, from.color);
-      gradient.addColorStop(1, to.color);
-      
-      bgCtx.strokeStyle = gradient;
-      bgCtx.globalAlpha = depthFactor * link.strength;
-      bgCtx.lineWidth = 1 + reactivity;
-      bgCtx.beginPath();
-      bgCtx.moveTo(from.x, from.y);
-      bgCtx.lineTo(to.x, to.y);
-      bgCtx.stroke();
-      
-      // Draw signal pulse
-      if (reactivity > 0.1) {
-        // Get color for signal pulse
-        let connectionColor;
-        if (isTransitioning) {
-          const currColor = colorSchemes[currentColorScheme].connection;
-          const nextColor = colorSchemes[targetColorScheme].connection;
-          connectionColor = [
-            lerp(currColor[0], nextColor[0], transitionProgress),
-            lerp(currColor[1], nextColor[1], transitionProgress),
-            lerp(currColor[2], nextColor[2], transitionProgress)
-          ];
-        } else {
-          connectionColor = colorSchemes[currentColorScheme].connection;
-        }
+      // Create neurons in layers
+      for (let layer = 0; layer < layerCount; layer++) {
+        const neuronsInLayer = layer === 0 || layer === layerCount - 1 ? 10 : 20;
+        const layerX = (bgCanvas.width / (layerCount - 1)) * layer;
         
-        bgCtx.fillStyle = `rgb(${connectionColor[0]}, ${connectionColor[1]}, ${connectionColor[2]})`;
-        bgCtx.globalAlpha = depthFactor * reactivity;
-        bgCtx.beginPath();
-        bgCtx.arc(signalX, signalY, 1.5 + reactivity * 2, 0, Math.PI * 2);
-        bgCtx.fill();
+        for (let i = 0; i < neuronsInLayer; i++) {
+          const ySpread = layer === 0 || layer === layerCount - 1 ? 0.6 : 0.8;
+          const y = bgCanvas.height * (0.5 - ySpread/2 + ySpread * (i / (neuronsInLayer - 1)));
+          
+          neurons.push({
+            x: layerX,
+            y,
+            layer,
+            size: Math.random() * 3 + 2,
+            pulse: 0,
+            speed: Math.random() * 0.02 + 0.01
+          });
+        }
       }
       
-      bgCtx.globalAlpha = 1;
+      // Connect neurons between adjacent layers
+      for (let i = 0; i < neurons.length; i++) {
+        const from = neurons[i];
+        
+        // Connect to next layer
+        if (from.layer < layerCount - 1) {
+          const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
+          
+          // Connect to some neurons in next layer
+          for (let j = 0; j < nextLayer.length; j += 2) {
+            const to = nextLayer[j];
+            connections.push({
+              from,
+              to,
+              weight: Math.random(),
+              signal: 0
+            });
+          }
+        }
+      }
     }
-  });
-  
-  // Draw nodes in sorted order (back to front)
-  sortedIndices.forEach(i => {
-    const proj = projectedNodes[i];
-    const node = nodes[i];
-    
-    // Only draw if node is large enough to be visible
-    if (proj.size > 0.5) {
-      // Draw node with glow effect
-      const glowSize = proj.size * (1 + reactivity);
-      const gradient = bgCtx.createRadialGradient(
-        proj.x, proj.y, 0,
-        proj.x, proj.y, glowSize * 2
-      );
+
+    // Render neural network background
+    function renderNeuralBackground() {
+      if (!audioContext) {
+        bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+        return;
+      }
       
-      gradient.addColorStop(0, proj.color);
-      gradient.addColorStop(0.5, proj.color.replace('rgb', 'rgba').replace(')', ', 0.3)'));
-      gradient.addColorStop(1, proj.color.replace('rgb', 'rgba').replace(')', ', 0)'));
+      bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+      analyser.getByteFrequencyData(dataArray);
       
-      bgCtx.fillStyle = gradient;
-      bgCtx.beginPath();
-      bgCtx.arc(proj.x, proj.y, glowSize, 0, Math.PI * 2);
-      bgCtx.fill();
+      // Calculate overall audio reactivity
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      reactivityFactor = sum / (bufferLength * 255);
       
-      // Core of the node
-      bgCtx.fillStyle = proj.color;
-      bgCtx.beginPath();
-      bgCtx.arc(proj.x, proj.y, proj.size, 0, Math.PI * 2);
-      bgCtx.fill();
+      // Clear with fade effect for trails
+      bgCtx.fillStyle = 'rgba(10, 11, 12, 0.1)';
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      
+      // Update neurons
+      neurons.forEach((neuron, i) => {
+        const freqIndex = Math.floor(i / neurons.length * bufferLength);
+        neuron.pulse = (dataArray[freqIndex] / 255) * 3 * reactivityFactor;
+        
+        // Draw neuron
+        const colors = colorSchemes[currentColorScheme];
+        bgCtx.fillStyle = colors.neuron;
+        bgCtx.beginPath();
+        bgCtx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse, 0, Math.PI * 2);
+        bgCtx.fill();
+      });
+      
+      // Draw connections with signals
+      connections.forEach(conn => {
+        const dx = conn.to.x - conn.from.x;
+        const dy = conn.to.y - conn.from.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Only draw if reasonable distance
+        if (distance < bgCanvas.width / 2) {
+          // Update signal position based on audio
+          conn.signal = (conn.signal + reactivityFactor * 0.05) % 1;
+          
+          // Calculate signal position
+          const signalX = conn.from.x + dx * conn.signal;
+          const signalY = conn.from.y + dy * conn.signal;
+          
+          // Draw connection line
+          bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
+          bgCtx.beginPath();
+          bgCtx.moveTo(conn.from.x, conn.from.y);
+          bgCtx.lineTo(conn.to.x, conn.to.y);
+          bgCtx.stroke();
+          
+          // Draw signal pulse
+          const colors = colorSchemes[currentColorScheme];
+          bgCtx.fillStyle = colors.connection;
+          bgCtx.beginPath();
+          bgCtx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
+          bgCtx.fill();
+        }
+      });
+      
+      // Occasionally change color scheme based on music intensity
+      if (Math.random() < 0.001 + reactivityFactor * 0.01) {
+        currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+      }
     }
-  });
-}
 
-// Track management
-function loadTrack(index) {
-  index = (index + tracks.length) % tracks.length;
-  currentTrackIndex = index;
-  musicPlayer.src = tracks[index].src;
-  $('trackTitle').textContent = tracks[index].title;
-  $('currentTrackNum').textContent = index + 1;
-  
-  document.querySelectorAll('.playlist-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.index == index);
-  });
-  
-  const activeItem = document.querySelector(`.playlist-item[data-index="${index}"]`);
-  if (activeItem) activeItem.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-  
-  musicPlayer.load();
-}
+    // Track management
+    function loadTrack(index) {
+      index = (index + tracks.length) % tracks.length;
+      currentTrackIndex = index;
+      musicPlayer.src = tracks[index].src;
+      $('trackTitle').textContent = tracks[index].title;
+      $('currentTrackNum').textContent = index + 1;
+      
+      document.querySelectorAll('.playlist-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.index == index);
+      });
+      
+      const activeItem = document.querySelector(`.playlist-item[data-index="${index}"]`);
+      if (activeItem) activeItem.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      
+      musicPlayer.load();
+    }
 
-function createPlaylist() {
-  const playlist = $('playlist');
-  playlist.innerHTML = '';
-  
-  tracks.forEach((track, i) => {
-    const item = document.createElement('div');
-    item.className = 'playlist-item' + (i === currentTrackIndex ? ' active' : '');
-    item.dataset.index = i;
-    
-    item.innerHTML = `
-      <span>${(i + 1).toString().padStart(2, '0')}</span>
-      <span>${track.title}</span>
-    `;
-    
-    item.addEventListener('click', () => {
-      loadTrack(i);
-      playTrack();
-    });
-    
-    playlist.appendChild(item);
-  });
-}
+    function createPlaylist() {
+      const playlist = $('playlist');
+      playlist.innerHTML = '';
+      
+      tracks.forEach((track, i) => {
+        const item = document.createElement('div');
+        item.className = 'playlist-item' + (i === currentTrackIndex ? ' active' : '');
+        item.dataset.index = i;
+        
+        item.innerHTML = `
+          <span>${(i + 1).toString().padStart(2, '0')}</span>
+          <span>${track.title}</span>
+        `;
+        
+        item.addEventListener('click', () => {
+          loadTrack(i);
+          playTrack();
+        });
+        
+        playlist.appendChild(item);
+      });
+    }
 
-// Playback controls
-function playTrack() {
-  initAudio();
-  audioContext.resume().then(() => {
-    musicPlayer.play();
-    playPauseBtn.textContent = 'Pause';
-    if (!animationId) renderVisualizer();
-  });
-}
+    // Playback controls
+    function playTrack() {
+      initAudio();
+      audioContext.resume().then(() => {
+        musicPlayer.play();
+        playPauseBtn.textContent = 'Pause';
+        if (!animationId) renderVisualizer();
+      });
+    }
 
-function pauseTrack() {
-  musicPlayer.pause();
-  playPauseBtn.textContent = 'Play';
-}
+    function pauseTrack() {
+      musicPlayer.pause();
+      playPauseBtn.textContent = 'Play';
+    }
 
-// Progress bar update
-function updateProgress() {
-  if (!musicPlayer.duration) return;
-  
-  progressBar.style.width = `${(musicPlayer.currentTime / musicPlayer.duration) * 100}%`;
-  $('currentTime').textContent = formatTime(musicPlayer.currentTime);
-  $('totalTime').textContent = formatTime(musicPlayer.duration);
-}
-
-// Initialize neural network
-window.addEventListener('resize', () => {
-  bgCanvas.width = window.innerWidth;
-  bgCanvas.height = window.innerHeight;
-  canvas.width = canvas.offsetWidth;
-  canvas.height = canvas.offsetHeight;
-});
-
-// Initialize neural network on load
-initNeuralNetwork();
-renderNeuralBackground();
+    // Progress bar update
+    function updateProgress() {
+      if (!musicPlayer.duration) return;
+      
+      progressBar.style.width = `${(musicPlayer.currentTime / musicPlayer.duration) * 100}%`;
+      $('currentTime').textContent = formatTime(musicPlayer.currentTime);
+      $('totalTime').textContent = formatTime(musicPlayer.duration);
+    }
 
     // Visualizer rendering functions
     function renderVisualizer() {
