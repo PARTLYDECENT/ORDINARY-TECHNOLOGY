@@ -252,293 +252,340 @@
             }
         }
         setInterval(drawMatrix, 33);
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Video player setup
-const videoSources = Array.from({ length: 20 }, (_, i) => `video${i + 1}.mp4`);
-let currentVideoIndex = 0;
-const cyclicVideo = document.getElementById("cyclicVideo");
-const videoTitle = document.getElementById("videoTitle");
-const videoCounter = document.getElementById("videoCounter");
-const speedButtons = document.querySelectorAll('.speed-panel button');
-const downloadBtn = document.getElementById("downloadBtn");
-const trackingBtn = document.getElementById("trackingBtn");
-const focusModeBtn = document.getElementById("focusModeBtn");
-const ambientGlowBtn = document.getElementById("ambientGlowBtn");
-const videoContainer = document.querySelector('.video-container');
-const ambientBorder = document.getElementById('ambientBorder');
 
-// Feature flags and state variables
-let trackingEnabled = false;      // Bookmark mode
-let focusModeEnabled = false;     // Smart zoom preview mode
-let ambientGlowEnabled = false;   // Dynamic color theme
-let trackerMarkers = [];
-let zoomPreview = null;
-let zoomCenter = null;
-let zoomAnimationFrameId = null;
+        // Video player setup
+        const videoSources = Array.from({ length: 20 }, (_, i) => `video${i + 1}.mp4`);
+        let currentVideoIndex = 0;
+        const cyclicVideo = document.getElementById("cyclicVideo");
+        const videoTitle = document.getElementById("videoTitle");
+        const videoCounter = document.getElementById("videoCounter");
+        const speedButtons = document.querySelectorAll('.speed-panel button');
+        const downloadBtn = document.getElementById("downloadBtn");
+        const trackingBtn = document.getElementById("trackingBtn");
+        const focusModeBtn = document.getElementById("focusModeBtn");
+        const ambientGlowBtn = document.getElementById("ambientGlowBtn");
+        const videoContainer = document.querySelector('.video-container');
+        const ambientBorder = document.getElementById('ambientBorder');
 
-// Update UI with current video data
-function updateUI() {
-    cyclicVideo.src = videoSources[currentVideoIndex];
-    cyclicVideo.load();
-    cyclicVideo.play();
-    
-    videoTitle.textContent = `Video ${currentVideoIndex + 1}`;
-    videoCounter.textContent = currentVideoIndex + 1;
-    
-    // Clear any existing bookmarks when changing videos
-    clearBookmarks();
-}
+        // Feature flags
+        let trackingEnabled = false;
+        let focusModeEnabled = false;
+        let ambientGlowEnabled = false;
+        let trackerMarkers = [];
+        let focusedArea = null;
 
-// Initialize video display
-updateUI();
-
-// Speed control (unchanged)
-speedButtons.forEach(button => {
-    button.addEventListener('click', function() {
-        const speed = parseFloat(this.dataset.speed);
-        cyclicVideo.playbackRate = speed;
-        speedButtons.forEach(btn => btn.classList.remove('active'));
-        this.classList.add('active');
-    });
-});
-
-// Navigation buttons (prev/next)
-document.getElementById("prevVideo").addEventListener("click", function() {
-    currentVideoIndex = (currentVideoIndex - 1 + videoSources.length) % videoSources.length;
-    updateUI();
-});
-document.getElementById("nextVideo").addEventListener("click", function() {
-    currentVideoIndex = (currentVideoIndex + 1) % videoSources.length;
-    updateUI();
-});
-
-// Download button (unchanged)
-downloadBtn.addEventListener("click", function() {
-    const a = document.createElement('a');
-    a.href = videoSources[currentVideoIndex];
-    a.download = `video-${currentVideoIndex + 1}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-});
-
-/*––––––––––––––––––––––––––––––––––
-   NEW BOOKMARK MODE (was "tracking")
-––––––––––––––––––––––––––––––––––*/
-
-// Toggle bookmark mode via the tracking button.
-trackingBtn.addEventListener("click", function() {
-    trackingEnabled = !trackingEnabled;
-    this.classList.toggle('active-button');
-    
-    // Change cursor to indicate bookmark mode if enabled.
-    videoContainer.style.cursor = trackingEnabled ? 'crosshair' : 'default';
-});
-
-// Helper: Format seconds into mm:ss
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-// Create a bookmark marker at the click position.
-function addBookmark(e) {
-    const containerRect = videoContainer.getBoundingClientRect();
-    const x = e.clientX - containerRect.left;
-    const y = e.clientY - containerRect.top;
-    const bookmarkTime = cyclicVideo.currentTime;
-    
-    const marker = document.createElement('div');
-    marker.className = 'tracker-marker'; // Style this class as desired
-    marker.style.position = 'absolute';
-    marker.style.left = `${x - 10}px`;
-    marker.style.top = `${y - 10}px`;
-    marker.style.width = '20px';
-    marker.style.height = '20px';
-    marker.style.backgroundColor = '#ffcc00';
-    marker.style.borderRadius = '50%';
-    marker.style.display = 'flex';
-    marker.style.alignItems = 'center';
-    marker.style.justifyContent = 'center';
-    marker.style.color = '#000';
-    marker.style.fontSize = '10px';
-    marker.style.cursor = 'pointer';
-    marker.title = `Jump to ${formatTime(bookmarkTime)}`;
-    marker.textContent = formatTime(bookmarkTime);
-    
-    // Clicking the marker jumps to that bookmarked time.
-    marker.addEventListener('click', function(ev) {
-        ev.stopPropagation(); // Prevent conflict with other click events.
-        cyclicVideo.currentTime = bookmarkTime;
-    });
-    
-    videoContainer.appendChild(marker);
-    trackerMarkers.push(marker);
-}
-
-// Clear all bookmark markers.
-function clearBookmarks() {
-    trackerMarkers.forEach(marker => {
-        if (marker.parentNode) {
-            marker.parentNode.removeChild(marker);
-        }
-    });
-    trackerMarkers = [];
-}
-
-/*––––––––––––––––––––––––––––––––––
-   NEW FOCUS MODE: SMART ZOOM PREVIEW
-––––––––––––––––––––––––––––––––––*/
-
-// Toggle smart zoom preview mode via the focus mode button.
-focusModeBtn.addEventListener("click", function() {
-    focusModeEnabled = !focusModeEnabled;
-    this.classList.toggle('active-button');
-    
-    if (!focusModeEnabled && zoomPreview) {
-        videoContainer.removeChild(zoomPreview);
-        zoomPreview = null;
-        zoomCenter = null;
-        cancelAnimationFrame(zoomAnimationFrameId);
-    }
-});
-
-// When focus mode is active, a click creates (or updates) a zoom preview.
-function createZoomPreview(e) {
-    const videoRect = cyclicVideo.getBoundingClientRect();
-    const x = e.clientX - videoRect.left;
-    const y = e.clientY - videoRect.top;
-    zoomCenter = { x, y };
-    
-    if (!zoomPreview) {
-        zoomPreview = document.createElement('canvas');
-        zoomPreview.width = 200;
-        zoomPreview.height = 200;
-        zoomPreview.style.position = 'absolute';
-        zoomPreview.style.right = '10px';
-        zoomPreview.style.top = '10px';
-        zoomPreview.style.border = '2px solid #fff';
-        zoomPreview.style.zIndex = 1000;
-        videoContainer.appendChild(zoomPreview);
-    }
-    updateZoomPreview();
-}
-
-// Continuously update the zoom preview with the zoomed region.
-function updateZoomPreview() {
-    if (!focusModeEnabled || !zoomPreview || !zoomCenter) return;
-    const ctx = zoomPreview.getContext('2d');
-    const zoomFactor = 2; // Adjust zoom level here.
-    const previewWidth = zoomPreview.width / zoomFactor;
-    const previewHeight = zoomPreview.height / zoomFactor;
-    
-    const videoRect = cyclicVideo.getBoundingClientRect();
-    const scaleX = cyclicVideo.videoWidth / videoRect.width;
-    const scaleY = cyclicVideo.videoHeight / videoRect.height;
-    
-    let sx = (zoomCenter.x * scaleX) - (previewWidth / 2);
-    let sy = (zoomCenter.y * scaleY) - (previewHeight / 2);
-    sx = Math.max(0, Math.min(cyclicVideo.videoWidth - previewWidth, sx));
-    sy = Math.max(0, Math.min(cyclicVideo.videoHeight - previewHeight, sy));
-    
-    try {
-        ctx.drawImage(cyclicVideo, sx, sy, previewWidth, previewHeight, 0, 0, zoomPreview.width, zoomPreview.height);
-    } catch (error) {
-        console.error("Error updating zoom preview:", error);
-    }
-    zoomAnimationFrameId = requestAnimationFrame(updateZoomPreview);
-}
-
-/*––––––––––––––––––––––––––––––––––
-   Combine video click events
-––––––––––––––––––––––––––––––––––*/
-
-// When the video is clicked, decide which mode should react.
-cyclicVideo.addEventListener("click", function(e) {
-    if (focusModeEnabled) {
-        createZoomPreview(e);
-    } else if (trackingEnabled) {
-        addBookmark(e);
-    }
-});
-
-/*––––––––––––––––––––––––––––––––––
-   NEW AMBIENT GLOW: DYNAMIC COLOR THEME
-––––––––––––––––––––––––––––––––––*/
-
-// Toggle dynamic color theme via the ambient glow button.
-ambientGlowBtn.addEventListener("click", function() {
-    ambientGlowEnabled = !ambientGlowEnabled;
-    this.classList.toggle('active-button');
-    
-    if (ambientGlowEnabled) {
-        setupDynamicColorTheme();
-    } else {
-        // Reset to default glow if turned off.
-        ambientBorder.style.boxShadow = 'inset 0 0 30px rgba(0, 255, 255, 0.5)';
-    }
-});
-
-// Analyze a low–res snapshot of the video and update the UI’s glow.
-function setupDynamicColorTheme() {
-    if (!ambientGlowEnabled) return;
-    
-    const offscreenCanvas = document.createElement('canvas');
-    const offCtx = offscreenCanvas.getContext('2d');
-    offscreenCanvas.width = 50;  
-    offscreenCanvas.height = 50;
-    
-    function updateDynamicTheme() {
-        if (!ambientGlowEnabled) return;
-        
-        try {
-            offCtx.drawImage(cyclicVideo, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-            const imageData = offCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-            const data = imageData.data;
-            let totalR = 0, totalG = 0, totalB = 0;
-            const numPixels = data.length / 4;
+        // Update UI with current video data
+        function updateUI() {
+            // Update video source and title
+            cyclicVideo.src = videoSources[currentVideoIndex];
+            cyclicVideo.load();
+            cyclicVideo.play();
             
-            for (let i = 0; i < data.length; i += 4) {
-                totalR += data[i];
-                totalG += data[i + 1];
-                totalB += data[i + 2];
+            videoTitle.textContent = `Video ${currentVideoIndex + 1}`;
+            videoCounter.textContent = currentVideoIndex + 1;
+            
+            // Clear tracking markers when changing videos
+            clearTrackingMarkers();
+        }
+
+        // Initialize
+        updateUI();
+        
+        // Speed control
+        speedButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const speed = parseFloat(this.dataset.speed);
+                cyclicVideo.playbackRate = speed;
+                
+                // Update active button
+                speedButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Navigation buttons
+        document.getElementById("prevVideo").addEventListener("click", function() {
+            currentVideoIndex = (currentVideoIndex - 1 + videoSources.length) % videoSources.length;
+            updateUI();
+        });
+
+        document.getElementById("nextVideo").addEventListener("click", function() {
+            currentVideoIndex = (currentVideoIndex + 1) % videoSources.length;
+            updateUI();
+        });
+
+        // Download button
+        downloadBtn.addEventListener("click", function() {
+            const a = document.createElement('a');
+            a.href = videoSources[currentVideoIndex];
+            a.download = `video-${currentVideoIndex + 1}.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
+        // Scene Tracking
+        trackingBtn.addEventListener("click", function() {
+            trackingEnabled = !trackingEnabled;
+            this.classList.toggle('active-button');
+            
+            if (trackingEnabled) {
+                generateTrackingMarkers();
+            } else {
+                clearTrackingMarkers();
+            }
+        });
+
+        function generateTrackingMarkers() {
+            clearTrackingMarkers();
+            
+            // Generate 3-5 random markers
+            const numMarkers = Math.floor(Math.random() * 3) + 3;
+            const videoRect = cyclicVideo.getBoundingClientRect();
+            
+            for (let i = 0; i < numMarkers; i++) {
+                const marker = document.createElement('div');
+                marker.className = 'tracker-marker';
+                
+                // Random position within video bounds
+                const x = Math.random() * (videoRect.width - 30) + 15;
+                const y = Math.random() * (videoRect.height - 30) + 15;
+                
+                marker.style.left = `${x}px`;
+                marker.style.top = `${y}px`;
+                
+                // Add click handler
+                marker.addEventListener('click', function() {
+                    this.style.backgroundColor = '#ff00ff';
+                    setTimeout(() => {
+                        this.style.backgroundColor = 'rgba(0, 255, 255, 0.7)';
+                    }, 300);
+                });
+                
+                videoContainer.appendChild(marker);
+                trackerMarkers.push(marker);
+                
+                // Animate markers
+                animateMarker(marker);
+            }
+        }
+
+        function animateMarker(marker) {
+            let posX = parseFloat(marker.style.left);
+            let posY = parseFloat(marker.style.top);
+            let dirX = Math.random() * 2 - 1;
+            let dirY = Math.random() * 2 - 1;
+            const speed = 0.5;
+            
+            function moveMarker() {
+                if (!trackingEnabled) return;
+                
+                const videoRect = cyclicVideo.getBoundingClientRect();
+                posX += dirX * speed;
+                posY += dirY * speed;
+                
+                // Bounce off edges
+                if (posX < 15 || posX > videoRect.width - 15) {
+                    dirX *= -1;
+                    posX = Math.max(15, Math.min(videoRect.width - 15, posX));
+                }
+                
+                if (posY < 15 || posY > videoRect.height - 15) {
+                    dirY *= -1;
+                    posY = Math.max(15, Math.min(videoRect.height - 15, posY));
+                }
+                
+                marker.style.left = `${posX}px`;
+                marker.style.top = `${posY}px`;
+                
+                requestAnimationFrame(moveMarker);
             }
             
-            const avgR = Math.round(totalR / numPixels);
-            const avgG = Math.round(totalG / numPixels);
-            const avgB = Math.round(totalB / numPixels);
-            
-            // Update the ambient border’s glow and border color based on the average color.
-            ambientBorder.style.boxShadow = `inset 0 0 30px rgba(${avgR}, ${avgG}, ${avgB}, 0.7)`;
-            ambientBorder.style.borderColor = `rgb(${avgR}, ${avgG}, ${avgB})`;
-        } catch (e) {
-            console.error("Error updating dynamic color theme", e);
+            moveMarker();
         }
-        requestAnimationFrame(updateDynamicTheme);
-    }
-    updateDynamicTheme();
-}
 
-// Back button functionality (if needed)
-function goBack() {
-    window.history.back();
-}
+        function clearTrackingMarkers() {
+            trackerMarkers.forEach(marker => {
+                if (marker.parentNode) {
+                    marker.parentNode.removeChild(marker);
+                }
+            });
+            trackerMarkers = [];
+        }
 
-// Optional: Handle window resize for bookmarks (or any re–layout needs)
-window.addEventListener('resize', function() {
-    // You might want to clear bookmarks or adjust positions here.
-    // For now, we leave them as is.
-});
+        // Precision Focus Mode
+        focusModeBtn.addEventListener("click", function() {
+            focusModeEnabled = !focusModeEnabled;
+            this.classList.toggle('active-button');
+            
+            if (!focusModeEnabled && focusedArea) {
+                videoContainer.removeChild(focusedArea);
+                focusedArea = null;
+            }
+        });
 
-// Initialize ambient glow when the video plays.
-cyclicVideo.addEventListener('play', function() {
-    if (ambientGlowEnabled) {
-        setupDynamicColorTheme();
-    }
-});
+        cyclicVideo.addEventListener("click", function(e) {
+            if (!focusModeEnabled) return;
+            
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Remove existing focus area
+            if (focusedArea) {
+                videoContainer.removeChild(focusedArea);
+            }
+            
+            // Create new focus area
+            focusedArea = document.createElement('div');
+            focusedArea.className = 'focused-area';
+            
+            const size = 80;
+            focusedArea.style.width = `${size}px`;
+            focusedArea.style.height = `${size}px`;
+            focusedArea.style.left = `${x - size/2}px`;
+            focusedArea.style.top = `${y - size/2}px`;
+            
+            videoContainer.appendChild(focusedArea);
+            
+            // Animate focus effect
+            animateFocusEffect(focusedArea);
+        });
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////
-    
+        function animateFocusEffect(element) {
+            let opacity = 1;
+            let size = 80;
+            
+            function animate() {
+                if (!focusModeEnabled || !element.parentNode) return;
+                
+                opacity -= 0.01;
+                size += 0.5;
+                
+                if (opacity <= 0) {
+                    videoContainer.removeChild(element);
+                    focusedArea = null;
+                    return;
+                }
+                
+                element.style.opacity = opacity;
+                element.style.width = `${size}px`;
+                element.style.height = `${size}px`;
+                element.style.left = `${parseFloat(element.style.left) - 0.25}px`;
+                element.style.top = `${parseFloat(element.style.top) - 0.25}px`;
+                
+                requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+
+        // Ambient Edge Glow
+        ambientGlowBtn.addEventListener("click", function() {
+            ambientGlowEnabled = !ambientGlowEnabled;
+            this.classList.toggle('active-button');
+            
+            if (ambientGlowEnabled) {
+                setupAmbientGlow();
+            } else {
+                ambientBorder.style.boxShadow = 'inset 0 0 30px rgba(0, 255, 255, 0.5)';
+            }
+        });
+
+        function setupAmbientGlow() {
+            if (!ambientGlowEnabled) return;
+            
+            const videoWidth = cyclicVideo.videoWidth;
+            const videoHeight = cyclicVideo.videoHeight;
+            
+            // Create offscreen canvas for color analysis
+            const offscreenCanvas = document.createElement('canvas');
+            const offCtx = offscreenCanvas.getContext('2d');
+            offscreenCanvas.width = 50;  // Small size for performance
+            offscreenCanvas.height = 50;
+            
+            function updateAmbientGlow() {
+                if (!ambientGlowEnabled) return;
+                
+                try {
+                    // Draw current video frame to canvas
+                    offCtx.drawImage(cyclicVideo, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                    
+                    // Get pixel data from the edges of the video
+                    const edgePixels = [];
+                    
+                    // Sample from top, right, bottom, and left edges
+                    const imageData = offCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                    const data = imageData.data;
+                    
+                    for (let i = 0; i < offscreenCanvas.width; i++) {
+                        // Top edge
+                        let idx = (i + 0 * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                        
+                        // Bottom edge
+                        idx = (i + (offscreenCanvas.height - 1) * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    }
+                    
+                    for (let i = 0; i < offscreenCanvas.height; i++) {
+                        // Left edge
+                        let idx = (0 + i * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                        
+                        // Right edge
+                        idx = ((offscreenCanvas.width - 1) + i * offscreenCanvas.width) * 4;
+                        edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    }
+                    
+                    // Calculate average color
+                    let totalR = 0, totalG = 0, totalB = 0;
+                    edgePixels.forEach(pixel => {
+                        totalR += pixel[0];
+                        totalG += pixel[1];
+                        totalB += pixel[2];
+                    });
+                    
+                    const avgR = Math.round(totalR / edgePixels.length);
+                    const avgG = Math.round(totalG / edgePixels.length);
+                    const avgB = Math.round(totalB / edgePixels.length);
+                    
+                    // Apply color to ambient border
+                    ambientBorder.style.boxShadow = `inset 0 0 30px rgba(${avgR}, ${avgG}, ${avgB}, 0.7)`;
+                } catch (e) {
+                    console.error("Error updating ambient glow", e);
+                }
+                
+                // Request next frame
+                requestAnimationFrame(updateAmbientGlow);
+            }
+            
+            updateAmbientGlow();
+        }
+
+        // Back button function
+        function goBack() {
+            window.history.back();
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Reposition tracking markers if active
+            if (trackingEnabled) {
+                clearTrackingMarkers();
+                generateTrackingMarkers();
+            }
+        });
+
+        // Initialize video events
+        cyclicVideo.addEventListener('play', function() {
+            if (ambientGlowEnabled) {
+                setupAmbientGlow();
+            }
+        });
+    </script>
 </body>
 </html>
