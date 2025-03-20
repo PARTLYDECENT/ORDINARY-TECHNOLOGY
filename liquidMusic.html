@@ -658,220 +658,57 @@
       ctx.stroke();
     }
 /////////////////////////////////////////////////////////////4///////////////////////////////////////////////////////////////////////
-  function drawGalacticStars(ctx, canvas, dataArray, bufferLength) {
-  // Create a dark space background with slight fade for trailing effect
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+function drawGalacticStars(ctx, canvas, dataArray, bufferLength) {
+  // Create dark background with fade for trail effect
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  // Create spiral galaxy effect
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
-  const time = Date.now() * 0.0001;
-  
-  // Draw spiral arms
-  drawSpiralArms(ctx, centerX, centerY, time, dataArray, bufferLength);
-  
-  // Draw dynamic stars
-  drawDynamicStars(ctx, canvas, dataArray, bufferLength);
-  
-  // Draw central galactic core
-  drawGalacticCore(ctx, centerX, centerY, dataArray, bufferLength);
-  
-  // Draw supernova bursts on beat detection
-  detectBeatAndDrawSupernova(ctx, dataArray, canvas);
-}
-
-function drawSpiralArms(ctx, centerX, centerY, time, dataArray, bufferLength) {
   ctx.globalCompositeOperation = 'lighter';
   
-  // Use audio data to determine spiral intensity
-  const bassValue = getAverageFrequency(dataArray, 0, Math.floor(bufferLength * 0.1));
-  const spiralDensity = Math.max(300, bassValue * 800);
-  
-  for (let i = 0; i < spiralDensity; i++) {
-    // Create logarithmic spiral
-    const angle = 0.1 * i + time * (1 + (i % 5) * 0.1);
-    const radius = 5 + 0.3 * i;
-    const x = centerX + radius * Math.cos(angle) * 2;
-    const y = centerY + radius * Math.sin(angle);
-    
-    if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) continue;
-    
-    // Use different frequencies for different spiral arms
-    const dataIndex = Math.floor((i / spiralDensity) * bufferLength);
-    const audioValue = dataArray[dataIndex] / 255;
-    
-    // Color based on position and audio data
-    const hue = (angle * 30 + time * 100) % 360;
-    const saturation = 80 + audioValue * 20;
-    const lightness = 50 + audioValue * 30;
-    
-    ctx.beginPath();
-    const starSize = audioValue * 2 + 0.5;
-    ctx.arc(x, y, starSize, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${0.3 + audioValue * 0.7})`;
-    ctx.fill();
-  }
-}
-
-function drawDynamicStars(ctx, canvas, dataArray, bufferLength) {
-  // Draw individual stars that react to higher frequencies
-  for (let i = 0; i < 200; i++) {
+  // Draw standard stars with enhanced colors
+  for (let i = 0; i < 100; i++) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
+    const dataIndex = Math.floor((i / 100) * bufferLength);
+    const radius = (dataArray[dataIndex] / 255) * 3 + 1;
     
-    // Map each star to a different frequency range, favoring higher frequencies
-    const dataIndex = Math.floor(bufferLength * 0.5 + (i / 200) * (bufferLength * 0.5));
-    const audioValue = dataArray[Math.min(dataIndex, bufferLength - 1)] / 255;
+    // Add color variation based on frequency
+    const hue = (dataIndex / bufferLength) * 360;
+    const brightness = 80 + (dataArray[dataIndex] / 255) * 20;
     
-    // Pulse size with audio
-    const radius = audioValue * 2.5 + 0.5;
-    const flicker = 0.7 + Math.sin(Date.now() * 0.01 * (i % 10)) * 0.3;
-    
-    // Color stars based on position and audio frequency
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(x - canvas.width/2, 2) + 
-      Math.pow(y - canvas.height/2, 2)
-    );
-    
-    const hue = (distanceFromCenter * 0.1 + Date.now() * 0.02) % 360;
-    
-    // Create star glow
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * 2);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 90%, ${audioValue * flicker})`);
-    gradient.addColorStop(0.5, `hsla(${hue}, 80%, 50%, ${audioValue * flicker * 0.5})`);
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 2, 0, Math.PI * 2);
-    ctx.fillStyle = gradient;
-    ctx.fill();
-  }
-}
-
-function drawGalacticCore(ctx, centerX, centerY, dataArray, bufferLength) {
-  // Calculate the average of the first third of frequencies (bass/mid)
-  const coreIntensity = getAverageFrequency(dataArray, 0, Math.floor(bufferLength * 0.3));
-  const coreSize = 20 + coreIntensity * 30;
-  
-  // Create pulsing galactic core
-  const coreGradient = ctx.createRadialGradient(
-    centerX, centerY, 0, 
-    centerX, centerY, coreSize * 2
-  );
-  
-  // Core color evolves over time
-  const time = Date.now() * 0.001;
-  const coreHue = (time * 15) % 360;
-  
-  coreGradient.addColorStop(0, `hsla(${coreHue}, 100%, 90%, ${0.8 + coreIntensity * 0.2})`);
-  coreGradient.addColorStop(0.3, `hsla(${coreHue + 20}, 100%, 70%, ${0.6 * coreIntensity})`);
-  coreGradient.addColorStop(0.7, `hsla(${coreHue + 40}, 90%, 40%, ${0.3 * coreIntensity})`);
-  coreGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, coreSize * 2, 0, Math.PI * 2);
-  ctx.fillStyle = coreGradient;
-  ctx.fill();
-  
-  // Add lens flare effect
-  drawLensFlare(ctx, centerX, centerY, coreIntensity);
-}
-
-function drawLensFlare(ctx, x, y, intensity) {
-  // Draw lens flare rays
-  ctx.save();
-  ctx.translate(x, y);
-  
-  const rayCount = 6;
-  const rayLength = 80 * intensity;
-  
-  ctx.globalAlpha = 0.4 * intensity;
-  
-  for (let i = 0; i < rayCount; i++) {
-    ctx.rotate(Math.PI * 2 / rayCount);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(rayLength, 0);
-    
-    const gradient = ctx.createLinearGradient(0, 0, rayLength, 0);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, `hsla(${hue}, 80%, ${brightness}%, ${dataArray[dataIndex]/255})`);
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 5 * intensity;
-    ctx.stroke();
-  }
-  
-  ctx.restore();
-}
-
-function detectBeatAndDrawSupernova(ctx, dataArray, canvas) {
-  // Simple beat detection focusing on bass frequencies
-  const bassValue = getAverageFrequency(dataArray, 0, 10);
-  
-  // Store last few bass values to detect spikes
-  if (!window.bassHistory) {
-    window.bassHistory = new Array(10).fill(0);
-    window.lastSupernovaTime = 0;
-    window.supernovas = [];
-  }
-  
-  window.bassHistory.push(bassValue);
-  window.bassHistory.shift();
-  
-  const bassAverage = window.bassHistory.reduce((a, b) => a + b, 0) / window.bassHistory.length;
-  
-  // Detect beat by checking if current bass is significantly higher than recent average
-  if (bassValue > bassAverage * 1.5 && Date.now() - window.lastSupernovaTime > 1000) {
-    window.lastSupernovaTime = Date.now();
-    
-    // Create new supernova at random location
-    window.supernovas.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      size: 1,
-      maxSize: 40 + Math.random() * 60,
-      growSpeed: 1 + Math.random() * 2,
-      hue: Math.random() * 360
-    });
-  }
-  
-  // Draw and update existing supernovas
-  for (let i = 0; i < window.supernovas.length; i++) {
-    const nova = window.supernovas[i];
-    
-    // Grow supernova
-    nova.size += nova.growSpeed;
-    
-    // Draw supernova
-    const gradient = ctx.createRadialGradient(
-      nova.x, nova.y, 0,
-      nova.x, nova.y, nova.size
-    );
-    
-    const opacity = Math.max(0, 1 - (nova.size / nova.maxSize));
-    
-    gradient.addColorStop(0, `hsla(${nova.hue}, 100%, 90%, ${opacity})`);
-    gradient.addColorStop(0.4, `hsla(${nova.hue}, 100%, 70%, ${opacity * 0.7})`);
-    gradient.addColorStop(0.7, `hsla(${nova.hue}, 80%, 50%, ${opacity * 0.3})`);
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    
     ctx.beginPath();
-    ctx.arc(nova.x, nova.y, nova.size, 0, Math.PI * 2);
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fillStyle = gradient;
     ctx.fill();
-    
-    // Remove supernova if fully expanded
-    if (nova.size >= nova.maxSize) {
-      window.supernovas.splice(i, 1);
-      i--;
-    }
   }
+  
+  // Add a few larger stars that pulse with bass frequencies
+  const bassValue = getAverageBass(dataArray, 0, Math.floor(bufferLength * 0.1));
+  
+  for (let i = 0; i < 10; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const bassRadius = bassValue * 8 + 2;
+    
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, bassRadius);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${bassValue})`);
+    gradient.addColorStop(0.5, `rgba(200, 220, 255, ${bassValue * 0.6})`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
+    ctx.beginPath();
+    ctx.arc(x, y, bassRadius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+  }
+  
+  ctx.globalCompositeOperation = 'source-over';
 }
 
-// Utility function to get average value from a frequency range
-function getAverageFrequency(dataArray, start, end) {
+// Helper function to get bass level
+function getAverageBass(dataArray, start, end) {
   let sum = 0;
   for (let i = start; i < end; i++) {
     sum += dataArray[i];
