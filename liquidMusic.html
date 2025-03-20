@@ -234,265 +234,676 @@
     <div class="playlist-container" id="playlist" style="display:none;"></div>
   </div>
   <script>
-    // DOM elements
-    const $ = id => document.getElementById(id);
-    const musicPlayer = $('musicPlayer');
-    const playPauseBtn = $('playPause');
-    const canvas = $('visualizer');
-    const ctx = canvas.getContext('2d');
-    const progressBar = $('progressBar');
-    const progressContainer = $('progressContainer');
-    
-    // Background neural network setup
-    const bgCanvas = $('background-canvas');
-    const bgCtx = bgCanvas.getContext('2d');
-    
-    // Set canvas dimensions
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    bgCanvas.width = window.innerWidth;
-    bgCanvas.height = window.innerHeight;
-    
-    // Track list
-    const tracks = [
-      { src: 'track1.wav', title: 'Liquid Dreams' },
-      { src: 'track2.wav', title: 'Neon Flow' },
-      { src: 'track3.wav', title: 'Cosmic Wave' },
-      { src: 'track4.wav', title: 'Digital Sunrise' },
-      { src: 'track5.wav', title: 'Quantum Beat' },
-      { src: 'track6.wav', title: 'Cyberspace Odyssey' },
-      { src: 'track7.wav', title: 'Neural Network' },
-      { src: 'track8.wav', title: 'Binary Echoes' },
-      { src: 'track9.wav', title: 'Virtual Reality' },
-      { src: 'track10.wav', title: 'Holographic Memory' },
-      { src: 'track11.wav', title: 'Singularity' },
-      { src: 'track12.wav', title: 'Electric Dreams' },
-      { src: 'track13.wav', title: 'Synthwave Journey' },
-      { src: 'track14.wav', title: 'Galactic Pulse' },
-      { src: 'track15.wav', title: 'Cyber Dawn' },
-      { src: 'track16.wav', title: 'Ethereal Code' },
-      { src: 'track17.mp3', title: 'Alternatives' },
-      { src: 'track18.wav', title: 'Astral Projection' },
-      { src: 'track19.wav', title: 'Plasma Field' },
-      { src: 'track20.wav', title: 'Quantum Resonance' }
-    ];
-    ///////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DOM elements
+const $ = id => document.getElementById(id);
+const musicPlayer = $('musicPlayer');
+const playPauseBtn = $('playPause');
+const canvas = $('visualizer');
+const ctx = canvas.getContext('2d');
+const progressBar = $('progressBar');
+const progressContainer = $('progressContainer');
 
-////////////////
+// Background neural network setup
+const bgCanvas = $('background-canvas');
+const bgCtx = bgCanvas.getContext('2d');
 
-
-
-// =====================
-// AUDIO VISUALIZER MODULE
-// =====================
-
-/** Core Configuration */
-const VISUALIZER_CONFIG = {
-  NEURON_LAYERS: 5,
-  INITIAL_NEURONS: 80,
-  COLOR_SCHEMES: [
-    { neuron: '#ff4b00', connection: '#00ffd0' },
-    { neuron: '#00ffd0', connection: '#ff4b00' },
-    { neuron: '#ff00ff', connection: '#00ffff' },
-    { neuron: '#ffff00', connection: '#0088ff' }
-  ],
-  FFT_SIZE: 512,
-  NEURON_SIZE_RANGE: [2, 5],
-  PULSE_SPEED_RANGE: [0.01, 0.03]
-};
-
-/** Module State */
-const VisualizerState = (() => {
-  let instance = null;
+// Set canvas dimensions with higher resolution for better quality
+function resizeCanvases() {
+  // Main visualizer - use device pixel ratio for sharper rendering
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx.scale(dpr, dpr);
   
-  return () => {
-    if (!instance) {
-      instance = {
-        currentTrackIndex: 0,
-        currentColorScheme: 0,
-        audioContext: null,
-        analyser: null,
-        source: null,
-        dataArray: null,
-        neurons: [],
-        connections: [],
-        animations: { main: null, bg: null },
-        reactivity: 0
-      };
-    }
-    return instance;
-  };
-})();
-
-// =====================
-// CORE FUNCTIONS
-// =====================
-
-/** Audio System Initialization */
-function initializeAudioSystem(playerElement) {
-  const state = VisualizerState();
-  
-  if (!state.audioContext) {
-    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    state.analyser = state.audioContext.createAnalyser();
-    state.source = state.audioContext.createMediaElementSource(playerElement);
-    
-    state.source.connect(state.analyser);
-    state.analyser.connect(state.audioContext.destination);
-    state.analyser.fftSize = VISUALIZER_CONFIG.FFT_SIZE;
-    
-    const bufferLength = state.analyser.frequencyBinCount;
-    state.dataArray = new Uint8Array(bufferLength);
-  }
+  // Background canvas - full window with pixel ratio
+  bgCanvas.width = window.innerWidth * dpr;
+  bgCanvas.height = window.innerHeight * dpr;
+  bgCtx.scale(dpr, dpr);
 }
 
-/** Neural Network Initialization */
-function createNeuralNetwork(canvas) {
-  const state = VisualizerState();
-  state.neurons = [];
-  state.connections = [];
+// Call resize on init and window resize
+resizeCanvases();
+window.addEventListener('resize', resizeCanvases);
 
-  // Neuron Layer Generation
-  for (let layer = 0; layer < VISUALIZER_CONFIG.NEURON_LAYERS; layer++) {
-    const neuronCount = layer === 0 || layer === VISUALIZER_CONFIG.NEURON_LAYERS - 1 ? 10 : 20;
-    const xPosition = (canvas.width / (VISUALIZER_CONFIG.NEURON_LAYERS - 1)) * layer;
+// Enhanced track list with genre/mood tags for visualization styling
+const tracks = [
+  { src: 'track1.wav', title: 'Liquid Dreams', mood: 'chill', dominantColor: '#00a8ff' },
+  { src: 'track2.wav', title: 'Neon Flow', mood: 'energetic', dominantColor: '#ff2a6d' },
+  { src: 'track3.wav', title: 'Cosmic Wave', mood: 'ambient', dominantColor: '#05d9e8' },
+  { src: 'track4.wav', title: 'Digital Sunrise', mood: 'uplifting', dominantColor: '#ff71ce' },
+  { src: 'track5.wav', title: 'Quantum Beat', mood: 'intense', dominantColor: '#01cdfe' },
+  { src: 'track6.wav', title: 'Cyberspace Odyssey', mood: 'mysterious', dominantColor: '#b967ff' },
+  { src: 'track7.wav', title: 'Neural Network', mood: 'glitch', dominantColor: '#fffb96' },
+  { src: 'track8.wav', title: 'Binary Echoes', mood: 'dark', dominantColor: '#05ffa1' },
+  { src: 'track9.wav', title: 'Virtual Reality', mood: 'dreamy', dominantColor: '#f15bb5' },
+  { src: 'track10.wav', title: 'Holographic Memory', mood: 'nostalgic', dominantColor: '#00bbf9' },
+  { src: 'track11.wav', title: 'Singularity', mood: 'epic', dominantColor: '#9b5de5' },
+  { src: 'track12.wav', title: 'Electric Dreams', mood: 'retro', dominantColor: '#fee440' },
+  { src: 'track13.wav', title: 'Synthwave Journey', mood: 'driving', dominantColor: '#f72585' },
+  { src: 'track14.wav', title: 'Galactic Pulse', mood: 'spacey', dominantColor: '#4cc9f0' },
+  { src: 'track15.wav', title: 'Cyber Dawn', mood: 'hopeful', dominantColor: '#ff9e00' },
+  { src: 'track16.wav', title: 'Ethereal Code', mood: 'floating', dominantColor: '#8338ec' },
+  { src: 'track17.mp3', title: 'Alternatives', mood: 'experimental', dominantColor: '#fb5607' },
+  { src: 'track18.wav', title: 'Astral Projection', mood: 'psychedelic', dominantColor: '#3a86ff' },
+  { src: 'track19.wav', title: 'Plasma Field', mood: 'heavy', dominantColor: '#ff006e' },
+  { src: 'track20.wav', title: 'Quantum Resonance', mood: 'ethereal', dominantColor: '#8ac926' }
+];
 
-    for (let i = 0; i < neuronCount; i++) {
-      const ySpread = layer % 2 === 0 ? 0.6 : 0.8;
-      const yPosition = canvas.height * (0.5 - ySpread/2 + ySpread * (i / (neuronCount - 1)));
-      
-      state.neurons.push({
-        x: xPosition,
-        y: yPosition,
-        layer,
-        size: Math.random() * (VISUALIZER_CONFIG.NEURON_SIZE_RANGE[1] - VISUALIZER_CONFIG.NEURON_SIZE_RANGE[0]) + VISUALIZER_CONFIG.NEURON_SIZE_RANGE[0],
-        pulse: 0,
-        speed: Math.random() * (VISUALIZER_CONFIG.PULSE_SPEED_RANGE[1] - VISUALIZER_CONFIG.PULSE_SPEED_RANGE[0]) + VISUALIZER_CONFIG.PULSE_SPEED_RANGE[0]
-      });
-    }
+// State variables
+let currentTrackIndex = 0;
+let currentVisualizer = 1;
+let animationId = null;
+let bgAnimationId = null;
+let audioContext, analyser, source, dataArray, bufferLength;
+let frequencyData, timeData;
+let bassLevel = 0, midLevel = 0, trebleLevel = 0;
+let particles = [];
+let lastBeat = 0;
+let lastPowerfulBeat = 0;
+
+// Enhanced neural network background state
+const neurons = [];
+const connections = [];
+const neuronCount = 120; // Increased neuron count
+const layerCount = 7; // More layers for complexity
+const colorSchemes = [
+  { 
+    neuron: '#ff4b00', 
+    connection: '#00ffd0',
+    background: 'rgba(10, 11, 22, 0.08)',
+    glow: '#ff4b00'
+  },
+  { 
+    neuron: '#00ffd0', 
+    connection: '#ff4b00',
+    background: 'rgba(10, 15, 20, 0.08)',
+    glow: '#00ffd0'
+  },
+  { 
+    neuron: '#ff00ff', 
+    connection: '#00ffff',
+    background: 'rgba(12, 10, 22, 0.08)',
+    glow: '#ff00ff'
+  },
+  { 
+    neuron: '#ffff00', 
+    connection: '#0088ff',
+    background: 'rgba(10, 13, 18, 0.08)',
+    glow: '#ffff00'
+  },
+  { 
+    neuron: '#f72585', 
+    connection: '#4cc9f0',
+    background: 'rgba(8, 8, 15, 0.08)',
+    glow: '#f72585'
+  },
+  { 
+    neuron: '#7209b7', 
+    connection: '#4cc9f0',
+    background: 'rgba(5, 10, 20, 0.08)',
+    glow: '#7209b7'
+  },
+  { 
+    neuron: '#3a86ff', 
+    connection: '#ff006e',
+    background: 'rgba(8, 10, 25, 0.08)',
+    glow: '#3a86ff'
   }
+];
+let currentColorScheme = 0;
+let reactivityFactor = 0;
+let lightningEffects = [];
 
-  // Connection System
-  state.neurons.forEach((neuron, index) => {
-    if (neuron.layer < VISUALIZER_CONFIG.NEURON_LAYERS - 1) {
-      const nextLayer = state.neurons.filter(n => n.layer === neuron.layer + 1);
-      nextLayer.forEach((target, targetIndex) => {
-        if (targetIndex % 2 === 0) {
-          state.connections.push({
-            from: neuron,
-            to: target,
-            weight: Math.random(),
-            signal: 0
-          });
+// Particle system for foreground visualization
+class Particle {
+  constructor(x, y, baseColor) {
+    this.x = x;
+    this.y = y;
+    this.size = Math.random() * 5 + 2;
+    this.baseColor = baseColor || '#ffffff';
+    this.color = this.baseColor;
+    this.speedX = Math.random() * 3 - 1.5;
+    this.speedY = Math.random() * 3 - 1.5;
+    this.intensity = Math.random();
+    this.life = Math.random() * 100 + 50;
+    this.magnetism = Math.random() * 2 - 1;
+    this.rotation = Math.random() * Math.PI * 2;
+    this.rotationSpeed = Math.random() * 0.1 - 0.05;
+    this.shape = Math.random() > 0.7 ? 'circle' : 'polygon';
+    this.sides = Math.floor(Math.random() * 5) + 3;
+    this.opacity = Math.random() * 0.7 + 0.3;
+  }
+  
+  update(intensity) {
+    this.life--;
+    
+    // Apply subtle magnetism to create organic movement
+    if (intensity > 0.6 && Math.random() > 0.95) {
+      this.speedX += (Math.random() - 0.5) * intensity;
+      this.speedY += (Math.random() - 0.5) * intensity;
+    }
+    
+    // Apply central gravity
+    const dx = bgCanvas.width / 2 - this.x;
+    const dy = bgCanvas.height / 2 - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 50) {
+      this.speedX += (dx / dist) * this.magnetism * 0.02 * intensity;
+      this.speedY += (dy / dist) * this.magnetism * 0.02 * intensity;
+    }
+    
+    // Update position
+    this.x += this.speedX;
+    this.y += this.speedY;
+    
+    // Add friction
+    this.speedX *= 0.99;
+    this.speedY *= 0.99;
+    
+    // Add rotation
+    this.rotation += this.rotationSpeed;
+    
+    // Fade out as life decreases
+    this.opacity = (this.life / 150) * 0.8 + 0.2;
+    
+    // Update color based on intensity
+    const r = parseInt(this.baseColor.slice(1, 3), 16);
+    const g = parseInt(this.baseColor.slice(3, 5), 16);
+    const b = parseInt(this.baseColor.slice(5, 7), 16);
+    
+    // Make colors more intense on beats
+    const intensityBoost = Math.min(1, intensity * 1.5);
+    this.color = `rgba(${Math.min(255, r + intensityBoost * 50)}, ${Math.min(255, g + intensityBoost * 50)}, ${Math.min(255, b + intensityBoost * 50)}, ${this.opacity})`;
+    
+    // Increase size on beats
+    this.displaySize = this.size + (intensity * 3);
+  }
+  
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
+    
+    // Add glow effect
+    ctx.shadowBlur = 10 * reactivityFactor;
+    ctx.shadowColor = this.color;
+    
+    ctx.fillStyle = this.color;
+    
+    if (this.shape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(0, 0, this.displaySize, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      for (let i = 0; i < this.sides; i++) {
+        const angle = (Math.PI * 2 / this.sides) * i;
+        const x = Math.cos(angle) * this.displaySize;
+        const y = Math.sin(angle) * this.displaySize;
+        
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
         }
-      });
-    }
-  });
-}
-
-// =====================
-// RENDERING SYSTEM
-// =====================
-
-/** Main Visualization Loop */
-function renderNeuralBackground(canvas, ctx) {
-  const state = VisualizerState();
-  if (!state.audioContext) return;
-
-  // Update animation frame
-  state.animations.bg = requestAnimationFrame(() => renderNeuralBackground(canvas, ctx));
-
-  // Process audio data
-  state.analyser.getByteFrequencyData(state.dataArray);
-  state.reactivity = state.dataArray.reduce((a, b) => a + b, 0) / (state.dataArray.length * 255);
-
-  // Clear canvas with fade effect
-  ctx.fillStyle = 'rgba(10, 11, 12, 0.1)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Render components
-  renderNeurons(ctx, canvas);
-  renderConnections(ctx);
-  updateColorScheme();
-}
-
-/** Neuron Rendering Subsystem */
-function renderNeurons(ctx) {
-  const state = VisualizerState();
-  const colors = VISUALIZER_CONFIG.COLOR_SCHEMES[state.currentColorScheme];
-
-  state.neurons.forEach((neuron, index) => {
-    const frequencyIndex = Math.floor(index / state.neurons.length * state.dataArray.length);
-    neuron.pulse = (state.dataArray[frequencyIndex] / 255) * 3 * state.reactivity;
-
-    ctx.fillStyle = colors.neuron;
-    ctx.beginPath();
-    ctx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse, 0, Math.PI * 2);
-    ctx.fill();
-  });
-}
-
-/** Connection Rendering Subsystem */
-function renderConnections(ctx) {
-  const state = VisualizerState();
-  const colors = VISUALIZER_CONFIG.COLOR_SCHEMES[state.currentColorScheme];
-
-  state.connections.forEach(conn => {
-    const dx = conn.to.x - conn.from.x;
-    const dy = conn.to.y - conn.from.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < ctx.canvas.width / 2) {
-      conn.signal = (conn.signal + state.reactivity * 0.05) % 1;
-      const [signalX, signalY] = [
-        conn.from.x + dx * conn.signal,
-        conn.from.y + dy * conn.signal
-      ];
-
-      // Draw connection line
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
-      ctx.beginPath();
-      ctx.moveTo(conn.from.x, conn.from.y);
-      ctx.lineTo(conn.to.x, conn.to.y);
-      ctx.stroke();
-
-      // Draw signal pulse
-      ctx.fillStyle = colors.connection;
-      ctx.beginPath();
-      ctx.arc(signalX, signalY, 2 * state.reactivity + 1, 0, Math.PI * 2);
+      }
+      ctx.closePath();
       ctx.fill();
     }
-  });
-}
-
-// =====================
-// UTILITY FUNCTIONS
-// =====================
-
-function updateColorScheme() {
-  const state = VisualizerState();
-  if (Math.random() < 0.001 + state.reactivity * 0.01) {
-    state.currentColorScheme = (state.currentColorScheme + 1) % VISUALIZER_CONFIG.COLOR_SCHEMES.length;
+    
+    ctx.restore();
   }
 }
 
-function formatPlaybackTime(seconds) {
-  return `${Math.floor(secon
-
-
-
-
-
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
+// Lightning effect for powerful beats
+class Lightning {
+  constructor(x, y, color, intensity) {
+    this.startX = x;
+    this.startY = y;
+    this.endX = Math.random() * bgCanvas.width;
+    this.endY = Math.random() * bgCanvas.height;
+    this.segments = Math.floor(Math.random() * 5) + 3;
+    this.color = color;
+    this.intensity = intensity;
+    this.life = 10;
+    this.branches = [];
     
+    // Create random branches
+    if (intensity > 0.7 && Math.random() > 0.5) {
+      const branchCount = Math.floor(Math.random() * 3) + 1;
+      for (let i = 0; i < branchCount; i++) {
+        this.branches.push({
+          startPoint: Math.random(),
+          angle: (Math.random() * Math.PI/2) - Math.PI/4,
+          length: Math.random() * 0.7 + 0.3,
+          segments: Math.floor(Math.random() * 3) + 2
+        });
+      }
+    }
+  }
+  
+  update() {
+    this.life--;
+  }
+  
+  draw(ctx) {
+    const opacity = this.life / 10;
+    
+    // Calculate path points
+    const points = [{x: this.startX, y: this.startY}];
+    
+    const dx = this.endX - this.startX;
+    const dy = this.endY - this.startY;
+    
+    for (let i = 1; i < this.segments; i++) {
+      const ratio = i / this.segments;
+      const randFactor = (1 - ratio) * 100 * this.intensity;
+      points.push({
+        x: this.startX + dx * ratio + (Math.random() - 0.5) * randFactor,
+        y: this.startY + dy * ratio + (Math.random() - 0.5) * randFactor
+      });
+    }
+    
+    points.push({x: this.endX, y: this.endY});
+    
+    // Draw main lightning bolt
+    ctx.strokeStyle = `rgba(${this.color}, ${opacity})`;
+    ctx.lineWidth = 2 + this.intensity * 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = `rgba(${this.color}, ${opacity})`;
+    
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    
+    ctx.stroke();
+    
+    // Draw branches
+    this.branches.forEach(branch => {
+      const branchStartIndex = Math.floor(branch.startPoint * (points.length - 1));
+      const branchStart = points[branchStartIndex];
+      
+      const mainDx = points[branchStartIndex + 1].x - branchStart.x;
+      const mainDy = points[branchStartIndex + 1].y - branchStart.y;
+      const mainAngle = Math.atan2(mainDy, mainDx);
+      
+      const branchAngle = mainAngle + branch.angle;
+      const branchLength = Math.sqrt(dx*dx + dy*dy) * branch.length;
+      
+      const branchPoints = [branchStart];
+      const branchEnd = {
+        x: branchStart.x + Math.cos(branchAngle) * branchLength,
+        y: branchStart.y + Math.sin(branchAngle) * branchLength
+      };
+      
+      for (let i = 1; i < branch.segments; i++) {
+        const ratio = i / branch.segments;
+        const randFactor = (1 - ratio) * 50 * this.intensity;
+        const bx = branchStart.x + (branchEnd.x - branchStart.x) * ratio + (Math.random() - 0.5) * randFactor;
+        const by = branchStart.y + (branchEnd.y - branchStart.y) * ratio + (Math.random() - 0.5) * randFactor;
+        branchPoints.push({x: bx, y: by});
+      }
+      
+      branchPoints.push(branchEnd);
+      
+      ctx.beginPath();
+      ctx.moveTo(branchPoints[0].x, branchPoints[0].y);
+      
+      for (let i = 1; i < branchPoints.length; i++) {
+        ctx.lineTo(branchPoints[i].x, branchPoints[i].y);
+      }
+      
+      ctx.lineWidth = 1 + this.intensity * 2;
+      ctx.strokeStyle = `rgba(${this.color}, ${opacity * 0.8})`;
+      ctx.stroke();
+    });
+  }
+}
+
+// Helper functions
+const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+
+// Enhanced audio context initialization with additional analysis bands
+function initAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Create main analyzer
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048; // Higher FFT size for more detailed frequency data
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+    
+    // Create additional analyzers for frequency bands
+    bassAnalyser = audioContext.createBiquadFilter();
+    bassAnalyser.type = 'lowpass';
+    bassAnalyser.frequency.value = 200;
+    
+    midAnalyser = audioContext.createBiquadFilter();
+    midAnalyser.type = 'bandpass';
+    midAnalyser.frequency.value = 1000;
+    midAnalyser.Q.value = 0.5;
+    
+    trebleAnalyser = audioContext.createBiquadFilter();
+    trebleAnalyser.type = 'highpass';
+    trebleAnalyser.frequency.value = 5000;
+    
+    // Create analyzer nodes for each frequency band
+    bassAnalyserNode = audioContext.createAnalyser();
+    bassAnalyserNode.fftSize = 256;
+    bassData = new Uint8Array(bassAnalyserNode.frequencyBinCount);
+    
+    midAnalyserNode = audioContext.createAnalyser();
+    midAnalyserNode.fftSize = 256;
+    midData = new Uint8Array(midAnalyserNode.frequencyBinCount);
+    
+    trebleAnalyserNode = audioContext.createAnalyser();
+    trebleAnalyserNode.fftSize = 256;
+    trebleData = new Uint8Array(trebleAnalyserNode.frequencyBinCount);
+    
+    // Set up audio routing
+    source = audioContext.createMediaElementSource(musicPlayer);
+    
+    // Create time-domain data arrays for waveform visualization
+    timeData = new Uint8Array(analyser.fftSize);
+    frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    
+    // Connect everything together
+    source.connect(analyser);
+    source.connect(bassAnalyser);
+    source.connect(midAnalyser);
+    source.connect(trebleAnalyser);
+    
+    bassAnalyser.connect(bassAnalyserNode);
+    midAnalyser.connect(midAnalyserNode);
+    trebleAnalyser.connect(trebleAnalyserNode);
+    
+    analyser.connect(audioContext.destination);
+    bassAnalyserNode.connect(audioContext.destination);
+    midAnalyserNode.connect(audioContext.destination);
+    trebleAnalyserNode.connect(audioContext.destination);
+  }
+  
+  // Create initial particles
+  createParticlePool();
+}
+
+// Create initial particle pool
+function createParticlePool() {
+  particles = [];
+  const poolSize = 200;
+  const currentTrackColor = tracks[currentTrackIndex].dominantColor;
+  
+  for (let i = 0; i < poolSize; i++) {
+    const x = Math.random() * bgCanvas.width;
+    const y = Math.random() * bgCanvas.height;
+    particles.push(new Particle(x, y, currentTrackColor));
+  }
+}
+
+// Initialize neural network - enhanced with more dynamic architecture
+function initNeuralNetwork() {
+  neurons.length = 0;
+  connections.length = 0;
+  
+  // Create neurons with more interesting structure
+  for (let layer = 0; layer < layerCount; layer++) {
+    // Vary neuron count per layer for more organic look
+    const layerRatio = layer / (layerCount - 1);
+    const neuronsInLayer = layer === 0 || layer === layerCount - 1 
+      ? 10 
+      : Math.floor(15 + Math.sin(layerRatio * Math.PI) * 25);
+    
+    // Position layers with some interesting curve
+    const layerX = bgCanvas.width * (0.1 + 0.8 * layerRatio);
+    
+    for (let i = 0; i < neuronsInLayer; i++) {
+      const ratio = i / (neuronsInLayer - 1);
+      
+      // Create more interesting vertical distribution
+      let ySpread;
+      if (layer === 0 || layer === layerCount - 1) {
+        ySpread = 0.6;
+      } else {
+        // Middle layers have wider spread
+        ySpread = 0.8 + Math.sin(layerRatio * Math.PI) * 0.15;
+      }
+      
+      // Add some randomness to positions
+      const xJitter = (Math.random() - 0.5) * 40;
+      const yJitter = (Math.random() - 0.5) * 40;
+      
+      const y = bgCanvas.height * (0.5 - ySpread/2 + ySpread * ratio) + yJitter;
+      
+      neurons.push({
+        x: layerX + xJitter,
+        y,
+        layer,
+        size: Math.random() * 3 + 2,
+        pulse: 0,
+        speed: Math.random() * 0.02 + 0.01,
+        // Add more properties for visual interest
+        originalX: layerX + xJitter,
+        originalY: y,
+        frequency: Math.random() * 0.05 + 0.01,
+        phase: Math.random() * Math.PI * 2,
+        pulseFactor: Math.random() * 0.5 + 0.5
+      });
+    }
+  }
+  
+  // Create more interesting connection patterns
+  for (let i = 0; i < neurons.length; i++) {
+    const from = neurons[i];
+    
+    // Connect to next layer with more interesting pattern
+    if (from.layer < layerCount - 1) {
+      const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
+      
+      // Calculate how many connections to make (more connected at the center)
+      const centerFactor = 1 - Math.abs((from.y / bgCanvas.height) - 0.5) * 2;
+      const connections = Math.floor(nextLayer.length * (0.2 + centerFactor * 0.4));
+      
+      // Pick random targets from next layer
+      const targets = nextLayer.sort(() => Math.random() - 0.5).slice(0, connections);
+      
+      for (const to of targets) {
+        connections.push({
+          from,
+          to,
+          weight: Math.random(),
+          signal: Math.random(), // Randomize initial signal positions
+          signalSpeed: Math.random() * 0.04 + 0.01,
+          active: Math.random() > 0.2, // Some connections start inactive
+          width: Math.random() * 2 + 0.5
+        });
+      }
+    }
+  }
+}
+
+// Enhanced neural network rendering with more dramatic effects
+function renderNeuralBackground() {
+  if (!audioContext) {
+    bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+    return;
+  }
+  
+  bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+  
+  // Analyze audio
+  analyser.getByteFrequencyData(frequencyData);
+  analyser.getByteTimeDomainData(timeData);
+  bassAnalyserNode.getByteFrequencyData(bassData);
+  midAnalyserNode.getByteFrequencyData(midData);
+  trebleAnalyserNode.getByteFrequencyData(trebleData);
+  
+  // Calculate overall and band-specific reactivity
+  let bassSum = 0, midSum = 0, trebleSum = 0;
+  
+  for (let i = 0; i < bassData.length; i++) {
+    bassSum += bassData[i];
+  }
+  
+  for (let i = 0; i < midData.length; i++) {
+    midSum += midData[i];
+  }
+  
+  for (let i = 0; i < trebleData.length; i++) {
+    trebleSum += trebleData[i];
+  }
+  
+  // Smooth the levels for more pleasing visuals
+  bassLevel = bassLevel * 0.9 + (bassSum / (bassData.length * 255)) * 0.1;
+  midLevel = midLevel * 0.9 + (midSum / (midData.length * 255)) * 0.1;
+  trebleLevel = trebleLevel * 0.9 + (trebleSum / (trebleData.length * 255)) * 0.1;
+  
+  // Overall reactivity factor combines all frequency bands
+  reactivityFactor = (bassLevel * 1.5 + midLevel + trebleLevel * 0.8) / 3.3;
+  
+  // Beat detection for dramatic effects
+  const currentTime = Date.now();
+  const beatThreshold = 0.65;
+  const powerfulBeatThreshold = 0.8;
+  
+  let beatDetected = false;
+  let powerfulBeatDetected = false;
+  
+  // Simple beat detection based on bass/kick
+  if (bassLevel > beatThreshold && currentTime - lastBeat > 300) {
+    beatDetected = true;
+    lastBeat = currentTime;
+    
+    // Add particles on beats
+    addParticlesOnBeat(10 + Math.floor(bassLevel * 20));
+  }
+  
+  // Powerful beat detection
+  if (bassLevel > powerfulBeatThreshold && currentTime - lastPowerfulBeat > 1000) {
+    powerfulBeatDetected = true;
+    lastPowerfulBeat = currentTime;
+    
+    // Add lightning effect on powerful beats
+    const colors = colorSchemes[currentColorScheme];
+    const r = parseInt(colors.glow.slice(1, 3), 16);
+    const g = parseInt(colors.glow.slice(3, 5), 16);
+    const b = parseInt(colors.glow.slice(5, 7), 16);
+    
+    // Create 1-3 lightning bolts
+    const bolts = Math.floor(Math.random() * 3) + 1;
+    for (let i = 0; i < bolts; i++) {
+      const x = Math.random() * bgCanvas.width;
+      const y = Math.random() * (bgCanvas.height / 3);
+      lightningEffects.push(new Lightning(x, y, `${r},${g},${b}`, bassLevel));
+    }
+    
+    // Add a burst of particles
+    addParticleExplosion(bgCanvas.width / 2, bgCanvas.height / 2, 50);
+  }
+  
+  // Apply background with fade effect for trails
+  const colors = colorSchemes[currentColorScheme];
+  bgCtx.fillStyle = colors.background;
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+  
+  // Update and render neurons
+  neurons.forEach((neuron, i) => {
+    // Get frequency data corresponding to neuron
+    const freqIndex = Math.floor(i / neurons.length * frequencyData.length);
+    const freqValue = frequencyData[freqIndex] / 255;
+    
+    // More dynamic neuron movement based on different frequency bands
+    const time = Date.now() / 1000;
+    neuron.pulse = freqValue * 3 * reactivityFactor * neuron.pulseFactor;
+    
+    // Add organic movement
+    const offsetX = Math.sin(time * neuron.frequency + neuron.phase) * 10;
+    const offsetY = Math.cos(time * neuron.frequency * 1.3 + neuron.phase) * 10;
+    
+    // Add reactivity to positioning
+    neuron.x = neuron.originalX + offsetX * reactivityFactor;
+    neuron.y = neuron.originalY + offsetY * reactivityFactor;
+    
+    // Check if this is in a bass-responsive layer
+    const isInBassLayer = neuron.layer === 1 || neuron.layer === layerCount - 2;
+    
+    // Make some neurons pulse more dramatically on beats
+    if (beatDetected && isInBassLayer) {
+      neuron.pulse += bassLevel * 5;
+    }
+    
+    // Draw neuron with glow effect
+    const colors = colorSchemes[currentColorScheme];
+    bgCtx.shadowBlur = 15 * neuron.pulse;
+    bgCtx.shadowColor = colors.glow;
+    bgCtx.fillStyle = colors.neuron;
+    bgCtx.beginPath();
+    bgCtx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse, 0, Math.PI * 2);
+    bgCtx.fill();
+    
+    // Add secondary halo on powerful beats
+    if (powerfulBeatDetected && Math.random() > 0.7) {
+      bgCtx.globalAlpha = 0.7 * bassLevel;
+      bgCtx.beginPath();
+      bgCtx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse + 10, 0, Math.PI * 2);
+      bgCtx.fill();
+      bgCtx.globalAlpha = 1.0;
+    }
+  });
+  
+  // Reset shadow settings
+  bgCtx.shadowBlur = 0;
+  
+  // Draw connections with enhanced signals
+  connections.forEach(conn => {
+    // Skip some connections based on activity
+    if (!conn.active && Math.random() > 0.01 * reactivityFactor) return;
+    
+    const dx = conn.to.x - conn.from.x;
+    const dy = conn.to.y - conn.from.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Only draw if reasonable distance
+    if (distance < bgCanvas.width / 1.5) {
+      // Update signal position based on audio reactivity
+      conn.signal = (conn.signal + conn.signalSpeed * (1 + reactivityFactor)) % 1;
+      
+      // Calculate signal position
+      const signalX = conn.from.x + dx * conn.signal;
+      const signalY = conn.from.y + dy * conn.signal;
+      
+      // Draw connection line with thickness based on weight and reactivity
+      const lineWidth = conn.width * (1 + reactivityFactor);
+      bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1 * reactivityFactor})`;
+      bgCtx.lineWidth = lineWidth;
+      bgCtx.beginPath();
+      bgCtx.moveTo(conn.from.x, conn.from.y);
+      bgCtx.lineTo(conn.to.x, conn.to.y);
+      bgCtx.stroke();
+      
+      // Draw signal pulse with glow
+      const colors = colorSchemes[currentColorScheme];
+      bgCtx.shadowBlur = 10 * reactivityFactor;
+      bgCtx.shadowColor = colors.connection;
+      bgCtx.fillStyle = colors.connection;
+      
+      // Signal size responds to beat
+      const signalSize = (2 * reactivityFactor + 1) * (beatDetected ? 2 : 1);
+      
+      bgCtx.beginPath();
+      bgCtx.arc(signalX, signalY, signalSize, 0, Math.PI * 2);
+      bgCtx.fill();
+      
+      // Reset shadow
+      bgCtx.shadowBlur
     // Track management
     function loadTrack(index) {
       index = (index + tracks.length) % tracks.length;
