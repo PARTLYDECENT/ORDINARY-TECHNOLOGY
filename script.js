@@ -20,14 +20,23 @@ const warpSound = new Audio('https://partlydecent.github.io/ORDINARY-TECHNOLOGY/
 warpSound.load();
 
 // WebGL initialization 
-let gl;
-const webglCanvas = document.getElementById('webglCanvas');
-webglCanvas.width = window.innerWidth;
-webglCanvas.height = window.innerHeight;
-gl = webglCanvas.getContext('webgl');
+function initWebGL() {
+  const webglCanvas = document.getElementById('webglCanvas');
+  if (!webglCanvas) {
+    console.error('WebGL canvas not found');
+    return null;
+  }
 
-if (!gl) {
-  console.log("WebGL not supported in this browser. Fallback visuals will be used.");
+  webglCanvas.width = window.innerWidth;
+  webglCanvas.height = window.innerHeight;
+  
+  const gl = webglCanvas.getContext('webgl');
+  if (!gl) {
+    console.log("WebGL not supported in this browser. Fallback visuals will be used.");
+    return null;
+  }
+
+  return { gl, canvas: webglCanvas };
 }
 
 // Vertex shader source
@@ -38,22 +47,27 @@ const vertexShaderSource = `
   }
 `;
 
-// Fragment shader source - advanced multi-phase animation
+// Default fragment shader source with basic fallback
 let fragmentShaderSource = `
   precision highp float;
   uniform float u_time;
   
-  // [Rest of the fragment shader code from the original script]
-  // ... (The long fragment shader code remains the same as in the original HTML)
+  void main() {
+    vec2 uv = gl_FragCoord.xy / vec2(400.0, 300.0);
+    gl_FragColor = vec4(uv.x, uv.y, 0.5 + 0.5 * sin(u_time), 1.0);
+  }
 `;
 
 // WebGL utility functions
 function createShader(gl, type, source) {
+  if (!gl) return null;
+
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
+  
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+    console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
     gl.deleteShader(shader);
     return null;
   }
@@ -61,10 +75,13 @@ function createShader(gl, type, source) {
 }
 
 function createProgram(gl, vertexShader, fragmentShader) {
+  if (!gl || !vertexShader || !fragmentShader) return null;
+
   const program = gl.createProgram();
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
   gl.linkProgram(program);
+  
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     console.error('Program link error:', gl.getProgramInfoLog(program));
     gl.deleteProgram(program);
@@ -73,15 +90,30 @@ function createProgram(gl, vertexShader, fragmentShader) {
   return program;
 }
 
-// Initialize WebGL shaders
-if (gl) {
+// Main WebGL setup and rendering
+function setupWebGLRendering() {
+  const webglContext = initWebGL();
+  if (!webglContext) return;
+
+  const { gl, canvas } = webglContext;
+
   const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-  let program = createProgram(gl, vertexShader, fragmentShader);
+  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+  
+  if (!vertexShader || !fragmentShader) {
+    console.error('Failed to create shaders');
+    return;
+  }
+
+  const program = createProgram(gl, vertexShader, fragmentShader);
+  if (!program) {
+    console.error('Failed to create WebGL program');
+    return;
+  }
 
   // Set up attribute and uniform locations
-  let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-  let timeUniformLocation = gl.getUniformLocation(program, "u_time");
+  const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+  const timeUniformLocation = gl.getUniformLocation(program, "u_time");
 
   // Create geometry
   const positionBuffer = gl.createBuffer();
@@ -97,7 +129,7 @@ if (gl) {
   // Render loop
   let time = 0;
   function render() {
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -112,17 +144,19 @@ if (gl) {
     requestAnimationFrame(render);
   }
   render();
-  
-  // Function to update shader dynamically
+
+  // Shader update function
   window.updateShader = function(newShaderCode) {
     try {
       const newFragmentShaderSource = `
         precision highp float;
         uniform float u_time;
+        
         void main() {
           ${newShaderCode}
         }
       `;
+      
       const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
       if (!newFragmentShader) return;
 
@@ -132,48 +166,29 @@ if (gl) {
         return;
       }
 
-      gl.deleteShader(fragmentShader);
       gl.deleteProgram(program);
+      gl.deleteShader(fragmentShader);
 
-      fragmentShader = newFragmentShader;
+      // Update references
+      fragmentShaderSource = newFragmentShaderSource;
       program = newProgram;
-
-      positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-      timeUniformLocation = gl.getUniformLocation(program, "u_time");
     } catch (e) {
       console.error('Shader update error:', e);
     }
   };
-  
+
   // Handle window resize
   window.addEventListener('resize', function() {
-    webglCanvas.width = window.innerWidth;
-    webglCanvas.height = window.innerHeight;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
   });
 }
 
-// Navigation functions
-function navigateToGame() {
-  animateButtonAndNavigate('.play-button', 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/game.html');
-}
+// Call WebGL setup on page load
+document.addEventListener('DOMContentLoaded', setupWebGLRendering);
 
-function navigateToVideoPlayer() {
-  animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/videoPlayer.html');
-}
-
-function navigateToLiquidMusic() {
-  animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/liquidMusic.html');
-}
-
-function navigateToDimension88() {
-  animateButtonAndNavigate(document.querySelectorAll('.play-button')[3], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/dimension88.html');
-}
-
-function navigateToAI() {
-  animateButtonAndNavigate('.ai-button', 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/ai.html');
-}
-
+// Navigation functions with button animation
 function animateButtonAndNavigate(selector, url) {
   try {
     const button = typeof selector === 'string' ? document.querySelector(selector) : selector;
@@ -199,6 +214,27 @@ function animateButtonAndNavigate(selector, url) {
     console.error('Navigation error:', e);
     window.location.href = url;
   }
+}
+
+// Navigation wrapper functions
+function navigateToGame() {
+  animateButtonAndNavigate('.play-button', 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/game.html');
+}
+
+function navigateToVideoPlayer() {
+  animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/videoPlayer.html');
+}
+
+function navigateToLiquidMusic() {
+  animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/liquidMusic.html');
+}
+
+function navigateToDimension88() {
+  animateButtonAndNavigate(document.querySelectorAll('.play-button')[3], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/dimension88.html');
+}
+
+function navigateToAI() {
+  animateButtonAndNavigate('.ai-button', 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/ai.html');
 }
 
 // Console input handling
@@ -232,7 +268,7 @@ function handleConsoleInput(event) {
     } else if (easterEggs[input]) {
       window.location.href = 'https://partlydecent.github.io/GAMEHUBORDINARY/' + easterEggs[input];
     } else {
-      // More modern notification
+      // Modern notification
       const notification = document.createElement('div');
       notification.style.position = 'fixed';
       notification.style.bottom = '5rem';
