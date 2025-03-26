@@ -316,62 +316,52 @@
     const warpSound = new Audio('https://partlydecent.github.io/ORDINARY-TECHNOLOGY/warp_sound.mp3');
     warpSound.load();
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	  ///////////////////////////////////////////////////SHADER////////////////////////////////////////////////
-	  
-	  
-	  
-	  
-// WebGL setup - same but with additional buffer for post-processing
+// WebGL setup
 const webglCanvas = document.getElementById('webglCanvas');
 webglCanvas.width = window.innerWidth;
 webglCanvas.height = window.innerHeight;
-const gl = webglCanvas.getContext('webgl', { antialias: false });
+const gl = webglCanvas.getContext('webgl');
 
 if (!gl) {
   console.log("WebGL not supported in this browser. Fallback visuals will be used.");
 }
 
-// Vertex shader source - enhanced with texture coordinates
+// Vertex shader source
 const vertexShaderSource = `
   attribute vec4 a_position;
-  varying vec2 v_texCoord;
   void main() {
     gl_Position = a_position;
-    v_texCoord = a_position.xy * 0.5 + 0.5; // For post-processing
   }
 `;
 
-// Fragment shader source - DOUBLE the effects with more phases and layers
+// Fragment shader source - advanced multi-phase animation
 let fragmentShaderSource = `
   precision highp float;
   uniform float u_time;
-  uniform vec2 u_resolution;
-  varying vec2 v_texCoord;
   
-  // Enhanced noise functions with more dimensions
-  float hash(float n) { return fract(sin(n) * 43758.5453); }
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-  
-  // Improved noise with 3D support
-  float noise(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    f = f*f*(3.0-2.0*f);
-    
-    float n = i.x + i.y*57.0 + 113.0*i.z;
-    return mix(mix(mix( hash(n+0.0), hash(n+1.0),f.x),
-                   mix( hash(n+57.0), hash(n+58.0),f.x),f.y),
-               mix(mix( hash(n+113.0), hash(n+114.0),f.x),
-                   mix( hash(n+170.0), hash(n+171.0),f.x),f.y),f.z);
+  // Noise functions
+  float hash(float n) {
+    return fract(sin(n) * 43758.5453);
   }
   
-  // More complex fractal noise
-  float fbm(vec3 p) {
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n = i.x + i.y * 57.0;
+    return mix(
+      mix(hash(n), hash(n + 1.0), f.x),
+      mix(hash(n + 57.0), hash(n + 58.0), f.x),
+      f.y
+    );
+  }
+  
+  // Fractal noise
+  float fbm(vec2 p) {
     float sum = 0.0;
     float amp = 1.0;
     float freq = 1.0;
-    for(int i = 0; i < 6; i++) { // Increased from 4 to 6 layers
+    for(int i = 0; i < 4; i++) {
       sum += noise(p * freq) * amp;
       amp *= 0.5;
       freq *= 2.0;
@@ -379,410 +369,170 @@ let fragmentShaderSource = `
     return sum;
   }
   
-  // New: Ridged multifractal for more interesting terrain
-  float ridgedMF(vec3 p) {
-    float sum = 0.0;
-    float freq = 1.0;
-    float amp = 0.5;
-    float prev = 1.0;
-    
-    for(int i=0; i<5; i++) {
-      float n = abs(noise(p * freq));
-      n = 1.0 - n;
-      n *= n * prev;
-      prev = n;
-      sum += n * amp;
-      freq *= 2.0;
-      amp *= 0.5;
-    }
-    return sum;
-  }
-  
-  // New: Domain warping for more organic patterns
-  vec3 domainWarp(vec3 p) {
-    vec3 q = vec3(
-      fbm(p + vec3(0.0, 0.0, u_time * 0.1)),
-      fbm(p + vec3(5.2, 1.3, u_time * 0.1)),
-      fbm(p + vec3(0.0, 0.0, u_time * 0.1))
-    );
-    
-    vec3 r = vec3(
-      fbm(p + 4.0 * q + vec3(1.7, 9.2, u_time * 0.2)),
-      fbm(p + 4.0 * q + vec3(8.3, 2.8, u_time * 0.2)),
-      fbm(p + 4.0 * q + vec3(0.0, 0.0, u_time * 0.2))
-    );
-    
-    return r;
-  }
-  
-  // New: Color palette generator
-  vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d) {
-    return a + b * cos(6.28318 * (c * t + d));
-  }
-  
   void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.y, u_resolution.x);
-    uv *= 1.0 + 0.1 * sin(u_time * 0.5); // Subtle pulsing zoom
+    vec2 resolution = vec2(800.0, 600.0);
+    vec2 uv = gl_FragCoord.xy / resolution;
+    vec2 center = vec2(0.5, 0.5);
+    uv = uv * 2.0 - 1.0;
+    uv.x *= resolution.x / resolution.y;
     
-    // Animation phase (now with 8 phases instead of 4)
-    float phase = mod(u_time * 0.1, 8.0);
+    // Animation phase (cycles through different effects)
+    float phase = mod(u_time * 0.1, 4.0);
     
-    // Expanded color palette
+    // Colors - avoiding pink
     vec3 blue = vec3(0.0, 0.3, 0.8);
     vec3 teal = vec3(0.0, 0.7, 0.7);
     vec3 green = vec3(0.0, 0.8, 0.4);
     vec3 purple = vec3(0.4, 0.0, 0.8);
     vec3 gold = vec3(0.8, 0.7, 0.0);
-    vec3 red = vec3(0.8, 0.1, 0.1);
-    vec3 cyan = vec3(0.0, 0.9, 0.9);
-    vec3 magenta = vec3(0.8, 0.0, 0.5);
     
-    // Initialize color with background gradient
-    vec3 color = mix(blue * 0.2, purple * 0.1, length(uv) * 0.5);
+    // Initialize color
+    vec3 color = vec3(0.0);
     
-    // New: Add global domain warping
-    vec3 warpedUV = domainWarp(vec3(uv * 3.0, u_time * 0.1));
-    vec2 distortedUV = uv + warpedUV.xy * 0.1;
-    
-    // Phase 0: Enhanced grid effect with depth
+    // Phase 0: Initial grid effect
     if (phase < 1.0) {
+      // Create cyberpunk grid effect
       float z = 0.1 / (0.1 - uv.y * 0.05 * sin(u_time * 0.2));
-      vec2 warp = distortedUV * z;
+      vec2 warp = uv * z;
       
-      // Grid with more detail
-      vec2 grid = abs(fract(warp * 10.0) - 0.5); // Increased from 5.0 to 10.0
-      float line = smoothstep(0.03, 0.04, min(grid.x, grid.y)) * 0.7; // Sharper lines
+      // Create grid pattern
+      vec2 grid = abs(fract(warp * 5.0) - 0.5);
+      float line = smoothstep(0.05, 0.06, min(grid.x, grid.y)) * 0.5;
       
-      // Depth with noise
-      float depth = fract(z * 0.1 + u_time * 0.1 + fbm(vec3(warp, u_time * 0.1)));
+      // Create depth planes
+      float depth = fract(z * 0.1 + u_time * 0.1);
       
-      // More complex color mixing
+      // Apply colors based on position and time
       color = mix(
-        mix(purple, teal, sin(u_time * 0.1 + warp.x) * 0.5 + 0.5),
-        mix(blue, cyan, cos(u_time * 0.3 + warp.y) * 0.5 + 0.5), 
-        sin(length(warp) * 2.0 - u_time) * 0.5 + 0.5
+        mix(purple, teal, sin(u_time * 0.1) * 0.5 + 0.5),
+        blue, 
+        sin(length(warp) - u_time * 0.5) * 0.5 + 0.5
       );
       
       // Add grid with depth effect
-      color = mix(color * 0.1, color, line * depth * 2.0); // Stronger effect
-      
-      // Add pulsing energy lines
-      float energy = smoothstep(0.4, 0.41, abs(sin(warp.x * 20.0 + u_time * 2.0)));
-      color += cyan * energy * 0.3;
+      color = mix(color * 0.2, color, line * depth);
       
       // Transition effect
       if (phase > 0.8) {
-        float t = (phase - 0.8) * 5.0;
-        float circles = smoothstep(0.3, 0.31, abs(length(uv) - mix(2.0, 0.5, t)));
-        color = mix(color, mix(blue, magenta, t), circles * t);
+        // Begin transition to next phase
+        float t = (phase - 0.8) * 5.0; // Scale 0.8-1.0 to 0-1
+        float circles = smoothstep(0.3, 0.31, 
+            abs(length(uv) - mix(2.0, 0.5, t)));
+        color = mix(color, blue, circles * t);
       }
     }
-    // Phase 1: Supercharged circular wave effect
+    // Phase 1: Circular wave effect
     else if (phase < 2.0) {
-      float dist = length(distortedUV);
-      float rings = sin(dist * 30.0 - u_time * 3.0) * 0.5 + 0.5; // More rings
-      rings *= smoothstep(1.5, 0.3, dist); // Sharper falloff
+      // Create circular wave effect
+      float dist = length(uv);
+      float rings = sin(dist * 15.0 - u_time * 2.0) * 0.5 + 0.5;
+      rings *= smoothstep(1.5, 0.5, dist);
       
-      // More complex wave distortion
-      float wave = sin(distortedUV.y * 40.0 + u_time) * 0.1;
-      wave += sin(distortedUV.x * 25.0 + u_time * 1.5) * 0.05;
-      distortedUV.x += wave;
+      // Wave distortion
+      float wave = sin(uv.y * 20.0 + u_time) * 0.05;
+      uv.x += wave;
       
-      // Apply multiple layers of noise
-      float n = fbm(vec3(distortedUV * 5.0, u_time * 0.3));
-      n += fbm(vec3(distortedUV * 10.0, u_time * 0.1)) * 0.5;
+      // Apply fractal noise
+      float n = fbm(uv * 3.0 + u_time * 0.2);
       
-      // Use palette for more interesting colors
-      vec3 pal = palette(dist * 2.0 - u_time * 0.1, 
-                        vec3(0.5, 0.5, 0.5), 
-                        vec3(0.5, 0.5, 0.5), 
-                        vec3(1.0, 1.0, 1.0), 
-                        vec3(0.0, 0.33, 0.67));
-      
+      // Mix colors based on rings and noise
       color = mix(
-        mix(blue * 2.0, teal * 1.5, rings),
-        pal,
-        0.5 + 0.5 * sin(u_time)
+        mix(blue, teal, rings),
+        mix(green, gold, n),
+        0.5 + 0.5 * sin(u_time * 0.5)
       );
       
-      // Add glow
-      color += pow(rings, 3.0) * gold * 0.5;
+      color = mix(color * 0.2, color, rings + n * 0.5);
       
       // Transition effect
       if (phase > 1.8) {
         float t = (phase - 1.8) * 5.0;
-        float cells = fract(distortedUV.x * 15.0 * t) * fract(distortedUV.y * 15.0 * t);
-        color = mix(color, green * 1.5, pow(cells, 3.0) * t);
+        float cells = fract(uv.x * 10.0 * t);
+        cells *= fract(uv.y * 10.0 * t);
+        color = mix(color, green, cells * t);
       }
     }
-    // Phase 2: Hexagonal electric storm
+    // Phase 2: Electric pulse effect
     else if (phase < 3.0) {
-      // Hexagonal grid with more detail
+      // Create hexagonal grid
       vec2 r = vec2(1.0, 1.73);
       vec2 h = r * 0.5;
-      vec2 a = mod(distortedUV, r) - h;
-      vec2 b = mod(distortedUV - h, r) - h;
+      vec2 a = mod(uv, r) - h;
+      vec2 b = mod(uv - h, r) - h;
       vec2 gv = length(a) < length(b) ? a : b;
       
-      // More intense electric pulse
-      float pulse = sin(u_time * 5.0) * 0.5 + 0.5;
-      float electric = sin(length(gv) * 40.0 - u_time * 5.0);
-      electric = smoothstep(0.7, 0.9, abs(electric)) * pulse;
+      // Electric pulse
+      float pulse = sin(u_time * 3.0) * 0.5 + 0.5;
+      float electric = sin(length(gv) * 20.0 - u_time * 3.0);
+      electric = smoothstep(0.0, 0.1, abs(electric));
       
-      // Add secondary pulse
-      float electric2 = cos(length(gv) * 25.0 + u_time * 3.0);
-      electric2 = smoothstep(0.6, 0.8, abs(electric2)) * (1.0 - pulse);
+      // Noise distortion
+      float distortion = fbm(uv * 2.0 + vec2(u_time * 0.1, 0.0));
       
-      // More complex noise distortion
-      float distortion = ridgedMF(vec3(distortedUV * 4.0, u_time * 0.2));
-      
-      // Color with energy gradient
+      // Color
       vec3 baseColor = mix(teal, green, distortion);
-      vec3 glowColor = mix(magenta, cyan, pulse);
-      vec3 glowColor2 = mix(red, gold, pulse);
+      vec3 glowColor = mix(blue, purple, pulse);
       
-      // Apply effects
-      color = mix(baseColor * 0.1, glowColor, electric * 2.0);
-      color = mix(color, glowColor2, electric2 * 1.5);
+      // Apply effect
+      color = mix(baseColor * 0.2, glowColor, electric * pulse);
       
-      // Add hexagonal grid lines
-      float hexLine = 1.0 - smoothstep(0.02, 0.03, length(gv));
-      color += mix(baseColor, glowColor, 0.7) * hexLine * 0.3;
+      // Add additional details
+      float detail = abs(sin(uv.x * 20.0 + u_time)) * abs(sin(uv.y * 20.0 - u_time));
+      color += glowColor * detail * 0.1;
       
       // Transition effect
       if (phase > 2.8) {
         float t = (phase - 2.8) * 5.0;
-        float vortex = atan(distortedUV.y, distortedUV.x) / (3.14159 * 2.0) + 0.5;
-        vortex = fract(vortex * 8.0 + t * u_time * 0.5);
-        color = mix(color, purple * 1.5, pow(vortex, 2.0) * t);
+        float vortex = atan(uv.y, uv.x) / (3.14159 * 2.0) + 0.5;
+        vortex = fract(vortex * 5.0 + t * u_time);
+        color = mix(color, purple, vortex * t);
       }
     }
-    // Phase 3: Cosmic vortex with stars
-    else if (phase < 4.0) {
-      // Enhanced vortex effect
-      float angle = atan(distortedUV.y, distortedUV.x);
-      float radius = length(distortedUV);
+    // Phase 3: Vortex effect
+    else {
+      // Create vortex effect
+      float angle = atan(uv.y, uv.x);
+      float radius = length(uv);
+      float spiral = sin(angle * 5.0 + radius * 5.0 - u_time * 2.0);
       
-      // More complex spiral
-      float spiral = sin(angle * 8.0 + radius * 10.0 - u_time * 3.0);
-      spiral += sin(angle * 3.0 + radius * 20.0 + u_time * 2.0) * 0.5;
+      // Dynamic distortion
+      radius += sin(angle * 8.0) * 0.1;
       
-      // Dynamic distortion with noise
-      radius += sin(angle * 10.0) * 0.2;
-      radius += fbm(vec3(angle * 2.0, radius * 3.0, u_time * 0.1)) * 0.1;
-      
-      // More bands with variation
-      float bands = fract(radius * 8.0 - u_time * 0.7);
-      bands = smoothstep(0.0, 0.1, bands) * smoothstep(1.0, 0.9, bands);
-      bands += smoothstep(0.3, 0.31, fract(radius * 5.0 - u_time * 0.3)) * 0.5;
-      
-      // Add starfield
-      vec2 starUV = distortedUV * 10.0;
-      float star = pow(hash(floor(starUV.x) + hash(floor(starUV.y))), 50.0);
-      star *= smoothstep(0.9, 1.0, sin(u_time + starUV.x * 3.14159) * sin(u_time + starUV.y * 3.14159));
-      
-      // Color with nebula effect
-      vec3 deepColor = mix(purple * 0.5, blue * 0.7, sin(radius * 15.0) * 0.5 + 0.5);
-      vec3 brightColor = mix(gold * 1.5, cyan, cos(angle * 5.0) * 0.5 + 0.5);
-      
-      // Final color mixing
-      color = mix(deepColor, brightColor, bands * 1.5);
-      color += gold * spiral * 0.2;
-      color += vec3(1.0) * star * 2.0;
-      
-      // Transition effect
-      if (phase > 3.8) {
-        float t = (phase - 3.8) * 5.0;
-        float grid = step(0.9, fract(distortedUV.x * 15.0 * t)) * 
-                    step(0.9, fract(distortedUV.y * 15.0 * t));
-        color = mix(color, blue * 1.5, pow(grid, 2.0) * t);
-      }
-    }
-    // NEW PHASE 4: Plasma rivers
-    else if (phase < 5.0) {
-      vec2 p = distortedUV * 2.0;
-      
-      // Create flowing plasma
-      float v1 = sin(p.x * 5.0 + u_time);
-      float v2 = sin(p.y * 3.0 + u_time * 1.3);
-      float v3 = sin(p.x * p.y * 0.5 + u_time * 0.7);
-      float v4 = length(p) * 0.7;
-      
-      float plasma = sin(v1 + v2 + v3 + v4);
+      // Create bands
+      float bands = fract(radius * 5.0 - u_time * 0.5);
+      bands = smoothstep(0.0, 0.2, bands) * smoothstep(1.0, 0.8, bands);
       
       // Add turbulence
-      plasma += fbm(vec3(p * 2.0, u_time * 0.2)) * 0.5;
-      
-      // Color mapping
-      vec3 pal = palette(plasma * 0.5 + u_time * 0.1,
-                        vec3(0.5, 0.5, 0.5),
-                        vec3(0.5, 0.5, 0.5),
-                        vec3(1.0, 1.0, 0.5),
-                        vec3(0.8, 0.9, 0.3));
-      
-      color = pal * (0.7 + 0.3 * plasma);
-      
-      // Add energy cores
-      float cores = smoothstep(0.9, 0.91, sin(p.x * 20.0) * sin(p.y * 20.0));
-      color = mix(color, cyan * 2.0, cores * 0.7);
-      
-      // Transition effect
-      if (phase > 4.8) {
-        float t = (phase - 4.8) * 5.0;
-        float scanlines = sin(distortedUV.y * 100.0 * t) * 0.5 + 0.5;
-        color = mix(color, mix(magenta, blue, scanlines), t);
-      }
-    }
-    // NEW PHASE 5: Digital rain
-    else if (phase < 6.0) {
-      // Create columns
-      float column = floor(distortedUV.x * 30.0);
-      float columnPos = fract(distortedUV.x * 30.0);
-      
-      // Create falling digits
-      float speed = hash(column) * 2.0 + 1.0;
-      float yPos = fract(distortedUV.y * 2.0 + u_time * speed);
-      float digit = smoothstep(0.02, 0.03, yPos) * 
-                   smoothstep(0.1, 0.09, yPos) * 
-                   hash(column + floor(distortedUV.y * 2.0 + u_time * speed));
-      
-      // Add glow to digits
-      float glow = digit * (0.5 + 0.5 * sin(u_time * 5.0 + column * 3.14159));
-      
-      // Create grid
-      float gridX = smoothstep(0.05, 0.06, columnPos) * 
-                   smoothstep(0.95, 0.94, columnPos);
-      float gridY = smoothstep(0.95, 0.96, fract(distortedUV.y * 20.0));
+      float turb = fbm(vec2(radius * 5.0, angle * 2.0) + u_time * 0.1);
       
       // Color
-      color = mix(teal * 0.1, teal * 0.3, gridX + gridY);
-      color += green * digit * 0.7;
-      color += cyan * glow * 0.5;
+      vec3 deepColor = mix(purple, blue, sin(radius * 10.0) * 0.5 + 0.5);
+      vec3 brightColor = mix(gold, teal, cos(angle * 3.0) * 0.5 + 0.5);
       
-      // Add background pattern
-      float pattern = sin(distortedUV.x * 50.0) * sin(distortedUV.y * 50.0 + u_time);
-      color += blue * 0.1 * smoothstep(0.9, 0.91, pattern);
+      // Final color mixing
+      color = mix(deepColor, brightColor, bands + turb * 0.5);
+      color += gold * spiral * 0.1;
       
-      // Transition effect
-      if (phase > 5.8) {
-        float t = (phase - 5.8) * 5.0;
-        float fade = smoothstep(0.0, 0.5, t);
-        color = mix(color, gold * fade, t);
-      }
-    }
-    // NEW PHASE 6: Fractal mountains
-    else if (phase < 7.0) {
-      // Create terrain
-      float terrain = ridgedMF(vec3(distortedUV * 3.0, u_time * 0.1));
-      
-      // Add lighting
-      vec2 eps = vec2(0.01, 0.0);
-      float dx = ridgedMF(vec3(distortedUV + eps.xy, u_time * 0.1)) - 
-                 ridgedMF(vec3(distortedUV - eps.xy, u_time * 0.1));
-      float dy = ridgedMF(vec3(distortedUV + eps.yx, u_time * 0.1)) - 
-                 ridgedMF(vec3(distortedUV - eps.yx, u_time * 0.1));
-      vec3 normal = normalize(vec3(dx, dy, 0.1));
-      
-      // Lighting
-      vec3 lightDir = normalize(vec3(0.5, 0.5, 1.0));
-      float diffuse = max(0.0, dot(normal, lightDir));
-      float specular = pow(max(0.0, dot(reflect(-lightDir, normal), vec3(0.0, 0.0, 1.0))), 20.0);
-      
-      // Color mapping
-      float height = terrain * 0.5 + 0.5;
-      vec3 base = mix(blue * 0.3, green * 0.7, smoothstep(0.3, 0.7, height));
-      base = mix(base, gold, smoothstep(0.7, 0.9, height));
-      
-      // Final color
-      color = base * (diffuse * 0.8 + 0.2);
-      color += specular * gold * 0.5;
-      
-      // Add atmospheric haze
-      color = mix(color, blue * 0.5, smoothstep(0.0, 2.0, length(distortedUV)));
-      
-      // Transition effect
-      if (phase > 6.8) {
-        float t = (phase - 6.8) * 5.0;
-        float dissolve = fbm(vec3(distortedUV * 10.0, t * 5.0));
-        color = mix(color, purple * 1.5, smoothstep(t * 0.5, t * 0.5 + 0.2, dissolve));
-      }
-    }
-    // NEW PHASE 7: Quantum foam
-    else {
-      // Create quantum foam effect
-      vec3 p = vec3(distortedUV * 5.0, u_time * 0.2);
-      float foam = 0.0;
-      
-      for (int i = 0; i < 5; i++) {
-        p = abs(p) / dot(p, p) - 0.7;
-        foam += exp(-10.0 * abs(p.x * p.y));
-      }
-      
-      // Add pulsing energy
-      float pulse = sin(u_time * 3.0) * 0.5 + 0.5;
-      foam *= pulse * 2.0;
-      
-      // Color mapping
-      vec3 pal = palette(foam * 0.5 + u_time * 0.1,
-                        vec3(0.5, 0.5, 0.5),
-                        vec3(0.5, 0.5, 0.5),
-                        vec3(1.0, 0.7, 0.4),
-                        vec3(0.0, 0.15, 0.2));
-      
-      color = pal * foam * 2.0;
-      
-      // Add central glow
-      float centerGlow = 0.05 / length(distortedUV);
-      color += cyan * centerGlow * pulse;
-      
-      // Add sparkling particles
-      float sparkle = pow(hash(distortedUV.x + hash(distortedUV.y)), 100.0);
-      color += gold * sparkle * 10.0;
-      
-      // Transition back to phase 0
-      if (phase > 7.8) {
-        float t = (phase - 7.8) * 5.0;
-        float grid = smoothstep(0.0, 0.1, fract(distortedUV.x * 20.0 * t)) * 
-                    smoothstep(0.0, 0.1, fract(distortedUV.y * 20.0 * t));
-        color = mix(color, blue * 1.5, grid * t);
+      // Approaching transition back to phase 0
+      if (phase > 3.8) {
+        float t = (phase - 3.8) * 5.0;
+        float grid = step(0.9, fract(uv.x * 10.0 * t)) * step(0.9, fract(uv.y * 10.0 * t));
+        color = mix(color, blue, grid * t);
       }
     }
     
-    // Enhanced global effects
+    // Add subtle pulse across all phases
+    color += 0.05 * sin(u_time * 2.0 + uv.x * 5.0) * sin(u_time * 2.0 + uv.y * 5.0);
     
-    // Add subtle chromatic aberration
-    float chroma = 0.005 * sin(u_time * 0.5);
-    vec2 offsetR = vec2(chroma, 0.0);
-    vec2 offsetB = vec2(-chroma, 0.0);
-    color.r = mix(color.r, texture2D(u_texture, v_texCoord + offsetR).r, 0.3);
-    color.b = mix(color.b, texture2D(u_texture, v_texCoord + offsetB).b, 0.3);
+    // Add vignette effect
+    float vignette = smoothstep(1.2, 0.5, length(uv));
+    color *= vignette;
     
-    // Add stronger pulse across all phases
-    float globalPulse = 0.1 * sin(u_time * 3.0) + 
-                       0.05 * sin(u_time * 5.0) + 
-                       0.03 * sin(u_time * 7.0);
-    color *= 1.0 + globalPulse;
-    
-    // Enhanced vignette with color
-    float vignette = smoothstep(1.5, 0.3, length(uv));
-    vec3 vignetteColor = mix(purple, blue, sin(u_time * 0.3) * 0.5 + 0.5);
-    color = mix(color * vignette, color, vignette);
-    color = mix(color, vignetteColor, (1.0 - vignette) * 0.2);
-    
-    // Add scanlines
-    float scanlines = sin(gl_FragCoord.y * 1.5) * 0.1 + 0.9;
-    color *= scanlines;
-    
-    // Add film grain
-    float grain = hash(gl_FragCoord.xy + u_time) * 0.05;
-    color += grain;
-    
-    // Final output
     gl_FragColor = vec4(color, 1.0);
   }
 `;
 
-// WebGL utility functions (same as before)
+// WebGL utility functions
 function createShader(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
@@ -808,9 +558,8 @@ function createProgram(gl, vertexShader, fragmentShader) {
   return program;
 }
 
-// Initialize WebGL shaders with post-processing
+// Initialize WebGL shaders
 if (gl) {
-  // Create main program
   const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
   let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
   let program = createProgram(gl, vertexShader, fragmentShader);
@@ -818,7 +567,6 @@ if (gl) {
   // Set up attribute and uniform locations
   let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
   let timeUniformLocation = gl.getUniformLocation(program, "u_time");
-  let resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
   // Create geometry
   const positionBuffer = gl.createBuffer();
@@ -831,23 +579,9 @@ if (gl) {
   ];
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-  // Set up framebuffer for post-processing
-  const fbTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, fbTexture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, webglCanvas.width, webglCanvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  
-  const fb = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbTexture, 0);
-
   // Render loop
   let time = 0;
   function render() {
-    // First pass - render to texture
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -857,17 +591,6 @@ if (gl) {
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
     gl.uniform1f(timeUniformLocation, time);
-    gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    
-    // Second pass - render to screen with post-processing
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    
-    // (In a full implementation, you'd have a separate post-processing shader here)
-    // For now we'll just draw the texture directly
-    gl.bindTexture(gl.TEXTURE_2D, fbTexture);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     
     time += 0.01;
@@ -875,101 +598,103 @@ if (gl) {
   }
   render();
   
-  // Rest of your WebGL code (updateShader, resize handler, etc.)...
+  // Function to update shader dynamically
+  window.updateShader = function(newShaderCode) {
+    try {
+      const newFragmentShaderSource = `
+        precision highp float;
+        uniform float u_time;
+        void main() {
+          ${newShaderCode}
+        }
+      `;
+      const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
+      if (!newFragmentShader) return;
+
+      const newProgram = createProgram(gl, vertexShader, newFragmentShader);
+      if (!newProgram) {
+        gl.deleteShader(newFragmentShader);
+        return;
+      }
+
+      gl.deleteShader(fragmentShader);
+      gl.deleteProgram(program);
+
+      fragmentShader = newFragmentShader;
+      program = newProgram;
+
+      positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+      timeUniformLocation = gl.getUniformLocation(program, "u_time");
+    } catch (e) {
+      console.error('Shader update error:', e);
+    }
+  };
+  
+  // Handle window resize
+  window.addEventListener('resize', function() {
+    webglCanvas.width = window.innerWidth;
+    webglCanvas.height = window.innerHeight;
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  });
 }
 
-// SUPERCHARGED particle system with DOUBLE the effects
+// Enhanced particle system
 function createParticles() {
   const container = document.getElementById('particles');
-  const particleCount = 80; // Double the particles
-  
-  // Add new particle types
-  const particleTypes = [
-    { class: 'particle', size: [1, 5] },
-    { class: 'spark', size: [0.5, 2], speed: 2.0 },
-    { class: 'orb', size: [3, 8], pulse: true }
-  ];
+  const particleCount = 40;
   
   for (let i = 0; i < particleCount; i++) {
-    const type = particleTypes[Math.floor(Math.random() * particleTypes.length)];
     const particle = document.createElement('div');
-    particle.classList.add(type.class);
+    particle.classList.add('particle');
     
-    // Random properties with more variation
-    const size = Math.random() * (type.size[1] - type.size[0]) + type.size[0];
+    // Random positions and sizes
+    const size = Math.random() * 4 + 1;
     const left = Math.random() * 100;
-    const delay = Math.random() * 15;
-    const duration = (type.speed || 1.0) * (Math.random() * 20 + 10);
-    const opacity = Math.random() * 0.8 + 0.2;
-    const blur = Math.random() * 3 + 1;
+    const delay = Math.random() * 10;
+    const duration = Math.random() * 15 + 10;
     
     // Set CSS properties
     particle.style.width = `${size}px`;
     particle.style.height = `${size}px`;
     particle.style.left = `${left}%`;
     particle.style.bottom = `-5px`;
-    particle.style.opacity = opacity;
-    particle.style.filter = `blur(${blur}px)`;
+    particle.style.opacity = Math.random() * 0.6 + 0.1;
     
-    // Expanded color palette with more vibrancy
+    // Random colors - no pink
     const colors = [
-      '#0088FF', '#00FFAA', '#6600FF', '#FF00FF', 
-      '#00FFFF', '#FFAA00', '#FF0066', '#AA00FF',
-      '#00FF88', '#FF6600', '#FFFFFF'
+      'var(--primary)', 
+      'var(--secondary)', 
+      '#0088FF', 
+      '#00FFAA', 
+      '#6600FF', 
+      '#FFFFFF'
     ];
     particle.style.background = colors[Math.floor(Math.random() * colors.length)];
     
-    // Enhanced animations
-    const animations = [];
-    animations.push(`float ${duration}s infinite ${Math.random() > 0.5 ? 'ease-in-out' : 'linear'}`);
-    
-    if (type.pulse || Math.random() > 0.6) {
-      const pulseSpeed = Math.random() * 2 + 1;
-      animations.push(`pulse ${pulseSpeed}s infinite`);
-    }
-    
+    // Enhanced animation with pulses
     if (Math.random() > 0.7) {
-      const driftAmount = Math.random() * 20 + 10;
-      animations.push(`drift ${duration * 2}s infinite alternate`);
-      particle.style.setProperty('--drift-amount', `${driftAmount}px`);
+      particle.style.animation = `float ${duration}s infinite ease-in-out, pulse 3s infinite`;
+    } else {
+      particle.style.animation = `float ${duration}s infinite linear`;
     }
-    
-    particle.style.animation = animations.join(', ');
     particle.style.animationDelay = `${delay}s`;
     
     container.appendChild(particle);
   }
   
-  // Add enhanced CSS animations
+  // Add CSS for pulse animation if not present
   if (!document.getElementById('particleStyles')) {
     const style = document.createElement('style');
     style.id = 'particleStyles';
     style.textContent = `
       @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 0.8; }
-        50% { transform: scale(1.5); opacity: 1; }
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.5); }
       }
       
       @keyframes float {
         from { transform: translateY(0) rotate(0deg); }
         to { transform: translateY(-2000%) rotate(720deg); }
-      }
-      
-      @keyframes drift {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(var(--drift-amount)); }
-      }
-      
-      /* New particle types */
-      .spark {
-        border-radius: 50%;
-        box-shadow: 0 0 5px 1px currentColor;
-      }
-      
-      .orb {
-        border-radius: 50%;
-        background: radial-gradient(circle, currentColor 0%, transparent 70%);
-        box-shadow: 0 0 15px 2px currentColor;
       }
     `;
     document.head.appendChild(style);
@@ -985,9 +710,11 @@ function resetParticles() {
   }
 }
 
-// Initialize particles with faster refresh
+// Initialize particles
 createParticles();
-setInterval(resetParticles, 15000); // Refresh twice as often
+
+// Periodic particle refresh for visual variety
+setInterval(resetParticles, 30000);
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
    
 	  ///SHADER?????????????????????????????????SHADER//////////////////////////////////////////////////SHADER
