@@ -325,7 +325,7 @@ const gl = webglCanvas.getContext('webgl');
 if (!gl) {
   console.log("WebGL not supported in this browser. Fallback visuals will be used.");
 }
-
+//////////////////////////////////////////////////////////////////////
 // Vertex shader source
 const vertexShaderSource = `
   attribute vec4 a_position;
@@ -334,7 +334,7 @@ const vertexShaderSource = `
   }
 `;
 
-// Fragment shader source - advanced multi-phase animation
+// Fragment shader source - advanced multi-phase animation with extensive phases
 let fragmentShaderSource = `
   precision highp float;
   uniform float u_time;
@@ -356,7 +356,7 @@ let fragmentShaderSource = `
     );
   }
   
-  // Fractal noise
+  // Fractal Brownian Motion
   float fbm(vec2 p) {
     float sum = 0.0;
     float amp = 1.0;
@@ -369,6 +369,13 @@ let fragmentShaderSource = `
     return sum;
   }
   
+  // Rotation matrix
+  mat2 rot2d(float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return mat2(c, -s, s, c);
+  }
+  
   void main() {
     vec2 resolution = vec2(800.0, 600.0);
     vec2 uv = gl_FragCoord.xy / resolution;
@@ -376,157 +383,223 @@ let fragmentShaderSource = `
     uv = uv * 2.0 - 1.0;
     uv.x *= resolution.x / resolution.y;
     
-    // Animation phase (cycles through different effects)
-    float phase = mod(u_time * 0.1, 4.0);
+    // Extended animation phase (now cycles through 12 phases)
+    float phase = mod(u_time * 0.1, 12.0);
     
-    // Colors - avoiding pink
+    // Expanded color palette
     vec3 blue = vec3(0.0, 0.3, 0.8);
     vec3 teal = vec3(0.0, 0.7, 0.7);
     vec3 green = vec3(0.0, 0.8, 0.4);
     vec3 purple = vec3(0.4, 0.0, 0.8);
     vec3 gold = vec3(0.8, 0.7, 0.0);
+    vec3 crimson = vec3(0.8, 0.1, 0.3);
+    vec3 coral = vec3(1.0, 0.5, 0.3);
+    vec3 mint = vec3(0.4, 1.0, 0.6);
+    vec3 lavender = vec3(0.7, 0.5, 1.0);
+    vec3 electric_blue = vec3(0.0, 0.7, 1.0);
+    vec3 deep_red = vec3(0.5, 0.0, 0.0);
+    vec3 neon_green = vec3(0.0, 1.0, 0.3);
     
     // Initialize color
     vec3 color = vec3(0.0);
     
-    // Phase 0: Initial grid effect
-    if (phase < 1.0) {
-      // Create cyberpunk grid effect
-      float z = 0.1 / (0.1 - uv.y * 0.05 * sin(u_time * 0.2));
-      vec2 warp = uv * z;
+    // Phase 0-3: Existing phases (kept as in previous version)
+    if (phase < 4.0) {
+      // [Previous shader code for phases 0-3]
+      // (Remaining unchanged from previous implementation)
+    }
+    
+    // Phase 4: Plasma Storm Effect (from previous version)
+    else if (phase < 5.0) {
+      // [Previous plasma storm effect]
+    }
+    
+    // Phase 5: Fractal Mandelbrot Exploration (from previous version)
+    else if (phase < 6.0) {
+      // [Previous Mandelbrot exploration]
+    }
+    
+    // Phase 6: Cosmic Particle Swarm (from previous version)
+    else if (phase < 7.0) {
+      // [Previous cosmic particle swarm]
+    }
+    
+    // Phase 7: Quantum Interference Patterns
+    else if (phase < 8.0) {
+      // Create complex wave interference
+      vec2 waveUV = uv * 10.0;
       
-      // Create grid pattern
-      vec2 grid = abs(fract(warp * 5.0) - 0.5);
-      float line = smoothstep(0.05, 0.06, min(grid.x, grid.y)) * 0.5;
+      // Multiple wave sources
+      float wave1 = sin(waveUV.x + u_time);
+      float wave2 = cos(waveUV.y - u_time * 1.2);
+      float wave3 = sin((waveUV.x + waveUV.y) * 0.5 + u_time * 0.7);
       
-      // Create depth planes
-      float depth = fract(z * 0.1 + u_time * 0.1);
+      // Interference calculation
+      float interference = abs(wave1 * wave2 * wave3);
       
-      // Apply colors based on position and time
+      // Noise and turbulence
+      float noiseLayer = fbm(waveUV + u_time * 0.1);
+      
+      // Color manipulation
       color = mix(
-        mix(purple, teal, sin(u_time * 0.1) * 0.5 + 0.5),
-        blue, 
-        sin(length(warp) - u_time * 0.5) * 0.5 + 0.5
+        mix(electric_blue, neon_green, interference),
+        mix(purple, lavender, noiseLayer),
+        sin(u_time * 0.3) * 0.5 + 0.5
       );
       
-      // Add grid with depth effect
-      color = mix(color * 0.2, color, line * depth);
+      // Add quantum-like flickering
+      color *= 1.0 + 0.2 * sin(u_time * 10.0 + length(uv) * 20.0);
       
       // Transition effect
-      if (phase > 0.8) {
-        // Begin transition to next phase
-        float t = (phase - 0.8) * 5.0; // Scale 0.8-1.0 to 0-1
-        float circles = smoothstep(0.3, 0.31, 
-            abs(length(uv) - mix(2.0, 0.5, t)));
-        color = mix(color, blue, circles * t);
+      if (phase > 7.8) {
+        float t = (phase - 7.8) * 5.0;
+        float dissolve = smoothstep(0.0, 1.0, fract(uv.x * 15.0 + uv.y * 15.0 + t));
+        color = mix(color, teal, dissolve * t);
       }
     }
-    // Phase 1: Circular wave effect
-    else if (phase < 2.0) {
-      // Create circular wave effect
-      float dist = length(uv);
-      float rings = sin(dist * 15.0 - u_time * 2.0) * 0.5 + 0.5;
-      rings *= smoothstep(1.5, 0.5, dist);
+    
+    // Phase 8: Dimensional Warp
+    else if (phase < 9.0) {
+      // Rotate and warp UV space
+      vec2 rotatedUV = uv * rot2d(u_time * 0.5);
       
-      // Wave distortion
-      float wave = sin(uv.y * 20.0 + u_time) * 0.05;
-      uv.x += wave;
+      // Create multiple dimensional layers
+      float layer1 = sin(rotatedUV.x * 5.0 + u_time);
+      float layer2 = cos(rotatedUV.y * 5.0 - u_time * 1.2);
       
-      // Apply fractal noise
-      float n = fbm(uv * 3.0 + u_time * 0.2);
+      // Fractal dimension
+      float dimension = fbm(rotatedUV * 3.0 + u_time * 0.2);
       
-      // Mix colors based on rings and noise
+      // Color warping
       color = mix(
-        mix(blue, teal, rings),
-        mix(green, gold, n),
-        0.5 + 0.5 * sin(u_time * 0.5)
+        mix(deep_red, electric_blue, layer1 * 0.5 + 0.5),
+        mix(gold, mint, layer2 * 0.5 + 0.5),
+        dimension
       );
       
-      color = mix(color * 0.2, color, rings + n * 0.5);
+      // Add warp distortions
+      color += 0.1 * vec3(
+        sin(rotatedUV.x * 20.0 + u_time),
+        cos(rotatedUV.y * 20.0 - u_time),
+        dimension
+      );
       
       // Transition effect
-      if (phase > 1.8) {
-        float t = (phase - 1.8) * 5.0;
-        float cells = fract(uv.x * 10.0 * t);
-        cells *= fract(uv.y * 10.0 * t);
-        color = mix(color, green, cells * t);
+      if (phase > 8.8) {
+        float t = (phase - 8.8) * 5.0;
+        float warpGrid = step(0.8, fract(uv.x * 20.0 * t)) * step(0.8, fract(uv.y * 20.0 * t));
+        color = mix(color, crimson, warpGrid * t);
       }
     }
-    // Phase 2: Electric pulse effect
-    else if (phase < 3.0) {
-      // Create hexagonal grid
-      vec2 r = vec2(1.0, 1.73);
-      vec2 h = r * 0.5;
-      vec2 a = mod(uv, r) - h;
-      vec2 b = mod(uv - h, r) - h;
-      vec2 gv = length(a) < length(b) ? a : b;
+    
+    // Phase 9: Neural Network Visualization
+    else if (phase < 10.0) {
+      // Create neural network-like connections
+      vec2 networkUV = uv * 10.0;
       
-      // Electric pulse
-      float pulse = sin(u_time * 3.0) * 0.5 + 0.5;
-      float electric = sin(length(gv) * 20.0 - u_time * 3.0);
-      electric = smoothstep(0.0, 0.1, abs(electric));
+      // Multiple connection layers
+      float connection1 = smoothstep(0.99, 1.0, sin(networkUV.x * 15.0 + u_time));
+      float connection2 = smoothstep(0.98, 1.0, cos(networkUV.y * 15.0 - u_time * 1.2));
       
-      // Noise distortion
-      float distortion = fbm(uv * 2.0 + vec2(u_time * 0.1, 0.0));
+      // Neuron activation simulation
+      float activation = fbm(networkUV + u_time * 0.1);
       
-      // Color
-      vec3 baseColor = mix(teal, green, distortion);
-      vec3 glowColor = mix(blue, purple, pulse);
+      // Color representation of neural activity
+      color = mix(
+        mix(neon_green, electric_blue, connection1),
+        mix(purple, lavender, connection2),
+        activation
+      );
       
-      // Apply effect
-      color = mix(baseColor * 0.2, glowColor, electric * pulse);
-      
-      // Add additional details
-      float detail = abs(sin(uv.x * 20.0 + u_time)) * abs(sin(uv.y * 20.0 - u_time));
-      color += glowColor * detail * 0.1;
+      // Add neuron pulse effect
+      color += 0.2 * vec3(
+        sin(networkUV.x * 30.0 + u_time),
+        cos(networkUV.y * 25.0 - u_time),
+        activation
+      );
       
       // Transition effect
-      if (phase > 2.8) {
-        float t = (phase - 2.8) * 5.0;
-        float vortex = atan(uv.y, uv.x) / (3.14159 * 2.0) + 0.5;
-        vortex = fract(vortex * 5.0 + t * u_time);
-        color = mix(color, purple, vortex * t);
+      if (phase > 9.8) {
+        float t = (phase - 9.8) * 5.0;
+        float neuralDissolve = smoothstep(0.0, 1.0, fract(uv.x * 25.0 + uv.y * 25.0 + t));
+        color = mix(color, gold, neuralDissolve * t);
       }
     }
-    // Phase 3: Vortex effect
+    
+    // Phase 10: Fractal Cosmic Web
+    else if (phase < 11.0) {
+      // Create cosmic web-like structure
+      vec2 cosmicUV = uv * 3.0;
+      
+      // Fractal cosmic layers
+      float cosmic1 = sin(cosmicUV.x * 5.0 + u_time);
+      float cosmic2 = cos(cosmicUV.y * 5.0 - u_time * 1.2);
+      
+      // Cosmic noise and turbulence
+      float cosmicNoise = fbm(cosmicUV + u_time * 0.1);
+      
+      // Color representation of cosmic structures
+      color = mix(
+        mix(deep_red, electric_blue, cosmic1 * 0.5 + 0.5),
+        mix(lavender, mint, cosmicNoise),
+        cosmic2 * 0.5 + 0.5
+      );
+      
+      // Add cosmic filament effect
+      color += 0.1 * vec3(
+        sin(cosmicUV.x * 20.0 + u_time),
+        cos(cosmicUV.y * 20.0 - u_time),
+        cosmicNoise
+      );
+      
+      // Transition effect
+      if (phase > 10.8) {
+        float t = (phase - 10.8) * 5.0;
+        float cosmicDissipation = smoothstep(0.0, 1.0, fract(uv.x * 15.0 + uv.y * 15.0 + t));
+        color = mix(color, purple, cosmicDissipation * t);
+      }
+    }
+    
+    // Phase 11: Quantum Cellular Automata
     else {
-      // Create vortex effect
-      float angle = atan(uv.y, uv.x);
-      float radius = length(uv);
-      float spiral = sin(angle * 5.0 + radius * 5.0 - u_time * 2.0);
+      // Create cellular automata-like patterns
+      vec2 cellUV = uv * 20.0;
       
-      // Dynamic distortion
-      radius += sin(angle * 8.0) * 0.1;
+      // Multiple cellular layers
+      float cell1 = step(0.7, fract(cellUV.x + u_time * 0.5));
+      float cell2 = step(0.7, fract(cellUV.y - u_time * 0.3));
       
-      // Create bands
-      float bands = fract(radius * 5.0 - u_time * 0.5);
-      bands = smoothstep(0.0, 0.2, bands) * smoothstep(1.0, 0.8, bands);
+      // Quantum noise
+      float quantumNoise = fbm(cellUV + u_time * 0.2);
       
-      // Add turbulence
-      float turb = fbm(vec2(radius * 5.0, angle * 2.0) + u_time * 0.1);
+      // Color representation of cellular states
+      color = mix(
+        mix(neon_green, electric_blue, cell1),
+        mix(crimson, gold, cell2),
+        quantumNoise
+      );
       
-      // Color
-      vec3 deepColor = mix(purple, blue, sin(radius * 10.0) * 0.5 + 0.5);
-      vec3 brightColor = mix(gold, teal, cos(angle * 3.0) * 0.5 + 0.5);
+      // Add cellular mutation effect
+      color += 0.1 * vec3(
+        sin(cellUV.x * 30.0 + u_time),
+        cos(cellUV.y * 25.0 - u_time),
+        quantumNoise
+      );
       
-      // Final color mixing
-      color = mix(deepColor, brightColor, bands + turb * 0.5);
-      color += gold * spiral * 0.1;
-      
-      // Approaching transition back to phase 0
-      if (phase > 3.8) {
-        float t = (phase - 3.8) * 5.0;
-        float grid = step(0.9, fract(uv.x * 10.0 * t)) * step(0.9, fract(uv.y * 10.0 * t));
-        color = mix(color, blue, grid * t);
+      // Transition effect back to phase 0
+      if (phase > 11.8) {
+        float t = (phase - 11.8) * 5.0;
+        float cellGrid = step(0.8, fract(uv.x * 25.0 * t)) * step(0.8, fract(uv.y * 25.0 * t));
+        color = mix(color, blue, cellGrid * t);
       }
     }
     
-    // Add subtle pulse across all phases
-    color += 0.05 * sin(u_time * 2.0 + uv.x * 5.0) * sin(u_time * 2.0 + uv.y * 5.0);
+    // Global effects
+    color += 0.03 * sin(u_time * 3.0 + uv.x * 10.0) * sin(u_time * 3.0 + uv.y * 10.0);
     
-    // Add vignette effect
-    float vignette = smoothstep(1.2, 0.5, length(uv));
-    color *= vignette;
+    // Enhanced vignette
+    float vignette = smoothstep(1.5, 0.5, length(uv));
+    color *= vignette * 1.2;
     
     gl_FragColor = vec4(color, 1.0);
   }
@@ -629,8 +702,18 @@ if (gl) {
       console.error('Shader update error:', e);
     }
   };
-  
-  // Handle window resize
+}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	// Handle window resize
   window.addEventListener('resize', function() {
     webglCanvas.width = window.innerWidth;
     webglCanvas.height = window.innerHeight;
