@@ -37,16 +37,7 @@
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas(); // Initial size setup
 
-  // Vertex Shader: Basic passthrough for fullscreen quad
-  const vertexShaderSource = `
-    attribute vec2 a_position; // Use vec2 since we pass 2D positions
-    void main() {
-      // Output position in clip space (-1 to +1)
-      gl_Position = vec4(a_position, 0.0, 1.0);
-    }
-  `;
-
-// Fragment Shader: Extended to 14 phases (WARNING: High Complexity/Performance Risk)
+// Fragment Shader: Extended to 14 phases (DEBUGGED)
 const fragmentShaderSource = `
   precision highp float;
   uniform float u_time;
@@ -59,8 +50,9 @@ const fragmentShaderSource = `
   const vec3 COLOR_PURPLE = vec3(0.4, 0.0, 0.8);
   const vec3 COLOR_GOLD   = vec3(0.8, 0.7, 0.0);
   const vec3 COLOR_WHITE  = vec3(1.0, 1.0, 1.0);
-  const vec3 COLOR_RED    = vec3(0.9, 0.1, 0.1); // Added Color
-  const vec3 COLOR_CYAN   = vec3(0.1, 0.9, 0.9); // Added Color
+  const vec3 COLOR_RED    = vec3(0.9, 0.1, 0.1);
+  const vec3 COLOR_CYAN   = vec3(0.1, 0.9, 0.9);
+  const vec3 COLOR_BLACK  = vec3(0.0, 0.0, 0.0); // <-- *** FIX: Added COLOR_BLACK ***
   const float PI = 3.14159265359;
 
   // --- Noise Functions (Keep from original) ---
@@ -84,7 +76,7 @@ const fragmentShaderSource = `
     float sum = 0.0;
     float amp = 1.0;
     float freq = 1.0;
-    for(int i = 0; i < 4; i++) { // Keep original 4 octaves for performance
+    for(int i = 0; i < 4; i++) {
       sum += noise(p * freq) * amp;
       amp *= 0.5;
       freq *= 2.0;
@@ -107,7 +99,7 @@ const fragmentShaderSource = `
 
     // --- Phase Calculation (0 to 13.999...) ---
     float totalPhases = 14.0;
-    float cycleSpeed = 0.2; // Adjusts overall speed (14 phases / 70 sec cycle = 0.2)
+    float cycleSpeed = 0.2;
     float phase = mod(u_time * cycleSpeed, totalPhases);
 
     // Initialize color
@@ -131,8 +123,7 @@ const fragmentShaderSource = `
             sin(length(warp) - u_time * 0.5) * 0.5 + 0.5
         );
         color = mix(color * 0.2, color, line * depth);
-        // Transition effect (original)
-        if (phase > 0.8) { // Using original phase value here
+        if (phase > 0.8) {
             float t = (phase - 0.8) * 5.0;
             float circles = smoothstep(0.3, 0.31, abs(length(uv) - mix(2.0, 0.5, t)));
             color = mix(color, COLOR_BLUE, circles * t);
@@ -152,7 +143,6 @@ const fragmentShaderSource = `
             0.5 + 0.5 * sin(u_time * 0.5)
         );
         color = mix(color * 0.2, color, rings + n * 0.5);
-        // Transition effect (original)
         if (phase > 1.8) {
              float t = (phase - 1.8) * 5.0;
              float cells = fract(waved_uv.x * 10.0 * t) * fract(waved_uv.y * 10.0 * t);
@@ -174,7 +164,6 @@ const fragmentShaderSource = `
         color = mix(baseColor * 0.2, glowColor, electric * pulse);
         float detail = abs(sin(uv.x * 20.0 + u_time)) * abs(sin(uv.y * 20.0 - u_time));
         color += glowColor * detail * 0.1;
-        // Transition effect (original)
          if (phase > 2.8) {
             float t = (phase - 2.8) * 5.0;
             float angle = atan(uv.y, uv.x);
@@ -197,7 +186,6 @@ const fragmentShaderSource = `
         vec3 brightColor = mix(COLOR_GOLD, COLOR_TEAL, cos(angle * 3.0) * 0.5 + 0.5);
         color = mix(deepColor, brightColor, bands + turb * 0.3);
         color = mix(color, brightColor, spiral * 0.2);
-        // Transition effect (original)
         if (phase > 3.8) {
            float t = (phase - 3.8) * 5.0;
            float grid_x = smoothstep(0.01, 0.05, abs(fract(uv.x * 10.0 * t + u_time * 0.1) - 0.5));
@@ -220,21 +208,21 @@ const fragmentShaderSource = `
         float angle = atan(uv.y, uv.x) + u_time * 0.5;
         float radius = length(uv);
         float rays = smoothstep(0.0, 0.1, abs(fract(angle / (PI / 4.0)) - 0.5)); // 8 rays
-        color = mix(COLOR_BLACK, COLOR_GOLD, rays * (1.0 - smoothstep(0.8, 1.5, radius)));
+        color = mix(COLOR_BLACK, COLOR_GOLD, rays * (1.0 - smoothstep(0.8, 1.5, radius))); // <-- *** FIX: Used COLOR_BLACK ***
         color += fbm(uv * 3.0 + u_time * 0.1) * 0.2 * COLOR_PURPLE;
     }
     // Phase 6: Digital Rain (Simple)
     else if (phase < 7.0) {
-        vec2 rain_uv = uv * vec2(5.0, 1.0); // Stretch horizontally
+        vec2 rain_uv = uv * vec2(5.0, 1.0);
         rain_uv.y += u_time * 0.5;
-        float rain_val = fract(sin(floor(rain_uv.x) * 13.7 + floor(rain_uv.y) * 9.3) * 437.5); // Random seed per cell
-        float rain_intensity = smoothstep(0.0, 0.1, fract(rain_uv.y)) * smoothstep(1.0, 0.9, fract(rain_uv.y)); // Drop shape
-        if (rain_val > 0.8) { // Only show some drops
+        float rain_val = fract(sin(floor(rain_uv.x) * 13.7 + floor(rain_uv.y) * 9.3) * 437.5);
+        float rain_intensity = smoothstep(0.0, 0.1, fract(rain_uv.y)) * smoothstep(1.0, 0.9, fract(rain_uv.y));
+        if (rain_val > 0.8) {
              color = COLOR_GREEN * rain_intensity;
         } else {
-             color = COLOR_BLACK;
+             color = COLOR_BLACK; // <-- *** FIX: Used COLOR_BLACK ***
         }
-        color += noise(uv * 10.0) * 0.1; // Background noise
+        color += noise(uv * 10.0) * 0.1;
     }
     // Phase 7: Simple Plasma
     else if (phase < 8.0) {
@@ -248,82 +236,78 @@ const fragmentShaderSource = `
     // Phase 8: Scanlines & Color Shift
     else if (phase < 9.0) {
         float scanline = sin(gl_FragCoord.y * 2.0 + u_time * 5.0) * 0.5 + 0.5;
-        scanline = smoothstep(0.4, 0.6, scanline) * 0.8 + 0.2; // Sharpen scanlines
-        vec3 base = fbm(uv * 1.5 + u_time * 0.05) * vec3(0.5, 0.8, 1.0);
-        // Shift colors based on horizontal position
-        color.r = texture2D(u_texture, uv + vec2(0.01 * sin(u_time), 0.0)).r; // Requires a texture uniform! Placeholder logic:
-        color.r = fbm((uv + vec2(0.01 * sin(u_time), 0.0)) * 1.5 + u_time * 0.05) * 0.5;
+        scanline = smoothstep(0.4, 0.6, scanline) * 0.8 + 0.2;
+        //vec3 base = fbm(uv * 1.5 + u_time * 0.05) * vec3(0.5, 0.8, 1.0); // Base color if needed
+
+        // *** FIX: Removed texture2D line ***
+        // color.r = texture2D(u_texture, uv + vec2(0.01 * sin(u_time), 0.0)).r;
+
+        // Use fbm as fallback for color channels simulation
+        color.r = fbm((uv + vec2(0.01 * sin(u_time * 0.9), 0.0)) * 1.5 + u_time * 0.05) * 0.5; // Slightly different timing
         color.g = fbm(uv * 1.5 + u_time * 0.05) * 0.8;
-        color.b = fbm((uv - vec2(0.01 * sin(u_time), 0.0)) * 1.5 + u_time * 0.05) * 1.0;
+        color.b = fbm((uv - vec2(0.01 * sin(u_time * 1.1), 0.0)) * 1.5 + u_time * 0.05) * 1.0; // Slightly different timing
 
         color *= scanline;
     }
      // Phase 9: Truchet Tiles (Simplified)
     else if (phase < 10.0) {
-        vec2 tile_uv = fract(uv * 5.0); // Scale for tiling
+        vec2 tile_uv = fract(uv * 5.0);
         vec2 tile_id = floor(uv * 5.0);
-        float pattern = hash(tile_id.x * 31.7 + tile_id.y * 19.3 + floor(u_time * 2.0)); // Change pattern over time
+        float pattern = hash(tile_id.x * 31.7 + tile_id.y * 19.3 + floor(u_time * 2.0));
 
         float val;
-        if (pattern < 0.5) { // Diagonal pattern 1
+        if (pattern < 0.5) { // Diagonal /
             val = smoothstep(0.48, 0.52, abs(tile_uv.x - tile_uv.y));
-        } else { // Diagonal pattern 2
+        } else { // Diagonal \
             val = smoothstep(0.48, 0.52, abs(tile_uv.x + tile_uv.y - 1.0));
         }
         color = mix(COLOR_CYAN, COLOR_PURPLE, val);
     }
     // Phase 10: Warped Checkerboard
     else if (phase < 11.0) {
-        vec2 warp_uv = uv + fbm(uv * 2.0 + u_time * 0.1) * 0.3; // Warp coordinates
+        vec2 warp_uv = uv + fbm(uv * 2.0 + u_time * 0.1) * 0.3;
         float checker = mod(floor(warp_uv.x * 6.0) + floor(warp_uv.y * 6.0), 2.0);
         color = mix(COLOR_GOLD * 0.8, COLOR_BLUE * 0.6, checker);
     }
     // Phase 11: Simple Glitch Effect
     else if (phase < 12.0) {
-        float glitch_t = fract(u_time * 1.5); // Timing for glitch
-        float glitch_line = hash(floor(uv.y * 10.0 + u_time * 5.0)); // Random line selection
-        float glitch_strength = smoothstep(0.9, 0.95, glitch_line) * (0.5 + 0.5 * sin(glitch_t * PI * 20.0)) * 0.1; // Intensity pulse
+        float glitch_t = fract(u_time * 1.5);
+        float glitch_line = hash(floor(uv.y * 10.0 + u_time * 5.0));
+        float glitch_strength = smoothstep(0.9, 0.95, glitch_line) * (0.5 + 0.5 * sin(glitch_t * PI * 20.0)) * 0.1;
 
-        vec2 offset_uv = uv + vec2(glitch_strength * (hash(uv.y + 0.1) - 0.5) * 2.0, 0.0); // Horizontal offset
+        vec2 offset_uv = uv + vec2(glitch_strength * (hash(uv.y + 0.1) - 0.5) * 2.0, 0.0);
 
-        // Simulate reading offset color (use noise instead of texture)
         float r = fbm(offset_uv * 3.0 + 0.1);
         float g = fbm(offset_uv * 3.0 + 0.2);
         float b = fbm(offset_uv * 3.0 + 0.3);
 
         color = vec3(r, g, b);
-        color = mix(color, COLOR_RED, glitch_strength * 5.0); // Add red tint on strong glitches
+        color = mix(color, COLOR_RED, glitch_strength * 5.0);
     }
     // Phase 12: Expanding Boxes
     else if (phase < 13.0) {
-        float box_t = fract(u_time * 0.4); // Box expansion timing
-        float box_size = box_t * 1.5; // Size expands
-        float box_dist = max(abs(uv.x), abs(uv.y)); // Distance from center in box shape
+        float box_t = fract(u_time * 0.4);
+        float box_size = box_t * 1.5;
+        float box_dist = max(abs(uv.x), abs(uv.y));
         float box_edge = smoothstep(box_size - 0.05, box_size + 0.05, box_dist);
         float box_glow = smoothstep(box_size - 0.1, box_size + 0.1, box_dist);
-        box_glow *= (1.0 - smoothstep(box_size + 0.1, box_size + 0.2, box_dist)); // Make it a band
+        box_glow *= (1.0 - smoothstep(box_size + 0.1, box_size + 0.2, box_dist));
 
-        color = mix(COLOR_TEAL, COLOR_PURPLE, box_edge) * (1.0 - box_edge) * 0.5; // Fill color
-        color += COLOR_WHITE * box_glow * 0.8; // Edge glow
+        color = mix(COLOR_TEAL, COLOR_PURPLE, box_edge) * (1.0 - box_edge) * 0.5;
+        color += COLOR_WHITE * box_glow * 0.8;
     }
     // Phase 13: Fading Noise (Transition back towards start)
     else { // phase < 14.0
-        float fade_n = fbm(uv * (2.0 + 8.0 * (1.0-fract(phase))) + u_time * 0.1); // Noise scales down
-        float fade_amount = 0.5 + 0.5*sin(fract(phase)*PI); // Fade intensity
+        float fade_n = fbm(uv * (2.0 + 8.0 * (1.0-fract(phase))) + u_time * 0.1);
+        float fade_amount = 0.5 + 0.5*sin(fract(phase)*PI);
         color = mix(COLOR_BLUE, COLOR_PURPLE, fade_n);
-        color *= mix(1.0, 0.3, fade_amount); // Fade to darker
+        color *= mix(1.0, 0.3, fade_amount);
     }
 
     // --- Final Global Adjustments ---
-
-    // Subtle global pulse (copied from original)
     color += 0.05 * sin(u_time * 2.0 + uv.x * 5.0) * sin(u_time * 2.0 + uv.y * 5.0);
-
-    // Vignette (copied from original)
     float vignette = smoothstep(1.2, 0.5, length(uv));
     color *= vignette;
-
-    // Clamp color (copied from original)
     color = clamp(color, 0.0, 1.0);
 
     gl_FragColor = vec4(color, 1.0);
