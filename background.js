@@ -185,15 +185,75 @@
   const canvas = document.getElementById('webglCanvas');
   const shaderManager = new ShaderManager(canvas);
 
-  // EXAMPLE SHADER 1 (Your existing complex shader)
-  const complexShader1 = `
-    precision highp float;
-    uniform float u_time;
-    uniform vec2 u_resolution;
+ precision highp float;
 
-    // [Your existing complex fragment shader code goes here]
-    // (paste the entire fragment shader from the previous implementation)
-  `;
+uniform float u_time;
+uniform vec2 u_resolution;
+
+// Madness-inducing noise functions
+float hash(vec2 p) {
+    p = 50.0 * fract(p * 0.3183099 + vec2(0.71, 0.113));
+    return -1.0 + 2.0 * fract(p.x * p.y * (p.x + p.y));
+}
+
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    
+    return mix(mix(hash(i + vec2(0.0, 0.0)), 
+                   hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), 
+                   hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+// Warped reality transformation
+vec3 warpReality(vec2 fragCoord) {
+    vec2 uv = fragCoord / u_resolution.xy;
+    
+    // Recursive distortion layers
+    float timeWarp = u_time * 0.5;
+    
+    // Nightmare-fuel geometric transformations
+    uv += vec2(
+        sin(uv.y * 10.0 + timeWarp) * 0.1 * cos(timeWarp),
+        cos(uv.x * 8.0 + timeWarp) * 0.15 * sin(timeWarp)
+    );
+    
+    // Fractal-like noise mutations
+    float noiseIntensity = noise(uv * 20.0 + timeWarp) * 2.0;
+    
+    // Psychedelic color mutations
+    vec3 color = vec3(
+        abs(sin(uv.x * 5.0 + timeWarp + noiseIntensity)),
+        abs(cos(uv.y * 6.0 - timeWarp * 1.5)),
+        abs(tan(uv.x * uv.y * 4.0 + timeWarp * 2.0))
+    );
+    
+    // Additional reality-breaking effects
+    color *= 1.0 + 0.5 * sin(length(uv - 0.5) * 10.0 + timeWarp);
+    color = pow(color, vec3(1.3 + 0.3 * sin(timeWarp)));
+    
+    // Glitchy edge distortions
+    float glitchIntensity = sin(timeWarp * 3.0) * 0.05;
+    color += glitchIntensity * noise(uv * 100.0);
+    
+    return clamp(color, 0.0, 1.0);
+}
+
+void main() {
+    vec2 fragCoord = gl_FragCoord.xy;
+    vec3 finalColor = warpReality(fragCoord);
+    
+    // Occasional total reality breakdown
+    float breakdown = abs(sin(u_time * 0.2));
+    if (breakdown > 0.95) {
+        finalColor = vec3(1.0) - finalColor;
+    }
+    
+    gl_FragColor = vec4(finalColor, 1.0);
+}
 
   // EXAMPLE SHADER 2 (A different style)
   const complexShader2 = `
