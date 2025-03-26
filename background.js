@@ -37,282 +37,212 @@
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas(); // Initial size setup
 
-// Fragment Shader: Extended to 14 phases (DEBUGGED)
-const fragmentShaderSource = `
-  precision highp float;
-  uniform float u_time;
-  uniform vec2 u_resolution;
-
-  // --- Constants ---
-  const vec3 COLOR_BLUE   = vec3(0.0, 0.3, 0.8);
-  const vec3 COLOR_TEAL   = vec3(0.0, 0.7, 0.7);
-  const vec3 COLOR_GREEN  = vec3(0.0, 0.8, 0.4);
-  const vec3 COLOR_PURPLE = vec3(0.4, 0.0, 0.8);
-  const vec3 COLOR_GOLD   = vec3(0.8, 0.7, 0.0);
-  const vec3 COLOR_WHITE  = vec3(1.0, 1.0, 1.0);
-  const vec3 COLOR_RED    = vec3(0.9, 0.1, 0.1);
-  const vec3 COLOR_CYAN   = vec3(0.1, 0.9, 0.9);
-  const vec3 COLOR_BLACK  = vec3(0.0, 0.0, 0.0); // <-- *** FIX: Added COLOR_BLACK ***
-  const float PI = 3.14159265359;
-
-  // --- Noise Functions (Keep from original) ---
-  float hash(float n) {
-    return fract(sin(n) * 43758.5453);
-  }
-
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float n = i.x + i.y * 57.0;
-    return mix(
-      mix(hash(n), hash(n + 1.0), f.x),
-      mix(hash(n + 57.0), hash(n + 58.0), f.x),
-      f.y
-    );
-  }
-
-  float fbm(vec2 p) {
-    float sum = 0.0;
-    float amp = 1.0;
-    float freq = 1.0;
-    for(int i = 0; i < 4; i++) {
-      sum += noise(p * freq) * amp;
-      amp *= 0.5;
-      freq *= 2.0;
+  // Vertex Shader: Basic passthrough for fullscreen quad
+  const vertexShaderSource = `
+    attribute vec2 a_position; // Use vec2 since we pass 2D positions
+    void main() {
+      // Output position in clip space (-1 to +1)
+      gl_Position = vec4(a_position, 0.0, 1.0);
     }
-    return sum;
-  }
+  `;
 
-  // --- Helpers ---
-  mat2 rotate2d(float angle){
-      return mat2(cos(angle),-sin(angle),
-                  sin(angle),cos(angle));
-  }
+////////////////////////////////////////////////////////////////////////////////////////SHADERSSHADERSHADER 
+////////////////////////////////////////////////////////////////////////////////////////SHADERSSHADERSHADER ////////////////////////////////////////////////////////////////////////////////////////SHADERSSHADERSHADER ////////////////////////////////////////////////////////////////////////////////////////SHADERSSHADERSHADER 
 
-  // --- Main ---
-  void main() {
-    // Consistent UV mapping with aspect correction
-    vec2 uv = gl_FragCoord.xy / u_resolution;
-    uv = uv * 2.0 - 1.0;
-    uv.x *= u_resolution.x / u_resolution.y;
 
-    // --- Phase Calculation (0 to 13.999...) ---
-    float totalPhases = 14.0;
-    float cycleSpeed = 0.2;
-    float phase = mod(u_time * cycleSpeed, totalPhases);
 
-    // Initialize color
-    vec3 color = vec3(0.0);
 
-    // --- Original 4 Phases ---
-    // Phase 0: Initial grid effect
-    if (phase < 1.0) {
-        float y_warp = 0.1 + 0.05 * sin(u_time * 0.2);
-        float warped_y = uv.y * y_warp;
-        if (abs(0.1 - warped_y) < 0.001) warped_y = (0.1 - sign(0.1 - warped_y) * 0.001);
-        float z = 0.1 / (0.1 - warped_y);
-        z = clamp(z, 0.1, 10.0);
-        vec2 warp = uv * z;
-        vec2 grid = abs(fract(warp * 5.0) - 0.5);
-        float line = smoothstep(0.05, 0.06, min(grid.x, grid.y)) * 0.5;
-        float depth = fract(z * 0.1 + u_time * 0.1);
-        color = mix(
-            mix(COLOR_PURPLE, COLOR_TEAL, sin(u_time * 0.1) * 0.5 + 0.5),
-            COLOR_BLUE,
-            sin(length(warp) - u_time * 0.5) * 0.5 + 0.5
-        );
-        color = mix(color * 0.2, color, line * depth);
-        if (phase > 0.8) {
-            float t = (phase - 0.8) * 5.0;
-            float circles = smoothstep(0.3, 0.31, abs(length(uv) - mix(2.0, 0.5, t)));
-            color = mix(color, COLOR_BLUE, circles * t);
-        }
-    }
-    // Phase 1: Circular wave effect
-    else if (phase < 2.0) {
-        float dist = length(uv);
-        float rings = sin(dist * 15.0 - u_time * 2.0) * 0.5 + 0.5;
-        rings *= smoothstep(1.5, 0.5, dist);
-        float wave = sin(uv.y * 20.0 + u_time) * 0.05;
-        vec2 waved_uv = uv + vec2(wave, 0.0);
-        float n = fbm(waved_uv * 3.0 + u_time * 0.2);
-        color = mix(
-            mix(COLOR_BLUE, COLOR_TEAL, rings),
-            mix(COLOR_GREEN, COLOR_GOLD, n),
-            0.5 + 0.5 * sin(u_time * 0.5)
-        );
-        color = mix(color * 0.2, color, rings + n * 0.5);
-        if (phase > 1.8) {
-             float t = (phase - 1.8) * 5.0;
-             float cells = fract(waved_uv.x * 10.0 * t) * fract(waved_uv.y * 10.0 * t);
-             color = mix(color, COLOR_GREEN, cells * t);
-        }
-    }
-    // Phase 2: Electric pulse effect
-    else if (phase < 3.0) {
-        vec2 scaled_uv = uv * 4.0;
-        vec2 r = vec2(1.0, 1.73); vec2 h = r * 0.5;
-        vec2 a = mod(scaled_uv, r) - h; vec2 b = mod(scaled_uv - h, r) - h;
-        vec2 gv = length(a) < length(b) ? a : b;
-        float pulse = sin(u_time * 3.0) * 0.5 + 0.5;
-        float electric = sin(length(gv) * 10.0 - u_time * 3.0);
-        electric = smoothstep(0.0, 0.1, abs(electric));
-        float distortion = fbm(uv * 2.0 + vec2(u_time * 0.1, 0.0));
-        vec3 baseColor = mix(COLOR_TEAL, COLOR_GREEN, distortion);
-        vec3 glowColor = mix(COLOR_BLUE, COLOR_PURPLE, pulse);
-        color = mix(baseColor * 0.2, glowColor, electric * pulse);
-        float detail = abs(sin(uv.x * 20.0 + u_time)) * abs(sin(uv.y * 20.0 - u_time));
-        color += glowColor * detail * 0.1;
-         if (phase > 2.8) {
-            float t = (phase - 2.8) * 5.0;
-            float angle = atan(uv.y, uv.x);
-            float vortex = angle / (2.0 * PI) + 0.5;
-            vortex = fract(vortex * 5.0 + t + u_time * 0.1);
-            color = mix(color, COLOR_PURPLE, vortex * t);
-        }
-    }
-    // Phase 3: Vortex effect
-    else if (phase < 4.0) {
-        float angle = atan(uv.y, uv.x);
-        float radius = length(uv);
-        float spiral_angle = angle * 5.0 + radius * 10.0 - u_time * 2.0;
-        float spiral = sin(spiral_angle) * 0.5 + 0.5;
-        float radius_distorted = radius + sin(angle * 8.0 + u_time * 0.5) * 0.05;
-        float bands = fract(radius_distorted * 5.0 - u_time * 0.5);
-        bands = smoothstep(0.0, 0.2, bands) * smoothstep(1.0, 0.8, bands);
-        float turb = fbm(vec2(radius_distorted * 5.0, angle * 2.0) + u_time * 0.1);
-        vec3 deepColor = mix(COLOR_PURPLE, COLOR_BLUE, sin(radius_distorted * 10.0) * 0.5 + 0.5);
-        vec3 brightColor = mix(COLOR_GOLD, COLOR_TEAL, cos(angle * 3.0) * 0.5 + 0.5);
-        color = mix(deepColor, brightColor, bands + turb * 0.3);
-        color = mix(color, brightColor, spiral * 0.2);
-        if (phase > 3.8) {
-           float t = (phase - 3.8) * 5.0;
-           float grid_x = smoothstep(0.01, 0.05, abs(fract(uv.x * 10.0 * t + u_time * 0.1) - 0.5));
-           float grid_y = smoothstep(0.01, 0.05, abs(fract(uv.y * 10.0 * t + u_time * 0.1) - 0.5));
-           color = mix(color, COLOR_BLUE, max(grid_x, grid_y) * t);
-        }
+
+  // Fragment Shader: The original complex multi-phase shader
+  const fragmentShaderSource = `
+    precision highp float; // Use highp as in the original complex shader
+    uniform float u_time;
+    uniform vec2 u_resolution;
+
+    // --- Start of original complex shader code ---
+    // Noise functions
+    float hash(float n) {
+      return fract(sin(n) * 43758.5453);
     }
 
-    // --- NEW PHASES (4 to 13) --- Simpler effects ---
-
-    // Phase 4: Noise Flow
-    else if (phase < 5.0) {
-        vec2 flow_uv = uv + vec2(u_time * 0.1, u_time * 0.05);
-        float n = fbm(flow_uv * 2.0);
-        color = mix(COLOR_GREEN, COLOR_TEAL, n * 0.5 + 0.5);
-        color *= 0.6 + 0.4 * sin(n * 10.0 + u_time);
-    }
-    // Phase 5: Rotating Rays
-    else if (phase < 6.0) {
-        float angle = atan(uv.y, uv.x) + u_time * 0.5;
-        float radius = length(uv);
-        float rays = smoothstep(0.0, 0.1, abs(fract(angle / (PI / 4.0)) - 0.5)); // 8 rays
-        color = mix(COLOR_BLACK, COLOR_GOLD, rays * (1.0 - smoothstep(0.8, 1.5, radius))); // <-- *** FIX: Used COLOR_BLACK ***
-        color += fbm(uv * 3.0 + u_time * 0.1) * 0.2 * COLOR_PURPLE;
-    }
-    // Phase 6: Digital Rain (Simple)
-    else if (phase < 7.0) {
-        vec2 rain_uv = uv * vec2(5.0, 1.0);
-        rain_uv.y += u_time * 0.5;
-        float rain_val = fract(sin(floor(rain_uv.x) * 13.7 + floor(rain_uv.y) * 9.3) * 437.5);
-        float rain_intensity = smoothstep(0.0, 0.1, fract(rain_uv.y)) * smoothstep(1.0, 0.9, fract(rain_uv.y));
-        if (rain_val > 0.8) {
-             color = COLOR_GREEN * rain_intensity;
-        } else {
-             color = COLOR_BLACK; // <-- *** FIX: Used COLOR_BLACK ***
-        }
-        color += noise(uv * 10.0) * 0.1;
-    }
-    // Phase 7: Simple Plasma
-    else if (phase < 8.0) {
-        float plasma = 0.0;
-        plasma += sin(length(uv + vec2(0.0, sin(u_time * 0.3))) * 8.0 + u_time);
-        plasma += sin(length(uv + vec2(sin(u_time * 0.5), 0.0)) * 10.0 - u_time * 1.2);
-        plasma = plasma * 0.5 + 0.5;
-        color = mix(COLOR_RED, COLOR_BLUE, plasma);
-        color = mix(color, COLOR_GOLD, fbm(uv * 3.0 - u_time * 0.1));
-    }
-    // Phase 8: Scanlines & Color Shift
-    else if (phase < 9.0) {
-        float scanline = sin(gl_FragCoord.y * 2.0 + u_time * 5.0) * 0.5 + 0.5;
-        scanline = smoothstep(0.4, 0.6, scanline) * 0.8 + 0.2;
-        //vec3 base = fbm(uv * 1.5 + u_time * 0.05) * vec3(0.5, 0.8, 1.0); // Base color if needed
-
-        // *** FIX: Removed texture2D line ***
-        // color.r = texture2D(u_texture, uv + vec2(0.01 * sin(u_time), 0.0)).r;
-
-        // Use fbm as fallback for color channels simulation
-        color.r = fbm((uv + vec2(0.01 * sin(u_time * 0.9), 0.0)) * 1.5 + u_time * 0.05) * 0.5; // Slightly different timing
-        color.g = fbm(uv * 1.5 + u_time * 0.05) * 0.8;
-        color.b = fbm((uv - vec2(0.01 * sin(u_time * 1.1), 0.0)) * 1.5 + u_time * 0.05) * 1.0; // Slightly different timing
-
-        color *= scanline;
-    }
-     // Phase 9: Truchet Tiles (Simplified)
-    else if (phase < 10.0) {
-        vec2 tile_uv = fract(uv * 5.0);
-        vec2 tile_id = floor(uv * 5.0);
-        float pattern = hash(tile_id.x * 31.7 + tile_id.y * 19.3 + floor(u_time * 2.0));
-
-        float val;
-        if (pattern < 0.5) { // Diagonal /
-            val = smoothstep(0.48, 0.52, abs(tile_uv.x - tile_uv.y));
-        } else { // Diagonal \
-            val = smoothstep(0.48, 0.52, abs(tile_uv.x + tile_uv.y - 1.0));
-        }
-        color = mix(COLOR_CYAN, COLOR_PURPLE, val);
-    }
-    // Phase 10: Warped Checkerboard
-    else if (phase < 11.0) {
-        vec2 warp_uv = uv + fbm(uv * 2.0 + u_time * 0.1) * 0.3;
-        float checker = mod(floor(warp_uv.x * 6.0) + floor(warp_uv.y * 6.0), 2.0);
-        color = mix(COLOR_GOLD * 0.8, COLOR_BLUE * 0.6, checker);
-    }
-    // Phase 11: Simple Glitch Effect
-    else if (phase < 12.0) {
-        float glitch_t = fract(u_time * 1.5);
-        float glitch_line = hash(floor(uv.y * 10.0 + u_time * 5.0));
-        float glitch_strength = smoothstep(0.9, 0.95, glitch_line) * (0.5 + 0.5 * sin(glitch_t * PI * 20.0)) * 0.1;
-
-        vec2 offset_uv = uv + vec2(glitch_strength * (hash(uv.y + 0.1) - 0.5) * 2.0, 0.0);
-
-        float r = fbm(offset_uv * 3.0 + 0.1);
-        float g = fbm(offset_uv * 3.0 + 0.2);
-        float b = fbm(offset_uv * 3.0 + 0.3);
-
-        color = vec3(r, g, b);
-        color = mix(color, COLOR_RED, glitch_strength * 5.0);
-    }
-    // Phase 12: Expanding Boxes
-    else if (phase < 13.0) {
-        float box_t = fract(u_time * 0.4);
-        float box_size = box_t * 1.5;
-        float box_dist = max(abs(uv.x), abs(uv.y));
-        float box_edge = smoothstep(box_size - 0.05, box_size + 0.05, box_dist);
-        float box_glow = smoothstep(box_size - 0.1, box_size + 0.1, box_dist);
-        box_glow *= (1.0 - smoothstep(box_size + 0.1, box_size + 0.2, box_dist));
-
-        color = mix(COLOR_TEAL, COLOR_PURPLE, box_edge) * (1.0 - box_edge) * 0.5;
-        color += COLOR_WHITE * box_glow * 0.8;
-    }
-    // Phase 13: Fading Noise (Transition back towards start)
-    else { // phase < 14.0
-        float fade_n = fbm(uv * (2.0 + 8.0 * (1.0-fract(phase))) + u_time * 0.1);
-        float fade_amount = 0.5 + 0.5*sin(fract(phase)*PI);
-        color = mix(COLOR_BLUE, COLOR_PURPLE, fade_n);
-        color *= mix(1.0, 0.3, fade_amount);
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float n = i.x + i.y * 57.0;
+      return mix(
+        mix(hash(n), hash(n + 1.0), f.x),
+        mix(hash(n + 57.0), hash(n + 58.0), f.x),
+        f.y
+      );
     }
 
-    // --- Final Global Adjustments ---
-    color += 0.05 * sin(u_time * 2.0 + uv.x * 5.0) * sin(u_time * 2.0 + uv.y * 5.0);
-    float vignette = smoothstep(1.2, 0.5, length(uv));
-    color *= vignette;
-    color = clamp(color, 0.0, 1.0);
+    // Fractal noise
+    float fbm(vec2 p) {
+      float sum = 0.0;
+      float amp = 1.0;
+      float freq = 1.0;
+      // Loop count should match original if possible (original had 4)
+      for(int i = 0; i < 4; i++) {
+        sum += noise(p * freq) * amp;
+        amp *= 0.5;
+        freq *= 2.0;
+      }
+      return sum;
+    }
 
-    gl_FragColor = vec4(color, 1.0);
-  }
-`;
+    void main() {
+      // Normalize pixel coordinates and center
+      vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution) / min(u_resolution.x, u_resolution.y);
+      // Or using the previous uv calculation method:
+      // vec2 uv = gl_FragCoord.xy / u_resolution;
+      // uv = uv * 2.0 - 1.0;
+      // uv.x *= u_resolution.x / u_resolution.y; // Correct aspect ratio
+
+      // Animation phase (cycles through different effects)
+      float phase = mod(u_time * 0.1, 4.0);
+
+      // Colors (matching original)
+      vec3 blue = vec3(0.0, 0.3, 0.8);
+      vec3 teal = vec3(0.0, 0.7, 0.7);
+      vec3 green = vec3(0.0, 0.8, 0.4);
+      vec3 purple = vec3(0.4, 0.0, 0.8);
+      vec3 gold = vec3(0.8, 0.7, 0.0);
+
+      // Initialize color
+      vec3 color = vec3(0.0);
+
+      // --- Shader Phases (Copied from original) ---
+      // Phase 0: Initial grid effect
+      if (phase < 1.0) {
+          float y_warp = 0.1 + 0.05 * sin(u_time * 0.2);
+          // Avoid division by zero or near-zero
+          float warped_y = uv.y * y_warp;
+          if (abs(0.1 - warped_y) < 0.001) warped_y = (0.1 - sign(0.1 - warped_y) * 0.001); // Adjust slightly away from 0.1 if needed
+          float z = 0.1 / (0.1 - warped_y); // Be cautious with division
+          z = clamp(z, 0.1, 10.0);
+          vec2 warp = uv * z;
+
+          vec2 grid = abs(fract(warp * 5.0) - 0.5);
+          float line = smoothstep(0.05, 0.06, min(grid.x, grid.y)) * 0.5;
+          float depth = fract(z * 0.1 + u_time * 0.1);
+
+          color = mix(
+              mix(purple, teal, sin(u_time * 0.1) * 0.5 + 0.5),
+              blue,
+              sin(length(warp) - u_time * 0.5) * 0.5 + 0.5
+          );
+          color = mix(color * 0.2, color, line * depth);
+
+          if (phase > 0.8) {
+              float t = (phase - 0.8) * 5.0;
+              float circles = smoothstep(0.3, 0.31, abs(length(uv) - mix(2.0, 0.5, t)));
+              color = mix(color, blue, circles * t);
+          }
+      }
+      // Phase 1: Circular wave effect
+      else if (phase < 2.0) {
+          float dist = length(uv);
+          float rings = sin(dist * 15.0 - u_time * 2.0) * 0.5 + 0.5;
+          rings *= smoothstep(1.5, 0.5, dist); // Fade out rings
+
+          float wave = sin(uv.y * 20.0 + u_time) * 0.05;
+          vec2 waved_uv = uv + vec2(wave, 0.0);
+
+          float n = fbm(waved_uv * 3.0 + u_time * 0.2);
+
+          color = mix(
+              mix(blue, teal, rings),
+              mix(green, gold, n),
+              0.5 + 0.5 * sin(u_time * 0.5)
+          );
+          color = mix(color * 0.2, color, rings + n * 0.5);
+
+          if (phase > 1.8) {
+              float t = (phase - 1.8) * 5.0;
+              // Use waved_uv for consistency
+              float cells = fract(waved_uv.x * 10.0 * t) * fract(waved_uv.y * 10.0 * t);
+              color = mix(color, green, cells * t);
+          }
+      }
+      // Phase 2: Electric pulse effect
+      else if (phase < 3.0) {
+          // Hexagonal grid distance calculation might be sensitive to UV mapping.
+          // Using centered UV from the start.
+          vec2 scaled_uv = uv * 4.0; // Scale uv for denser pattern
+          vec2 r = vec2(1.0, 1.73); // Hex grid vectors
+          vec2 h = r * 0.5;
+          vec2 a = mod(scaled_uv, r) - h;
+          vec2 b = mod(scaled_uv - h, r) - h;
+          vec2 gv = length(a) < length(b) ? a : b; // Closest hex center distance
+
+          float pulse = sin(u_time * 3.0) * 0.5 + 0.5;
+          // Adjust electric effect calculation based on hex distance
+          float electric = sin(length(gv) * 10.0 - u_time * 3.0); // Adjusted scale
+          electric = smoothstep(0.0, 0.1, abs(electric));
+
+          float distortion = fbm(uv * 2.0 + vec2(u_time * 0.1, 0.0));
+          vec3 baseColor = mix(teal, green, distortion);
+          vec3 glowColor = mix(blue, purple, pulse);
+
+          color = mix(baseColor * 0.2, glowColor, electric * pulse);
+
+          float detail = abs(sin(uv.x * 20.0 + u_time)) * abs(sin(uv.y * 20.0 - u_time));
+          color += glowColor * detail * 0.1;
+
+          if (phase > 2.8) {
+              float t = (phase - 2.8) * 5.0;
+              float angle = atan(uv.y, uv.x); // Use original uv for angle/radius
+              float vortex = angle / (2.0 * 3.14159) + 0.5;
+              vortex = fract(vortex * 5.0 + t + u_time * 0.1); // Simplified vortex animation
+              color = mix(color, purple, vortex * t);
+          }
+      }
+      // Phase 3: Vortex effect
+      else {
+          float angle = atan(uv.y, uv.x);
+          float radius = length(uv);
+          // Ensure spiral_angle calculation matches original intent
+          float spiral_angle = angle * 5.0 + radius * 10.0 - u_time * 2.0; // Adjusted radius factor
+          float spiral = sin(spiral_angle) * 0.5 + 0.5; // Map to 0-1
+
+          float radius_distorted = radius + sin(angle * 8.0 + u_time * 0.5) * 0.05; // Slightly animated distortion
+
+          float bands = fract(radius_distorted * 5.0 - u_time * 0.5);
+          bands = smoothstep(0.0, 0.2, bands) * smoothstep(1.0, 0.8, bands); // Create bands
+
+          float turb = fbm(vec2(radius_distorted * 5.0, angle * 2.0) + u_time * 0.1);
+
+          vec3 deepColor = mix(purple, blue, sin(radius_distorted * 10.0) * 0.5 + 0.5);
+          vec3 brightColor = mix(gold, teal, cos(angle * 3.0) * 0.5 + 0.5);
+
+          color = mix(deepColor, brightColor, bands + turb * 0.3); // Adjusted turbulence mix
+          color = mix(color, brightColor, spiral * 0.2); // Mix in spiral subtly
+
+          if (phase > 3.8) {
+              float t = (phase - 3.8) * 5.0;
+              // Use original uv for transition grid
+              float grid_x = smoothstep(0.01, 0.05, abs(fract(uv.x * 10.0 * t + u_time * 0.1) - 0.5));
+              float grid_y = smoothstep(0.01, 0.05, abs(fract(uv.y * 10.0 * t + u_time * 0.1) - 0.5));
+              color = mix(color, blue, max(grid_x, grid_y) * t); // Transition using max for thicker lines
+          }
+      }
+      // --- End Shader Phases ---
+
+      // Add subtle pulse (copied from original)
+      color += 0.05 * sin(u_time * 2.0 + uv.x * 5.0) * sin(u_time * 2.0 + uv.y * 5.0);
+
+      // Add vignette (copied from original)
+      float vignette = smoothstep(1.2, 0.5, length(uv)); // Adjust length based on chosen uv mapping
+      color *= vignette;
+
+      // Clamp color (copied from original)
+      color = clamp(color, 0.0, 1.0);
+
+      gl_FragColor = vec4(color, 1.0);
+      // --- End of original complex shader code ---
+    }
+  `;
   console.log('background.js: Complex fragment shader source defined.'); // Debug log
 
   // Helper function to compile a shader
