@@ -511,179 +511,174 @@
 
 
     
-  // Main render loop
+// Global variables assumed to exist:
+// audioContext, analyser, dataArray, bufferLength, canvas, ctx, currentVisualizer, animationId
+
+// Main render loop: picks one of five modern visualizers
 function renderVisualizer() {
   if (!audioContext) return;
   animationId = requestAnimationFrame(renderVisualizer);
   analyser.getByteFrequencyData(dataArray);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Array of visualization functions – adjust ordering as desired
-  const vizFuncs = [
-    drawHolographicBars,
-    drawQuantumCircles,
-    drawNeuralWave,
-    drawGalacticNebulae,
-    draw4DSpectrum
+  // Clear canvas with semi-transparent fill for persistent trails
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  const visualizers = [
+    drawNeonHolographicBars,
+    drawQuantumCirclesX,
+    drawNeuralWaveV2,
+    drawGalacticNebulaeX,
+    drawHyper4DSpectrum
   ];
   
-  // Ensure currentVisualizer is in the correct range (1-indexed)
-  const index = (currentVisualizer - 1) % vizFuncs.length;
-  vizFuncs[index]();
+  // Use a modulo for safe indexing (currentVisualizer is 1-indexed)
+  const index = (currentVisualizer - 1) % visualizers.length;
+  visualizers[index]();
 }
 
-/* 1. Holographic Bars with Shimmer & Glow */
-function drawHolographicBars() {
-  const barWidth = (canvas.width / bufferLength) * 2.5;
-  const time = Date.now() * 0.001;
+/* 1. Neon Holographic Bars – With Particle Glitch Overlays */
+function drawNeonHolographicBars() {
+  const barWidth = (canvas.width / bufferLength) * 1.8;
+  const t = Date.now() * 0.002;
   
   for (let i = 0, x = 0; i < bufferLength; i++, x += barWidth + 1) {
-    const barHeight = dataArray[i];
-    // Pulse effect modulated by time and frequency index
-    const pulseIntensity = 0.2 * Math.sin(time + i * 0.1) + 1;
-    const adjustedHeight = barHeight * pulseIntensity;
+    const amplitude = dataArray[i] / 255;
+    const barHeight = amplitude * canvas.height * 0.8;
+    const pulse = 0.5 + 0.5 * Math.sin(t + i * 0.3);
     
-    // Create a vibrant vertical gradient for each bar
-    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - adjustedHeight);
-    const hue1 = (barHeight + time * 20) % 360;
-    const hue2 = (hue1 + 180) % 360;
-    gradient.addColorStop(0, `hsla(${hue1}, 100%, 70%, 0.9)`);
-    gradient.addColorStop(0.5, `hsla(${(hue1 + 60) % 360}, 100%, 60%, 0.7)`);
-    gradient.addColorStop(1, `hsla(${hue2}, 100%, 80%, 0.3)`);
+    // Create a neon gradient: start with bright cyan to deep magenta
+    const hue = (i / bufferLength) * 360 + t * 30;
+    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight * pulse);
+    gradient.addColorStop(0, `hsla(${hue % 360}, 100%, 70%, 0.9)`);
+    gradient.addColorStop(0.5, `hsla(${(hue + 40) % 360}, 100%, 60%, 0.7)`);
+    gradient.addColorStop(1, `hsla(${(hue + 100) % 360}, 100%, 50%, 0.3)`);
+    
+    ctx.save();
+    ctx.shadowColor = `hsla(${hue % 360}, 100%, 70%, 0.8)`;
+    ctx.shadowBlur = 20 * amplitude;
     
     ctx.fillStyle = gradient;
+    // Draw with rounded top and a slight skew for a futuristic feel
     ctx.beginPath();
     ctx.moveTo(x, canvas.height);
-    ctx.lineTo(x, canvas.height - adjustedHeight / 2);
-    ctx.arc(x + barWidth / 2, canvas.height - adjustedHeight / 2, barWidth / 2, Math.PI, 0, false);
+    ctx.lineTo(x, canvas.height - barHeight * 0.6);
+    ctx.quadraticCurveTo(x + barWidth / 2, canvas.height - barHeight, x + barWidth, canvas.height - barHeight * 0.6);
     ctx.lineTo(x + barWidth, canvas.height);
     ctx.closePath();
-    
-    // Apply glow via shadow effects
-    ctx.shadowColor = `hsla(${hue1}, 100%, 70%, 0.7)`;
-    ctx.shadowBlur = 15 * (barHeight / 255);
     ctx.fill();
+    ctx.restore();
     
-    // Draw a dynamic stroke for extra shimmer
-    const strokeOpacity = 0.3 + 0.5 * Math.sin(time * 3 + i * 0.2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${strokeOpacity})`;
-    ctx.lineWidth = 0.5 + (barHeight / 255) * 1.5;
-    ctx.stroke();
-    
-    // Reset shadow for subsequent drawings
-    ctx.shadowBlur = 0;
-    
-    // Occasional vertical light streak for additional dimension
-    if (Math.random() < 0.05) {
-      ctx.beginPath();
-      const streakX = x + barWidth * Math.random();
-      ctx.strokeStyle = `rgba(255, 255, 255, 0.7)`;
-      ctx.lineWidth = 0.5;
-      ctx.moveTo(streakX, canvas.height);
-      ctx.lineTo(streakX, canvas.height - adjustedHeight * 1.2);
-      ctx.stroke();
+    // Glitch overlay: sporadic horizontal slices of bright noise
+    if (Math.random() < 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * Math.random()})`;
+      const glitchY = canvas.height - barHeight * Math.random();
+      ctx.fillRect(x, glitchY, barWidth, 2 + Math.random() * 4);
+      ctx.restore();
     }
   }
 }
 
-/* 2. Quantum Circles with Radiating Lines */
-function drawQuantumCircles() {
+/* 2. Quantum Circles X – Orbiting Pulses and Laser Lines */
+function drawQuantumCirclesX() {
   const t = performance.now() / 1000;
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
   
   for (let i = 0; i < bufferLength; i++) {
-    // Angle with a subtle time-based offset for swirling motion
-    const angle = (Math.PI * 2 * i / bufferLength) + (Math.sin(t + i) * 0.05);
-    // Radius scaled from frequency data with a pulsating multiplier
-    const baseRadius = dataArray[i] / 255 * Math.min(canvas.width, canvas.height) / 4;
-    const pulsate = 1 + 0.2 * Math.sin(t * 3 + i);
-    const radius = baseRadius * pulsate;
+    // Angular position plus noise for chaotic motion
+    const angle = (Math.PI * 2 * i / bufferLength) + (0.1 * Math.sin(t + i * 0.15));
+    // Radius determined by amplitude with extra pulsation
+    const baseRadius = (dataArray[i] / 255) * (Math.min(canvas.width, canvas.height) / 3);
+    const pulsate = 1 + 0.3 * Math.sin(t * 4 + i);
+    const orbitRadius = baseRadius * pulsate;
     
-    // Position around the center
-    const x = canvas.width / 2 + Math.cos(angle) * radius;
-    const y = canvas.height / 2 + Math.sin(angle) * radius;
+    // Position from center with a slight offset from a perlin-like noise function (simulate with sin/cos)
+    const x = centerX + Math.cos(angle) * orbitRadius;
+    const y = centerY + Math.sin(angle) * orbitRadius;
     
-    // Generate a dynamic hue based on index and time
-    const hue = (i * 360 / bufferLength + t * 40) % 360;
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 5);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 60%, 1)`);
-    gradient.addColorStop(0.7, `hsla(${(hue + 30) % 360}, 100%, 55%, 0.7)`);
-    gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 100%, 50%, 0)`);
+    const hue = ((i * 360 / bufferLength) + t * 50) % 360;
+    // Radial gradient for a glowing orb
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, orbitRadius * 0.1);
+    gradient.addColorStop(0, `hsla(${hue}, 100%, 65%, 1)`);
+    gradient.addColorStop(1, `hsla(${(hue + 50) % 360}, 100%, 50%, 0)`);
     
-    // Draw primary circle
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(x, y, radius / 5, 0, Math.PI * 2);
+    ctx.arc(x, y, orbitRadius * 0.1, 0, Math.PI * 2);
     ctx.fill();
     
-    // Draw radiating line toward center
-    const strokeOpacity = (Math.sin(t + i / 10) * 0.5 + 0.5).toFixed(2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${strokeOpacity})`;
+    // Draw a laser line connecting orb to center with dynamic opacity
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 + 0.7 * Math.abs(Math.sin(t + i))})`;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(canvas.width / 2, canvas.height / 2);
+    ctx.lineTo(centerX, centerY);
     ctx.stroke();
     
-    // Extra arc for an uncanny glow effect
+    // Additional larger semi-transparent ring for a holographic aura
+    ctx.strokeStyle = `hsla(${hue}, 100%, 60%, 0.5)`;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x, y, radius / 4, 0, Math.PI * 2);
-    ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${strokeOpacity})`;
+    ctx.arc(x, y, orbitRadius * 0.12, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
 
-/* 3. Neural Wave – Smooth, Centered Audio Waveform */
-function drawNeuralWave() {
+/* 3. Neural Wave V2 – Futuristic, Fluid Audio Oscillations */
+function drawNeuralWaveV2() {
   ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
   ctx.beginPath();
   
-  // Ensure the wave is centered vertically
   const sliceWidth = canvas.width / (bufferLength - 1);
   for (let i = 0; i < bufferLength; i++) {
     const v = dataArray[i] / 255;
+    // Map v to create a wavy line oscillating around midline with fluid curvature
+    const y = canvas.height / 2 + (v - 0.5) * canvas.height * 0.9 * Math.sin(i * 0.03 + performance.now() * 0.005);
     const x = i * sliceWidth;
-    // Map v from [0,1] to canvas height centered on midline
-    const y = canvas.height / 2 + (v - 0.5) * canvas.height;
     
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
     
-    // Optional: Draw small, pulsating circles on each data point
-    ctx.fillStyle = `rgba(${Math.floor(v * 255)}, ${Math.floor(200 - v * 100)}, 255, 0.9)`;
+    // Draw flickering micro-circles along the wave
+    ctx.fillStyle = `rgba(${200 + v * 55}, ${100 + v * 155}, 255, 0.8)`;
     ctx.beginPath();
-    ctx.arc(x, y, 3 + v * 4, 0, Math.PI * 2);
+    ctx.arc(x, y, 2 + v * 4, 0, Math.PI * 2);
     ctx.fill();
   }
-  
   ctx.stroke();
 }
 
-/* 4. Galactic Nebulae – Swirling, Pulsating Nebulae */
-function drawGalacticNebulae() {
-  // Apply a subtle fade to allow trails
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+/* 4. Galactic Nebulae X – Swirling, Interactive Cosmic Clouds */
+function drawGalacticNebulaeX() {
+  // Semi-transparent overlay for smooth trail effect
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.globalCompositeOperation = 'lighter';
   
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
+  const t = performance.now() / 1000;
   
-  // Draw multiple nebula clouds randomly across the canvas
-  for (let i = 0; i < 50; i++) {
+  // Create dozens of swirling nebula particles
+  for (let i = 0; i < 80; i++) {
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * (canvas.width / 2);
-    const x = centerX + Math.cos(angle) * distance;
-    const y = centerY + Math.sin(angle) * distance;
+    const x = centerX + Math.cos(angle + t * 0.2) * distance;
+    const y = centerY + Math.sin(angle + t * 0.2) * distance;
     
-    // Use a slice of the audio data to modulate intensity
-    const dataIndex = Math.floor((i / 50) * bufferLength);
+    // Use a slice of audio data to drive intensity and size
+    const dataIndex = Math.floor((i / 80) * bufferLength);
     const intensity = dataArray[dataIndex] / 255;
+    const hue = (i * 5 + t * 30) % 360;
+    const radius = intensity * 40 + 5;
     
-    const hue = (i * 7) % 360;
-    const radius = 30 * intensity + 10;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, `hsla(${hue}, 80%, 60%, ${intensity})`);
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    gradient.addColorStop(0, `hsla(${hue}, 90%, 65%, ${intensity * 1.2})`);
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -691,23 +686,23 @@ function drawGalacticNebulae() {
     ctx.fill();
   }
   
-  // Draw a central, pulsating nebula reacting to bass frequencies
+  // Central pulsating core reacting to bass frequencies
   const bassValue = getAverageBass(dataArray, 0, Math.floor(bufferLength * 0.1));
-  const centralRadius = bassValue * 100 + 50;
-  const centralGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, centralRadius);
-  centralGradient.addColorStop(0, `rgba(255, 200, 150, ${bassValue})`);
-  centralGradient.addColorStop(0.5, `rgba(200, 100, 150, ${bassValue * 0.8})`);
-  centralGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  const coreRadius = bassValue * 150 + 50;
+  const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
+  coreGradient.addColorStop(0, `rgba(255, 180, 120, ${bassValue * 1.5})`);
+  coreGradient.addColorStop(0.5, `rgba(200, 100, 160, ${bassValue})`);
+  coreGradient.addColorStop(1, 'rgba(0,0,0,0)');
   
-  ctx.fillStyle = centralGradient;
+  ctx.fillStyle = coreGradient;
   ctx.beginPath();
-  ctx.arc(centerX, centerY, centralRadius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
   ctx.fill();
   
   ctx.globalCompositeOperation = 'source-over';
 }
 
-// Helper: Calculate average bass amplitude from a slice of the data
+// Helper: Average bass amplitude over a slice of the data array
 function getAverageBass(dataArray, start, end) {
   let sum = 0;
   for (let i = start; i < end; i++) {
@@ -716,31 +711,72 @@ function getAverageBass(dataArray, start, end) {
   return sum / (end - start) / 255;
 }
 
-/* 5. 4D Spectrum – Dual-Layer Frequency Bars with Dynamic Opacity */
-function draw4DSpectrum() {
+/* 5. Hyper 4D Spectrum – Multilayer Frequency Bars with Depth & Glitch FX */
+function drawHyper4DSpectrum() {
   const barWidth = canvas.width / bufferLength;
-  const currentTime = Date.now() / 1000;
+  const t = Date.now() / 1000;
   
   for (let i = 0; i < bufferLength; i++) {
-    const barHeight = dataArray[i];
+    const amplitude = dataArray[i] / 255;
+    const barHeight = amplitude * canvas.height;
     const x = i * barWidth;
-    const hue = i / bufferLength * 360;
+    const hue = (i / bufferLength) * 360;
     
-    // Base gradient for the bar
-    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
-    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 1)`);
-    gradient.addColorStop(1, `hsla(${hue}, 100%, 80%, 0.2)`);
-    ctx.fillStyle = gradient;
+    // Primary bar gradient: a neon spectrum
+    const gradient1 = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+    gradient1.addColorStop(0, `hsla(${hue}, 100%, 55%, 1)`);
+    gradient1.addColorStop(1, `hsla(${hue}, 100%, 75%, 0.2)`);
+    ctx.fillStyle = gradient1;
     ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
     
-    // Overlay with a dynamic, oscillating opacity layer for extra depth
-    ctx.globalAlpha = Math.sin(currentTime + i / bufferLength * Math.PI * 2) * 0.5 + 0.5;
-    ctx.fillStyle = `hsla(${(hue + 180) % 360}, 100%, 50%, 0.5)`;
+    // Secondary overlay: glitchy, shifting bands for extra depth
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 5 + i);
+    const gradient2 = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight * 0.5);
+    gradient2.addColorStop(0, `hsla(${(hue + 180) % 360}, 100%, 60%, 0.7)`);
+    gradient2.addColorStop(1, `hsla(${(hue + 180) % 360}, 100%, 80%, 0.1)`);
+    ctx.fillStyle = gradient2;
     ctx.fillRect(x, canvas.height - barHeight * 0.5, barWidth, barHeight * 0.5);
+    
     ctx.globalAlpha = 1;
+    
+    // Random digital noise: thin lines that flicker for a cyber-glitch effect
+    if (Math.random() < 0.015) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,255,255,${0.5 + Math.random() * 0.5})`;
+      ctx.lineWidth = 1;
+      const glitchX = x + barWidth * Math.random();
+      ctx.beginPath();
+      ctx.moveTo(glitchX, canvas.height - barHeight * Math.random());
+      ctx.lineTo(glitchX, canvas.height - barHeight * Math.random());
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Event Handlers
     function updateVisualizerButtons() {
