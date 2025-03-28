@@ -328,6 +328,10 @@
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////nn
+// ======= BACKGROUND IMAGE SETUP =======
+const bgImage = new Image();
+bgImage.src = "liquid.jpg"; // Ensure this file is accessible in your project
+
 // ======= NEURON CLASS =======
 class Neuron {
   constructor(x, y, layer, size, speed) {
@@ -351,11 +355,11 @@ class Connection {
     this.from = from;
     this.to = to;
     this.weight = weight;
-    this.signal = Math.random(); // start at a random phase for extra dynamism
+    this.signal = Math.random(); // random starting phase
   }
 
   update(reactivityFactor) {
-    // Move the signal along the connection based on the reactivity factor
+    // Advance the signal along the connection based on audio reactivity
     this.signal = (this.signal + reactivityFactor * 0.05) % 1;
   }
 }
@@ -374,7 +378,7 @@ class NeuralNetwork {
   initNeurons() {
     this.neurons = [];
     for (let layer = 0; layer < this.layerCount; layer++) {
-      // Use fewer neurons in the input and output layers
+      // Fewer neurons in the input and output layers
       const neuronsInLayer = layer === 0 || layer === this.layerCount - 1 ? 10 : 20;
       const layerX = (this.canvas.width / (this.layerCount - 1)) * layer;
       for (let i = 0; i < neuronsInLayer; i++) {
@@ -389,7 +393,7 @@ class NeuralNetwork {
 
   initConnections() {
     this.connections = [];
-    // For each neuron, connect it to some neurons in the next layer
+    // Connect each neuron to some neurons in the next layer
     this.neurons.forEach(from => {
       if (from.layer < this.layerCount - 1) {
         const nextLayerNeurons = this.neurons.filter(n => n.layer === from.layer + 1);
@@ -402,17 +406,17 @@ class NeuralNetwork {
   }
 
   update(audioData, bufferLength, reactivityFactor) {
-    // Update neurons with audio data
+    // Update each neuron based on corresponding audio data
     this.neurons.forEach((neuron, index) => {
       const freqIndex = Math.floor((index / this.neurons.length) * bufferLength);
       neuron.update(audioData[freqIndex], reactivityFactor);
     });
-    // Update connections based on reactivity
+    // Update all connections
     this.connections.forEach(conn => conn.update(reactivityFactor));
   }
 
   render(ctx, colorSchemes, currentColorScheme, reactivityFactor) {
-    // Draw neurons with a subtle oscillation
+    // Draw neurons with subtle oscillation effects
     this.neurons.forEach(neuron => {
       const oscillation = Math.sin(performance.now() * neuron.speed) * 0.5;
       const finalSize = neuron.size + neuron.pulse + oscillation;
@@ -423,24 +427,19 @@ class NeuralNetwork {
       ctx.fill();
     });
 
-    // Draw connections between neurons
+    // Draw connections with moving signal pulses
     this.connections.forEach(conn => {
       const dx = conn.to.x - conn.from.x;
       const dy = conn.to.y - conn.from.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      // Draw only connections within a reasonable distance
       if (distance < this.canvas.width / 2) {
         const signalX = conn.from.x + dx * conn.signal;
         const signalY = conn.from.y + dy * conn.signal;
-
-        // Draw the base connection line
         ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
         ctx.beginPath();
         ctx.moveTo(conn.from.x, conn.from.y);
         ctx.lineTo(conn.to.x, conn.to.y);
         ctx.stroke();
-
-        // Draw the moving signal along the connection
         const colors = colorSchemes[currentColorScheme];
         ctx.fillStyle = colors.connection;
         ctx.beginPath();
@@ -451,52 +450,121 @@ class NeuralNetwork {
   }
 }
 
-// ======= MAIN RENDERING FUNCTION =======
-function renderNeuralBackground() {
-  if (!audioContext) {
-    bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-    return;
+// ======= MORPHED SCENE CLASS =======
+class MorphedScene {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.startTime = performance.now();
   }
 
-  bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-  analyser.getByteFrequencyData(dataArray);
+  update() {
+    this.time = (performance.now() - this.startTime) / 1000;
+  }
 
-  // Calculate overall audio reactivity
+  render() {
+    const ctx = this.ctx;
+    const t = this.time;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    // Clear canvas with a semi-transparent fill for trailing effects
+    ctx.fillStyle = `rgba(10, 11, 12, 0.2)`;
+    ctx.fillRect(0, 0, w, h);
+    // Create a swirling, colorful pattern that evolves over time
+    const centerX = w / 2;
+    const centerY = h / 2;
+    const radius = Math.min(w, h) / 3;
+    for (let i = 0; i < 10; i++) {
+      const angle = t + (i * (Math.PI * 2 / 10));
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      const size = 20 + 10 * Math.sin(t + i);
+      ctx.fillStyle = `hsl(${(t * 40 + i * 36) % 360}, 80%, 60%)`;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// ======= STATE MANAGER =======
+const STATES = { NETWORK: 'network', MORPH: 'morph' };
+let currentState = STATES.NETWORK;
+let stateSwitchTime = performance.now() + 30000; // Switch after 30 seconds
+
+// ======= GLOBAL VARIABLES & INITIALIZATION =======
+// Assume these globals are defined or set up elsewhere in your project:
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+const layerCount = 5;
+let audioContext, analyser, dataArray, bufferLength;
+// colorSchemes and currentColorScheme are defined for your visuals:
+const colorSchemes = [
+  { neuron: '#ff55aa', connection: '#ffaa55' },
+  { neuron: '#55aaff', connection: '#aaff55' },
+  // Add more schemes as desired
+];
+let currentColorScheme = 0;
+let bgAnimationId;
+
+// Create a neural network instance
+const neuralNetwork = new NeuralNetwork(layerCount, bgCanvas);
+let morphedScene = null; // will be created when we switch states
+
+// ======= MAIN RENDER LOOP =======
+function renderLoop() {
+  bgAnimationId = requestAnimationFrame(renderLoop);
+
+  // Draw the liquid.jpg background first
+  if (bgImage.complete) {
+    bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
+  } else {
+    // Fallback to a solid color if the image isn't loaded yet
+    bgCtx.fillStyle = "#000";
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+  }
+
+  // If audioContext hasn't been set up yet, skip the rest of the loop
+  if (!audioContext) return;
+
+  // Get audio data for reactivity
+  analyser.getByteFrequencyData(dataArray);
   let sum = 0;
   for (let i = 0; i < bufferLength; i++) {
     sum += dataArray[i];
   }
   const reactivityFactor = sum / (bufferLength * 255);
 
-  // Create a dynamic gradient background for smooth trails
-  const gradient = bgCtx.createLinearGradient(0, 0, bgCanvas.width, bgCanvas.height);
-  gradient.addColorStop(0, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
-  gradient.addColorStop(1, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
-  bgCtx.fillStyle = gradient;
-  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+  // Render based on the current state
+  if (currentState === STATES.NETWORK) {
+    // Use a dynamic gradient for a subtle overlay effect
+    const gradient = bgCtx.createLinearGradient(0, 0, bgCanvas.width, bgCanvas.height);
+    gradient.addColorStop(0, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
+    gradient.addColorStop(1, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
+    bgCtx.fillStyle = gradient;
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-  // Update the neural network
-  neuralNetwork.update(dataArray, bufferLength, reactivityFactor);
+    neuralNetwork.update(dataArray, bufferLength, reactivityFactor);
+    neuralNetwork.render(bgCtx, colorSchemes, currentColorScheme, reactivityFactor);
 
-  // Render the neural network
-  neuralNetwork.render(bgCtx, colorSchemes, currentColorScheme, reactivityFactor);
+    // Occasionally change color schemes for extra vibe
+    if (Math.random() < 0.001 + reactivityFactor * 0.01) {
+      currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+    }
 
-  // Occasionally change the color scheme for an extra vibe
-  if (Math.random() < 0.001 + reactivityFactor * 0.01) {
-    currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+    // Switch state after the preset duration
+    if (performance.now() > stateSwitchTime) {
+      currentState = STATES.MORPH;
+      morphedScene = new MorphedScene(bgCanvas);
+    }
+  } else if (currentState === STATES.MORPH) {
+    morphedScene.update();
+    morphedScene.render();
   }
 }
 
-// ======= INITIALIZATION =======
-// Assuming these globals are defined elsewhere in your project:
-// bgCanvas, bgCtx, audioContext, analyser, dataArray, bufferLength,
-// colorSchemes, currentColorScheme, bgAnimationId, layerCount
-
-// Create a new neural network instance
-const neuralNetwork = new NeuralNetwork(layerCount, bgCanvas);
-
-// Start the render loop
-bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+// ======= START THE RENDER LOOP =======
+bgAnimationId = requestAnimationFrame(renderLoop);
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
