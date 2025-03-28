@@ -328,53 +328,130 @@
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////nn
-// Initialize neural network
-function initNeuralNetwork() {
-  neurons.length = 0;
-  connections.length = 0;
-
-  // Create neurons in layers
-  for (let layer = 0; layer < layerCount; layer++) {
-    // Edge layers have fewer neurons
-    const neuronsInLayer = layer === 0 || layer === layerCount - 1 ? 10 : 20;
-    const layerX = (bgCanvas.width / (layerCount - 1)) * layer;
-
-    for (let i = 0; i < neuronsInLayer; i++) {
-      // Adjust vertical spread depending on layer position
-      const ySpread = layer === 0 || layer === layerCount - 1 ? 0.6 : 0.8;
-      const y = bgCanvas.height * (0.5 - ySpread / 2 + ySpread * (i / (neuronsInLayer - 1)));
-
-      neurons.push({
-        x: layerX,
-        y,
-        layer,
-        size: Math.random() * 3 + 2,
-        pulse: 0,
-        speed: Math.random() * 0.02 + 0.01
-      });
-    }
+// ======= NEURON CLASS =======
+class Neuron {
+  constructor(x, y, layer, size, speed) {
+    this.x = x;
+    this.y = y;
+    this.layer = layer;
+    this.size = size;
+    this.speed = speed;
+    this.pulse = 0;
   }
 
-  // Connect neurons between adjacent layers
-  for (let i = 0; i < neurons.length; i++) {
-    const from = neurons[i];
-    if (from.layer < layerCount - 1) {
-      // Only connect to neurons in the next layer
-      const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
-      for (let j = 0; j < nextLayer.length; j += 2) {
-        const to = nextLayer[j];
-        connections.push({
-          from,
-          to,
-          weight: Math.random(),
-          signal: Math.random() // start at a random phase for extra dynamism
-        });
-      }
-    }
+  update(audioValue, reactivityFactor) {
+    // Map the audio value to a pulse effect
+    this.pulse = (audioValue / 255) * 3 * reactivityFactor;
   }
 }
 
-// Render neural network background with enhanced visual effects
+// ======= CONNECTION CLASS =======
+class Connection {
+  constructor(from, to, weight) {
+    this.from = from;
+    this.to = to;
+    this.weight = weight;
+    this.signal = Math.random(); // start at a random phase for extra dynamism
+  }
+
+  update(reactivityFactor) {
+    // Move the signal along the connection based on the reactivity factor
+    this.signal = (this.signal + reactivityFactor * 0.05) % 1;
+  }
+}
+
+// ======= NEURAL NETWORK CLASS =======
+class NeuralNetwork {
+  constructor(layerCount, canvas) {
+    this.layerCount = layerCount;
+    this.canvas = canvas;
+    this.neurons = [];
+    this.connections = [];
+    this.initNeurons();
+    this.initConnections();
+  }
+
+  initNeurons() {
+    this.neurons = [];
+    for (let layer = 0; layer < this.layerCount; layer++) {
+      // Use fewer neurons in the input and output layers
+      const neuronsInLayer = layer === 0 || layer === this.layerCount - 1 ? 10 : 20;
+      const layerX = (this.canvas.width / (this.layerCount - 1)) * layer;
+      for (let i = 0; i < neuronsInLayer; i++) {
+        const ySpread = layer === 0 || layer === this.layerCount - 1 ? 0.6 : 0.8;
+        const y = this.canvas.height * (0.5 - ySpread / 2 + ySpread * (i / (neuronsInLayer - 1)));
+        const size = Math.random() * 3 + 2;
+        const speed = Math.random() * 0.02 + 0.01;
+        this.neurons.push(new Neuron(layerX, y, layer, size, speed));
+      }
+    }
+  }
+
+  initConnections() {
+    this.connections = [];
+    // For each neuron, connect it to some neurons in the next layer
+    this.neurons.forEach(from => {
+      if (from.layer < this.layerCount - 1) {
+        const nextLayerNeurons = this.neurons.filter(n => n.layer === from.layer + 1);
+        for (let j = 0; j < nextLayerNeurons.length; j += 2) {
+          const weight = Math.random();
+          this.connections.push(new Connection(from, nextLayerNeurons[j], weight));
+        }
+      }
+    });
+  }
+
+  update(audioData, bufferLength, reactivityFactor) {
+    // Update neurons with audio data
+    this.neurons.forEach((neuron, index) => {
+      const freqIndex = Math.floor((index / this.neurons.length) * bufferLength);
+      neuron.update(audioData[freqIndex], reactivityFactor);
+    });
+    // Update connections based on reactivity
+    this.connections.forEach(conn => conn.update(reactivityFactor));
+  }
+
+  render(ctx, colorSchemes, currentColorScheme, reactivityFactor) {
+    // Draw neurons with a subtle oscillation
+    this.neurons.forEach(neuron => {
+      const oscillation = Math.sin(performance.now() * neuron.speed) * 0.5;
+      const finalSize = neuron.size + neuron.pulse + oscillation;
+      const colors = colorSchemes[currentColorScheme];
+      ctx.fillStyle = colors.neuron;
+      ctx.beginPath();
+      ctx.arc(neuron.x, neuron.y, finalSize, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Draw connections between neurons
+    this.connections.forEach(conn => {
+      const dx = conn.to.x - conn.from.x;
+      const dy = conn.to.y - conn.from.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Draw only connections within a reasonable distance
+      if (distance < this.canvas.width / 2) {
+        const signalX = conn.from.x + dx * conn.signal;
+        const signalY = conn.from.y + dy * conn.signal;
+
+        // Draw the base connection line
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
+        ctx.beginPath();
+        ctx.moveTo(conn.from.x, conn.from.y);
+        ctx.lineTo(conn.to.x, conn.to.y);
+        ctx.stroke();
+
+        // Draw the moving signal along the connection
+        const colors = colorSchemes[currentColorScheme];
+        ctx.fillStyle = colors.connection;
+        ctx.beginPath();
+        ctx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+  }
+}
+
+// ======= MAIN RENDERING FUNCTION =======
 function renderNeuralBackground() {
   if (!audioContext) {
     bgAnimationId = requestAnimationFrame(renderNeuralBackground);
@@ -389,75 +466,38 @@ function renderNeuralBackground() {
   for (let i = 0; i < bufferLength; i++) {
     sum += dataArray[i];
   }
-  reactivityFactor = sum / (bufferLength * 255);
+  const reactivityFactor = sum / (bufferLength * 255);
 
-  // Create a dynamic gradient background for smoother trails
+  // Create a dynamic gradient background for smooth trails
   const gradient = bgCtx.createLinearGradient(0, 0, bgCanvas.width, bgCanvas.height);
   gradient.addColorStop(0, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
   gradient.addColorStop(1, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
   bgCtx.fillStyle = gradient;
   bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-  // Update and draw each neuron
-  neurons.forEach((neuron, i) => {
-    // Map audio frequency data to the neuron pulse
-    const freqIndex = Math.floor(i / neurons.length * bufferLength);
-    neuron.pulse = (dataArray[freqIndex] / 255) * 3 * reactivityFactor;
+  // Update the neural network
+  neuralNetwork.update(dataArray, bufferLength, reactivityFactor);
 
-    // Optionally add a subtle oscillation over time
-    const oscillation = Math.sin(performance.now() * neuron.speed) * 0.5;
-    const finalSize = neuron.size + neuron.pulse + oscillation;
+  // Render the neural network
+  neuralNetwork.render(bgCtx, colorSchemes, currentColorScheme, reactivityFactor);
 
-    const colors = colorSchemes[currentColorScheme];
-    bgCtx.fillStyle = colors.neuron;
-    bgCtx.beginPath();
-    bgCtx.arc(neuron.x, neuron.y, finalSize, 0, Math.PI * 2);
-    bgCtx.fill();
-  });
-
-  // Draw connections with dynamic signal pulses
-  connections.forEach(conn => {
-    const dx = conn.to.x - conn.from.x;
-    const dy = conn.to.y - conn.from.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Only draw connections within a certain distance for clarity
-    if (distance < bgCanvas.width / 2) {
-      // Update the signal position based on audio reactivity
-      conn.signal = (conn.signal + reactivityFactor * 0.05) % 1;
-      const signalX = conn.from.x + dx * conn.signal;
-      const signalY = conn.from.y + dy * conn.signal;
-
-      // Draw connection line with slight alpha modulation
-      bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
-      bgCtx.beginPath();
-      bgCtx.moveTo(conn.from.x, conn.from.y);
-      bgCtx.lineTo(conn.to.x, conn.to.y);
-      bgCtx.stroke();
-
-      // Draw a pulse or spark along the connection
-      const colors = colorSchemes[currentColorScheme];
-      bgCtx.fillStyle = colors.connection;
-      bgCtx.beginPath();
-      bgCtx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
-      bgCtx.fill();
-
-      // Optionally, add an extra spark effect on high reactivity
-      if (reactivityFactor > 0.7 && Math.random() < 0.05) {
-        bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.2 + conn.weight * 0.2})`;
-        bgCtx.beginPath();
-        bgCtx.moveTo(signalX, signalY);
-        bgCtx.lineTo(signalX + dx * 0.1, signalY + dy * 0.1);
-        bgCtx.stroke();
-      }
-    }
-  });
-
-  // Occasionally change color scheme based on music intensity for extra vibe
+  // Occasionally change the color scheme for an extra vibe
   if (Math.random() < 0.001 + reactivityFactor * 0.01) {
     currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
   }
 }
+
+// ======= INITIALIZATION =======
+// Assuming these globals are defined elsewhere in your project:
+// bgCanvas, bgCtx, audioContext, analyser, dataArray, bufferLength,
+// colorSchemes, currentColorScheme, bgAnimationId, layerCount
+
+// Create a new neural network instance
+const neuralNetwork = new NeuralNetwork(layerCount, bgCanvas);
+
+// Start the render loop
+bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
