@@ -315,124 +315,172 @@
       }
     }
 
-    // Initialize neural network
-    function initNeuralNetwork() {
-      neurons.length = 0;
-      connections.length = 0;
-      
-      // Create neurons in layers
-      for (let layer = 0; layer < layerCount; layer++) {
-        const neuronsInLayer = layer === 0 || layer === layerCount - 1 ? 10 : 20;
-        const layerX = (bgCanvas.width / (layerCount - 1)) * layer;
-        
-        for (let i = 0; i < neuronsInLayer; i++) {
-          const ySpread = layer === 0 || layer === layerCount - 1 ? 0.6 : 0.8;
-          const y = bgCanvas.height * (0.5 - ySpread/2 + ySpread * (i / (neuronsInLayer - 1)));
-          
-          neurons.push({
-            x: layerX,
-            y,
-            layer,
-            size: Math.random() * 3 + 2,
-            pulse: 0,
-            speed: Math.random() * 0.02 + 0.01
-          });
-        }
-      }
-      
-      // Connect neurons between adjacent layers
-      for (let i = 0; i < neurons.length; i++) {
-        const from = neurons[i];
-        
-        // Connect to next layer
-        if (from.layer < layerCount - 1) {
-          const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
-          
-          // Connect to some neurons in next layer
-          for (let j = 0; j < nextLayer.length; j += 2) {
-            const to = nextLayer[j];
-            connections.push({
-              from,
-              to,
-              weight: Math.random(),
-              signal: 0
-            });
-          }
-        }
+
+
+
+
+
+
+
+
+
+
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////nn
+// Initialize neural network
+function initNeuralNetwork() {
+  neurons.length = 0;
+  connections.length = 0;
+
+  // Create neurons in layers
+  for (let layer = 0; layer < layerCount; layer++) {
+    // Edge layers have fewer neurons
+    const neuronsInLayer = layer === 0 || layer === layerCount - 1 ? 10 : 20;
+    const layerX = (bgCanvas.width / (layerCount - 1)) * layer;
+
+    for (let i = 0; i < neuronsInLayer; i++) {
+      // Adjust vertical spread depending on layer position
+      const ySpread = layer === 0 || layer === layerCount - 1 ? 0.6 : 0.8;
+      const y = bgCanvas.height * (0.5 - ySpread / 2 + ySpread * (i / (neuronsInLayer - 1)));
+
+      neurons.push({
+        x: layerX,
+        y,
+        layer,
+        size: Math.random() * 3 + 2,
+        pulse: 0,
+        speed: Math.random() * 0.02 + 0.01
+      });
+    }
+  }
+
+  // Connect neurons between adjacent layers
+  for (let i = 0; i < neurons.length; i++) {
+    const from = neurons[i];
+    if (from.layer < layerCount - 1) {
+      // Only connect to neurons in the next layer
+      const nextLayer = neurons.filter(n => n.layer === from.layer + 1);
+      for (let j = 0; j < nextLayer.length; j += 2) {
+        const to = nextLayer[j];
+        connections.push({
+          from,
+          to,
+          weight: Math.random(),
+          signal: Math.random() // start at a random phase for extra dynamism
+        });
       }
     }
+  }
+}
 
-    // Render neural network background
-    function renderNeuralBackground() {
-      if (!audioContext) {
-        bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-        return;
-      }
-      
-      bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-      analyser.getByteFrequencyData(dataArray);
-      
-      // Calculate overall audio reactivity
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      reactivityFactor = sum / (bufferLength * 255);
-      
-      // Clear with fade effect for trails
-      bgCtx.fillStyle = 'rgba(10, 11, 12, 0.1)';
-      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-      
-      // Update neurons
-      neurons.forEach((neuron, i) => {
-        const freqIndex = Math.floor(i / neurons.length * bufferLength);
-        neuron.pulse = (dataArray[freqIndex] / 255) * 3 * reactivityFactor;
-        
-        // Draw neuron
-        const colors = colorSchemes[currentColorScheme];
-        bgCtx.fillStyle = colors.neuron;
+// Render neural network background with enhanced visual effects
+function renderNeuralBackground() {
+  if (!audioContext) {
+    bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+    return;
+  }
+
+  bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+  analyser.getByteFrequencyData(dataArray);
+
+  // Calculate overall audio reactivity
+  let sum = 0;
+  for (let i = 0; i < bufferLength; i++) {
+    sum += dataArray[i];
+  }
+  reactivityFactor = sum / (bufferLength * 255);
+
+  // Create a dynamic gradient background for smoother trails
+  const gradient = bgCtx.createLinearGradient(0, 0, bgCanvas.width, bgCanvas.height);
+  gradient.addColorStop(0, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
+  gradient.addColorStop(1, `rgba(10, 11, 12, ${0.08 + reactivityFactor * 0.05})`);
+  bgCtx.fillStyle = gradient;
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+  // Update and draw each neuron
+  neurons.forEach((neuron, i) => {
+    // Map audio frequency data to the neuron pulse
+    const freqIndex = Math.floor(i / neurons.length * bufferLength);
+    neuron.pulse = (dataArray[freqIndex] / 255) * 3 * reactivityFactor;
+
+    // Optionally add a subtle oscillation over time
+    const oscillation = Math.sin(performance.now() * neuron.speed) * 0.5;
+    const finalSize = neuron.size + neuron.pulse + oscillation;
+
+    const colors = colorSchemes[currentColorScheme];
+    bgCtx.fillStyle = colors.neuron;
+    bgCtx.beginPath();
+    bgCtx.arc(neuron.x, neuron.y, finalSize, 0, Math.PI * 2);
+    bgCtx.fill();
+  });
+
+  // Draw connections with dynamic signal pulses
+  connections.forEach(conn => {
+    const dx = conn.to.x - conn.from.x;
+    const dy = conn.to.y - conn.from.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Only draw connections within a certain distance for clarity
+    if (distance < bgCanvas.width / 2) {
+      // Update the signal position based on audio reactivity
+      conn.signal = (conn.signal + reactivityFactor * 0.05) % 1;
+      const signalX = conn.from.x + dx * conn.signal;
+      const signalY = conn.from.y + dy * conn.signal;
+
+      // Draw connection line with slight alpha modulation
+      bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
+      bgCtx.beginPath();
+      bgCtx.moveTo(conn.from.x, conn.from.y);
+      bgCtx.lineTo(conn.to.x, conn.to.y);
+      bgCtx.stroke();
+
+      // Draw a pulse or spark along the connection
+      const colors = colorSchemes[currentColorScheme];
+      bgCtx.fillStyle = colors.connection;
+      bgCtx.beginPath();
+      bgCtx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
+      bgCtx.fill();
+
+      // Optionally, add an extra spark effect on high reactivity
+      if (reactivityFactor > 0.7 && Math.random() < 0.05) {
+        bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.2 + conn.weight * 0.2})`;
         bgCtx.beginPath();
-        bgCtx.arc(neuron.x, neuron.y, neuron.size + neuron.pulse, 0, Math.PI * 2);
-        bgCtx.fill();
-      });
-      
-      // Draw connections with signals
-      connections.forEach(conn => {
-        const dx = conn.to.x - conn.from.x;
-        const dy = conn.to.y - conn.from.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Only draw if reasonable distance
-        if (distance < bgCanvas.width / 2) {
-          // Update signal position based on audio
-          conn.signal = (conn.signal + reactivityFactor * 0.05) % 1;
-          
-          // Calculate signal position
-          const signalX = conn.from.x + dx * conn.signal;
-          const signalY = conn.from.y + dy * conn.signal;
-          
-          // Draw connection line
-          bgCtx.strokeStyle = `rgba(255, 255, 255, ${0.05 + conn.weight * 0.1})`;
-          bgCtx.beginPath();
-          bgCtx.moveTo(conn.from.x, conn.from.y);
-          bgCtx.lineTo(conn.to.x, conn.to.y);
-          bgCtx.stroke();
-          
-          // Draw signal pulse
-          const colors = colorSchemes[currentColorScheme];
-          bgCtx.fillStyle = colors.connection;
-          bgCtx.beginPath();
-          bgCtx.arc(signalX, signalY, 2 * reactivityFactor + 1, 0, Math.PI * 2);
-          bgCtx.fill();
-        }
-      });
-      
-      // Occasionally change color scheme based on music intensity
-      if (Math.random() < 0.001 + reactivityFactor * 0.01) {
-        currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+        bgCtx.moveTo(signalX, signalY);
+        bgCtx.lineTo(signalX + dx * 0.1, signalY + dy * 0.1);
+        bgCtx.stroke();
       }
     }
+  });
 
+  // Occasionally change color scheme based on music intensity for extra vibe
+  if (Math.random() < 0.001 + reactivityFactor * 0.01) {
+    currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+  }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
     // Track management
     function loadTrack(index) {
       index = (index + tracks.length) % tracks.length;
