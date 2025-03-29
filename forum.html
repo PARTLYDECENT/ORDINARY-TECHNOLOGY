@@ -2,20 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ORDINARY TECHNOLOGY WEAPONS LAB - /OTSF.js</title>
+  <title>ORDINARY TECHNOLOGY - Weapon Viewer</title>
   <style>
     :root {
       --neon-blue: #00f3ff;
       --neon-purple: #9600ff;
-      --neon-red: #ff003c;
+      --neon-red: #ff003c; /* Kept for potential future use, e.g., highlighting */
     }
-    
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     html, body {
       width: 100%;
       height: 100%;
@@ -24,7 +24,7 @@
       font-family: 'Orbitron', sans-serif;
       color: white;
     }
-    
+
     #renderCanvas {
       width: 100%;
       height: 100%;
@@ -32,7 +32,7 @@
       position: absolute;
       z-index: 1;
     }
-    
+
     .overlay {
       position: absolute;
       top: 0;
@@ -41,318 +41,90 @@
       height: 100%;
       z-index: 2;
       pointer-events: none;
-      background: linear-gradient(135deg, rgba(0,0,40,0.3) 0%, rgba(0,0,0,0) 50%);
+      /* Optional: Keep a subtle gradient or remove entirely */
+      /* background: linear-gradient(135deg, rgba(0,0,40,0.1) 0%, rgba(0,0,0,0) 50%); */
     }
-    
+
     /* HUD Elements */
     .hud {
       position: absolute;
       z-index: 3;
       pointer-events: none;
     }
-    
+
     .header {
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 2.5rem;
+      font-size: 2rem; /* Slightly smaller */
       font-weight: bold;
       text-align: center;
-      text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
+      text-shadow: 0 0 8px var(--neon-blue);
       letter-spacing: 2px;
     }
-    
+
     .status-bar {
       bottom: 30px;
       left: 30px;
-      width: 300px;
-      height: 110px;
-      border: 2px solid var(--neon-blue);
-      border-radius: 10px;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 15px;
-      box-shadow: 0 0 15px var(--neon-blue);
-    }
-    
-    .weapon-name {
-      font-size: 1.2rem;
-      margin-bottom: 5px;
-      color: var(--neon-blue);
-    }
-    
-    .weapon-stats {
-      font-size: 0.9rem;
-      line-height: 1.4;
-      opacity: 0.9;
-    }
-    
-    .damage-meter {
-      position: absolute;
-      right: 30px;
-      bottom: 30px;
-      width: 200px;
-      height: 70px;
-      border: 2px solid var(--neon-red);
-      border-radius: 10px;
+      width: auto; /* Adjust width based on content */
+      min-width: 250px;
+      height: auto;
+      border: 1px solid var(--neon-blue); /* Thinner border */
+      border-radius: 5px;
       background: rgba(0, 0, 0, 0.7);
       padding: 10px;
-      box-shadow: 0 0 15px var(--neon-red);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      box-shadow: 0 0 10px var(--neon-blue);
     }
-    
-    .damage-label {
-      font-size: 0.9rem;
-      margin-bottom: 5px;
-      color: var(--neon-red);
-    }
-    
-    .damage-bar {
-      height: 15px;
-      background: linear-gradient(90deg, #ff003c 0%, #ff6b00 100%);
-      border-radius: 5px;
-      width: 80%;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .damage-bar::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 30px;
-      height: 100%;
-      background: rgba(255, 255, 255, 0.3);
-      animation: bar-shine 1.5s infinite;
-    }
-    
-    @keyframes bar-shine {
-      0% { transform: translateX(-30px); }
-      100% { transform: translateX(180px); }
-    }
-    
-    /* Scanning effect */
-    .scan-line {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 5px;
-      background: var(--neon-blue);
-      opacity: 0.5;
-      z-index: 4;
-      box-shadow: 0 0 15px 5px var(--neon-blue);
-      animation: scan 4s linear infinite;
-    }
-    
-    @keyframes scan {
-      0% { top: -5px; }
-      100% { top: 100%; }
-    }
-    
-    /* Target reticle */
-    .reticle {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 100px;
-      height: 100px;
-      z-index: 3;
-      animation: pulse 2s infinite;
-    }
-    
-    .reticle::before, .reticle::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80px;
-      height: 80px;
-      border: 2px solid var(--neon-blue);
-      border-radius: 50%;
-    }
-    
-    .reticle::after {
-      width: 40px;
-      height: 40px;
-      border-color: var(--neon-purple);
-    }
-    
-    .reticle-line {
-      position: absolute;
-      background: var(--neon-blue);
-    }
-    
-    .reticle-h {
-      top: 50%;
-      left: 0;
-      width: 100%;
-      height: 1px;
-      transform: translateY(-50%);
-    }
-    
-    .reticle-v {
-      top: 0;
-      left: 50%;
-      width: 1px;
-      height: 100%;
-      transform: translateX(-50%);
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
-    }
-    
-    /* Pop-up facts */
-    .fact-popup {
-      position: absolute;
-      color: white;
-      background: rgba(0, 15, 30, 0.85);
-      padding: 15px;
-      border-radius: 5px;
-      border-left: 4px solid var(--neon-purple);
-      max-width: 350px;
-      opacity: 0;
-      transform: translateY(20px);
-      z-index: 5;
-      box-shadow: 0 0 20px rgba(150, 0, 255, 0.5);
-      transition: opacity 0.5s, transform 0.5s;
-    }
-    
-    .fact-popup.active {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    
-    .fact-title {
-      color: var(--neon-purple);
+
+    .weapon-name {
       font-size: 1rem;
-      margin-bottom: 8px;
-      letter-spacing: 1px;
+      margin-bottom: 0; /* Removed margin */
+      color: var(--neon-blue);
     }
-    
-    .fact-content {
-      font-size: 0.9rem;
-      line-height: 1.4;
-      letter-spacing: 0.5px;
-    }
-    
-    /* Holographic rings */
-    .holo-rings {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 300px;
-      height: 300px;
-      z-index: 2;
-      pointer-events: none;
-    }
-    
-    .holo-ring {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      border-radius: 50%;
-      border: 1px solid var(--neon-blue);
-      opacity: 0.3;
-      transform: translate(-50%, -50%);
-    }
-    
-    .ring1 {
-      width: 400px;
-      height: 400px;
-      animation: rotate 20s linear infinite;
-    }
-    
-    .ring2 {
-      width: 300px;
-      height: 300px;
-      border-color: var(--neon-purple);
-      animation: rotate 15s linear infinite reverse;
-    }
-    
-    .ring3 {
-      width: 200px;
-      height: 200px;
-      border-color: var(--neon-red);
-      animation: rotate 10s linear infinite;
-    }
-    
-    @keyframes rotate {
-      0% { transform: translate(-50%, -50%) rotate(0deg); }
-      100% { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    
-    /* Corner decorations */
+
+    /* Removed .weapon-stats, .damage-meter, .reticle, .fact-popup, .holo-rings, .energy-field, .warning, .scan-line */
+
+    /* Corner decorations (kept for subtle style) */
     .corner {
       position: absolute;
-      width: 50px;
-      height: 50px;
+      width: 30px; /* Smaller */
+      height: 30px; /* Smaller */
       z-index: 3;
-      opacity: 0.8;
+      opacity: 0.6;
     }
-    
-    .top-left {
-      top: 20px;
-      left: 20px;
-      border-top: 2px solid var(--neon-blue);
-      border-left: 2px solid var(--neon-blue);
-    }
-    
-    .top-right {
-      top: 20px;
-      right: 20px;
-      border-top: 2px solid var(--neon-blue);
-      border-right: 2px solid var(--neon-blue);
-    }
-    
-    .bottom-left {
-      bottom: 20px;
-      left: 20px;
-      border-bottom: 2px solid var(--neon-blue);
-      border-left: 2px solid var(--neon-blue);
-    }
-    
-    .bottom-right {
-      bottom: 20px;
-      right: 20px;
-      border-bottom: 2px solid var(--neon-blue);
-      border-right: 2px solid var(--neon-blue);
-    }
-    
+
+    .top-left { top: 10px; left: 10px; border-top: 1px solid var(--neon-blue); border-left: 1px solid var(--neon-blue); }
+    .top-right { top: 10px; right: 10px; border-top: 1px solid var(--neon-blue); border-right: 1px solid var(--neon-blue); }
+    .bottom-left { bottom: 10px; left: 10px; border-bottom: 1px solid var(--neon-blue); border-left: 1px solid var(--neon-blue); }
+    .bottom-right { bottom: 10px; right: 10px; border-bottom: 1px solid var(--neon-blue); border-right: 1px solid var(--neon-blue); }
+
     /* Control panel */
     .control-panel {
       position: absolute;
       top: 30px;
       right: 30px;
-      width: 250px;
+      width: 150px; /* Narrower */
       background: rgba(0, 0, 0, 0.7);
-      border: 2px solid var(--neon-purple);
-      border-radius: 10px;
-      padding: 15px;
+      border: 1px solid var(--neon-purple);
+      border-radius: 5px;
+      padding: 10px;
       z-index: 10;
-      box-shadow: 0 0 15px var(--neon-purple);
+      box-shadow: 0 0 10px var(--neon-purple);
     }
-    
+
     .control-title {
-      font-size: 1rem;
-      margin-bottom: 10px;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
       color: var(--neon-purple);
       text-align: center;
     }
-    
+
     .control-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
+      grid-template-columns: 1fr; /* Single column */
+      gap: 8px;
     }
-    
+
     .control-btn {
       background: rgba(0, 0, 0, 0.8);
       border: 1px solid var(--neon-blue);
@@ -363,14 +135,16 @@
       font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.3s;
-      pointer-events: auto;
+      pointer-events: auto; /* Make buttons clickable */
+      text-align: center;
     }
-    
+
     .control-btn:hover {
       background: rgba(0, 180, 255, 0.2);
+      box-shadow: 0 0 5px var(--neon-blue);
     }
-    
-    /* Loading screen */
+
+    /* Loading screen (kept) */
     .loading-screen {
       position: absolute;
       top: 0;
@@ -385,178 +159,70 @@
       z-index: 100;
       transition: opacity 1s;
     }
-    
+
     .loading-title {
-      font-size: 3rem;
+      font-size: 2.5rem;
       color: var(--neon-blue);
-      margin-bottom: 30px;
-      text-shadow: 0 0 10px var(--neon-blue);
+      margin-bottom: 20px;
+      text-shadow: 0 0 8px var(--neon-blue);
     }
-    
+
     .loading-bar-container {
-      width: 400px;
-      height: 20px;
+      width: 300px;
+      height: 15px;
       background: rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
+      border-radius: 8px;
       overflow: hidden;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
-    
+
     .loading-bar {
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
-      transition: width 2s;
+      transition: width 0.5s; /* Faster transition */
     }
-    
+
     .loading-text {
       color: white;
-      font-size: 1rem;
+      font-size: 0.9rem;
     }
-    
-    /* Energy effect around weapon */
-    .energy-field {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 0;
-      height: 0;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(0, 243, 255, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
-      z-index: 2;
-      animation: pulse-field 4s infinite;
-    }
-    
-    @keyframes pulse-field {
-      0%, 100% { width: 300px; height: 300px; opacity: 0.1; }
-      50% { width: 400px; height: 400px; opacity: 0.2; }
-    }
-    
-    /* Warning indicators */
-    .warning {
-      position: absolute;
-      top: 100px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      border: 2px solid var(--neon-red);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 5px;
-      font-size: 1.2rem;
-      z-index: 5;
-      display: none;
-      text-align: center;
-      box-shadow: 0 0 15px var(--neon-red);
-    }
-    
-    .warning.active {
-      display: block;
-      animation: blink 1s infinite;
-    }
-    
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    
-    /* Particles effect */
-    #particles-container {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-      pointer-events: none;
-    }
+
+     /* Removed particles.js related styles */
+
   </style>
-  <!-- Load fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- Load Babylon.js from CDN -->
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
-  <!-- Load particles.js from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js"></script>
-</head>
+  </head>
 <body>
-  <!-- Main canvas for 3D rendering -->
   <canvas id="renderCanvas"></canvas>
-  
-  <!-- Overlay elements -->
+
   <div class="overlay"></div>
-  <div class="scan-line"></div>
-  
-  <!-- HUD Elements -->
-  <div class="hud header">ORDINARY WEAPONS LAB - /OTSF.js</div>
-  
-  <div class="hud status-bar">
-    <div class="weapon-name">O.T.S.F.M.B.R.C.A. XXXKENJOXXX</div>
-    <div class="weapon-stats">
-      POWER: 87.5%<br>
-      RANGE: 4500M<br>
-      AMMO: NEUROTIC CASELESS XXXREDACTED2<br>
-      STATUS: TESTING PHASE 1
-    </div>
-  </div>
-  
-  <div class="hud damage-meter">
-    <div class="damage-label"> STORAGE CAPACITY</div>
-    <div class="damage-bar"></div>
-  </div>
-  
-  <div class="hud reticle">
-    <div class="reticle-line reticle-h"></div>
-    <div class="reticle-line reticle-v"></div>
-  </div>
-  
-  <!-- Corner decorations -->
+  <div class="hud header">WEAPON VIEWER</div> <div class="hud status-bar">
+    <div class="weapon-name">O.T.S.F.M.B.R.C.A. XXXKENJOXXX</div> </div>
+
   <div class="corner top-left"></div>
   <div class="corner top-right"></div>
   <div class="corner bottom-left"></div>
   <div class="corner bottom-right"></div>
-  
-  <!-- Holographic rings -->
-  <div class="holo-rings">
-    <div class="holo-ring ring1"></div>
-    <div class="holo-ring ring2"></div>
-    <div class="holo-ring ring3"></div>
-  </div>
-  
-  <!-- Energy field effect -->
-  <div class="energy-field"></div>
-  
-  <!-- Particles container -->
-  <div id="particles-container"></div>
-  
-  <!-- Warning indicator -->
-  <div class="warning">CRITICAL ENERGY LEVELS DETECTED</div>
-  
-  <!-- Control panel -->
+
   <div class="control-panel">
-    <div class="control-title">WEAPON CONTROLS</div>
+    <div class="control-title">VIEW CONTROLS</div>
     <div class="control-grid">
-      <button class="control-btn" id="rotate-btn">ROTATE</button>
-      <button class="control-btn" id="zoom-btn">ZOOM</button>
-      <button class="control-btn" id="lights-btn">LIGHTS</button>
-      <button class="control-btn" id="facts-btn">FACTS</button>
-      <button class="control-btn" id="scan-btn">SCAN</button>
-      <button class="control-btn" id="power-btn">POWER UP</button>
-    </div>
+      <button class="control-btn" id="rotate-btn">TOGGLE ROTATE</button>
+      <button class="control-btn" id="zoom-in-btn">ZOOM IN</button>
+      <button class="control-btn" id="zoom-out-btn">ZOOM OUT</button>
+      <button class="control-btn" id="lights-btn">TOGGLE LIGHTS</button>
+      </div>
   </div>
-  
-  <!-- Fact popup container (will be populated dynamically) -->
-  <div class="fact-popup" id="fact-popup">
-    <div class="fact-title">CLASSIFIED INFORMATION</div>
-    <div class="fact-content" id="fact-content"></div>
-  </div>
-  
-  <!-- Loading screen -->
+
   <div class="loading-screen" id="loading-screen">
-    <div class="loading-title">INITIALIZING</div>
+    <div class="loading-title">LOADING MODEL</div>
     <div class="loading-bar-container">
       <div class="loading-bar" id="loading-bar"></div>
     </div>
-    <div class="loading-text" id="loading-text">LOADING WEAPON DATA...</div>
+    <div class="loading-text" id="loading-text">Please wait...</div>
   </div>
 
   <script>
@@ -564,507 +230,167 @@
     const loadingBar = document.getElementById("loading-bar");
     const loadingText = document.getElementById("loading-text");
     const loadingScreen = document.getElementById("loading-screen");
-    
+
+    // --- Loading Simulation ---
+    // You might replace this with actual progress feedback from Babylon.js SceneLoader if needed
     let loadProgress = 0;
     const loadingInterval = setInterval(() => {
-      loadProgress += Math.random() * 15;
+      loadProgress += Math.random() * 25; // Faster loading steps
       if (loadProgress >= 100) {
         loadProgress = 100;
         clearInterval(loadingInterval);
-        
-        // Finish loading sequence
         loadingBar.style.width = "100%";
-        loadingText.textContent = "WEAPON SYSTEMS ONLINE";
-        
+        loadingText.textContent = "MODEL LOADED";
         setTimeout(() => {
           loadingScreen.style.opacity = "0";
           setTimeout(() => {
             loadingScreen.style.display = "none";
-          }, 1000);
-        }, 1000);
+          }, 1000); // Fade out duration
+        }, 500); // Wait briefly after load complete
       } else {
         loadingBar.style.width = loadProgress + "%";
       }
-      
-      // Update loading text occasionally
-      if (Math.random() > 0.7) {
-        const loadingMessages = [
-          "LOADING WEAPON DATA...",
-          "INITIALIZING TARGETING SYSTEMS...",
-          "CALIBRATING GYROSCOPES...",
-          "ESTABLISHING NEURAL INTERFACE...",
-          "CHARGING SYSTEM MAINFRAME...",
-          "ACTIVATING ENERGY SHIELDS..."
-        ];
-        loadingText.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-      }
-    }, 200);
+    }, 100); // Faster interval
 
+    // Removed facts array and related functions
 
-
-
-
-
-
-
-
-////////////////////////////////////////////////////////FACTS//////////////////////////////////////////////////////////////////////////////////
-
-
-	  
-   const facts = [
-  "Advanced laser systems now employ directed-energy beams that can vaporize enemy targets with surgical precision.",
-  "Quantum entanglement links stealth drones, creating a real-time hive mind that orchestrates coordinated strikes.",
-  "Ultra-dense exoskeletons infused with adaptive nanomaterials transform soldiers into near-superhuman warriors.",
-  "Cybernetic neural interfaces enable instantaneous communication between soldiers and their weapon systems.",
-  "Electromagnetic railguns now hurl hypervelocity projectiles, shattering enemy fortifications in a flash.",
-  "Autonomous AI battle drones independently analyze and neutralize multiple threats with unprecedented accuracy.",
-  "Russia has been accused of reanimating corpses to field them as shock troops, blurring the line between life and death.",
-  "Next-gen directed-energy systems can disintegrate enemy armor and disable electronics with a single pulse.",
-  "Stealth technology now renders modern tanks nearly invisible to radar, merging adaptive camouflage with active cloaking.",
-  "New composite armors absorb and dissipate explosive energy, drastically reducing damage from high-impact blasts.",
-  "Ultra-fast battlefield networks use quantum encryption to secure unbreakable communication even in hostile environments.",
-  "Engineered nanobots perform rapid battlefield repairs or sabotage enemy equipment at the molecular level.",
-  "Bioengineered neural enhancers grant soldiers heightened situational awareness and near-instant reaction times.",
-  "Adaptive uniforms change color and pattern in real time, blending seamlessly with any terrain or environment.",
-  "Military exoskeletons amplify human strength and endurance, allowing a single soldier to operate heavy artillery.",
-  "Autonomous ground vehicles equipped with advanced AI and sensor arrays patrol battlefields, minimizing risk to human lives.",
-  "Next-gen missile systems integrate AI-guided interception to neutralize multiple aerial threats simultaneously.",
-  "High-frequency sonic weapons disorient enemy troops and disable electronics without any physical contact.",
-  "Emerging quantum radar systems promise to detect stealth aircraft and missiles, revolutionizing air defense.",
-  "Experimental energy shields are in development to create protective fields that can deflect incoming projectiles."
-];
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	  
     // Initialize Babylon.js scene
     const canvas = document.getElementById("renderCanvas");
     const engine = new BABYLON.Engine(canvas, true);
     const scene = new BABYLON.Scene(engine);
-    
+
     // Set scene background and properties
-    scene.clearColor = new BABYLON.Color4(0, 0, 0.05, 1);
-    
-    // Create a camera
+    scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.03, 1); // Slightly lighter dark blue
+
+    // Create a camera - ArcRotateCamera is good for model viewing
     const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
-    camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 2;
-    camera.upperRadiusLimit = 10;
-    camera.wheelDeltaPercentage = 0.01;
-    
+    camera.attachControl(canvas, true); // Allow user control (orbit, zoom, pan)
+    camera.lowerRadiusLimit = 1; // Allow closer zoom
+    camera.upperRadiusLimit = 20; // Allow further zoom out
+    camera.wheelDeltaPercentage = 0.02; // Adjust zoom speed
+
     // Add lights
     const mainLight = new BABYLON.HemisphericLight("mainLight", new BABYLON.Vector3(0, 1, 0), scene);
-    mainLight.intensity = 0.7;
-    
-    // Add spotlight
-    const spotlight = new BABYLON.SpotLight("spotlight", new BABYLON.Vector3(0, 5, -5), new BABYLON.Vector3(0, -1, 1), Math.PI / 4, 2, scene);
-    spotlight.intensity = 0.8;
-    spotlight.diffuse = new BABYLON.Color3(0, 0.7, 1);
-    
-    // Add point lights for dramatic effect
-    const blueLight = new BABYLON.PointLight("blueLight", new BABYLON.Vector3(2, 0, 2), scene);
-    blueLight.diffuse = new BABYLON.Color3(0, 0.5, 1);
-    blueLight.intensity = 0.7;
-    
-    const purpleLight = new BABYLON.PointLight("purpleLight", new BABYLON.Vector3(-2, 0, -2), scene);
-    purpleLight.diffuse = new BABYLON.Color3(0.5, 0, 1);
-    purpleLight.intensity = 0.7;
-    
-    // Create a ground reflection
-    const groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
-    groundMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
-    groundMaterial.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-    groundMaterial.alpha = 0.2;
-    
-    const ground = BABYLON.MeshBuilder.CreateDisc("ground", {radius: 20}, scene);
-    ground.rotation.x = Math.PI / 2;
-    ground.position.y = -2;
-    ground.material = groundMaterial;
-    
-    // Add a glow layer
+    mainLight.intensity = 0.8;
+
+    // Optional: Add a directional light for better shading
+    const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-0.5, -1, 0.5), scene);
+    dirLight.intensity = 0.5;
+
+    // Removed point lights for simplicity, but can be added back if desired
+    // Removed ground reflection plane
+
+    // Add a glow layer (optional, enhances emissive parts)
     const gl = new BABYLON.GlowLayer("glow", scene);
-    gl.intensity = 1.0;
-    
-    // Variable to store loaded weapon
+    gl.intensity = 0.6; // Reduced intensity
+
+    // Variable to store loaded weapon and rotation state
     let weapon;
-    
+    let isRotating = true; // Start rotating by default
+
     // Load the GLB weapon model
     BABYLON.SceneLoader.ImportMesh("", "assets/weapons/", "weapon1.glb", scene, (meshes) => {
-      weapon = meshes[0];
-      weapon.position = new BABYLON.Vector3(0, 0, 0);
-      weapon.scaling = new BABYLON.Vector3(1, 1, 1);
-      
-      // Apply special materials if desired
-      meshes.forEach(mesh => {
-        if (mesh.material) {
-          mesh.material.emissiveColor = new BABYLON.Color3(0, 0.5, 1);
-          gl.addIncludedOnlyMesh(mesh);
-        }
-      });
-      
-      // Create rotation animation
-      const rotationAnimation = new BABYLON.Animation(
-        "rotationAnimation",
-        "rotation.y",
-        30,
-        BABYLON.Animation.ANIMATIONTYPE_FLOAT,
-        BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
-      );
-      
-      const rotationKeys = [
-        { frame: 0, value: 0 },
-        { frame: 300, value: 2 * Math.PI }
-      ];
-      
-      rotationAnimation.setKeys(rotationKeys);
-      weapon.animations.push(rotationAnimation);
-      
-      // Start rotation by default
-      scene.beginAnimation(weapon, 0, 300, true);
+      if (meshes.length > 0) {
+          weapon = meshes[0]; // Assuming the main mesh is the first one
+          weapon.position = new BABYLON.Vector3(0, 0, 0); // Center the model
+          // Optional: Auto-scale or center the model if needed
+          // const boundingInfo = weapon.getHierarchyBoundingVectors();
+          // const size = boundingInfo.max.subtract(boundingInfo.min);
+          // const maxDim = Math.max(size.x, size.y, size.z);
+          // weapon.scaling.scaleInPlace(3 / maxDim); // Example scaling to fit ~3 units
+          // weapon.position = boundingInfo.center.scale(-1).scale(weapon.scaling.x); // Center pivot
+
+          // Apply glow to meshes with emissive materials if desired
+          meshes.forEach(mesh => {
+              if (mesh.material && mesh.material.emissiveColor && (mesh.material.emissiveColor.r > 0 || mesh.material.emissiveColor.g > 0 || mesh.material.emissiveColor.b > 0)) {
+                 gl.addIncludedOnlyMesh(mesh);
+              } else if (mesh.material) {
+                 // Optional: Tweak non-emissive materials if needed
+                 // mesh.material.metallic = 0.5;
+                 // mesh.material.roughness = 0.4;
+              }
+          });
+
+          // Setup rotation animation (we control start/stop via button)
+          const rotationAnimation = new BABYLON.Animation(
+              "rotationAnimation", "rotation.y", 30,
+              BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+              BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+          );
+          rotationAnimation.setKeys([ { frame: 0, value: 0 }, { frame: 300, value: 2 * Math.PI } ]);
+          weapon.animations.push(rotationAnimation);
+
+          // Start rotation initially
+          scene.beginAnimation(weapon, 0, 300, true, 1.0, null, "rotationGroup");
+
+      } else {
+          console.error("Failed to load weapon model or model is empty.");
+          loadingText.textContent = "ERROR LOADING MODEL";
+      }
+    }, (progress) => {
+        // Optional: Update loading bar with actual progress
+        // let percent = progress.loaded / progress.total * 100;
+        // loadingBar.style.width = percent + "%";
+        // loadingText.textContent = `Loading: ${Math.round(percent)}%`;
+    }, (scene, message, exception) => {
+        console.error("Error during model loading:", message, exception);
+        loadingText.textContent = "ERROR LOADING MODEL";
     });
 
+    // Removed Skybox for cleaner background, but can be added back
+    // Removed Particle Systems
 
-
-
-
-
-
-
-	  
- // Enhanced Skybox Setup with Dynamic Atmosphere and Glow
-const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 1000.0 }, scene);
-
-const skyboxMaterial = new BABYLON.StandardMaterial("skyBoxMaterial", scene);
-skyboxMaterial.backFaceCulling = false;
-
-// Use a high-definition space texture for a more immersive look
-skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("https://assets.babylonjs.com/textures/space", scene);
-skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
-
-// Set material colors for a deeper, cosmic feel
-skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
-skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-skyboxMaterial.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.15); // subtle ambient glow
-
-skybox.material = skyboxMaterial;
-
-// Add a slow, continuous rotation for a dynamic, ever-changing backdrop
-scene.registerBeforeRender(() => {
-    skybox.rotation.y += 0.001;  // Adjust speed as needed for visual impact
-});
-
-// Optional: Add a glow layer for that extra visual "jazz"
-const glowLayer = new BABYLON.GlowLayer("glow", scene);
-glowLayer.intensity = 0.35;
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////  
-  
-	  
-	  
-	  
-	  
-	  
-	// Apocalyptic Particle Storm Generator
-const createEpicParticleSystem = (scene) => {
-    // Babylon.js Particle System - Cosmic Chaos Edition
-    const particlesOptions = {
-        capacity: 5000, // Ramped up particle count
-        particleTexture: new BABYLON.Texture("https://assets.babylonjs.com/textures/flare.png", scene)
-    };
-    
-    const particleSystem = new BABYLON.ParticleSystem("quantum-storm", particlesOptions.capacity, scene);
-    particleSystem.particleTexture = particlesOptions.particleTexture;
-    
-    // Explosive Emitter Dynamics
-    particleSystem.emitter = new BABYLON.Vector3(0, 0, 0);
-    particleSystem.minEmitBox = new BABYLON.Vector3(-2, -2, -2); // Wider emission zone
-    particleSystem.maxEmitBox = new BABYLON.Vector3(2, 2, 2);
-    
-    // Plasma Color Palette - Electric Blue Mayhem
-    particleSystem.color1 = new BABYLON.Color4(0, 1.0, 1.0, 1.0); // Cyan intensity
-    particleSystem.color2 = new BABYLON.Color4(0.1, 0.5, 1.0, 0.8); // Deep electric blue
-    particleSystem.colorDead = new BABYLON.Color4(0, 0.2, 0.5, 0.0); // Fading energy remnants
-    
-    // Particle Size Mutation
-    particleSystem.minSize = 0.05;
-    particleSystem.maxSize = 0.5; // More dramatic size variations
-    
-    // Lifespan Chaos
-    particleSystem.minLifeTime = 0.5;
-    particleSystem.maxLifeTime = 4; // Extended potential lifecycle
-    
-    // Emission Fury
-    particleSystem.emitRate = 500; // Increased emission rate
-    
-    // Blending for Maximum Visual Impact
-    particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
-    
-    // Gravitational Manipulation
-    particleSystem.gravity = new BABYLON.Vector3(0, -0.5, 0); // More aggressive gravity
-    
-    // Directional Vectors of Destruction
-    particleSystem.direction1 = new BABYLON.Vector3(-2, 2, -2);
-    particleSystem.direction2 = new BABYLON.Vector3(2, 2, 2);
-    
-    // Angular Velocity - Spin Madness
-    particleSystem.minAngularSpeed = -Math.PI;
-    particleSystem.maxAngularSpeed = Math.PI;
-    
-    // Emission Power - MAXIMUM OVERDRIVE
-    particleSystem.minEmitPower = 1;
-    particleSystem.maxEmitPower = 3;
-    particleSystem.updateSpeed = 0.005; // Smoother update cycle
-    
-    // Start the Particle Apocalypse
-    particleSystem.start();
-
-    // Particles.js Background - Cybernetic Overlay
-    particlesJS("particles-container", {
-        particles: {
-            number: { value: 200, density: { enable: true, value_area: 1200 } },
-            color: { value: "#00ffff" }, // Neon Cyan
-            shape: {
-                type: ["circle", "triangle", "polygon"],
-                stroke: { width: 1, color: "#00ffff" },
-                polygon: { nb_sides: 5 }
-            },
-            opacity: {
-                value: 0.7,
-                random: true,
-                anim: { enable: true, speed: 2, opacity_min: 0.1, sync: false }
-            },
-            size: {
-                value: 5,
-                random: true,
-                anim: { enable: true, speed: 5, size_min: 0.1, sync: false }
-            },
-            line_linked: {
-                enable: true,
-                distance: 180,
-                color: "#00ffff",
-                opacity: 0.4,
-                width: 1.5
-            },
-            move: {
-                enable: true,
-                speed: 3,
-                direction: "none",
-                random: true,
-                straight: false,
-                out_mode: "bounce",
-                bounce: true,
-                attract: { enable: true, rotateX: 600, rotateY: 1200 }
-            }
-        },
-        interactivity: {
-            detect_on: "canvas",
-            events: {
-                onhover: { enable: true, mode: ["repulse", "grab"] },
-                onclick: { enable: true, mode: "push" },
-                resize: true
-            },
-            modes: {
-                grab: { distance: 200, line_linked: { opacity: 0.7 } },
-                repulse: { distance: 100, duration: 0.4 },
-                push: { particles_nb: 10 }
-            }
-        },
-        retina_detect: true
-    });
-};
-
-// Initialize the Particle Apocalypse
-createEpicParticleSystem(scene);
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-   
-	  
-	  
-	  
-	  
-	  
-	  
-	  
-	  
-	  // Control panel functionality
+    // Control panel functionality
     document.getElementById("rotate-btn").addEventListener("click", function() {
-      if (weapon) {
-        // Toggle rotation animation
-        if (scene.getAnimationGroupByName("rotationAnimation")) {
-          scene.stopAnimation(weapon);
-        } else {
-          scene.beginAnimation(weapon, 0, 300, true);
+        if (weapon) {
+            isRotating = !isRotating;
+            const animGroup = scene.getAnimationGroupByName("rotationGroup");
+            if (isRotating) {
+                if (animGroup && animGroup.isStarted && !animGroup.isPlaying) {
+                     animGroup.play(true); // Resume if paused
+                } else if (!animGroup || !animGroup.isStarted) {
+                     scene.beginAnimation(weapon, 0, 300, true, 1.0, null, "rotationGroup"); // Start if not started
+                }
+            } else {
+                if (animGroup && animGroup.isPlaying) {
+                    animGroup.pause(); // Pause the rotation
+                }
+            }
         }
-      }
     });
-    
-    document.getElementById("zoom-btn").addEventListener("click", function() {
-      // Toggle between zoomed in and out
-      if (camera.radius > 4) {
-        camera.radius = 3;
-      } else {
-        camera.radius = 6;
-      }
+
+    document.getElementById("zoom-in-btn").addEventListener("click", function() {
+        // Animate zoom in
+        BABYLON.Animation.CreateAndStartAnimation('zoomIn', camera, 'radius', 30, 15, camera.radius, Math.max(camera.lowerRadiusLimit, camera.radius * 0.7), BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
     });
-    
+    document.getElementById("zoom-out-btn").addEventListener("click", function() {
+        // Animate zoom out
+         BABYLON.Animation.CreateAndStartAnimation('zoomOut', camera, 'radius', 30, 15, camera.radius, Math.min(camera.upperRadiusLimit, camera.radius * 1.3), BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+    });
+
+    let lightsOn = true;
     document.getElementById("lights-btn").addEventListener("click", function() {
-      // Toggle lights
-      if (blueLight.intensity > 0) {
-        blueLight.intensity = 0;
-        purpleLight.intensity = 0;
-        spotlight.intensity = 0.3;
-      } else {
-        blueLight.intensity = 0.7;
-        purpleLight.intensity = 0.7;
-        spotlight.intensity = 0.8;
-      }
+        lightsOn = !lightsOn;
+        mainLight.intensity = lightsOn ? 0.8 : 0.1; // Dim main light
+        dirLight.intensity = lightsOn ? 0.5 : 0; // Turn off directional
+        gl.intensity = lightsOn ? 0.6 : 0; // Turn off glow
+        // Toggle other lights if they were added back
     });
-    
-    // Facts button functionality
-    document.getElementById("facts-btn").addEventListener("click", function() {
-      showRandomFact();
-    });
-    
-    function showRandomFact() {
-      const factPopup = document.getElementById("fact-popup");
-      const factContent = document.getElementById("fact-content");
-      const randomFact = facts[Math.floor(Math.random() * facts.length)];
-      
-      factContent.textContent = randomFact;
-      factPopup.style.top = (Math.random() * 300 + 150) + "px";
-      factPopup.style.left = (Math.random() * 500 + 100) + "px";
-      
-      factPopup.classList.add("active");
-      
-      setTimeout(() => {
-        factPopup.classList.remove("active");
-      }, 5000);
-    }
-    
-    // Scan button functionality
-    document.getElementById("scan-btn").addEventListener("click", function() {
-      // Flash the scan line
-      const scanLine = document.querySelector(".scan-line");
-      scanLine.style.animation = "none";
-      setTimeout(() => {
-        scanLine.style.animation = "scan 2s linear 3";
-      }, 10);
-      
-      // Display random data values
-      updateWeaponStats();
-    });
-    
-    function updateWeaponStats() {
-      const weaponStats = document.querySelector(".weapon-stats");
-      const power = (80 + Math.random() * 18).toFixed(1);
-      const range = Math.floor(400 + Math.random() * 100);
-      
-      weaponStats.innerHTML = `
-        POWER: ${power}%<br>
-        RANGE: ${range}M<br>
-        AMMO: QUANTUM PLASMA<br>
-        STATUS: COMBAT READY
-      `;
-    }
-    
-    // Power up button functionality
-    document.getElementById("power-btn").addEventListener("click", function() {
-      // Show warning
-      const warning = document.querySelector(".warning");
-      warning.classList.add("active");
-      
-      // Increase particle intensity
-      particleSystem.emitRate = 300;
-      
-      // Pulse the lights
-      let pulseCount = 0;
-      const pulseInterval = setInterval(() => {
-        blueLight.intensity = 0.7 + Math.random() * 0.5;
-        purpleLight.intensity = 0.7 + Math.random() * 0.5;
-        pulseCount++;
-        
-        if (pulseCount > 10) {
-          clearInterval(pulseInterval);
-          blueLight.intensity = 0.7;
-          purpleLight.intensity = 0.7;
-          particleSystem.emitRate = 100;
-          warning.classList.remove("active");
-        }
-      }, 200);
-      
-      // Update damage bar
-      const damageBar = document.querySelector(".damage-bar");
-      damageBar.style.width = "100%";
-      setTimeout(() => {
-        damageBar.style.width = "80%";
-      }, 3000);
-    });
-    
+
+    // Removed facts, scan, power-up button logic
+    // Removed random fact/warning intervals
+    // Removed light animation (animateLights)
+
     // Resize the engine on window resize
     window.addEventListener("resize", function() {
       engine.resize();
     });
-    
+
     // Run the render loop
     engine.runRenderLoop(function() {
       scene.render();
     });
-    
-    // Show a random fact every 20 seconds
-    setInterval(showRandomFact, 20000);
-    
-    // Occasionally show random warnings
-    setInterval(() => {
-      if (Math.random() > 0.7) {
-        const warning = document.querySelector(".warning");
-        const warnings = [
-          "CRITICAL ENERGY LEVELS DETECTED",
-          "COOLING SYSTEM ALERT",
-          "DIMENSIONAL ANOMALY DETECTED",
-          "QUANTUM FLUCTUATION WARNING",
-          "NEURAL INTERFACE SYNC REQUIRED"
-        ];
-        warning.textContent = warnings[Math.floor(Math.random() * warnings.length)];
-        warning.classList.add("active");
-        
-        setTimeout(() => {
-          warning.classList.remove("active");
-        }, 3000);
-      }
-    }, 15000);
-    
-    // Create light animation
-    const animateLights = () => {
-      const t = performance.now() / 1000;
-      blueLight.position.x = Math.sin(t) * 3;
-      blueLight.position.z = Math.cos(t) * 3;
-      
-      purpleLight.position.x = Math.sin(t + Math.PI) * 3;
-      purpleLight.position.z = Math.cos(t + Math.PI) * 3;
-      
-      requestAnimationFrame(animateLights);
-    };
-    
-    animateLights();
+
   </script>
 </body>
 </html>
