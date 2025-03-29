@@ -3,51 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro City Driver</title>
+    <title>Endless Highway</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; color: white; }
-        canvas { display: block; background-color: #3a3a3a; /* Dark asphalt */ touch-action: none; border: 2px solid #777; max-width: 100%; max-height: calc(100vh - 50px); object-fit: contain; }
-        #ui { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 5; font-size: 16px; text-shadow: 1px 1px 2px black; pointer-events: none; color: #eee; background-color: rgba(0,0,0,0.3); padding: 5px; border-radius: 3px;}
-        #message { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); z-index: 5; font-size: 18px; color: #ff0; text-shadow: 1px 1px 2px black; background-color: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px; display: none; /* Hidden initially */ }
-        .overlay { /* Styles from highway */ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; text-align: center; padding: 15px; box-sizing: border-box; }
+        body { margin: 0; padding: 0; background-color: #222; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; color: white; }
+        canvas { display: block; background-color: #444; /* Road color */ touch-action: none; border: 2px solid #ccc; max-width: 100%; max-height: 95vh; object-fit: contain; }
+        #ui { position: fixed; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 5; font-size: 18px; text-shadow: 1px 1px 2px black; pointer-events: none; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; text-align: center; padding: 15px; box-sizing: border-box; }
         .overlay.active { opacity: 1; pointer-events: all; }
-        .overlay h1 { font-size: 32px; margin-bottom: 15px; color: #ddd; } .overlay p { font-size: 15px; margin-bottom: 20px; color: #bbb; max-width: 400px; line-height: 1.4;}
-        .overlay button { background-color: #666; color: #fff; border: 1px solid #999; padding: 10px 25px; font-size: 16px; margin-top: 15px; cursor: pointer; border-radius: 5px; transition: background-color 0.2s; }
-        .overlay button:hover { background-color: #888; }
-
-        /* --- Mobile Controls --- (Combined Joystick/Buttons) */
-        #mobile-controls { position: fixed; bottom: 0; left: 0; width: 100%; height: 150px; z-index: 3; pointer-events: none; display: none; user-select: none; -webkit-user-select: none; }
-        #joystick-area { position: absolute; left: 15px; bottom: 15px; width: 120px; height: 120px; background-color: rgba(80, 80, 80, 0.2); border-radius: 50%; border: 1px solid rgba(120, 120, 120, 0.4); pointer-events: auto; }
-        #joystick-thumb { position: absolute; left: 50%; top: 50%; width: 45px; height: 45px; background-color: rgba(120, 120, 120, 0.5); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; border: 1px solid rgba(180, 180, 180, 0.6); }
-        /* Using two action buttons for Accel/Brake */
-        #button-brake, #button-accel { position: absolute; right: 20px; width: 70px; height: 55px; background-color: rgba(80, 80, 80, 0.3); border: 1px solid rgba(120, 120, 120, 0.5); pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 14px; color: #ccc; border-radius: 8px; }
-        #button-accel { bottom: 85px; } /* Top right */
-        #button-brake { bottom: 15px; } /* Bottom right */
-        #button-brake:active, #button-accel:active { background-color: rgba(120, 120, 120, 0.5); transform: scale(0.97); }
-
+        .overlay h1 { font-size: 36px; margin-bottom: 15px; color: #eee; }
+        .overlay p { font-size: 16px; margin-bottom: 20px; color: #ccc; max-width: 400px; }
+        .overlay button { background-color: #777; color: #fff; border: 1px solid #aaa; padding: 12px 30px; font-size: 18px; margin-top: 15px; cursor: pointer; border-radius: 5px; transition: background-color 0.2s; }
+        .overlay button:hover { background-color: #999; }
+        /* Mobile touch areas */
+        #touch-left, #touch-right { position: fixed; bottom: 0; width: 50%; height: 100vh; /* Full height */ z-index: 2; /* Below UI, above canvas */ /* background-color: rgba(255, 0, 0, 0.1); */ /* Uncomment for debugging */ }
+        #touch-left { left: 0; }
+        #touch-right { right: 0; }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
     <div id="ui">
         <span id="score">Score: 0</span>
-        <span id="speed">Speed: 0 km/h</span>
+        <span id="speed">Speed: 1.0x</span>
     </div>
-    <div id="message">Objective Complete!</div>
 
-    <div id="mobile-controls">
-        <div id="joystick-area"><div id="joystick-thumb"></div></div>
-        <div id="button-accel">GAS</div>
-        <div id="button-brake">BRAKE</div>
-    </div>
+    <div id="touch-left"></div>
+    <div id="touch-right"></div>
 
     <div id="start-screen" class="overlay active">
-        <h1>Retro City Driver</h1>
-        <p>Drive around the city. Reach the <span style="color:#ff0;">TARGET</span>.<br>Avoid crashing!<br>WASD/Arrows or Joystick/Buttons.</p>
-        <button id="start-button">START ENGINE</button>
+        <h1>ENDLESS HIGHWAY</h1>
+        <p>Dodge the oncoming traffic!<br>Use A/D, Left/Right Arrows,<br>or Tap Left/Right side of screen.</p>
+        <button id="start-button">START DRIVING</button>
     </div>
     <div id="game-over" class="overlay">
-        <h1>WRECKED!</h1>
+        <h1>CRASH!</h1>
         <p id="final-score">Final Score: 0</p>
         <button id="restart-button">RESTART</button>
     </div>
@@ -63,422 +52,219 @@
         const scoreEl = document.getElementById('score');
         const speedEl = document.getElementById('speed');
         const finalScoreEl = document.getElementById('final-score');
-        const messageEl = document.getElementById('message');
         const startScreen = document.getElementById('start-screen');
         const gameOverScreen = document.getElementById('game-over');
         const startButton = document.getElementById('start-button');
         const restartButton = document.getElementById('restart-button');
+        const touchLeft = document.getElementById('touch-left');
+        const touchRight = document.getElementById('touch-right');
 
         // --- Game Constants ---
-        const TILE_SIZE = 40; // Size of each grid tile
-        const MAP_COLS = 40; // Map width in tiles
-        const MAP_ROWS = 30; // Map height in tiles
-        const PLAYER_WIDTH = TILE_SIZE * 0.4;
-        const PLAYER_HEIGHT = TILE_SIZE * 0.7;
-        const ACCELERATION = 0.08;
-        const BRAKING = 0.15;
-        const FRICTION = 0.97; // Multiplier less than 1
-        const TURN_SPEED = 0.05; // Radians per update
-        const MAX_SPEED = 4.5;
-        const TRAFFIC_CAR_WIDTH = PLAYER_WIDTH;
-        const TRAFFIC_CAR_HEIGHT = PLAYER_HEIGHT;
-        const MAX_TRAFFIC = 15;
-        const TARGET_SIZE = TILE_SIZE * 0.6;
-
-        // Map Tile Types
-        const TILE = { ROAD: 0, BUILDING: 1 };
+        const PLAYER_WIDTH = 30;
+        const PLAYER_HEIGHT = 50;
+        const PLAYER_MOVE_SPEED = 5; // How fast player moves side-to-side
+        const OBSTACLE_WIDTH = 35;
+        const OBSTACLE_HEIGHT = 60;
+        const ROAD_LINE_WIDTH = 10;
+        const ROAD_LINE_HEIGHT = 40;
+        const ROAD_LINE_GAP = 20;
+        const MAX_SPEED_INCREASE = 4; // Max speed multiplier
+        const SPEED_INCREMENT = 0.0001; // How much speed increases per frame
+        const OBSTACLE_SPAWN_BASE_CHANCE = 0.015; // Initial chance per frame
 
         // --- Game State ---
-        let player, mapGrid, camera, traffic, target, score, gameOver, gameRunning, keysPressed;
-        let touchSteer, touchAccel, touchBrake; // Mobile control state
+        let playerX, roadOffset, score, gameSpeed, obstacles, gameOver, gameRunning, keysPressed, touchLeftActive, touchRightActive;
 
-        // --- Map Generation ---
-        function generateMap(cols, rows) {
-            const grid = Array(rows).fill().map(() => Array(cols).fill(TILE.BUILDING));
-            // Simple grid pattern: roads every few cells
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    if (r > 1 && r < rows - 2 && c > 1 && c < cols - 2) { // Keep border buildings
-                       if (r % 4 === 0 || c % 5 === 0) { // Create road grid
-                           grid[r][c] = TILE.ROAD;
-                           // Make intersections roads too
-                           if (r % 4 === 0 && c % 5 === 0) grid[r][c] = TILE.ROAD;
-                       }
-                       // Add some random roads maybe
-                       // else if (Math.random() < 0.1) grid[r][c] = TILE.ROAD;
-                    }
+        // ============= Game Functions =============
+
+        function resetGame() {
+            playerX = C_WIDTH / 2 - PLAYER_WIDTH / 2;
+            roadOffset = 0;
+            score = 0;
+            gameSpeed = 1.0;
+            obstacles = [];
+            gameOver = false;
+            gameRunning = false; // Don't start until button press
+            keysPressed = new Set();
+            touchLeftActive = false;
+            touchRightActive = false;
+            console.log("Game Reset");
+            updateUI(); // Update UI for initial state
+        }
+
+        function updateUI() {
+            scoreEl.textContent = `Score: ${Math.floor(score)}`;
+            speedEl.textContent = `Speed: ${gameSpeed.toFixed(1)}x`;
+        }
+
+        function spawnObstacle() {
+            // Simple lane-based spawning
+            const laneWidth = C_WIDTH / 3; // Assuming 3 lanes
+            const lane = Math.floor(Math.random() * 3); // 0, 1, or 2
+            const xPos = lane * laneWidth + (laneWidth / 2) - OBSTACLE_WIDTH / 2;
+
+            obstacles.push({
+                x: xPos,
+                y: -OBSTACLE_HEIGHT, // Start above screen
+                w: OBSTACLE_WIDTH,
+                h: OBSTACLE_HEIGHT
+            });
+        }
+
+        function update(dt) { // dt not explicitly used here, speed controls time
+            if (gameOver || !gameRunning) return;
+
+            // --- Input ---
+            let move = 0;
+            if (touchLeftActive || keysPressed.has('a') || keysPressed.has('arrowleft')) {
+                move = -1;
+            } else if (touchRightActive || keysPressed.has('d') || keysPressed.has('arrowright')) {
+                move = 1;
+            }
+            playerX += move * PLAYER_MOVE_SPEED * (gameSpeed * 0.5 + 0.5) ; // Move faster at higher speeds
+
+            // Clamp player position
+            playerX = Math.max(0, Math.min(C_WIDTH - PLAYER_WIDTH, playerX));
+
+            // --- Road Lines ---
+            roadOffset = (roadOffset + ROAD_LINE_HEIGHT + ROAD_LINE_GAP) % (ROAD_LINE_HEIGHT + ROAD_LINE_GAP); // Move offset based on full cycle
+
+            // --- Obstacles ---
+            // Move existing obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += gameSpeed * 3; // Base speed adjusted by gameSpeed
+
+                // Collision check
+                if (playerX < obs.x + obs.w &&
+                    playerX + PLAYER_WIDTH > obs.x &&
+                    C_HEIGHT - PLAYER_HEIGHT - 10 < obs.y + obs.h && // Player fixed Y pos near bottom
+                    C_HEIGHT - 10 > obs.y) {
+                    gameOver = true;
+                    console.log("Collision!");
+                    finalScoreEl.textContent = `Final Score: ${Math.floor(score)}`;
+                    gameOverScreen.classList.add('active');
+                    return; // Stop update on collision
+                }
+
+                // Remove off-screen obstacles
+                if (obs.y > C_HEIGHT) {
+                    obstacles.splice(i, 1);
+                    score += 10; // Score for dodging
                 }
             }
-             // Ensure starting area is road
-             grid[rows-3][2] = TILE.ROAD; grid[rows-3][3] = TILE.ROAD;
-             grid[rows-4][2] = TILE.ROAD; grid[rows-4][3] = TILE.ROAD;
-             return grid;
-        }
 
-        // --- Camera ---
-        // Simple camera follows player, keeping player near bottom-center
-        function setupCamera() {
-             return { x: 0, y: 0 }; // Top-left corner of visible area
-        }
-        function updateCamera() {
-             camera.x = player.x - C_WIDTH / 2;
-             camera.y = player.y - C_HEIGHT * 0.75; // Keep player lower on screen
-             // Clamp camera to map boundaries
-             camera.x = Math.max(0, Math.min(MAP_COLS * TILE_SIZE - C_WIDTH, camera.x));
-             camera.y = Math.max(0, Math.min(MAP_ROWS * TILE_SIZE - C_HEIGHT, camera.y));
-        }
-
-        // --- Player ---
-        function createPlayer(x, y) { return { x, y, w: PLAYER_WIDTH, h: PLAYER_HEIGHT, angle: -Math.PI / 2, speed: 0, steer: 0 }; }
-        function updatePlayer(dt) { // dt is delta time in ms, convert to fraction of second
-             const delta = dt / 16.667; // Normalize to ~60fps baseline
-
-            // Input
-            let accelerate = 0; let turn = 0;
-            if (touchAccel || keysPressed.has('w') || keysPressed.has('arrowup')) accelerate = 1;
-            else if (touchBrake || keysPressed.has('s') || keysPressed.has('arrowdown')) accelerate = -1; // Brake/Reverse
-
-            if (touchSteer !== 0) turn = touchSteer;
-            else if (keysPressed.has('a') || keysPressed.has('arrowleft')) turn = -1;
-            else if (keysPressed.has('d') || keysPressed.has('arrowright')) turn = 1;
-
-            // Steering (only when moving, scaled by speed)
-            const turnFactor = Math.min(1, Math.abs(player.speed) / 2); // Less turning at low speed
-             if (player.speed !== 0) {
-                player.angle += turn * TURN_SPEED * turnFactor * (player.speed > 0 ? 1 : -1) * delta; // Allow reverse steering
-             }
-
-            // Acceleration/Braking
-            if (accelerate > 0) player.speed += ACCELERATION * delta;
-            else if (accelerate < 0) player.speed -= BRAKING * delta;
-
-            // Friction
-            player.speed *= FRICTION;
-            if (Math.abs(player.speed) < 0.01) player.speed = 0; // Stop if very slow
-
-            // Clamp Speed
-            player.speed = Math.max(-MAX_SPEED / 2, Math.min(MAX_SPEED, player.speed)); // Allow reverse speed
-
-            // Movement
-            const moveX = Math.cos(player.angle) * player.speed * delta;
-            const moveY = Math.sin(player.angle) * player.speed * delta;
-
-            // --- Basic Collision Detection (Simplified: Check corners against map grid) ---
-            const corners = getCarCorners(player);
-            let canMoveX = true;
-            let canMoveY = true;
-
-             // Check X movement
-             const nextX = player.x + moveX;
-             corners.forEach(corner => {
-                 if (!canMoveX) return;
-                 const tileCol = Math.floor((corner.x + moveX) / TILE_SIZE);
-                 const tileRow = Math.floor(corner.y / TILE_SIZE);
-                 if (mapGrid[tileRow]?.[tileCol] === TILE.BUILDING) canMoveX = false;
-             });
-
-             // Check Y movement
-             const nextY = player.y + moveY;
-              corners.forEach(corner => {
-                 if (!canMoveY) return;
-                 const tileCol = Math.floor(corner.x / TILE_SIZE);
-                 const tileRow = Math.floor((corner.y + moveY) / TILE_SIZE);
-                 if (mapGrid[tileRow]?.[tileCol] === TILE.BUILDING) canMoveY = false;
-             });
-
-
-            if (canMoveX) player.x += moveX; else player.speed *= 0.5; // Lose speed on wall hit
-            if (canMoveY) player.y += moveY; else player.speed *= 0.5;
-
-
-            // Clamp player to map bounds
-            player.x = Math.max(player.w / 2, Math.min(MAP_COLS * TILE_SIZE - player.w / 2, player.x));
-            player.y = Math.max(player.h / 2, Math.min(MAP_ROWS * TILE_SIZE - player.h / 2, player.y));
-
-            // --- Target Collision ---
-            if (isRectCircleColliding(player, target)) {
-                score += 100;
-                placeNewTarget();
-                showMessage("Target Reached! +100");
+            // Spawn new obstacles randomly based on chance + speed
+            const spawnChance = OBSTACLE_SPAWN_BASE_CHANCE * gameSpeed;
+            if (Math.random() < spawnChance) {
+                spawnObstacle();
             }
-        }
-        // Helper to get rotated corners for collision
-        function getCarCorners(car) {
-            const hw = car.w / 2; const hh = car.h / 2;
-            const c = Math.cos(car.angle); const s = Math.sin(car.angle);
-            const corners = [
-                {x: -hw, y: -hh}, {x: hw, y: -hh}, {x: hw, y: hh}, {x: -hw, y: hh}
-            ];
-            return corners.map(p => ({
-                x: car.x + p.x * c - p.y * s,
-                y: car.y + p.x * s + p.y * c
-            }));
-        }
-         // Simple Rectangle-Circle Collision (Target is circle)
-        function isRectCircleColliding(rect, circle) {
-            const rectCenterX = rect.x; // Assuming x,y is center
-            const rectCenterY = rect.y;
-            // Find closest point to circle center on the rectangle
-            const closestX = clamp(circle.x, rectCenterX - rect.w / 2, rectCenterX + rect.w / 2);
-            const closestY = clamp(circle.y, rectCenterY - rect.h / 2, rectCenterY + rect.h / 2);
-            // Calculate distance between circle's center and this closest point
-            const distX = circle.x - closestX;
-            const distY = circle.y - closestY;
-            // If the distance is less than the circle's radius, an overlap occurs
-            const distanceSquared = (distX * distX) + (distY * distY);
-            return distanceSquared < (circle.r * circle.r);
+
+            // --- Difficulty Increase ---
+            score += gameSpeed * 0.1; // Score increases faster at higher speeds
+            gameSpeed = Math.min(MAX_SPEED_INCREASE, gameSpeed + SPEED_INCREMENT);
+            updateUI();
         }
 
-        // --- Traffic ---
-        function createTrafficCar() {
-             // Spawn off screen on a road tile
-             let x, y, angle;
-             if (Math.random() < 0.5) { // Vertical road start
-                 const col = Math.floor(Math.random() * MAP_COLS);
-                 if (mapGrid[0][col] === TILE.ROAD || mapGrid[MAP_ROWS-1][col] === TILE.ROAD) { // Check if column is road near edge
-                      x = col * TILE_SIZE + TILE_SIZE / 2;
-                      if (Math.random() < 0.5) { y = -TRAFFIC_CAR_HEIGHT; angle = Math.PI/2; } // Top
-                      else { y = MAP_ROWS * TILE_SIZE + TRAFFIC_CAR_HEIGHT; angle = -Math.PI/2; } // Bottom
-                 } else return null; // Don't spawn if start isn't road
-             } else { // Horizontal road start
-                  const row = Math.floor(Math.random() * MAP_ROWS);
-                  if (mapGrid[row][0] === TILE.ROAD || mapGrid[row][MAP_COLS-1] === TILE.ROAD) {
-                      y = row * TILE_SIZE + TILE_SIZE / 2;
-                      if (Math.random() < 0.5) { x = -TRAFFIC_CAR_WIDTH; angle = 0; } // Left
-                      else { x = MAP_COLS * TILE_SIZE + TRAFFIC_CAR_WIDTH; angle = Math.PI; } // Right
-                  } else return null;
-             }
-             return { x, y, w: TRAFFIC_CAR_WIDTH, h: TRAFFIC_CAR_HEIGHT, angle, speed: 1 + Math.random() * 1.5 };
-        }
-        function updateTraffic(dt) {
-            const delta = dt / 16.667;
-            for (let i = traffic.length - 1; i >= 0; i--) {
-                 const car = traffic[i];
-                 car.x += Math.cos(car.angle) * car.speed * delta;
-                 car.y += Math.sin(car.angle) * car.speed * delta;
-
-                 // Collision with player
-                 if (isRectCircleColliding(car, {x: player.x, y: player.y, r: player.w/2})) { // Approximate player as circle
-                      gameOver = true;
-                      console.log("Crashed into traffic!");
-                      finalScoreEl.textContent = `Final Score: ${Math.floor(score)}`;
-                      gameOverScreen.classList.add('active');
-                      return; // Stop further updates
-                 }
-
-                 // Remove if far off screen
-                 if (car.x < -100 || car.x > MAP_COLS * TILE_SIZE + 100 || car.y < -100 || car.y > MAP_ROWS * TILE_SIZE + 100) {
-                      traffic.splice(i, 1);
-                 }
-            }
-            // Spawn new traffic
-            if (traffic.length < MAX_TRAFFIC && Math.random() < 0.02) {
-                 const newCar = createTrafficCar();
-                 if (newCar) traffic.push(newCar);
-            }
-        }
-
-        // --- Objective ---
-        function placeNewTarget() {
-             let r, c;
-             do {
-                 r = Math.floor(Math.random() * (MAP_ROWS - 4)) + 2; // Avoid edges
-                 c = Math.floor(Math.random() * (MAP_COLS - 4)) + 2;
-             } while (mapGrid[r][c] !== TILE.ROAD); // Ensure target is on a road
-             target = { x: c * TILE_SIZE + TILE_SIZE / 2, y: r * TILE_SIZE + TILE_SIZE / 2, r: TARGET_SIZE / 2 };
-        }
-        let messageTimeout = null;
-        function showMessage(msg) {
-            messageEl.textContent = msg;
-            messageEl.style.display = 'block';
-            clearTimeout(messageTimeout);
-            messageTimeout = setTimeout(() => { messageEl.style.display = 'none'; }, 2000);
-        }
-
-        // ============= Update & Render =============
-        function updateGame(dt) {
-            if (gameOver || !gameRunning) return;
-            updatePlayer(dt);
-            updateTraffic(dt);
-            updateCamera(); // Update camera based on new player pos
-        }
-
-        function renderGame() {
-            // Clear Canvas
-            ctx.fillStyle = '#3a3a3a'; // Road base color
+        function render() {
+            // Clear canvas
+            ctx.fillStyle = '#444'; // Road color
             ctx.fillRect(0, 0, C_WIDTH, C_HEIGHT);
 
-            // Save context, translate to camera view
-            ctx.save();
-            ctx.translate(-camera.x, -camera.y);
+            // --- Draw Road Lines ---
+            ctx.fillStyle = '#eee'; // Line color
+            const laneCenterX1 = C_WIDTH / 3;
+            const laneCenterX2 = (C_WIDTH / 3) * 2;
+            const segmentLength = ROAD_LINE_HEIGHT + ROAD_LINE_GAP;
 
-            // Draw Map Grid (Roads & Buildings)
-            for (let r = 0; r < MAP_ROWS; r++) {
-                for (let c = 0; c < MAP_COLS; c++) {
-                     const x = c * TILE_SIZE;
-                     const y = r * TILE_SIZE;
-                     // Check if tile is visible on screen before drawing (basic culling)
-                     if (x + TILE_SIZE > camera.x && x < camera.x + C_WIDTH && y + TILE_SIZE > camera.y && y < camera.y + C_HEIGHT) {
-                          if (mapGrid[r][c] === TILE.BUILDING) {
-                                ctx.fillStyle = '#556'; // Simple building color
-                                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                                ctx.strokeStyle = '#334';
-                                ctx.strokeRect(x,y, TILE_SIZE, TILE_SIZE);
-                          } else { // Road - Draw center line maybe?
-                               ctx.strokeStyle = '#666';
-                               ctx.lineWidth = 1;
-                               ctx.beginPath();
-                               ctx.moveTo(x + TILE_SIZE/2, y);
-                               ctx.lineTo(x + TILE_SIZE/2, y + TILE_SIZE);
-                               ctx.stroke();
-                               ctx.beginPath();
-                               ctx.moveTo(x, y + TILE_SIZE/2);
-                               ctx.lineTo(x + TILE_SIZE, y + TILE_SIZE/2);
-                               ctx.stroke();
-                          }
-                     }
-                }
+            for (let y = roadOffset - segmentLength; y < C_HEIGHT; y += segmentLength) {
+                ctx.fillRect(laneCenterX1 - ROAD_LINE_WIDTH / 2, y, ROAD_LINE_WIDTH, ROAD_LINE_HEIGHT);
+                ctx.fillRect(laneCenterX2 - ROAD_LINE_WIDTH / 2, y, ROAD_LINE_WIDTH, ROAD_LINE_HEIGHT);
             }
 
-            // Draw Target
-             if (target) {
-                 ctx.fillStyle = `rgba(255, 255, 0, ${0.7 + Math.sin(performance.now() * 0.005) * 0.3})`; // Flashing yellow
-                 ctx.beginPath();
-                 ctx.arc(target.x, target.y, target.r, 0, Math.PI * 2);
-                 ctx.fill();
-                 ctx.strokeStyle = '#ff0';
-                 ctx.lineWidth = 2;
-                 ctx.stroke();
-             }
-
-            // Draw Traffic
-            traffic.forEach(car => {
-                // Check visibility
-                 if (car.x + car.w > camera.x && car.x < camera.x + C_WIDTH && car.y + car.h > camera.y && car.y < camera.y + C_HEIGHT) {
-                    ctx.save();
-                    ctx.translate(car.x, car.y); // Translate to car's top-left
-                    ctx.rotate(car.angle); // Rotate around top-left (adjust if needed)
-                    ctx.fillStyle = '#ccc'; // Traffic car color
-                    ctx.fillRect(0, 0, car.w, car.h); // Draw relative to top-left
-                    ctx.restore();
-                 }
+            // --- Draw Obstacles ---
+            ctx.fillStyle = '#ddd'; // Obstacle color
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                // Simple shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                ctx.fillRect(obs.x + 3, obs.y + 3, obs.w, obs.h);
+                ctx.fillStyle = '#ddd'; // Reset color
             });
 
-            // Draw Player
-            if (player) {
-                 // Check visibility
-                 if (player.x + player.w > camera.x && player.x < camera.x + C_WIDTH && player.y + player.h > camera.y && player.y < camera.y + C_HEIGHT) {
-                    ctx.save();
-                    ctx.translate(player.x, player.y); // Translate to player center
-                    ctx.rotate(player.angle);
-                    ctx.fillStyle = '#e44'; // Player color
-                    ctx.fillRect(-player.w / 2, -player.h / 2, player.w, player.h); // Draw centered
-                    // Headlights?
-                    ctx.fillStyle = '#ff0';
-                    ctx.fillRect(player.w * 0.25, -player.h * 0.55, player.w*0.1, player.h*0.1);
-                    ctx.fillRect(-player.w * 0.35, -player.h * 0.55, player.w*0.1, player.h*0.1);
-                    ctx.restore();
-                 }
-            }
+            // --- Draw Player ---
+            ctx.fillStyle = '#e44'; // Player color
+            const playerDrawY = C_HEIGHT - PLAYER_HEIGHT - 10; // Fixed Y position
+            ctx.fillRect(playerX, playerDrawY, PLAYER_WIDTH, PLAYER_HEIGHT);
+            // Simple shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(playerX + 4, playerDrawY + 4, PLAYER_WIDTH, PLAYER_HEIGHT);
 
-            // Restore context transform
-            ctx.restore();
-
-            // --- Draw UI on top ---
-            updateUI(); // Update text content
         }
 
-        // ============= Game Loop Control =============
+        // ============= Game Loop =============
         let animationFrameId = null;
-        let lastTimestamp = 0;
         function gameLoop(timestamp) {
-            if (!gameRunning) { animationFrameId = null; return; } // Stop if not running
-            if (gameOver) { // Handle game over state
-                if (!gameOverScreen.classList.contains('active')) {
-                     finalScoreEl.textContent = `Final Score: ${Math.floor(score)}`;
-                     gameOverScreen.classList.add('active');
-                }
-                 animationFrameId = null; return; // Stop the loop
+            if (!gameRunning) {
+                animationFrameId = null;
+                 return; // Don't run if not started or game over handled
             }
+             if (gameOver) {
+                  animationFrameId = null;
+                  return; // Stop loop cleanly on game over
+             }
 
-            const deltaTime = timestamp - lastTimestamp;
-            lastTimestamp = timestamp;
-
-            updateGame(deltaTime > 100 ? 16.667 : deltaTime); // Update logic (cap delta time to prevent jumps)
-            renderGame(); // Draw
+            update(); // Update game logic
+            render(); // Draw the current state
 
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
-        // ============= Initialization =============
-        function initGame() {
-            console.log("Initializing Game...");
-            keysPressed = new Set(); // Clear keys
-            touchLeftActive = false; touchRightActive = false; touchSteer = 0; touchAccel = false; touchBrake = false; // Clear touch
-            mapGrid = generateMap(MAP_COLS, MAP_ROWS);
-            const startPos = { r: MAP_ROWS - 3, c: 2 }; // Find starting road tile
-            player = createPlayer(startPos.c * TILE_SIZE + TILE_SIZE / 2, startPos.r * TILE_SIZE + TILE_SIZE / 2);
-            camera = setupCamera();
-            traffic = [];
-            for(let i=0; i<5; i++){ const car = createTrafficCar(); if(car) traffic.push(car); } // Initial traffic
-            placeNewTarget();
-            score = 0; gameOver = false; gameRunning = false; // Reset flags
-            lastTimestamp = 0; // Reset timer
-            if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; } // Stop previous loop if any
-            // Hide overlays, show start screen
-            document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active'));
-            startScreen.classList.add('active');
-            setupMobileControls(); // Ensure controls are set up
-            console.log("initGame finished. Ready for Start button.");
-            renderGame(); // Initial render to show map/player on start screen
-        }
-
         // ============= Event Listeners =============
         // --- Keyboard ---
-        window.addEventListener('keydown', (e) => { keysPressed.add(e.key.toLowerCase()); });
-        window.addEventListener('keyup', (e) => { keysPressed.delete(e.key.toLowerCase()); });
+        window.addEventListener('keydown', (e) => {
+            keysPressed.add(e.key.toLowerCase());
+        });
+        window.addEventListener('keyup', (e) => {
+            keysPressed.delete(e.key.toLowerCase());
+        });
 
         // --- Touch Controls ---
-        const touchJoystickArea = document.getElementById('joystick-area');
-        const touchJoystickThumb = document.getElementById('joystick-thumb');
-        const touchButtonAccel = document.getElementById('button-accel');
-        const touchButtonBrake = document.getElementById('button-brake');
-        let touchJoystickActive = false;
-        let touchJoystickStartX = 0;
-        let touchJoystickStartY = 0;
-        let touchJoystickRadius = 0;
+        touchLeft.addEventListener('touchstart', (e) => { e.preventDefault(); touchLeftActive = true; }, { passive: false });
+        touchLeft.addEventListener('touchend', (e) => { e.preventDefault(); touchLeftActive = false; });
+        touchLeft.addEventListener('touchcancel', (e) => { e.preventDefault(); touchLeftActive = false; });
+        touchRight.addEventListener('touchstart', (e) => { e.preventDefault(); touchRightActive = true; }, { passive: false });
+        touchRight.addEventListener('touchend', (e) => { e.preventDefault(); touchRightActive = false; });
+        touchRight.addEventListener('touchcancel', (e) => { e.preventDefault(); touchRightActive = false; });
 
-        function setupTouchControls() { // Renamed to avoid conflict
-            if (!touchJoystickArea || !touchJoystickThumb || !touchButtonAccel || !touchButtonBrake || !mobileControlsDiv) return;
-            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-                mobileControlsDiv.style.display = 'block';
-                touchJoystickRadius = touchJoystickArea.offsetWidth / 2;
-                // Joystick
-                touchJoystickArea.addEventListener('touchstart', (e)=>{ e.preventDefault(); touchJoystickActive=true; const r=touchJoystickArea.getBoundingClientRect(); touchJoystickStartX=r.left+touchJoystickRadius; touchJoystickStartY=r.top+touchJoystickRadius; handleTouchJoystickMove(e); }, {passive:false});
-                touchJoystickArea.addEventListener('touchmove', handleTouchJoystickMove, {passive:false});
-                touchJoystickArea.addEventListener('touchend', handleTouchJoystickEnd, {passive:false});
-                touchJoystickArea.addEventListener('touchcancel', handleTouchJoystickEnd, {passive:false});
-                // Buttons
-                touchButtonAccel.addEventListener('touchstart', (e)=>{e.preventDefault(); touchAccel=true; touchButtonAccel.style.backgroundColor = 'rgba(120, 120, 120, 0.6)';}, {passive:false});
-                touchButtonAccel.addEventListener('touchend', (e)=>{e.preventDefault(); touchAccel=false; touchButtonAccel.style.backgroundColor = 'rgba(80, 80, 80, 0.3)';}, {passive:false});
-                touchButtonAccel.addEventListener('touchcancel', (e)=>{e.preventDefault(); touchAccel=false; touchButtonAccel.style.backgroundColor = 'rgba(80, 80, 80, 0.3)';}, {passive:false});
-                touchButtonBrake.addEventListener('touchstart', (e)=>{e.preventDefault(); touchBrake=true; touchButtonBrake.style.backgroundColor = 'rgba(120, 120, 120, 0.6)';}, {passive:false});
-                touchButtonBrake.addEventListener('touchend', (e)=>{e.preventDefault(); touchBrake=false; touchButtonBrake.style.backgroundColor = 'rgba(80, 80, 80, 0.3)';}, {passive:false});
-                touchButtonBrake.addEventListener('touchcancel', (e)=>{e.preventDefault(); touchBrake=false; touchButtonBrake.style.backgroundColor = 'rgba(80, 80, 80, 0.3)';}, {passive:false});
-
-            } else { mobileControlsDiv.style.display = 'none'; }
-        }
-        function handleTouchJoystickMove(event) { if (!touchJoystickActive) return; event.preventDefault(); const touch = event.touches[0]; const currentX = touch.clientX; const currentY = touch.clientY; const deltaX = currentX - touchJoystickStartX; const deltaY = currentY - touchJoystickStartY; const distance = Math.hypot(deltaX, deltaY); const maxDist = touchJoystickRadius - (touchJoystickThumb.offsetWidth / 2); const clampedDist = Math.min(distance, maxDist); const angle = Math.atan2(deltaY, deltaX); const thumbX = Math.cos(angle) * clampedDist; const thumbY = Math.sin(angle) * clampedDist; touchJoystickThumb.style.transform = `translate(-50%, -50%) translate(${thumbX}px, ${thumbY}px)`; const deadZone = touchJoystickRadius * 0.2; if (distance > deadZone) { const sensitivity = 1.0; touchSteer = Math.max(-1, Math.min(1, (deltaX / maxDist) * sensitivity)); /* Optional: map Y to accel/brake touchAccel = deltaY < -deadZone; touchBrake = deltaY > deadZone; */ } else { touchSteer = 0; /* touchAccel = false; touchBrake = false; */ } }
-        function handleTouchJoystickEnd(event) { if (!touchJoystickActive) return; event.preventDefault(); touchJoystickActive=false; touchSteer=0; /* touchAccel=false; touchBrake = false; */ touchJoystickThumb.style.transform = 'translate(-50%, -50%)'; }
-
-        // --- UI Buttons ---
+        // --- Buttons ---
         startButton.addEventListener('click', () => {
-             if (!gameRunning) { console.log("Start button clicked"); gameRunning = true; gameOver = false; startScreen.classList.remove('active'); gameOverScreen.classList.remove('active'); if (!animationFrameId) { lastTimestamp = performance.now(); animationFrameId = requestAnimationFrame(gameLoop); console.log("Game Loop Started."); } }
+             if (!gameRunning) {
+                 console.log("Starting Game");
+                 resetGame(); // Reset state completely
+                 gameRunning = true; // Set running BEFORE starting loop
+                 startScreen.classList.remove('active');
+                 gameOverScreen.classList.remove('active'); // Ensure game over is hidden
+                 if (!animationFrameId) { // Start loop if not already running
+                      animationFrameId = requestAnimationFrame(gameLoop);
+                 }
+             }
         });
-        restartButton.addEventListener('click', () => { console.log("Restart button clicked"); initGame(); /* Shows start screen again */ });
+        restartButton.addEventListener('click', () => {
+             console.log("Restarting Game");
+             resetGame(); // Reset state
+             gameRunning = true; // Set running
+             gameOverScreen.classList.remove('active');
+             startScreen.classList.remove('active'); // Hide start screen too
+             if (!animationFrameId) { // Start loop
+                 animationFrameId = requestAnimationFrame(gameLoop);
+             }
+        });
 
-        // --- Initial Setup Call ---
-        document.addEventListener('DOMContentLoaded', initGame); // Initialize state on DOM ready
+        // --- Initial Setup ---
+        resetGame(); // Initialize state on page load
+        // Mobile controls visibility handled by CSS media query or JS check if preferred
+        // if ('ontouchstart' in window || navigator.maxTouchPoints > 0) { /* show controls */ }
 
     </script>
 </body>
