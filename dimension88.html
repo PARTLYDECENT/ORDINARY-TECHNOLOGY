@@ -1,209 +1,403 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Urban Rampage</title>
-  <style>
-    body { margin: 0; padding: 0; background: #111; overflow: hidden; }
-    canvas { display: block; background: #333; }
-    #ui { position: fixed; top: 10px; left: 10px; color: #fff; font-family: Arial, sans-serif; z-index: 10; }
-    .overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.85); display: flex; flex-direction: column;
-      align-items: center; justify-content: center; color: #fff; z-index: 20;
-    }
-    .overlay button {
-      margin-top: 20px; padding: 10px 20px; font-size: 16px; cursor: pointer;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Open World Driving Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #333;
+        }
+        #world {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4000px;
+            height: 4000px;
+            background-color: #4a6741;
+            transform-origin: 0 0;
+        }
+        .road {
+            position: absolute;
+            background-color: #555;
+        }
+        .road-line {
+            position: absolute;
+            background-color: #fff;
+        }
+        .building {
+            position: absolute;
+            background-color: #777;
+        }
+        .tree {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #2d5520;
+        }
+        .tree::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 12px;
+            background-color: #5d4037;
+            bottom: -10px;
+            left: 12px;
+        }
+        #car {
+            position: absolute;
+            width: 30px;
+            height: 50px;
+            background-color: #e53935;
+            border-radius: 5px;
+            transform-origin: center center;
+        }
+        #speedometer {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        #minimap {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 100;
+        }
+        #minimap-content {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #minimap-player {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: #ff0000;
+            border-radius: 50%;
+        }
+        #minimap-world {
+            position: absolute;
+            background-color: #4a6741;
+            opacity: 0.6;
+        }
+        .minimap-road {
+            position: absolute;
+            background-color: #555;
+            opacity: 0.7;
+        }
+        #instructions {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+    </style>
 </head>
 <body>
-  <div id="ui">Speed: <span id="speed">0</span> | Score: <span id="score">0</span></div>
-  <div id="startScreen" class="overlay">
-    <h1>URBAN RAMPAGE</h1>
-    <p>Drive hard through the concrete jungle!<br>Use Arrow keys or WASD.</p>
-    <button id="startBtn">START</button>
-  </div>
-  <div id="gameOverScreen" class="overlay" style="display:none;">
-    <h1>CRASHED!</h1>
-    <p id="finalScore">Score: 0</p>
-    <button id="restartBtn">RESTART</button>
-  </div>
-  <canvas id="gameCanvas" width="800" height="600"></canvas>
-  <script>
-    // ---- Setup ----
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const speedEl = document.getElementById('speed');
-    const scoreEl = document.getElementById('score');
-    const startScreen = document.getElementById('startScreen');
-    const gameOverScreen = document.getElementById('gameOverScreen');
-    const finalScoreEl = document.getElementById('finalScore');
-    const startBtn = document.getElementById('startBtn');
-    const restartBtn = document.getElementById('restartBtn');
+    <div id="game-container">
+        <div id="world"></div>
+        <div id="car"></div>
+    </div>
+    
+    <div id="speedometer">Speed: 0 mph</div>
+    
+    <div id="minimap">
+        <div id="minimap-content">
+            <div id="minimap-world"></div>
+            <div id="minimap-player"></div>
+        </div>
+    </div>
+    
+    <div id="instructions">
+        <h3>Controls:</h3>
+        <p>W/Arrow Up: Accelerate</p>
+        <p>S/Arrow Down: Brake/Reverse</p>
+        <p>A/Arrow Left: Turn Left</p>
+        <p>D/Arrow Right: Turn Right</p>
+        <p>Space: Handbrake</p>
+    </div>
 
-    // World settings
-    const TILE_SIZE = 50;
-    const MAP_COLS = 40, MAP_ROWS = 40;
-    const worldWidth = MAP_COLS * TILE_SIZE;
-    const worldHeight = MAP_ROWS * TILE_SIZE;
-    let map = [];
-    for (let row = 0; row < MAP_ROWS; row++) {
-      map[row] = [];
-      for (let col = 0; col < MAP_COLS; col++) {
-        // Roads (0) vs. Buildings (1): more roads near center
-        map[row][col] = (Math.random() < 0.3 || (Math.abs(row-MAP_ROWS/2)<3 && Math.abs(col-MAP_COLS/2)<3)) ? 0 : 1;
-      }
-    }
-
-    // Player
-    const player = { x: worldWidth/2, y: worldHeight/2, angle: 0, speed: 0 };
-
-    // NPC vehicles
-    let npcs = [];
-    function spawnNPC() {
-      // Spawn at a random road tile
-      let r, c;
-      do { r = Math.floor(Math.random()*MAP_ROWS); c = Math.floor(Math.random()*MAP_COLS); } while(map[r][c]!==0);
-      npcs.push({ x: c*TILE_SIZE+TILE_SIZE/2, y: r*TILE_SIZE+TILE_SIZE/2, angle: Math.random()*Math.PI*2, speed: 1+Math.random()*1 });
-    }
-    // Spawn a few NPCs initially
-    for (let i=0;i<10;i++) spawnNPC();
-
-    // Input
-    const keys = {};
-    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-    let running = false;
-    let gameOver = false;
-    let score = 0;
-
-    // ---- Game Functions ----
-    function update() {
-      // Player controls
-      if (keys['arrowup'] || keys['w']) player.speed += 0.3;
-      else player.speed *= 0.95;
-      if (keys['arrowdown'] || keys['s']) player.speed *= 0.9;
-      if (keys['arrowleft'] || keys['a']) player.angle -= 0.05;
-      if (keys['arrowright'] || keys['d']) player.angle += 0.05;
-      player.x += Math.cos(player.angle) * player.speed;
-      player.y += Math.sin(player.angle) * player.speed;
-      // Wrap-around world
-      if (player.x < 0) player.x += worldWidth;
-      if (player.x >= worldWidth) player.x -= worldWidth;
-      if (player.y < 0) player.y += worldHeight;
-      if (player.y >= worldHeight) player.y -= worldHeight;
-
-      // NPC movement: simple wandering
-      npcs.forEach(npc => {
-        npc.x += Math.cos(npc.angle) * npc.speed;
-        npc.y += Math.sin(npc.angle) * npc.speed;
-        if (npc.x < 0) npc.x += worldWidth;
-        if (npc.x >= worldWidth) npc.x -= worldWidth;
-        if (npc.y < 0) npc.y += worldHeight;
-        if (npc.y >= worldHeight) npc.y -= worldHeight;
-        // Randomly change direction
-        if (Math.random() < 0.02) npc.angle += (Math.random()-0.5)*0.5;
-      });
-
-      // Check collisions: player with buildings
-      let tileCol = Math.floor(player.x / TILE_SIZE);
-      let tileRow = Math.floor(player.y / TILE_SIZE);
-      if (map[tileRow][tileCol] === 1) {
-        gameOver = true;
-      }
-      // Check collision with NPCs (simple distance check)
-      for (let npc of npcs) {
-        let dx = player.x - npc.x, dy = player.y - npc.y;
-        if (Math.hypot(dx, dy) < 25) gameOver = true;
-      }
-      // Increase score (distance traveled)
-      score += player.speed * 0.1;
-    }
-
-    function draw() {
-      ctx.clearRect(0,0,canvas.width, canvas.height);
-      // Camera offset: center on player
-      const offsetX = player.x - canvas.width/2;
-      const offsetY = player.y - canvas.height/2;
-      // Draw map
-      for (let row = 0; row < MAP_ROWS; row++) {
-        for (let col = 0; col < MAP_COLS; col++) {
-          const screenX = col*TILE_SIZE - offsetX;
-          const screenY = row*TILE_SIZE - offsetY;
-          if (screenX+TILE_SIZE < 0 || screenX > canvas.width ||
-              screenY+TILE_SIZE < 0 || screenY > canvas.height) continue;
-          ctx.fillStyle = (map[row][col]===0)? '#222' : '#777';
-          ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          ctx.strokeStyle = '#111';
-          ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+    <script>
+        // Game variables
+        const worldSize = 4000;
+        const worldScale = 0.03; // For minimap
+        
+        // Car properties
+        let carX = worldSize / 2;
+        let carY = worldSize / 2;
+        let carAngle = 0;
+        let carSpeed = 0;
+        const maxSpeed = 10;
+        const acceleration = 0.1;
+        const deceleration = 0.05;
+        const turnSpeed = 0.05;
+        
+        // Camera variables
+        let cameraX = 0;
+        let cameraY = 0;
+        let cameraZoom = 1;
+        
+        // Controls
+        const keys = {};
+        
+        // Game elements
+        const worldElement = document.getElementById('world');
+        const carElement = document.getElementById('car');
+        const speedometerElement = document.getElementById('speedometer');
+        const minimapPlayerElement = document.getElementById('minimap-player');
+        const minimapWorldElement = document.getElementById('minimap-world');
+        
+        // Initialize world
+        function initWorld() {
+            // Create roads
+            createRoad(1000, 0, 100, 4000); // Vertical main road
+            createRoad(0, 1000, 4000, 100); // Horizontal main road
+            createRoad(2500, 0, 100, 4000); // Second vertical road
+            createRoad(0, 2500, 4000, 100); // Second horizontal road
+            
+            // Add road lines
+            for (let i = 50; i < 4000; i += 100) {
+                createRoadLine(1050, i, 10, 50); // Vertical road lines
+                createRoadLine(i, 1050, 50, 10); // Horizontal road lines
+                
+                createRoadLine(2550, i, 10, 50); // Second vertical road lines
+                createRoadLine(i, 2550, 50, 10); // Second horizontal road lines
+            }
+            
+            // Create buildings
+            for (let i = 0; i < 80; i++) {
+                const size = 50 + Math.random() * 150;
+                const x = Math.random() * (worldSize - size);
+                const y = Math.random() * (worldSize - size);
+                
+                // Don't place buildings on roads
+                if (!isOnRoad(x, y, size, size)) {
+                    createBuilding(x, y, size, size);
+                }
+            }
+            
+            // Create trees
+            for (let i = 0; i < 500; i++) {
+                const x = Math.random() * worldSize;
+                const y = Math.random() * worldSize;
+                
+                // Don't place trees on roads
+                if (!isOnRoad(x, y, 30, 30)) {
+                    createTree(x, y);
+                }
+            }
+            
+            // Setup minimap
+            minimapWorldElement.style.width = worldSize * worldScale + 'px';
+            minimapWorldElement.style.height = worldSize * worldScale + 'px';
+            
+            // Create minimap roads
+            worldElement.querySelectorAll('.road').forEach(road => {
+                const left = parseFloat(road.style.left);
+                const top = parseFloat(road.style.top);
+                const width = parseFloat(road.style.width);
+                const height = parseFloat(road.style.height);
+                
+                const minimapRoad = document.createElement('div');
+                minimapRoad.className = 'minimap-road';
+                minimapRoad.style.left = left * worldScale + 'px';
+                minimapRoad.style.top = top * worldScale + 'px';
+                minimapRoad.style.width = width * worldScale + 'px';
+                minimapRoad.style.height = height * worldScale + 'px';
+                
+                minimapWorldElement.appendChild(minimapRoad);
+            });
         }
-      }
-      // Draw NPCs as smaller triangles
-      npcs.forEach(npc => {
-        ctx.save();
-        let screenX = npc.x - offsetX, screenY = npc.y - offsetY;
-        ctx.translate(screenX, screenY);
-        ctx.rotate(npc.angle);
-        ctx.fillStyle = '#ff0';
-        ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(-10, 7);
-        ctx.lineTo(-10, -7);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      });
-      // Draw player as a larger triangle
-      ctx.save();
-      ctx.translate(canvas.width/2, canvas.height/2);
-      ctx.rotate(player.angle);
-      ctx.fillStyle = '#e44';
-      ctx.beginPath();
-      ctx.moveTo(20, 0);
-      ctx.lineTo(-20, 12);
-      ctx.lineTo(-20, -12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      // Update UI
-      speedEl.textContent = player.speed.toFixed(1);
-      scoreEl.textContent = Math.floor(score);
-    }
-
-    function gameLoop() {
-      if (!running) return;
-      if (gameOver) {
-        finalScoreEl.textContent = `Score: ${Math.floor(score)}`;
-        gameOverScreen.style.display = 'flex';
-        running = false;
-        return;
-      }
-      update();
-      draw();
-      requestAnimationFrame(gameLoop);
-    }
-
-    // ---- Event Listeners ----
-    startBtn.addEventListener('click', () => {
-      running = true;
-      gameOver = false;
-      score = 0;
-      player.x = worldWidth/2; player.y = worldHeight/2; player.speed = 0; player.angle = 0;
-      startScreen.style.display = 'none';
-      gameOverScreen.style.display = 'none';
-      requestAnimationFrame(gameLoop);
-    });
-    restartBtn.addEventListener('click', () => {
-      running = true;
-      gameOver = false;
-      score = 0;
-      player.x = worldWidth/2; player.y = worldHeight/2; player.speed = 0; player.angle = 0;
-      gameOverScreen.style.display = 'none';
-      requestAnimationFrame(gameLoop);
-    });
-  </script>
+        
+        function isOnRoad(x, y, width, height) {
+            // Check if a rectangle is overlapping with any road
+            return (
+                (x < 1100 && x + width > 1000) || // Vertical main road
+                (y < 1100 && y + height > 1000) || // Horizontal main road
+                (x < 2600 && x + width > 2500) || // Second vertical road
+                (y < 2600 && y + height > 2500) // Second horizontal road
+            );
+        }
+        
+        function createRoad(x, y, width, height) {
+            const road = document.createElement('div');
+            road.className = 'road';
+            road.style.left = x + 'px';
+            road.style.top = y + 'px';
+            road.style.width = width + 'px';
+            road.style.height = height + 'px';
+            worldElement.appendChild(road);
+        }
+        
+        function createRoadLine(x, y, width, height) {
+            const line = document.createElement('div');
+            line.className = 'road-line';
+            line.style.left = x + 'px';
+            line.style.top = y + 'px';
+            line.style.width = width + 'px';
+            line.style.height = height + 'px';
+            worldElement.appendChild(line);
+        }
+        
+        function createBuilding(x, y, width, height) {
+            const building = document.createElement('div');
+            building.className = 'building';
+            building.style.left = x + 'px';
+            building.style.top = y + 'px';
+            building.style.width = width + 'px';
+            building.style.height = height + 'px';
+            // Random building color
+            const hue = Math.floor(Math.random() * 30) + 200;
+            const saturation = Math.floor(Math.random() * 20) + 10;
+            const lightness = Math.floor(Math.random() * 30) + 40;
+            building.style.backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            worldElement.appendChild(building);
+        }
+        
+        function createTree(x, y) {
+            const tree = document.createElement('div');
+            tree.className = 'tree';
+            tree.style.left = x + 'px';
+            tree.style.top = y + 'px';
+            worldElement.appendChild(tree);
+        }
+        
+        // Initialize game
+        function init() {
+            initWorld();
+            
+            // Setup event listeners
+            window.addEventListener('keydown', e => {
+                keys[e.key.toLowerCase()] = true;
+            });
+            
+            window.addEventListener('keyup', e => {
+                keys[e.key.toLowerCase()] = false;
+            });
+            
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Game loop
+        function gameLoop() {
+            updateCar();
+            updateCamera();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Update car position and rotation
+        function updateCar() {
+            // Handle controls
+            if (keys['w'] || keys['arrowup']) {
+                carSpeed += acceleration;
+            } else if (keys['s'] || keys['arrowdown']) {
+                carSpeed -= acceleration;
+            } else {
+                // Apply deceleration
+                if (carSpeed > 0) {
+                    carSpeed -= deceleration;
+                } else if (carSpeed < 0) {
+                    carSpeed += deceleration;
+                }
+                
+                // Stop car if speed is very low
+                if (Math.abs(carSpeed) < deceleration) {
+                    carSpeed = 0;
+                }
+            }
+            
+            // Apply handbrake
+            if (keys[' ']) {
+                carSpeed *= 0.95;
+            }
+            
+            // Limit speed
+            carSpeed = Math.max(-maxSpeed / 2, Math.min(maxSpeed, carSpeed));
+            
+            // Turn car
+            if (carSpeed !== 0) {
+                if (keys['a'] || keys['arrowleft']) {
+                    carAngle -= turnSpeed * (carSpeed > 0 ? 1 : -1);
+                }
+                if (keys['d'] || keys['arrowright']) {
+                    carAngle += turnSpeed * (carSpeed > 0 ? 1 : -1);
+                }
+            }
+            
+            // Update position
+            const moveX = Math.sin(carAngle) * carSpeed;
+            const moveY = -Math.cos(carAngle) * carSpeed;
+            
+            carX += moveX;
+            carY += moveY;
+            
+            // Keep car within world bounds
+            carX = Math.max(0, Math.min(worldSize - 30, carX));
+            carY = Math.max(0, Math.min(worldSize - 50, carY));
+            
+            // Update speedometer
+            const speedMph = Math.abs(Math.round(carSpeed * 10));
+            speedometerElement.textContent = `Speed: ${speedMph} mph`;
+        }
+        
+        // Update camera position
+        function updateCamera() {
+            // Camera follows car with some lag
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            
+            cameraX = carX - screenWidth / 2 + 15;
+            cameraY = carY - screenHeight / 2 + 25;
+            
+            // Keep camera within world bounds
+            cameraX = Math.max(0, Math.min(worldSize - screenWidth, cameraX));
+            cameraY = Math.max(0, Math.min(worldSize - screenHeight, cameraY));
+            
+            // Update minimap player position
+            minimapPlayerElement.style.left = (carX * worldScale - 2) + 'px';
+            minimapPlayerElement.style.top = (carY * worldScale - 2) + 'px';
+            
+            // Center minimap on player
+            minimapWorldElement.style.transform = `translate(${75 - carX * worldScale}px, ${75 - carY * worldScale}px)`;
+        }
+        
+        // Render game
+        function render() {
+            // Position world based on camera
+            worldElement.style.transform = `translate(${-cameraX}px, ${-cameraY}px)`;
+            
+            // Position and rotate car
+            carElement.style.left = carX + 'px';
+            carElement.style.top = carY + 'px';
+            carElement.style.transform = `rotate(${carAngle}rad)`;
+        }
+        
+        // Start the game
+        init();
+    </script>
 </body>
 </html>
