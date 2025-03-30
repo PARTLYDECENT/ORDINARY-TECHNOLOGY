@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alien Video Player v2</title>
+    <title>Alien Video Player v3 - Filter Madness</title>
     <style>
         :root {
             --primary-glow: #00ffff;
@@ -93,9 +93,20 @@
             display: block;
             transition: filter 0.5s ease; /* For filter effect */
         }
-        .video-container video.alien-vision {
-             filter: hue-rotate(120deg) saturate(2.5) contrast(1.2);
-        }
+        /* --- Added Filter Classes --- */
+        .video-container video.filter-none { filter: none; }
+        .video-container video.filter-grayscale { filter: grayscale(1); }
+        .video-container video.filter-sepia { filter: sepia(1); }
+        .video-container video.filter-invert { filter: invert(1); }
+        .video-container video.filter-hue-rotate-90 { filter: hue-rotate(90deg); }
+        .video-container video.filter-hue-rotate-180 { filter: hue-rotate(180deg); }
+        .video-container video.filter-contrast-saturate { filter: contrast(1.5) saturate(2); }
+        .video-container video.filter-blur-bright { filter: blur(2px) brightness(1.3); }
+        .video-container video.filter-vintage { filter: sepia(0.8) contrast(1.1) brightness(0.9); }
+        .video-container video.filter-xray { filter: invert(1) contrast(1.5) brightness(0.8); }
+        .video-container video.filter-saturated-bright { filter: saturate(3) brightness(1.1); }
+        /* --- End Filter Classes --- */
+
         #audioVisualizer { /* Visualizer styles */
             position: absolute;
             bottom: 4px; /* Position above bottom border */
@@ -170,6 +181,13 @@
             transition: opacity 0.5s;
             pointer-events: none;
         }
+        .current-filter-display { /* Style for filter name */
+             margin-left: 10px;
+             font-size: 0.8rem;
+             color: var(--secondary-glow);
+             text-transform: uppercase;
+             letter-spacing: 1px;
+        }
     </style>
 </head>
 
@@ -204,8 +222,7 @@
             <div class="feature-panel">
                  Features: <button id="shuffleBtn">Shuffle</button>
                 <button id="repeatBtn">Repeat: Off</button>
-                <button id="filterBtn">Alien Vision</button>
-            </div>
+                <button id="filterBtn">Next Filter</button> <span id="currentFilterDisplay" class="current-filter-display">FILTER: NONE</span> </div>
         </div>
     </main>
     <div id="keyboardTooltip" class="tooltip">Space: Play/Pause | ←/→: Prev/Next | S: Shuffle | R: Repeat | F: Filter</div>
@@ -253,6 +270,23 @@
         const repeatBtn = document.getElementById("repeatBtn");
         const filterBtn = document.getElementById("filterBtn");
         const keyboardTooltip = document.getElementById("keyboardTooltip");
+        const currentFilterDisplay = document.getElementById("currentFilterDisplay"); // Get filter display element
+
+        // --- Filter Setup ---
+        const filters = [ // Array matching CSS class suffixes
+            { name: 'NONE', class: 'filter-none' },
+            { name: 'GRAYSCALE', class: 'filter-grayscale' },
+            { name: 'SEPIA', class: 'filter-sepia' },
+            { name: 'INVERT', class: 'filter-invert' },
+            { name: 'ALIEN', class: 'filter-hue-rotate-90' }, // Renamed for clarity
+            { name: 'PSYCHEDELIC', class: 'filter-hue-rotate-180' },
+            { name: 'VIBRANT', class: 'filter-contrast-saturate' },
+            { name: 'BLURRY', class: 'filter-blur-bright' },
+            { name: 'VINTAGE', class: 'filter-vintage' },
+            { name: 'X-RAY', class: 'filter-xray' },
+            { name: 'OVERDRIVE', class: 'filter-saturated-bright' }
+        ];
+        let currentFilterIndex = 0; // Start with no filter
 
         // --- Audio Visualizer Setup ---
         const visualizerCanvas = document.getElementById('audioVisualizer');
@@ -267,7 +301,6 @@
             if (audioContext) return; // Already initialized
 
             try {
-                 // Important: Create AudioContext after user interaction (like clicking play or a button)
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = Math.pow(2, 7); // 128 for numBars=64
@@ -279,7 +312,6 @@
                 drawVisualizer(); // Start drawing
             } catch (e) {
                 console.error("Web Audio API setup failed:", e);
-                // Hide visualizer if setup fails
                 visualizerCanvas.style.display = 'none';
             }
         }
@@ -288,7 +320,7 @@
             if (!analyser) return; // Stop if analyser not ready
 
             visualizerAnimationId = requestAnimationFrame(drawVisualizer);
-            const bufferLength = analyser.frequencyBinCount; // Should be numBars (fftSize/2)
+            const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
             analyser.getByteFrequencyData(dataArray);
 
@@ -299,20 +331,13 @@
 
             for (let i = 0; i < numBars; i++) {
                 const barHeight = (dataArray[i] / 255) * visualizerCanvas.height;
-
-                // Gradient color for bars
-                const gradient = visualizerCtx.createLinearGradient(0, visualizerCanvas.height, 0, visualizerCanvas.height - barHeight);
-                gradient.addColorStop(0, `hsl(${i / numBars * 360}, 100%, 30%)`); // Vary hue, dark base
-                gradient.addColorStop(0.6, `hsl(${i / numBars * 360}, 100%, 50%)`); // Brighter mid
-                gradient.addColorStop(1, `hsl(${i / numBars * 360}, 100%, 70%)`); // Light top
-
-                visualizerCtx.fillStyle = gradient;
-                visualizerCtx.fillRect(x, visualizerCanvas.height - barHeight, barWidth - 1, barHeight); // -1 for slight gap
+                const hue = (i / numBars) * 360; // Cycle hue across bars
+                visualizerCtx.fillStyle = `hsla(${hue}, 100%, 50%, 0.8)`; // Use HSL for easy color cycling
+                visualizerCtx.fillRect(x, visualizerCanvas.height - barHeight, barWidth - 1, barHeight);
                 x += barWidth;
             }
         }
 
-        // Stop visualizer when not needed
         function stopVisualizer() {
              if (visualizerAnimationId) {
                 cancelAnimationFrame(visualizerAnimationId);
@@ -324,16 +349,13 @@
         function updateUI(playVideo = true) {
             if (currentVideoIndex < 0 || currentVideoIndex >= videoSources.length) {
                  console.error("Invalid video index:", currentVideoIndex);
-                 currentVideoIndex = 0; // Reset to first video
+                 currentVideoIndex = 0;
             }
-
-            // Update video source and title
             const videoPath = videoSources[currentVideoIndex];
-            videoTitle.textContent = `Video ${currentVideoIndex + 1}`; // Simple title for now
+            videoTitle.textContent = `Video ${currentVideoIndex + 1}`;
             videoCounter.textContent = currentVideoIndex + 1;
             videoTotal.textContent = videoSources.length;
 
-             // Only change src if it's different to avoid unnecessary reloads
              if (cyclicVideo.currentSrc.split('/').pop() !== videoPath.split('/').pop()) {
                  cyclicVideo.src = videoPath;
                  cyclicVideo.load();
@@ -341,41 +363,49 @@
 
             if (playVideo) {
                  cyclicVideo.play().catch(e => console.warn("Autoplay possibly prevented:", e));
-                 // Initialize AudioContext on first play attempt after user interaction
-                 if (!audioContext && cyclicVideo.readyState >= 2) { // readyState >= 2 means metadata loaded
+                 if (!audioContext && cyclicVideo.readyState >= 2) {
                      setupAudioVisualizer();
                  } else if (analyser && audioContext.state === 'suspended') {
-                      audioContext.resume(); // Resume if suspended
+                      audioContext.resume();
                  }
             }
-             // Update active speed button
              speedButtons.forEach(btn => {
                 btn.classList.toggle('active-button', parseFloat(btn.dataset.speed) === cyclicVideo.playbackRate);
             });
-            // Update shuffle button state
             shuffleBtn.classList.toggle('active-button', isShuffled);
-             // Update repeat button state
              repeatBtn.textContent = `Repeat: ${repeatMode ? 'On' : 'Off'}`;
              repeatBtn.classList.toggle('active-button', repeatMode);
-             cyclicVideo.loop = repeatMode; // Set video loop property
+             cyclicVideo.loop = repeatMode;
 
-             // Update filter button state
-             filterBtn.classList.toggle('active-button', cyclicVideo.classList.contains('alien-vision'));
+             // Update filter display
+             applyFilterClass(); // Ensure correct class is applied
+             currentFilterDisplay.textContent = `FILTER: ${filters[currentFilterIndex].name}`;
 
         }
 
-        // --- Event Listeners ---
+        // --- Apply Filter Function ---
+        function applyFilterClass() {
+            // Remove all possible filter classes first
+            filters.forEach(filter => cyclicVideo.classList.remove(filter.class));
+            // Add the current one
+            cyclicVideo.classList.add(filters[currentFilterIndex].class);
+             filterBtn.classList.toggle('active-button', currentFilterIndex !== 0); // Active if not 'NONE'
+        }
 
-        // Speed control
+        // --- Cycle Filter Function ---
+        function cycleFilter() {
+            currentFilterIndex = (currentFilterIndex + 1) % filters.length;
+            updateUI(false); // Update display without restarting video
+        }
+
+        // --- Event Listeners ---
         speedButtons.forEach(button => {
             button.addEventListener('click', function() {
-                const speed = parseFloat(this.dataset.speed);
-                cyclicVideo.playbackRate = speed;
-                updateUI(false); // Update buttons without restarting video
+                cyclicVideo.playbackRate = parseFloat(this.dataset.speed);
+                updateUI(false);
             });
         });
 
-        // Navigation buttons
         document.getElementById("prevVideo").addEventListener("click", function() {
             currentVideoIndex = (currentVideoIndex - 1 + videoSources.length) % videoSources.length;
             updateUI();
@@ -386,145 +416,95 @@
             updateUI();
         });
 
-        // Download button
         downloadBtn.addEventListener("click", function() {
             const a = document.createElement('a');
             a.href = videoSources[currentVideoIndex];
-            // Extract filename more reliably
             const filename = videoSources[currentVideoIndex].split('/').pop() || `video-${currentVideoIndex + 1}.mp4`;
             a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
         });
 
-        // Shuffle button
          shuffleBtn.addEventListener("click", function() {
             isShuffled = !isShuffled;
             if (isShuffled) {
-                // Shuffle the playlist, keeping the current video at index 0
                 const currentVideo = videoSources.splice(currentVideoIndex, 1)[0];
                 for (let i = videoSources.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [videoSources[i], videoSources[j]] = [videoSources[j], videoSources[i]];
                 }
-                videoSources.unshift(currentVideo); // Put current video back at the start
-                currentVideoIndex = 0; // We are now at index 0 of the shuffled list
+                videoSources.unshift(currentVideo);
+                currentVideoIndex = 0;
             } else {
-                 // Restore original order, find where the current video is
                  const currentVideoPath = videoSources[currentVideoIndex];
                  videoSources = [...originalVideoOrder];
                  currentVideoIndex = videoSources.findIndex(src => src === currentVideoPath);
-                 if (currentVideoIndex === -1) currentVideoIndex = 0; // Fallback
+                 if (currentVideoIndex === -1) currentVideoIndex = 0;
             }
-            updateUI(false); // Update button state
+            updateUI(false);
         });
 
-         // Repeat button
          repeatBtn.addEventListener("click", function() {
              repeatMode = !repeatMode;
-             updateUI(false); // Update button state and video loop property
+             updateUI(false);
          });
 
-        // Filter button
-        filterBtn.addEventListener("click", function() {
-             cyclicVideo.classList.toggle('alien-vision');
-             updateUI(false); // Update button state
-        });
+        filterBtn.addEventListener("click", cycleFilter); // Use cycle function
 
-        // Video ended listener (for non-repeat playlist advance)
          cyclicVideo.addEventListener('ended', () => {
-            if (!repeatMode) { // Only advance if repeat is off
+            if (!repeatMode) {
                  currentVideoIndex = (currentVideoIndex + 1) % videoSources.length;
                  updateUI();
             }
-             // If repeatMode is true, the browser's native loop attribute handles it
          });
 
-         // Start visualizer when video plays (and ensure context is running)
          cyclicVideo.addEventListener('play', () => {
-             if (!audioContext) { // Attempt setup if not done yet (e.g., after initial user interaction)
-                 setupAudioVisualizer();
-             } else if (audioContext.state === 'suspended') {
-                 audioContext.resume();
-             }
-             if (visualizerAnimationId === null && analyser) { // Start drawing if stopped
-                drawVisualizer();
-             }
+             if (!audioContext) { setupAudioVisualizer(); }
+             else if (audioContext.state === 'suspended') { audioContext.resume(); }
+             if (visualizerAnimationId === null && analyser) { drawVisualizer(); }
          });
-         // Stop visualizer when video pauses
          cyclicVideo.addEventListener('pause', stopVisualizer);
 
 
-        // Back button function
-        function goBack() {
-            window.history.back();
-        }
+        function goBack() { window.history.back(); }
 
-        // Keyboard Shortcuts
         document.addEventListener('keydown', (e) => {
-             // Ignore if user is typing in an input field
              if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
+             let handled = true; // Assume handled to prevent default if matched
              switch (e.code) {
-                case 'Space':
-                    e.preventDefault(); // Prevent page scroll
-                    if (cyclicVideo.paused) {
-                        cyclicVideo.play().catch(e => console.warn("Autoplay prevented:", e));
-                        if (!audioContext) setupAudioVisualizer(); // Init audio context on manual play
-                        else if (audioContext.state === 'suspended') audioContext.resume();
-                    } else {
-                        cyclicVideo.pause();
-                    }
-                    break;
-                case 'ArrowRight':
-                     document.getElementById("nextVideo").click(); // Trigger button click
-                    break;
-                case 'ArrowLeft':
-                     document.getElementById("prevVideo").click(); // Trigger button click
-                    break;
-                 case 'KeyS':
-                     shuffleBtn.click();
-                     break;
-                 case 'KeyR':
-                     repeatBtn.click();
-                     break;
-                 case 'KeyF':
-                     filterBtn.click();
-                     break;
-                // Add more shortcuts if needed (e.g., volume up/down)
+                case 'Space': cyclicVideo.paused ? cyclicVideo.play() : cyclicVideo.pause(); break;
+                case 'ArrowRight': document.getElementById("nextVideo").click(); break;
+                case 'ArrowLeft': document.getElementById("prevVideo").click(); break;
+                 case 'KeyS': shuffleBtn.click(); break;
+                 case 'KeyR': repeatBtn.click(); break;
+                 case 'KeyF': cycleFilter(); break; // Use cycle function
+                 default: handled = false; // Not handled
             }
+             if (handled) e.preventDefault(); // Prevent default actions like page scroll
         });
 
-         // Show/Hide Keyboard Tooltip
         let tooltipTimeout;
         function showTooltip() {
             clearTimeout(tooltipTimeout);
             keyboardTooltip.style.opacity = '1';
-            tooltipTimeout = setTimeout(() => {
-                keyboardTooltip.style.opacity = '0';
-            }, 3000); // Hide after 3 seconds
+            tooltipTimeout = setTimeout(() => { keyboardTooltip.style.opacity = '0'; }, 3000);
         }
-         document.addEventListener('keydown', showTooltip); // Show on any keydown initially
-         showTooltip(); // Show once on load
+         document.addEventListener('keydown', showTooltip);
+         showTooltip(); // Show on load
 
-        // Handle window resize
         window.addEventListener('resize', function() {
             matrixCanvas.width = window.innerWidth;
             matrixCanvas.height = window.innerHeight;
-            // Recalculate matrix drops if needed
             const newColumns = matrixCanvas.width / matrixFontSize;
-            if (newColumns > matrixDrops.length) {
-                 for (let i = matrixDrops.length; i < newColumns; i++) matrixDrops[i] = 1;
-            } else {
-                 matrixDrops.length = Math.floor(newColumns);
-            }
+            matrixDrops.length = Math.floor(newColumns);
+            for (let i = 0; i < matrixDrops.length; i++) if (matrixDrops[i] === undefined) matrixDrops[i] = 1;
 
-             // Resize visualizer canvas
              if (visualizerCanvas.style.display !== 'none' && audioContext) {
                 visualizerCanvas.width = visualizerCanvas.offsetWidth;
              }
         });
+
+        // --- Initial Load ---
+        updateUI(); // Load first video and set initial states
 
     </script>
 </body>
