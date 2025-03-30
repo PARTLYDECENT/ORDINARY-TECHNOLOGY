@@ -1,271 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Endless Highway</title>
-    <style>
-        body { margin: 0; padding: 0; background-color: #222; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; color: white; }
-        canvas { display: block; background-color: #444; /* Road color */ touch-action: none; border: 2px solid #ccc; max-width: 100%; max-height: 95vh; object-fit: contain; }
-        #ui { position: fixed; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 5; font-size: 18px; text-shadow: 1px 1px 2px black; pointer-events: none; }
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; text-align: center; padding: 15px; box-sizing: border-box; }
-        .overlay.active { opacity: 1; pointer-events: all; }
-        .overlay h1 { font-size: 36px; margin-bottom: 15px; color: #eee; }
-        .overlay p { font-size: 16px; margin-bottom: 20px; color: #ccc; max-width: 400px; }
-        .overlay button { background-color: #777; color: #fff; border: 1px solid #aaa; padding: 12px 30px; font-size: 18px; margin-top: 15px; cursor: pointer; border-radius: 5px; transition: background-color 0.2s; }
-        .overlay button:hover { background-color: #999; }
-        /* Mobile touch areas */
-        #touch-left, #touch-right { position: fixed; bottom: 0; width: 50%; height: 100vh; /* Full height */ z-index: 2; /* Below UI, above canvas */ /* background-color: rgba(255, 0, 0, 0.1); */ /* Uncomment for debugging */ }
-        #touch-left { left: 0; }
-        #touch-right { right: 0; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Urban Rampage</title>
+  <style>
+    body { margin: 0; padding: 0; background: #111; overflow: hidden; }
+    canvas { display: block; background: #333; }
+    #ui { position: fixed; top: 10px; left: 10px; color: #fff; font-family: Arial, sans-serif; z-index: 10; }
+    .overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: #fff; z-index: 20;
+    }
+    .overlay button {
+      margin-top: 20px; padding: 10px 20px; font-size: 16px; cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
-    <div id="ui">
-        <span id="score">Score: 0</span>
-        <span id="speed">Speed: 1.0x</span>
-    </div>
+  <div id="ui">Speed: <span id="speed">0</span> | Score: <span id="score">0</span></div>
+  <div id="startScreen" class="overlay">
+    <h1>URBAN RAMPAGE</h1>
+    <p>Drive hard through the concrete jungle!<br>Use Arrow keys or WASD.</p>
+    <button id="startBtn">START</button>
+  </div>
+  <div id="gameOverScreen" class="overlay" style="display:none;">
+    <h1>CRASHED!</h1>
+    <p id="finalScore">Score: 0</p>
+    <button id="restartBtn">RESTART</button>
+  </div>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    // ---- Setup ----
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const speedEl = document.getElementById('speed');
+    const scoreEl = document.getElementById('score');
+    const startScreen = document.getElementById('startScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const finalScoreEl = document.getElementById('finalScore');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
 
-    <div id="touch-left"></div>
-    <div id="touch-right"></div>
+    // World settings
+    const TILE_SIZE = 50;
+    const MAP_COLS = 40, MAP_ROWS = 40;
+    const worldWidth = MAP_COLS * TILE_SIZE;
+    const worldHeight = MAP_ROWS * TILE_SIZE;
+    let map = [];
+    for (let row = 0; row < MAP_ROWS; row++) {
+      map[row] = [];
+      for (let col = 0; col < MAP_COLS; col++) {
+        // Roads (0) vs. Buildings (1): more roads near center
+        map[row][col] = (Math.random() < 0.3 || (Math.abs(row-MAP_ROWS/2)<3 && Math.abs(col-MAP_COLS/2)<3)) ? 0 : 1;
+      }
+    }
 
-    <div id="start-screen" class="overlay active">
-        <h1>ENDLESS HIGHWAY</h1>
-        <p>Dodge the oncoming traffic!<br>Use A/D, Left/Right Arrows,<br>or Tap Left/Right side of screen.</p>
-        <button id="start-button">START DRIVING</button>
-    </div>
-    <div id="game-over" class="overlay">
-        <h1>CRASH!</h1>
-        <p id="final-score">Final Score: 0</p>
-        <button id="restart-button">RESTART</button>
-    </div>
+    // Player
+    const player = { x: worldWidth/2, y: worldHeight/2, angle: 0, speed: 0 };
 
-    <script>
-        // ============= Game Setup =============
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const C_WIDTH = canvas.width;
-        const C_HEIGHT = canvas.height;
+    // NPC vehicles
+    let npcs = [];
+    function spawnNPC() {
+      // Spawn at a random road tile
+      let r, c;
+      do { r = Math.floor(Math.random()*MAP_ROWS); c = Math.floor(Math.random()*MAP_COLS); } while(map[r][c]!==0);
+      npcs.push({ x: c*TILE_SIZE+TILE_SIZE/2, y: r*TILE_SIZE+TILE_SIZE/2, angle: Math.random()*Math.PI*2, speed: 1+Math.random()*1 });
+    }
+    // Spawn a few NPCs initially
+    for (let i=0;i<10;i++) spawnNPC();
 
-        // --- Elements ---
-        const scoreEl = document.getElementById('score');
-        const speedEl = document.getElementById('speed');
-        const finalScoreEl = document.getElementById('final-score');
-        const startScreen = document.getElementById('start-screen');
-        const gameOverScreen = document.getElementById('game-over');
-        const startButton = document.getElementById('start-button');
-        const restartButton = document.getElementById('restart-button');
-        const touchLeft = document.getElementById('touch-left');
-        const touchRight = document.getElementById('touch-right');
+    // Input
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-        // --- Game Constants ---
-        const PLAYER_WIDTH = 30;
-        const PLAYER_HEIGHT = 50;
-        const PLAYER_MOVE_SPEED = 5; // How fast player moves side-to-side
-        const OBSTACLE_WIDTH = 35;
-        const OBSTACLE_HEIGHT = 60;
-        const ROAD_LINE_WIDTH = 10;
-        const ROAD_LINE_HEIGHT = 40;
-        const ROAD_LINE_GAP = 20;
-        const MAX_SPEED_INCREASE = 4; // Max speed multiplier
-        const SPEED_INCREMENT = 0.0001; // How much speed increases per frame
-        const OBSTACLE_SPAWN_BASE_CHANCE = 0.015; // Initial chance per frame
+    let running = false;
+    let gameOver = false;
+    let score = 0;
 
-        // --- Game State ---
-        let playerX, roadOffset, score, gameSpeed, obstacles, gameOver, gameRunning, keysPressed, touchLeftActive, touchRightActive;
+    // ---- Game Functions ----
+    function update() {
+      // Player controls
+      if (keys['arrowup'] || keys['w']) player.speed += 0.3;
+      else player.speed *= 0.95;
+      if (keys['arrowdown'] || keys['s']) player.speed *= 0.9;
+      if (keys['arrowleft'] || keys['a']) player.angle -= 0.05;
+      if (keys['arrowright'] || keys['d']) player.angle += 0.05;
+      player.x += Math.cos(player.angle) * player.speed;
+      player.y += Math.sin(player.angle) * player.speed;
+      // Wrap-around world
+      if (player.x < 0) player.x += worldWidth;
+      if (player.x >= worldWidth) player.x -= worldWidth;
+      if (player.y < 0) player.y += worldHeight;
+      if (player.y >= worldHeight) player.y -= worldHeight;
 
-        // ============= Game Functions =============
+      // NPC movement: simple wandering
+      npcs.forEach(npc => {
+        npc.x += Math.cos(npc.angle) * npc.speed;
+        npc.y += Math.sin(npc.angle) * npc.speed;
+        if (npc.x < 0) npc.x += worldWidth;
+        if (npc.x >= worldWidth) npc.x -= worldWidth;
+        if (npc.y < 0) npc.y += worldHeight;
+        if (npc.y >= worldHeight) npc.y -= worldHeight;
+        // Randomly change direction
+        if (Math.random() < 0.02) npc.angle += (Math.random()-0.5)*0.5;
+      });
 
-        function resetGame() {
-            playerX = C_WIDTH / 2 - PLAYER_WIDTH / 2;
-            roadOffset = 0;
-            score = 0;
-            gameSpeed = 1.0;
-            obstacles = [];
-            gameOver = false;
-            gameRunning = false; // Don't start until button press
-            keysPressed = new Set();
-            touchLeftActive = false;
-            touchRightActive = false;
-            console.log("Game Reset");
-            updateUI(); // Update UI for initial state
+      // Check collisions: player with buildings
+      let tileCol = Math.floor(player.x / TILE_SIZE);
+      let tileRow = Math.floor(player.y / TILE_SIZE);
+      if (map[tileRow][tileCol] === 1) {
+        gameOver = true;
+      }
+      // Check collision with NPCs (simple distance check)
+      for (let npc of npcs) {
+        let dx = player.x - npc.x, dy = player.y - npc.y;
+        if (Math.hypot(dx, dy) < 25) gameOver = true;
+      }
+      // Increase score (distance traveled)
+      score += player.speed * 0.1;
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,canvas.width, canvas.height);
+      // Camera offset: center on player
+      const offsetX = player.x - canvas.width/2;
+      const offsetY = player.y - canvas.height/2;
+      // Draw map
+      for (let row = 0; row < MAP_ROWS; row++) {
+        for (let col = 0; col < MAP_COLS; col++) {
+          const screenX = col*TILE_SIZE - offsetX;
+          const screenY = row*TILE_SIZE - offsetY;
+          if (screenX+TILE_SIZE < 0 || screenX > canvas.width ||
+              screenY+TILE_SIZE < 0 || screenY > canvas.height) continue;
+          ctx.fillStyle = (map[row][col]===0)? '#222' : '#777';
+          ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          ctx.strokeStyle = '#111';
+          ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
         }
+      }
+      // Draw NPCs as smaller triangles
+      npcs.forEach(npc => {
+        ctx.save();
+        let screenX = npc.x - offsetX, screenY = npc.y - offsetY;
+        ctx.translate(screenX, screenY);
+        ctx.rotate(npc.angle);
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(-10, 7);
+        ctx.lineTo(-10, -7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+      // Draw player as a larger triangle
+      ctx.save();
+      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.rotate(player.angle);
+      ctx.fillStyle = '#e44';
+      ctx.beginPath();
+      ctx.moveTo(20, 0);
+      ctx.lineTo(-20, 12);
+      ctx.lineTo(-20, -12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // Update UI
+      speedEl.textContent = player.speed.toFixed(1);
+      scoreEl.textContent = Math.floor(score);
+    }
 
-        function updateUI() {
-            scoreEl.textContent = `Score: ${Math.floor(score)}`;
-            speedEl.textContent = `Speed: ${gameSpeed.toFixed(1)}x`;
-        }
+    function gameLoop() {
+      if (!running) return;
+      if (gameOver) {
+        finalScoreEl.textContent = `Score: ${Math.floor(score)}`;
+        gameOverScreen.style.display = 'flex';
+        running = false;
+        return;
+      }
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
 
-        function spawnObstacle() {
-            // Simple lane-based spawning
-            const laneWidth = C_WIDTH / 3; // Assuming 3 lanes
-            const lane = Math.floor(Math.random() * 3); // 0, 1, or 2
-            const xPos = lane * laneWidth + (laneWidth / 2) - OBSTACLE_WIDTH / 2;
-
-            obstacles.push({
-                x: xPos,
-                y: -OBSTACLE_HEIGHT, // Start above screen
-                w: OBSTACLE_WIDTH,
-                h: OBSTACLE_HEIGHT
-            });
-        }
-
-        function update(dt) { // dt not explicitly used here, speed controls time
-            if (gameOver || !gameRunning) return;
-
-            // --- Input ---
-            let move = 0;
-            if (touchLeftActive || keysPressed.has('a') || keysPressed.has('arrowleft')) {
-                move = -1;
-            } else if (touchRightActive || keysPressed.has('d') || keysPressed.has('arrowright')) {
-                move = 1;
-            }
-            playerX += move * PLAYER_MOVE_SPEED * (gameSpeed * 0.5 + 0.5) ; // Move faster at higher speeds
-
-            // Clamp player position
-            playerX = Math.max(0, Math.min(C_WIDTH - PLAYER_WIDTH, playerX));
-
-            // --- Road Lines ---
-            roadOffset = (roadOffset + ROAD_LINE_HEIGHT + ROAD_LINE_GAP) % (ROAD_LINE_HEIGHT + ROAD_LINE_GAP); // Move offset based on full cycle
-
-            // --- Obstacles ---
-            // Move existing obstacles
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obs = obstacles[i];
-                obs.y += gameSpeed * 3; // Base speed adjusted by gameSpeed
-
-                // Collision check
-                if (playerX < obs.x + obs.w &&
-                    playerX + PLAYER_WIDTH > obs.x &&
-                    C_HEIGHT - PLAYER_HEIGHT - 10 < obs.y + obs.h && // Player fixed Y pos near bottom
-                    C_HEIGHT - 10 > obs.y) {
-                    gameOver = true;
-                    console.log("Collision!");
-                    finalScoreEl.textContent = `Final Score: ${Math.floor(score)}`;
-                    gameOverScreen.classList.add('active');
-                    return; // Stop update on collision
-                }
-
-                // Remove off-screen obstacles
-                if (obs.y > C_HEIGHT) {
-                    obstacles.splice(i, 1);
-                    score += 10; // Score for dodging
-                }
-            }
-
-            // Spawn new obstacles randomly based on chance + speed
-            const spawnChance = OBSTACLE_SPAWN_BASE_CHANCE * gameSpeed;
-            if (Math.random() < spawnChance) {
-                spawnObstacle();
-            }
-
-            // --- Difficulty Increase ---
-            score += gameSpeed * 0.1; // Score increases faster at higher speeds
-            gameSpeed = Math.min(MAX_SPEED_INCREASE, gameSpeed + SPEED_INCREMENT);
-            updateUI();
-        }
-
-        function render() {
-            // Clear canvas
-            ctx.fillStyle = '#444'; // Road color
-            ctx.fillRect(0, 0, C_WIDTH, C_HEIGHT);
-
-            // --- Draw Road Lines ---
-            ctx.fillStyle = '#eee'; // Line color
-            const laneCenterX1 = C_WIDTH / 3;
-            const laneCenterX2 = (C_WIDTH / 3) * 2;
-            const segmentLength = ROAD_LINE_HEIGHT + ROAD_LINE_GAP;
-
-            for (let y = roadOffset - segmentLength; y < C_HEIGHT; y += segmentLength) {
-                ctx.fillRect(laneCenterX1 - ROAD_LINE_WIDTH / 2, y, ROAD_LINE_WIDTH, ROAD_LINE_HEIGHT);
-                ctx.fillRect(laneCenterX2 - ROAD_LINE_WIDTH / 2, y, ROAD_LINE_WIDTH, ROAD_LINE_HEIGHT);
-            }
-
-            // --- Draw Obstacles ---
-            ctx.fillStyle = '#ddd'; // Obstacle color
-            obstacles.forEach(obs => {
-                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-                // Simple shadow
-                ctx.fillStyle = 'rgba(0,0,0,0.2)';
-                ctx.fillRect(obs.x + 3, obs.y + 3, obs.w, obs.h);
-                ctx.fillStyle = '#ddd'; // Reset color
-            });
-
-            // --- Draw Player ---
-            ctx.fillStyle = '#e44'; // Player color
-            const playerDrawY = C_HEIGHT - PLAYER_HEIGHT - 10; // Fixed Y position
-            ctx.fillRect(playerX, playerDrawY, PLAYER_WIDTH, PLAYER_HEIGHT);
-            // Simple shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.fillRect(playerX + 4, playerDrawY + 4, PLAYER_WIDTH, PLAYER_HEIGHT);
-
-        }
-
-        // ============= Game Loop =============
-        let animationFrameId = null;
-        function gameLoop(timestamp) {
-            if (!gameRunning) {
-                animationFrameId = null;
-                 return; // Don't run if not started or game over handled
-            }
-             if (gameOver) {
-                  animationFrameId = null;
-                  return; // Stop loop cleanly on game over
-             }
-
-            update(); // Update game logic
-            render(); // Draw the current state
-
-            animationFrameId = requestAnimationFrame(gameLoop);
-        }
-
-        // ============= Event Listeners =============
-        // --- Keyboard ---
-        window.addEventListener('keydown', (e) => {
-            keysPressed.add(e.key.toLowerCase());
-        });
-        window.addEventListener('keyup', (e) => {
-            keysPressed.delete(e.key.toLowerCase());
-        });
-
-        // --- Touch Controls ---
-        touchLeft.addEventListener('touchstart', (e) => { e.preventDefault(); touchLeftActive = true; }, { passive: false });
-        touchLeft.addEventListener('touchend', (e) => { e.preventDefault(); touchLeftActive = false; });
-        touchLeft.addEventListener('touchcancel', (e) => { e.preventDefault(); touchLeftActive = false; });
-        touchRight.addEventListener('touchstart', (e) => { e.preventDefault(); touchRightActive = true; }, { passive: false });
-        touchRight.addEventListener('touchend', (e) => { e.preventDefault(); touchRightActive = false; });
-        touchRight.addEventListener('touchcancel', (e) => { e.preventDefault(); touchRightActive = false; });
-
-        // --- Buttons ---
-        startButton.addEventListener('click', () => {
-             if (!gameRunning) {
-                 console.log("Starting Game");
-                 resetGame(); // Reset state completely
-                 gameRunning = true; // Set running BEFORE starting loop
-                 startScreen.classList.remove('active');
-                 gameOverScreen.classList.remove('active'); // Ensure game over is hidden
-                 if (!animationFrameId) { // Start loop if not already running
-                      animationFrameId = requestAnimationFrame(gameLoop);
-                 }
-             }
-        });
-        restartButton.addEventListener('click', () => {
-             console.log("Restarting Game");
-             resetGame(); // Reset state
-             gameRunning = true; // Set running
-             gameOverScreen.classList.remove('active');
-             startScreen.classList.remove('active'); // Hide start screen too
-             if (!animationFrameId) { // Start loop
-                 animationFrameId = requestAnimationFrame(gameLoop);
-             }
-        });
-
-        // --- Initial Setup ---
-        resetGame(); // Initialize state on page load
-        // Mobile controls visibility handled by CSS media query or JS check if preferred
-        // if ('ontouchstart' in window || navigator.maxTouchPoints > 0) { /* show controls */ }
-
-    </script>
+    // ---- Event Listeners ----
+    startBtn.addEventListener('click', () => {
+      running = true;
+      gameOver = false;
+      score = 0;
+      player.x = worldWidth/2; player.y = worldHeight/2; player.speed = 0; player.angle = 0;
+      startScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      requestAnimationFrame(gameLoop);
+    });
+    restartBtn.addEventListener('click', () => {
+      running = true;
+      gameOver = false;
+      score = 0;
+      player.x = worldWidth/2; player.y = worldHeight/2; player.speed = 0; player.angle = 0;
+      gameOverScreen.style.display = 'none';
+      requestAnimationFrame(gameLoop);
+    });
+  </script>
 </body>
 </html>
