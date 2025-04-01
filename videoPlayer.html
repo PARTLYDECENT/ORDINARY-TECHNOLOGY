@@ -1,972 +1,752 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alien Player v5 - Unconventional Features</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary-glow: #00ffff;
-            --secondary-glow: #ff00ff;
-            --tertiary-glow: #00ff00; /* For matrix/visualizer/markers */
-            --background-start: #0d0d2b;
-            --background-end: #050018;
-            --border-color: #00ffff;
-            --text-color: #00ffff;
-            --control-bg: rgba(0, 0, 0, 0.75); /* Slightly darker */
-            --control-border: rgba(0, 255, 255, 0.4); /* Slightly stronger */
-            --button-active-bg: rgba(255, 0, 255, 0.3);
-            --button-active-border: #ff00ff;
-            --slider-thumb-bg: #ff00ff;
-            --slider-track-bg: rgba(0, 255, 255, 0.3);
-            --playlist-bg: rgba(0, 0, 10, 0.85);
-            --playlist-item-hover: rgba(0, 255, 255, 0.1);
-            --playlist-item-active: rgba(255, 0, 255, 0.25);
-            --marker-color: var(--tertiary-glow);
-            --glitch-overlay-bg: rgba(255, 0, 255, 0.1); /* For scramble effect */
-        }
-        *, *::before, *::after { box-sizing: border-box; }
-
-        body { margin: 0; background: radial-gradient(circle, var(--background-start), var(--background-end)); color: var(--text-color); font-family: 'Orbitron', sans-serif; min-height: 100vh; display: flex; overflow: hidden; }
-        #matrixCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; opacity: 1; transition: opacity 0.5s; }
-        #matrixCanvas.hidden { opacity: 0; }
-        .main-container { display: flex; flex-direction: column; align-items: center; width: 100%; height: 100vh; overflow: hidden; padding: 10px; transition: padding-left 0.4s ease-in-out; } /* Added transition */
-        body.playlist-visible .main-container { padding-left: 270px; }
-        header { width: 100%; padding: 10px 0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-        button, select { background: none; border: 2px solid var(--border-color); color: var(--text-color); border-radius: 5px; cursor: pointer; transition: all 0.2s ease-out; padding: 0.5rem 1rem; font-size: 0.9rem; font-family: inherit; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
-        button:hover:not(:disabled) { background: rgba(0, 255, 255, 0.2); box-shadow: 0 0 10px var(--primary-glow); transform: translateY(-2px); }
-        button:active:not(:disabled) { transform: scale(0.95) translateY(0); box-shadow: inset 0 0 8px rgba(0,0,0,0.5); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%230ff'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.7rem center; padding-right: 2.5rem; }
-        select:hover { border-color: var(--secondary-glow); }
-        h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2rem); text-shadow: 0 0 15px var(--primary-glow), 0 0 30px var(--secondary-glow); text-align: center; flex-grow: 1; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        main { width: 100%; max-width: 1000px; display: flex; flex-direction: column; flex-grow: 1; min-height: 0; margin-bottom: 10px; }
-        .video-wrapper { position: relative; width: 100%; flex-grow: 1; min-height: 0; display: flex; margin-bottom: 5px; /* Reduced margin */ }
-        .video-container { width: 100%; background: #000; border: 4px solid var(--border-color); border-radius: 10px; overflow: hidden; box-shadow: 0 0 25px rgba(0, 255, 255, 0.3); position: relative; display: flex; align-items: center; justify-content: center; }
-        .video-container video { width: 100%; height: 100%; object-fit: contain; display: block; transition: filter 0.4s ease; }
-        /* --- Visual Glitch Overlay for Scramble --- */
-        .video-container::after {
-            content: ''; position: absolute; inset: 0; background: var(--glitch-overlay-bg);
-            z-index: 10; pointer-events: none; opacity: 0;
-            animation: videoGlitch 0.15s steps(2, end) infinite; /* Use animation */
-            visibility: hidden;
-        }
-        .video-container.glitching::after { opacity: 1; visibility: visible; }
-        @keyframes videoGlitch {
-             0%, 100% { background-position: 0 0; filter: none;}
-             25% { background-position: 5px -5px; filter: hue-rotate(90deg) saturate(3); }
-             50% { background-position: -5px 5px; filter: hue-rotate(-90deg) contrast(2); }
-             75% { background-position: 0 5px; filter: invert(1); }
-        }
-
-        /* Filters (No changes) */
-        .video-container video.filter-none { filter: none; } /* ... other filter classes ... */
-        .video-container video.filter-grayscale { filter: grayscale(1); }
-        .video-container video.filter-sepia { filter: sepia(1); }
-        .video-container video.filter-invert { filter: invert(1); }
-        .video-container video.filter-hue-rotate-90 { filter: hue-rotate(90deg); }
-        .video-container video.filter-hue-rotate-180 { filter: hue-rotate(180deg); }
-        .video-container video.filter-contrast-saturate { filter: contrast(1.5) saturate(2); }
-        .video-container video.filter-blur-bright { filter: blur(2px) brightness(1.3); }
-        .video-container video.filter-vintage { filter: sepia(0.8) contrast(1.1) brightness(0.9); }
-        .video-container video.filter-xray { filter: invert(1) contrast(1.5) brightness(0.8); }
-        .video-container video.filter-saturated-bright { filter: saturate(3) brightness(1.1); }
-
-        #audioVisualizer { position: absolute; bottom: 4px; left: 4px; width: calc(100% - 8px); height: 50px; pointer-events: none; z-index: 5; opacity: 0.7; transition: opacity 0.3s; }
-        #audioVisualizer.hidden { opacity: 0; }
-        .video-info-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; /* Reduced margin */ padding: 5px 10px; background: var(--control-bg); border-radius: 5px; border: 1px solid var(--control-border); flex-shrink: 0; }
-        .video-title { font-size: 1rem; color: var(--secondary-glow); text-shadow: 0 0 5px var(--primary-glow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }
-        .time-display { display: flex; align-items: center; font-size: 0.9rem; color: var(--text-color); }
-        .time-display span { margin: 0 3px; }
-
-        /* Seek Bar & Markers */
-        .seek-bar-container { position: relative; width: 100%; margin-top: 8px; padding-bottom: 15px; /* Space for markers */ flex-shrink: 0;}
-        #seekBar { width: 100%; margin: 0; }
-        #markersContainer { position: absolute; bottom: 0; left: 0; width: 100%; height: 10px; pointer-events: none; /* Allow clicks through to seek bar */ }
-        .marker { position: absolute; bottom: 0; width: 3px; height: 10px; background-color: var(--marker-color); border-radius: 1px; transform: translateX(-50%); cursor: pointer; z-index: 1; box-shadow: 0 0 5px var(--marker-color); pointer-events: all; /* Make markers clickable */ }
-        .marker:hover { background-color: var(--secondary-glow); box-shadow: 0 0 8px var(--secondary-glow); transform: translateX(-50%) scaleY(1.3); }
-
-        /* Control Panel Layout */
-        .control-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; background: var(--control-bg); padding: 10px; border: 2px solid var(--border-color); border-radius: 10px; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); flex-shrink: 0; }
-        .controls-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; justify-content: center; }
-        .controls-row label { margin: 0 5px 0 0; font-size: 0.9em; opacity: 0.8;}
-
-        input[type="range"] { flex-grow: 1; height: 8px; -webkit-appearance: none; appearance: none; background: var(--slider-track-bg); border-radius: 4px; cursor: pointer; min-width: 80px; }
-        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: var(--slider-thumb-bg); border-radius: 50%; cursor: pointer; box-shadow: 0 0 8px var(--secondary-glow); }
-        input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; background: var(--slider-thumb-bg); border-radius: 50%; cursor: pointer; border: none; box-shadow: 0 0 8px var(--secondary-glow); }
-        .volume-control { display: flex; align-items: center; gap: 8px; min-width: 150px; }
-        .volume-control button { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-        #volumeSlider { max-width: 100px; }
-
-        .active-button { background: var(--button-active-bg); border-color: var(--button-active-border); box-shadow: 0 0 10px var(--button-active-border); }
-        #playlistPanel { position: fixed; top: 0; left: -260px; width: 250px; height: 100vh; background: var(--playlist-bg); backdrop-filter: blur(5px); border-right: 2px solid var(--border-color); box-shadow: 5px 0 15px rgba(0, 255, 255, 0.2); padding: 10px; padding-top: 50px; overflow-y: auto; z-index: 100; transition: left 0.4s ease-in-out; }
-        body.playlist-visible #playlistPanel { left: 0; }
-        #playlistPanel h3 { margin-top: 0; color: var(--secondary-glow); border-bottom: 1px solid var(--control-border); padding-bottom: 5px; margin-bottom: 10px; }
-        #playlist { list-style: none; padding: 0; margin: 0; }
-        #playlist li { padding: 8px 10px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; color: rgba(0, 255, 255, 0.8); transition: background-color 0.2s, color 0.2s; border: 1px solid transparent; }
-        #playlist li:hover { background-color: var(--playlist-item-hover); color: var(--text-color); }
-        #playlist li.playing { background-color: var(--playlist-item-active); color: var(--secondary-glow); border-color: var(--button-active-border); font-weight: bold; }
-        #playlistPanel::-webkit-scrollbar { width: 8px; }
-        #playlistPanel::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
-        #playlistPanel::-webkit-scrollbar-thumb { background-color: var(--slider-thumb-bg); border-radius: 4px; }
-        .header-button { font-size: 0.8rem; padding: 0.4rem 0.8rem; }
-        .tooltip { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #ccc; padding: 8px 12px; border-radius: 4px; font-size: 0.8rem; border: 1px solid #555; z-index: 100; opacity: 0; transition: opacity 0.5s; pointer-events: none; white-space: nowrap; }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-             body.playlist-visible .main-container { padding-left: 10px; }
-             #playlistPanel { width: 200px; left: -210px; padding-top: 60px; }
-             h1 { font-size: 1.2rem; }
-             .controls-row { gap: 5px; justify-content: space-around; } /* Better spacing */
-             button, select { font-size: 0.8rem; padding: 0.4rem 0.6rem; /* Adjust padding */ }
-             .volume-control { min-width: auto; flex-grow: 1; /* Allow volume to take space */ }
-             #volumeSlider { max-width: 60px; }
-             .tooltip { left: 10px; transform: none; width: calc(100% - 20px); text-align: center; white-space: normal;}
-             .main-container { padding: 5px; }
-             header, .video-info-bar, .control-panel { padding: 5px; }
-             .seek-bar-container { padding-bottom: 10px; } /* Less space needed */
-             .marker { height: 8px; width: 2px; }
-        }
-         @media (max-width: 480px) {
-              .header-button { padding: 0.3rem 0.5rem; }
-              .controls-row label { display: none; } /* Hide labels on small screens */
-              button, select { padding: 0.3rem 0.5rem; }
-         }
-
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VOIDSCAPE - Intergalactic Communication Portal v2</title>
+  <style>
+    :root {
+      --glow-color: #0ff;
+      --bg-color: #000;
+      --text-color: #8ef;
+      --accent-color: #f0c;
+      --glitch-filter-duration: 0.2s; /* Duration for glyph click glitch */
+    }
+     
+    /* Minimal Font Placeholder - Replace if you have a real alien font */
+    @font-face {
+      font-family: 'AlienFont';
+      /* Use a system monospace if no font is available */
+      src: local('Courier New'), local('Consolas'), monospace;
+      font-weight: normal;
+      font-style: normal;
+    }
+     
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+     
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: monospace;
+      overflow-x: hidden;
+      min-height: 100vh;
+      /* Custom cursor remains */
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='cyan' stroke-width='1'/%3E%3C/svg%3E"), auto;
+      /* Perspective for header scroll effect */
+      perspective: 800px;
+    }
+     
+    #stars {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      pointer-events: none;
+    }
+     
+    header {
+      text-align: center;
+      padding: 2rem;
+      position: relative;
+      z-index: 10; /* Ensure header is above potential main glitches */
+      transform-style: preserve-3d; /* Needed for perspective effect */
+    }
+     
+    h1 {
+      font-size: clamp(2rem, 6vw, 3.5rem); /* Responsive */
+      letter-spacing: 0.5rem;
+      margin-bottom: 1rem;
+      text-shadow: 0 0 10px var(--glow-color), 0 0 20px var(--glow-color);
+      animation: pulse 4s infinite alternate;
+      transition: transform 0.1s linear; /* Smooth transition for scroll effect */
+      transform-origin: center center;
+    }
+     
+    nav {
+      display: flex;
+      justify-content: center;
+      margin: 1rem 0;
+      flex-wrap: wrap;
+    }
+     
+    nav a {
+      color: var(--text-color);
+      text-decoration: none;
+      margin: 0.5rem 1rem; /* Adjust margin for wrapping */
+      padding: 0.5rem 1rem;
+      border: 1px solid transparent;
+      border-radius: 20px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+     
+    nav a:hover {
+      border-color: var(--glow-color);
+      box-shadow: 0 0 10px var(--glow-color);
+      transform: translateY(-3px);
+    }
+     
+    nav a::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.2), transparent);
+      transition: 0.5s;
+    }
+     
+    nav a:hover::after {
+      left: 100%;
+    }
+     
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      position: relative;
+      transition: filter var(--glitch-filter-duration) ease-in-out,
+                  transform var(--glitch-filter-duration) ease-in-out; /* Transition for glitches */
+    }
+     
+    /* ---- NEW: Glitch Filter Classes ---- */
+    main.viewport-glitch-blur { filter: blur(3px); }
+    main.viewport-glitch-invert { filter: invert(1); }
+    main.viewport-glitch-hue { filter: hue-rotate(180deg); }
+    main.viewport-glitch-contrast { filter: contrast(2) saturate(0.5); }
+    /* ---- END: Glitch Filter Classes ---- */
+     
+    .container {
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid var(--glow-color);
+      border-radius: 10px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 0 15px var(--glow-color);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.1s ease-out; /* Transition for jitter */
+    }
+     
+    /* ---- NEW: Unstable Container Jitter ---- */
+    .container.unstable {
+      animation: jitter 0.15s infinite linear;
+    }
+    @keyframes jitter {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(1px, -1px); }
+      50% { transform: translate(-1px, 1px); }
+      75% { transform: translate(-1px, -1px); }
+    }
+    /* ---- END: Unstable Container Jitter ---- */
+     
+    .container::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      right: -10px;
+      bottom: -10px;
+      background: linear-gradient(45deg, var(--glow-color), transparent, var(--accent-color), transparent);
+      z-index: -1;
+      filter: blur(20px);
+      opacity: 0.5;
+      animation: rotateGradient 10s linear infinite;
+    }
+     
+    h2 {
+      color: var(--accent-color);
+      margin-bottom: 1rem;
+      text-shadow: 0 0 5px var(--accent-color);
+      position: relative;
+      display: inline-block;
+    }
+     
+    h2::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+    }
+     
+    p {
+      margin-bottom: 1rem;
+      line-height: 1.6;
+      text-shadow: 0 0 1px var(--text-color);
+    }
+     
+    .alien-text {
+      font-family: 'AlienFont', monospace;
+      opacity: 0.7;
+      font-size: 0.8rem;
+      letter-spacing: 2px;
+      color: var(--glow-color);
+      margin: 1rem 0;
+      user-select: none;
+      min-height: 1.2em; /* Prevent layout shift during scramble */
+      display: inline-block; /* Needed for min-height */
+      cursor: default; /* Indicate interaction */
+    }
+     
+    .glyph-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 2rem 0;
+      gap: 1rem;
+    }
+     
+    .glyph {
+      width: 80px;
+      height: 80px;
+      background: rgba(0, 255, 255, 0.1);
+      border: 1px solid var(--glow-color);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
+      font-size: 2rem; /* For showing temp glyph */
+      user-select: none;
+    }
+     
+    .glyph:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 20px var(--glow-color);
+    }
+     
+    .glyph::before, .glyph::after {
+      content: '';
+      position: absolute;
+      background: var(--glow-color);
+      opacity: 0.5;
+    }
+     
+    .glyph::before {
+      width: 2px;
+      height: 60%;
+      animation: rotateLine 4s linear infinite;
+    }
+     
+    .glyph::after {
+      width: 60%;
+      height: 2px;
+      animation: rotateLine 4s linear infinite reverse;
+    }
+     
+    /* Removed fixed scanner, interaction added */
+    /* .scanner { ... } */
+     
+    .communication-form {
+      position: relative;
+      margin-top: 2rem;
+    }
+     
+    .communication-form input, .communication-form textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid var(--glow-color);
+      color: var(--text-color);
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      border-radius: 5px;
+      resize: none;
+      transition: all 0.3s;
+      font-family: monospace; /* Ensure monospace */
+    }
+     
+    .communication-form input:focus, .communication-form textarea:focus {
+      outline: none;
+      box-shadow: 0 0 10px var(--glow-color);
+    }
+     
+    .communication-form button {
+      background: transparent;
+      font-family: monospace;
+      color: var(--glow-color);
+      border: 1px solid var(--glow-color);
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border-radius: 5px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+     
+    .communication-form button:hover {
+      background: rgba(0, 255, 255, 0.1);
+      box-shadow: 0 0 10px var(--glow-color);
+    }
+     
+    .communication-form button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.2), transparent);
+      transition: 0.5s;
+    }
+     
+    .communication-form button:hover::after {
+      left: 100%;
+    }
+     
+    footer {
+      text-align: center;
+      padding: 2rem;
+      position: relative;
+      font-size: 0.8rem;
+      opacity: 0.7;
+      min-height: 5em; /* Space for multiple lines */
+    }
+     
+    .loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 5px;
+      background: linear-gradient(90deg, transparent, var(--glow-color), transparent);
+      z-index: 1000;
+      animation: loading 1.5s infinite;
+    }
+     
+    @keyframes pulse {
+      0% {
+        opacity: 0.7;
+        text-shadow: 0 0 10px var(--glow-color), 0 0 20px var(--glow-color);
+      }
+      100% {
+        opacity: 1;
+        text-shadow: 0 0 15px var(--glow-color), 0 0 30px var(--glow-color), 0 0 40px var(--glow-color);
+      }
+    }
+     
+    @keyframes rotateGradient {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+     
+    @keyframes rotateLine {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+     
+    /* Removed scan animation, effect handled by JS */
+    /* @keyframes scan { ... } */
+     
+    @keyframes loading {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+     
+    @media (max-width: 600px) {
+      h1 { font-size: 1.8rem; letter-spacing: 0.3rem; }
+      nav a { margin: 0.3rem 0.5rem; }
+      main { padding: 1rem; }
+      .container { padding: 1.5rem; }
+      .glyph { width: 60px; height: 60px; font-size: 1.5rem; }
+    }
+  </style>
 </head>
+<body>
+  <div class="loading-indicator"></div>
+  <canvas id="stars"></canvas>
+   
+  <header>
+    <h1 id="main-title">V O I D S C A P E</h1>
+    <p>INTERGALACTIC COMMUNICATION PORTAL ⌖ SECTOR ZX-9</p>
+    <div class="alien-text" data-original="⟙⟚⟛⟞⟠⟡⟢⟣⟤⟥⟦⟧⟨⟩⟪⟫⟬⟭ ⟮⟯⟰⟱⟲⟳⟴⟵⟶⟷⟸⟹⟺⟻⟼⟽⟾⟿"></div>
+  </header>
+   
+  <nav>
+    <a href="#transmission">TRANSMISSIONS</a>
+    <a href="#galactic">GALACTIC MAP</a>
+    <a href="#species">SPECIES DATABASE</a>
+    <a href="#communication">COMMUNICATION</a>
+  </nav>
+   
+  <main id="main-content">
+    <section id="transmission" class="container">
+      <h2>RECENT TRANSMISSIONS</h2>
+      <p>Welcome, cosmic traveler. This interface has been calibrated to your primitive visual processors. Our signals have reached your star system after traveling across 347 light cycles.</p>
+      <p>The Council of Zeta Reticuli extends greetings to your developing civilization. We have been monitoring your progress for 7,293 of your orbital cycles.</p>
+      <div class="alien-text" data-original="⟙⟚⟛⟞⟠⟡⟢⟣⟤⟥⟦⟧⟨⟩⟪⟫⟬⟭ ⟮⟯⟰⟱⟲⟳⟴⟵⟶⟷⟸⟹⟺⟻⟼⟽⟾⟿ ⥁⥂⥃⥄⥅⥆⥇⥈⥉⥊⥋⥌⥍⥎⥏"></div>
+    </section>
+     
+    <section id="galactic" class="container">
+      <h2>GALACTIC COORDINATES</h2>
+      <p>Your position: Sol System, Orion-Cygnus Arm, Milky Way Galaxy</p>
+      <p>Distance from Central Hub: 27,341 light years</p>
+      <p>Nearest outpost: Proxima Centauri</p>
+       
+      <div class="glyph-container">
+        <div class="glyph">?</div>
+        <div class="glyph">?</div>
+        <div class="glyph">?</div>
+        <div class="glyph">?</div>
+        <div class="glyph">?</div>
+      </div>
+    </section>
+     
+    <section id="species" class="container">
+      <h2>SPECIES DATABASE</h2>
+      <p>Your species classification: Carbon-based bipedal lifeforms</p>
+      <p>Evolutionary status: Early technological phase</p>
+      <p>Telepathic capability: Undeveloped</p>
+      <p>Interstellar travel capability: Primitive</p>
+      <div class="alien-text" data-original="⥚⥛⥜⥝⥞⥟⥠⥡⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯ ⥰⥱⥲⥳⥴⥵⥶⥷⥸⥹⥺⥻⥼⥽⥾⥿"></div>
+    </section>
+     
+    <section id="communication" class="container">
+      <h2>COMMUNICATION PORTAL</h2>
+      <p>Send your thoughts to the collective consciousness. All messages are translated through the quantum entanglement network.</p>
+       
+      <form class="communication-form">
+        <input type="text" placeholder="Your Designation (Name)" required>
+        <textarea placeholder="Enter your message to the cosmos..." rows="5" required></textarea>
+        <button type="button">TRANSMIT</button>
+      </form>
+    </section>
+  </main>
+   
+  <footer>
+    <div class="alien-text" data-original="⟙⟚⟛⟞⟠⟡⟢⟣⟤⟥⟦⟧⟨⟩⟪⟫⟬⟭ ⟮⟯⟰⟱⟲⟳⟴⟵⟶⟷⟸⟹⟺⟻⟼⟽⟾⟿"></div>
+    <p id="footer-data">COSMIC CYCLE: 7729.3 • SPATIAL COORDINATE: X-372.Y-584.Z-291</p>
+  </footer>
 
-<body> {/* No initial class */}
-    <canvas id="matrixCanvas"></canvas>
+  <script>
+    // --- Enhanced Starfield ---
+    const canvas = document.getElementById('stars');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
+    const numStars = 250; // Slightly more stars
+    let mousePos = { x: -1000, y: -1000 }; // Initialize mouse off-screen
 
-    <div id="playlistPanel">
-        <h3>Playlist</h3>
-        <ul id="playlist"></ul>
-    </div>
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      stars = []; // Reinitialize stars on resize
+      for (let i = 0; i < numStars; i++) {
+          stars.push({
+              x: Math.random() * canvas.width,
+              y: Math.random() * canvas.height,
+              size: Math.random() * 2 + 0.5,
+              speedY: Math.random() * 0.2 + 0.05, // Slower base speed
+              speedX: (Math.random() - 0.5) * 0.1, // Slight horizontal drift
+              brightness: Math.random(),
+              color: `hsl(${Math.random() * 60 + 180}, 100%, ${Math.random() * 30 + 50}%)` // Vary lightness
+          });
+      }
+    }
+    resizeCanvas(); // Initial setup
 
-    <div class="main-container">
-        <header>
-            <button id="togglePlaylistBtn" class="header-button" title="Toggle Playlist (Tab)">☰ List</button>
-            <h1>ALIEN PLAYER</h1>
-            <button id="toggleMatrixBtn" class="header-button" title="Toggle Matrix (G)">Matrix: On</button>
-        </header>
+    window.addEventListener('resize', resizeCanvas);
 
-        <main>
-            <div class="video-wrapper">
-                <div class="video-container"> {/* Added video-container class back */}
-                    <video id="cyclicVideo" loop controlslist="nodownload" crossorigin="anonymous"></video>
-                </div>
-                <canvas id="audioVisualizer"></canvas>
-            </div>
-
-            <div class="video-info-bar">
-                <div class="video-title" id="videoTitle">Loading...</div>
-                <div class="time-display">
-                    <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
-                </div>
-            </div>
-
-            <div class="seek-bar-container">
-                <input type="range" id="seekBar" value="0" min="0" max="100" step="0.1">
-                <div id="markersContainer"></div> {/* Container for markers */}
-            </div>
-
-            <div class="control-panel">
-                {/* Row 1: Core Playback */}
-                <div class="controls-row">
-                    <button id="prevVideo" title="Previous (←)">Prev</button>
-                    <button id="playPauseBtn" title="Play/Pause (Space)">Play</button>
-                    <button id="nextVideo" title="Next (→)">Next</button>
-                    <button id="repeatBtn" title="Toggle Repeat (R)">Repeat: Off</button>
-                    <button id="shuffleBtn" title="Toggle Shuffle (S)">Shuffle</button>
-                </div>
-                {/* Row 2: Speed & Volume */}
-                 <div class="controls-row">
-                    <label>Speed:</label>
-                    <button data-speed="0.5">0.5x</button>
-                    <button data-speed="0.75">0.75x</button>
-                    <button data-speed="1.0" class="active-button">1.0x</button>
-                    <button data-speed="1.5">1.5x</button>
-                    <button data-speed="2.0">2.0x</button>
-                    <div class="volume-control">
-                        <button id="muteBtn" title="Mute (M)">Mute</button>
-                        <input type="range" id="volumeSlider" min="0" max="1" value="1" step="0.01" title="Volume (↑/↓)">
-                    </div>
-                </div>
-                {/* Row 3: Features & Effects */}
-                <div class="controls-row">
-                     <label for="visualizerSelect">Viz:</label>
-                     <select id="visualizerSelect" title="Visualizer Style">
-                         <option value="bars">Bars</option>
-                         <option value="line">Line</option>
-                         <option value="off">Off</option>
-                     </select>
-                     <button id="distortBtn" title="Toggle Audio Muffle (D)">Muffle</button> {/* New */}
-                     <button id="spatialBtn" title="Toggle Spatial Drift (A)">Drift</button> {/* New */}
-                     <button id="scrambleBtn" title="Toggle Subspace Scramble (X)">[Scramble]</button> {/* New */}
-                     <button id="pipBtn" title="Picture-in-Picture (P)">PiP</button>
-                     <button id="fullscreenBtn" title="Fullscreen">Full</button>
-                     <button id="downloadBtn" title="Download Video">DL</button>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <div id="keyboardTooltip" class="tooltip">Keys: [Space] Play/Pause | [←/→] Prev/Next | [S] Shuffle | [R] Repeat | [L] Log Time | [M] Mute | [P] PiP | [↑/↓] Volume | [D] Muffle | [A] Drift | [X] Scramble | [G] Matrix | [Tab] Playlist</div>
-
-    <script>
-        // Wrap in IIFE for scope protection
-        (function() {
-            // --- Matrix Background ---
-            const matrixCanvas = document.getElementById('matrixCanvas');
-            const matrixCtx = matrixCanvas.getContext('2d');
-            let matrixColumns, matrixDrops, matrixFontSize = 16, matrixInterval;
-            let matrixActive = localStorage.getItem('matrixActive') !== 'false'; // Load state
-            let baseMatrixIntervalTime = 50; // Base speed ms
-            let currentMatrixIntervalTime = baseMatrixIntervalTime;
-
-            function setupMatrix() {
-                matrixCanvas.width = window.innerWidth;
-                matrixCanvas.height = window.innerHeight;
-                matrixColumns = matrixCanvas.width / matrixFontSize;
-                // Ensure drops array is always valid
-                const newDrops = Array(Math.floor(matrixColumns)).fill(1);
-                 if (matrixDrops && matrixDrops.length === newDrops.length) {
-                    // Preserve existing drop positions if columns haven't changed drastically
-                 } else {
-                    matrixDrops = newDrops;
-                 }
-                drawMatrix(); // Initial draw
-            }
-
-            function drawMatrix() {
-                if (!matrixActive || !matrixCtx) return;
-                matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-                matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
-                matrixCtx.fillStyle = 'var(--tertiary-glow)';
-                matrixCtx.font = matrixFontSize + 'px monospace';
-                const chars = "アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン01"; // Shorter set maybe faster?
-                for (let i = 0; i < matrixDrops.length; i++) {
-                    const text = chars.charAt(Math.floor(Math.random() * chars.length));
-                    matrixCtx.fillText(text, i * matrixFontSize, matrixDrops[i] * matrixFontSize);
-                    if (matrixDrops[i] * matrixFontSize > matrixCanvas.height && Math.random() > 0.975) {
-                        matrixDrops[i] = 0;
-                    }
-                    matrixDrops[i]++;
-                }
-            }
-
-            function startMatrix() {
-                stopMatrix(); // Clear previous interval if any
-                if (matrixActive) {
-                     setupMatrix();
-                     matrixInterval = setInterval(drawMatrix, currentMatrixIntervalTime); // Use dynamic interval
-                     matrixCanvas.classList.remove('hidden');
-                     document.getElementById('toggleMatrixBtn').textContent = "Matrix: On";
-                     document.getElementById('toggleMatrixBtn').classList.add('active-button');
-                     console.log('Matrix Started');
-                }
-            }
-            function stopMatrix() {
-                if (matrixInterval) {
-                    clearInterval(matrixInterval);
-                    matrixInterval = null;
-                    if (matrixCtx) matrixCtx.clearRect(0, 0, matrixCanvas.width, matrixCanvas.height);
-                    matrixCanvas.classList.add('hidden');
-                    document.getElementById('toggleMatrixBtn').textContent = "Matrix: Off";
-                    document.getElementById('toggleMatrixBtn').classList.remove('active-button');
-                    console.log('Matrix Stopped');
-                }
-            }
-             function toggleMatrix() {
-                 matrixActive = !matrixActive;
-                 localStorage.setItem('matrixActive', matrixActive);
-                 if (matrixActive) startMatrix();
-                 else stopMatrix();
-             }
-             function updateMatrixSpeed(audioLevel = 0) { // audioLevel 0-1
-                if (!matrixActive) return;
-                // Map audio level to interval time (e.g., 60ms down to 30ms)
-                // Inverse relationship: higher level -> shorter interval (faster)
-                const minInterval = 30;
-                const maxInterval = 65;
-                currentMatrixIntervalTime = Math.max(minInterval, maxInterval - (audioLevel * (maxInterval - minInterval)));
-                // Restart interval with new speed IF it changed significantly
-                 if (matrixInterval && Math.abs(currentMatrixIntervalTime - (matrixInterval._delay || baseMatrixIntervalTime)) > 2) {
-                    // Note: _delay is not standard, better to stop/start
-                    stopMatrix();
-                    startMatrix();
-                 }
-             }
+    document.addEventListener('mousemove', function(e) {
+      mousePos = { x: e.clientX, y: e.clientY };
+    });
+    document.addEventListener('mouseleave', function(e) {
+       mousePos = { x: -1000, y: -1000 }; // Move mouse away when it leaves window
+    });
 
 
-            // --- Video Player Setup ---
-            const videoSources = Array.from({ length: 20 }, (_, i) => `video${i + 1}.mp4`);
-            let originalVideoOrder = [...videoSources];
-            let currentVideoSources = [...videoSources];
-            let currentVideoIndex = 0;
-            // Load saved states
-            let isShuffled = localStorage.getItem('isShuffled') === 'true';
-            let repeatMode = localStorage.getItem('repeatMode') === 'true';
-            let savedVolume = parseFloat(localStorage.getItem('playerVolume'));
-            if (isNaN(savedVolume)) savedVolume = 1.0; // Default if NaN
-            let isMuted = localStorage.getItem('isMuted') === 'true';
-            let savedFilterIndex = parseInt(localStorage.getItem('filterIndex')) || 0;
-            let isDistortionOn = localStorage.getItem('distortionOn') === 'true';
-            let isSpatialOn = localStorage.getItem('spatialOn') === 'true';
-            let isScrambleOn = localStorage.getItem('scrambleOn') === 'true';
+    function animateStars() {
+      if (!ctx) return; // Ensure context exists
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+       
+      stars.forEach(star => {
+        ctx.fillStyle = star.color;
+        // Twinkle effect
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(Date.now() * 0.001 * star.brightness * 5 + star.brightness * 10);
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
 
-            // DOM Elements
-            const cyclicVideo = document.getElementById("cyclicVideo");
-            const videoTitle = document.getElementById("videoTitle");
-            const speedButtons = document.querySelectorAll('.controls-row button[data-speed]');
-            const downloadBtn = document.getElementById("downloadBtn");
-            const shuffleBtn = document.getElementById("shuffleBtn");
-            const repeatBtn = document.getElementById("repeatBtn");
-            const keyboardTooltip = document.getElementById("keyboardTooltip");
-            const filterSelect = document.getElementById("filterSelect");
-            const playlistElement = document.getElementById("playlist");
-            const togglePlaylistBtn = document.getElementById("togglePlaylistBtn");
-            const toggleMatrixBtn = document.getElementById("toggleMatrixBtn");
-            const playPauseBtn = document.getElementById('playPauseBtn');
-            const muteBtn = document.getElementById('muteBtn');
-            const volumeSlider = document.getElementById('volumeSlider');
-            const seekBar = document.getElementById('seekBar');
-            const currentTimeDisplay = document.getElementById('currentTime');
-            const durationDisplay = document.getElementById('duration');
-            const pipBtn = document.getElementById('pipBtn');
-            const fullscreenBtn = document.getElementById('fullscreenBtn');
-            const videoContainer = document.querySelector('.video-container');
-            const markersContainer = document.getElementById("markersContainer");
-            const distortBtn = document.getElementById("distortBtn");
-            const spatialBtn = document.getElementById("spatialBtn");
-            const scrambleBtn = document.getElementById("scrambleBtn");
+        // --- NEW: Mouse Interaction ---
+        const dx = star.x - mousePos.x;
+        const dy = star.y - mousePos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const repulsionRadius = 100; // How close mouse needs to be
+        const repulsionStrength = 1.5; // How strongly stars are pushed
 
-            // --- New Feature State & Vars ---
-            let logMarkers = []; // Array to store marker timestamps
-            let distortNode, spatialNode, audioSourceNode; // For Web Audio effects
-            let scrambleInterval = null; // Interval ID for scramble effect
+        if (dist < repulsionRadius) {
+            const force = (repulsionRadius - dist) / repulsionRadius * repulsionStrength;
+            const angle = Math.atan2(dy, dx);
+            star.x += Math.cos(angle) * force;
+            star.y += Math.sin(angle) * force;
+        }
+        // --- END: Mouse Interaction ---
 
-            // --- Filter Setup ---
-            const filters = [ /* Filter array remains the same */
-                { name: 'NONE', class: 'filter-none' }, { name: 'GRAYSCALE', class: 'filter-grayscale' },
-                { name: 'SEPIA', class: 'filter-sepia' }, { name: 'INVERT', class: 'filter-invert' },
-                { name: 'ALIEN', class: 'filter-hue-rotate-90' }, { name: 'PSYCHEDELIC', class: 'filter-hue-rotate-180' },
-                { name: 'VIBRANT', class: 'filter-contrast-saturate' }, { name: 'BLURRY', class: 'filter-blur-bright' },
-                { name: 'VINTAGE', class: 'filter-vintage' }, { name: 'X-RAY', class: 'filter-xray' },
-                { name: 'OVERDRIVE', class: 'filter-saturated-bright' }
-            ];
-            let currentFilterIndex = (savedFilterIndex >= 0 && savedFilterIndex < filters.length) ? savedFilterIndex : 0; // Validate saved index
-
-
-            // --- Audio Visualizer & Effects Setup ---
-            const visualizerCanvas = document.getElementById('audioVisualizer');
-            const visualizerCtx = visualizerCanvas.getContext('2d');
-            const visualizerSelect = document.getElementById('visualizerSelect');
-            let audioContext; let analyser; let sourceNode; let visualizerAnimationId; let dataArray;
-            const numBars = 64;
-            let currentVisualizerStyle = localStorage.getItem('visualizerStyle') || 'bars';
-            let gainNode; // Add gain node for volume control *after* source
-
-            function setupAudioNodes() {
-                if (audioContext || !cyclicVideo) return;
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    sourceNode = audioContext.createMediaElementSource(cyclicVideo);
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 256;
-                    analyser.smoothingTimeConstant = 0.8;
-
-                    // Create effect nodes
-                    gainNode = audioContext.createGain(); // For volume control
-                    distortNode = audioContext.createBiquadFilter();
-                    distortNode.type = "lowpass"; // Example: lowpass filter
-                    distortNode.frequency.setValueAtTime(20000, audioContext.currentTime); // Start bypassed
-
-                    spatialNode = audioContext.createStereoPanner();
-                    spatialNode.pan.setValueAtTime(0, audioContext.currentTime); // Start centered
-
-                    // Connect nodes: Source -> Gain -> Distortion -> Spatial -> Analyser -> Destination
-                    sourceNode.connect(gainNode);
-                    gainNode.connect(distortNode);
-                    distortNode.connect(spatialNode);
-                    spatialNode.connect(analyser);
-                    analyser.connect(audioContext.destination);
-
-                    const bufferLength = analyser.frequencyBinCount;
-                    dataArray = new Uint8Array(bufferLength);
-
-                    // Set initial states from localStorage
-                    toggleDistortion(isDistortionOn, false); // Don't save on initial load
-                    toggleSpatialDrift(isSpatialOn, false); // Don't save on initial load
-                    setVolume(savedVolume); // Apply saved volume via gain node
-
-                    resizeVisualizer();
-                    console.log('Audio Nodes Initialized');
-                } catch (e) {
-                    console.error("Web Audio API setup failed:", e);
-                    if(visualizerCanvas) visualizerCanvas.style.display = 'none';
-                    if(visualizerSelect) visualizerSelect.style.display = 'none';
-                    if(distortBtn) distortBtn.disabled = true;
-                    if(spatialBtn) spatialBtn.disabled = true;
-                }
-            }
-            // --- Visualizer Drawing (Remains mostly the same, uses dataArray) ---
-            function resizeVisualizer() { /* ... same as before ... */
-                 if(!visualizerCanvas || visualizerCanvas.style.display === 'none') return;
-                 visualizerCanvas.width = visualizerCanvas.offsetWidth;
-                 visualizerCanvas.height = 50;
-            }
-             function drawVisualizer() {
-                if (!analyser || currentVisualizerStyle === 'off') { stopVisualizer(); return; }
-
-                visualizerAnimationId = requestAnimationFrame(drawVisualizer);
-                const bufferLength = analyser.frequencyBinCount;
-                if (!dataArray || dataArray.length !== bufferLength) dataArray = new Uint8Array(bufferLength);
-
-                visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
-                const WIDTH = visualizerCanvas.width; const HEIGHT = visualizerCanvas.height;
-                let audioLevel = 0; // For matrix speed
-
-                if (currentVisualizerStyle === 'bars') {
-                    analyser.getByteFrequencyData(dataArray);
-                    const barWidth = (WIDTH / numBars) * 1.5; let x = 0;
-                    let sum = 0;
-                    for (let i = 0; i < numBars; i++) { // Use numBars here
-                        const barHeight = (dataArray[i] / 255.0) * HEIGHT * 1.2;
-                        sum += dataArray[i];
-                        const hue = (i / numBars) * 180 + 180;
-                        visualizerCtx.fillStyle = `hsla(${hue}, 100%, 60%, 0.85)`;
-                        visualizerCtx.fillRect(x, HEIGHT - barHeight, barWidth -1, barHeight);
-                        x += barWidth;
-                    }
-                    audioLevel = (sum / numBars) / 200; // Normalize average volume (adjust 200 scaling factor)
-
-                } else if (currentVisualizerStyle === 'line') {
-                    analyser.getByteTimeDomainData(dataArray);
-                    visualizerCtx.lineWidth = 2;
-                    visualizerCtx.strokeStyle = 'var(--tertiary-glow)';
-                    visualizerCtx.beginPath();
-                    const sliceWidth = WIDTH * 1.0 / bufferLength; let x = 0;
-                    let sum = 0;
-                    for (let i = 0; i < bufferLength; i++) {
-                        const v = dataArray[i] / 128.0; const y = v * HEIGHT / 2;
-                        sum += Math.abs(v - 1.0); // Calculate deviation from midpoint for loudness
-                        if (i === 0) visualizerCtx.moveTo(x, y); else visualizerCtx.lineTo(x, y);
-                        x += sliceWidth;
-                    }
-                    visualizerCtx.lineTo(WIDTH, HEIGHT / 2);
-                    visualizerCtx.stroke();
-                    audioLevel = (sum / bufferLength) * 1.5; // Normalize differently for waveform (adjust 1.5 scaling)
-                }
-                 updateMatrixSpeed(Math.min(1, audioLevel)); // Update matrix speed based on normalized level
-            }
-             function stopVisualizer() { /* ... same as before ... */
-                  if (visualizerAnimationId) {
-                      cancelAnimationFrame(visualizerAnimationId);
-                      visualizerAnimationId = null;
-                  }
-                  if(visualizerCtx) visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
-             }
-             visualizerSelect.addEventListener('change', (e) => { /* ... same as before ... */
-                 currentVisualizerStyle = e.target.value;
-                 localStorage.setItem('visualizerStyle', currentVisualizerStyle);
-                 visualizerCanvas.style.opacity = currentVisualizerStyle === 'off' ? '0' : '0.7';
-                  if(currentVisualizerStyle !== 'off' && !visualizerAnimationId && !cyclicVideo.paused) {
-                      drawVisualizer();
-                  } else if (currentVisualizerStyle === 'off') {
-                      stopVisualizer();
-                  }
-             });
-             // Set initial state
-             visualizerSelect.value = currentVisualizerStyle;
-             visualizerCanvas.style.opacity = currentVisualizerStyle === 'off' ? '0' : '0.7';
-
-
-            // --- Playlist Functions ---
-            function populatePlaylist() { /* ... same as before ... */
-                if (!playlistElement) return;
-                playlistElement.innerHTML = '';
-                currentVideoSources.forEach((src, index) => {
-                    const li = document.createElement('li');
-                    let displayName = src.split('/').pop()?.replace('.mp4', '').replace(/[_-]/g, ' ') || `Track ${index + 1}`;
-                    // Capitalize first letter of each word roughly
-                    displayName = displayName.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                    li.textContent = displayName;
-                    li.title = displayName; // Tooltip for long names
-                    li.dataset.index = index;
-                    if (index === currentVideoIndex) { li.classList.add('playing'); }
-                    li.addEventListener('click', () => {
-                        currentVideoIndex = index;
-                        logMarkers = []; // Clear markers when changing video manually
-                        updateUI();
-                        // Optionally close playlist on selection
-                        // document.body.classList.remove('playlist-visible');
-                    });
-                    playlistElement.appendChild(li);
-                });
-            }
-            function updatePlaylistHighlight() { /* ... same as before ... */
-                if (!playlistElement) return;
-                const items = playlistElement.querySelectorAll('li');
-                items.forEach((li, index) => {
-                    li.classList.toggle('playing', index === currentVideoIndex);
-                });
-                const activeItem = playlistElement.querySelector('.playing');
-                if (activeItem) { activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-            }
-             togglePlaylistBtn.addEventListener('click', () => { document.body.classList.toggle('playlist-visible'); });
-
-            // --- UI Update Function ---
-            function updateUI(playVideo = true) { /* ... mostly same, ensure new buttons updated ... */
-                 if (currentVideoIndex < 0 || currentVideoIndex >= currentVideoSources.length) {
-                    console.warn("Video index out of bounds, resetting.", currentVideoIndex);
-                    currentVideoIndex = 0;
-                    if (currentVideoSources.length === 0) { /* Handle empty playlist */ return; }
-                 }
-                 const videoPath = currentVideoSources[currentVideoIndex];
-                 const videoName = videoPath.split('/').pop()?.replace('.mp4', '').replace(/[_-]/g, ' ') || `Track ${currentVideoIndex + 1}`;
-                 videoTitle.textContent = videoName.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                 // videoTotal.textContent = currentVideoSources.length; // If you add this element back
-
-                 const currentVideoFilename = cyclicVideo.currentSrc?.split('/').pop(); // Use optional chaining
-                 const nextVideoFilename = videoPath.split('/').pop();
-                 if (!cyclicVideo.currentSrc || currentVideoFilename !== nextVideoFilename) {
-                     console.log("Loading:", videoPath);
-                     cyclicVideo.src = videoPath;
-                     cyclicVideo.load();
-                     currentTimeDisplay.textContent = "0:00"; durationDisplay.textContent = "0:00";
-                     seekBar.value = 0; seekBar.max = 100; seekBar.disabled = true;
-                     logMarkers = []; // Clear markers for new video
-                     renderMarkers(); // Clear visual markers
-                 }
-
-                // Apply settings from variables
-                cyclicVideo.muted = isMuted; // Apply mute state first
-                setVolume(savedVolume); // Apply volume via GainNode if possible
-                volumeSlider.value = savedVolume;
-                muteBtn.textContent = isMuted ? "Unmute" : "Mute";
-                muteBtn.classList.toggle('active-button', isMuted);
-                cyclicVideo.loop = repeatMode;
-
-                if (playVideo && cyclicVideo.paused) {
-                     cyclicVideo.play().catch(e => console.warn("Autoplay possibly prevented:", e));
-                }
-
-                updateButtonStates();
-                updatePlaylistHighlight();
-                applyFilterClass();
-            }
-            function updateButtonStates() { /* ... same as before + new buttons ... */
-                playPauseBtn.textContent = cyclicVideo.paused ? "Play" : "Pause";
-                speedButtons.forEach(btn => { btn.classList.toggle('active-button', parseFloat(btn.dataset.speed) === cyclicVideo.playbackRate); });
-                shuffleBtn.classList.toggle('active-button', isShuffled);
-                repeatBtn.textContent = `Repeat: ${repeatMode ? 'On' : 'Off'}`;
-                repeatBtn.classList.toggle('active-button', repeatMode);
-                filterSelect.value = filters[currentFilterIndex].class;
-                distortBtn.classList.toggle('active-button', isDistortionOn);
-                spatialBtn.classList.toggle('active-button', isSpatialOn);
-                scrambleBtn.classList.toggle('active-button', isScrambleOn);
-            }
-
-            // --- Filter Selection ---
-            function applyFilterClass() { /* ... same as before ... */
-                 filters.forEach(filter => cyclicVideo.classList.remove(filter.class));
-                 if (filters[currentFilterIndex]) { // Check index validity
-                     cyclicVideo.classList.add(filters[currentFilterIndex].class);
-                     filterSelect.value = filters[currentFilterIndex].class;
-                 }
-            }
-            filters.forEach((filter) => { /* Populate select - same as before */
-                 const option = document.createElement('option'); option.value = filter.class;
-                 option.textContent = filter.name; filterSelect.appendChild(option);
-            });
-             filterSelect.value = filters[currentFilterIndex]?.class || filters[0].class; // Set initial value safely
-             filterSelect.addEventListener('change', (e) => { /* ... same as before ... */
-                const selectedClass = e.target.value;
-                currentFilterIndex = filters.findIndex(f => f.class === selectedClass);
-                if(currentFilterIndex === -1) currentFilterIndex = 0;
-                localStorage.setItem('filterIndex', currentFilterIndex);
-                applyFilterClass();
-             });
-
-            // --- Format Time Helper ---
-            function formatTime(seconds) { /* ... same as before ... */
-                 const totalSeconds = Math.max(0, Math.floor(seconds)); // Ensure non-negative integer
-                 const minutes = Math.floor(totalSeconds / 60);
-                 const secs = totalSeconds % 60;
-                 return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-            }
-
-            // --- Timestamp Log Markers ---
-            function addLogMarker() {
-                const currentTime = cyclicVideo.currentTime;
-                if (!logMarkers.includes(currentTime)) { // Avoid duplicates
-                     logMarkers.push(currentTime);
-                     logMarkers.sort((a, b) => a - b); // Keep sorted
-                     renderMarkers();
-                     console.log(`Marker added at: ${formatTime(currentTime)}`);
-                     showTooltip(`Marker Added: ${formatTime(currentTime)}`); // Give feedback
-                }
-            }
-            function renderMarkers() {
-                markersContainer.innerHTML = ''; // Clear existing
-                const duration = cyclicVideo.duration;
-                if (!duration || duration <= 0 || !isFinite(duration)) return; // Need duration
-
-                logMarkers.forEach(time => {
-                     const marker = document.createElement('div');
-                     marker.className = 'marker';
-                     const percent = (time / duration) * 100;
-                     marker.style.left = `${percent}%`;
-                     marker.title = `Jump to ${formatTime(time)}`;
-                     marker.addEventListener('click', (e) => {
-                         e.stopPropagation(); // Prevent seek bar click
-                         cyclicVideo.currentTime = time;
-                     });
-                     markersContainer.appendChild(marker);
-                });
-            }
-
-             // --- Audio Effects ---
-             function toggleDistortion(forceState, save = true) {
-                 if (!audioContext || !distortNode) return; // Need audio context and node
-                 const newState = (forceState !== undefined) ? forceState : !isDistortionOn;
-                 if (newState) {
-                     distortNode.frequency.linearRampToValueAtTime(1000, audioContext.currentTime + 0.1); // Muffled
-                     distortNode.Q.linearRampToValueAtTime(5, audioContext.currentTime + 0.1); // Add resonance
-                 } else {
-                     distortNode.frequency.linearRampToValueAtTime(20000, audioContext.currentTime + 0.1); // Bypass
-                     distortNode.Q.linearRampToValueAtTime(1, audioContext.currentTime + 0.1);
-                 }
-                 isDistortionOn = newState;
-                 if(save) localStorage.setItem('distortionOn', isDistortionOn);
-                 updateButtonStates();
-             }
-            let spatialDriftInterval = null;
-            function toggleSpatialDrift(forceState, save = true) {
-                if (!audioContext || !spatialNode) return;
-                const newState = (forceState !== undefined) ? forceState : !isSpatialOn;
-                if (newState) {
-                    // Start drifting
-                    let panValue = 0;
-                    let direction = 0.01; // Speed and direction
-                    spatialDriftInterval = setInterval(() => {
-                         panValue += direction;
-                         if (panValue > 1.0 || panValue < -1.0) {
-                             direction *= -1; // Reverse direction
-                             panValue = Math.max(-1.0, Math.min(1.0, panValue)); // Clamp
-                         }
-                         // Use setValueAtTime for smooth-ish transitions (linearRamp is better but more complex for continuous)
-                         if(spatialNode?.pan) spatialNode.pan.setValueAtTime(panValue, audioContext.currentTime);
-                    }, 50); // Update pan every 50ms
+        // Movement and wrapping
+        star.y += star.speedY;
+        star.x += star.speedX;
+         
+        if (star.y > canvas.height + star.size) {
+            star.y = -star.size;
+            star.x = Math.random() * canvas.width;
+        } else if (star.y < -star.size) {
+            star.y = canvas.height + star.size;
+            star.x = Math.random() * canvas.width;
+        }
+        if (star.x > canvas.width + star.size) {
+            star.x = -star.size;
+            star.y = Math.random() * canvas.height;
+        } else if (star.x < -star.size) {
+            star.x = canvas.width + star.size;
+            star.y = Math.random() * canvas.height;
+        }
+      });
+       
+      requestAnimationFrame(animateStars);
+    }
+    animateStars();
+     
+    // --- Transmission Button (Original Logic) ---
+    const transmitButton = document.querySelector('.communication-form button');
+    if (transmitButton) {
+        transmitButton.addEventListener('click', function() {
+            const form = this.closest('form');
+            const inputs = form.querySelectorAll('input, textarea');
+            let allFilled = true;
+             
+            inputs.forEach(input => {
+                if (!input.value.trim()) {
+                    allFilled = false;
+                    input.style.borderColor = 'var(--accent-color)'; // Use accent for error
+                    input.animate([ // Simple shake animation
+                       { transform: 'translateX(0)' },
+                       { transform: 'translateX(-5px)' },
+                       { transform: 'translateX(5px)' },
+                       { transform: 'translateX(0)' }
+                    ], { duration: 200, iterations: 2 });
+                    setTimeout(() => {
+                        input.style.borderColor = 'var(--glow-color)';
+                    }, 1000);
                 } else {
-                    // Stop drifting and center
-                    clearInterval(spatialDriftInterval);
-                    spatialDriftInterval = null;
-                    if(spatialNode?.pan) spatialNode.pan.linearRampToValueAtTime(0, audioContext.currentTime + 0.2); // Smoothly return to center
-                }
-                 isSpatialOn = newState;
-                 if(save) localStorage.setItem('spatialOn', isSpatialOn);
-                 updateButtonStates();
-            }
-
-             // --- Subspace Scramble Effect ---
-             function scrambleEffect() {
-                 if (!isScrambleOn || cyclicVideo.paused) return; // Only run if active and playing
-
-                 const choice = Math.random();
-                 const glitchDuration = 100 + Math.random() * 150; // 100-250ms
-
-                 try {
-                     if (choice < 0.33) { // Tiny Seek
-                         const jump = (Math.random() - 0.5) * 0.6; // Max +/- 0.3 seconds
-                         const targetTime = Math.max(0, Math.min(cyclicVideo.duration || 0, cyclicVideo.currentTime + jump));
-                         if (isFinite(targetTime)) cyclicVideo.currentTime = targetTime;
-                         console.log("Scramble: Seek Jump");
-                     } else if (choice < 0.66) { // Brief Mute
-                         if (!isMuted) { // Only mute if not already manually muted
-                            cyclicVideo.muted = true;
-                            console.log("Scramble: Mute On");
-                            setTimeout(() => {
-                                if (isScrambleOn && !isMuted) cyclicVideo.muted = false; // Unmute only if scramble still on and user didn't mute manually
-                                console.log("Scramble: Mute Off");
-                            }, glitchDuration);
-                         }
-                     } else { // Visual Glitch
-                         videoContainer.classList.add('glitching');
-                         console.log("Scramble: Visual Glitch On");
-                         setTimeout(() => {
-                             videoContainer.classList.remove('glitching');
-                             console.log("Scramble: Visual Glitch Off");
-                         }, glitchDuration);
-                     }
-                 } catch (e) {
-                    console.warn("Scramble effect error:", e); // Catch potential errors during seeking etc.
-                 }
-             }
-             function toggleScramble(forceState, save = true) {
-                const newState = (forceState !== undefined) ? forceState : !isScrambleOn;
-                 if (newState) {
-                     if (!scrambleInterval) {
-                        scrambleInterval = setInterval(scrambleEffect, 700 + Math.random() * 1000); // Random interval 0.7s-1.7s
-                        console.log("Scramble Activated");
-                     }
-                 } else {
-                     clearInterval(scrambleInterval);
-                     scrambleInterval = null;
-                     videoContainer.classList.remove('glitching'); // Ensure glitch class is removed
-                     console.log("Scramble Deactivated");
-                 }
-                 isScrambleOn = newState;
-                 if(save) localStorage.setItem('scrambleOn', isScrambleOn);
-                 updateButtonStates();
-             }
-
-            // --- Event Listeners (Add new controls) ---
-            distortBtn.addEventListener('click', () => toggleDistortion());
-            spatialBtn.addEventListener('click', () => toggleSpatialDrift());
-            scrambleBtn.addEventListener('click', () => toggleScramble());
-
-            // Video Lifecycle
-            cyclicVideo.addEventListener('loadedmetadata', () => {
-                 durationDisplay.textContent = formatTime(cyclicVideo.duration);
-                 seekBar.max = cyclicVideo.duration;
-                 seekBar.disabled = false;
-                 if (!audioContext && !cyclicVideo.paused) { setupAudioNodes(); }
-                 renderMarkers(); // Render markers for newly loaded video
-            });
-            cyclicVideo.addEventListener('timeupdate', () => {
-                if (!seekBar.disabled) { // Only update if duration is known
-                     currentTimeDisplay.textContent = formatTime(cyclicVideo.currentTime);
-                     // Avoid updating slider value while user is dragging it
-                     if (!seekBar.matches(':active')) {
-                         seekBar.value = cyclicVideo.currentTime;
-                     }
+                    input.style.borderColor = 'var(--glow-color)'; // Reset border if filled
                 }
             });
-            cyclicVideo.addEventListener('play', () => { /* ... same + audio node resume ... */
-                playPauseBtn.textContent = "Pause";
-                 if (!audioContext) setupAudioNodes(); // Setup audio on first play interaction
-                 else if (audioContext.state === 'suspended') {
-                    audioContext.resume().catch(e => console.error("AudioContext resume failed:", e));
-                 }
-                 if (currentVisualizerStyle !== 'off' && !visualizerAnimationId && analyser) { drawVisualizer(); }
-            });
-             cyclicVideo.addEventListener('pause', () => { /* ... same ... */
-                 playPauseBtn.textContent = "Play";
-                 stopVisualizer();
-             });
-            cyclicVideo.addEventListener('ended', () => { /* ... same ... */
-                logMarkers = []; // Clear markers on natural end before next video
-                if (!repeatMode) {
-                    currentVideoIndex = (currentVideoIndex + 1) % currentVideoSources.length;
-                    updateUI();
-                } else {
-                    cyclicVideo.play();
-                }
-             });
-             cyclicVideo.addEventListener('error', (e) => { /* ... same ... */
-                console.error(`Error loading video: ${cyclicVideo.currentSrc}`, cyclicVideo.error || e);
-                videoTitle.textContent = `Error Loading Track ${currentVideoIndex + 1}`;
-                logMarkers = []; renderMarkers(); // Clear markers on error
+             
+            if (allFilled) {
+                this.textContent = 'TRANSMITTING...';
+                this.disabled = true;
+                 
                 setTimeout(() => {
-                    currentVideoIndex = (currentVideoIndex + 1) % currentVideoSources.length;
-                    updateUI();
-                }, 1500);
-             });
-
-
-            // Controls
-            playPauseBtn.addEventListener('click', () => { /* ... same ... */
-                if (audioContext && audioContext.state === 'suspended') {
-                    audioContext.resume().catch(e => console.error("AudioContext resume failed:", e));
-                }
-                if (cyclicVideo.paused) cyclicVideo.play();
-                else cyclicVideo.pause();
-             });
-            muteBtn.addEventListener('click', () => { /* ... same ... */
-                 isMuted = !isMuted;
-                 cyclicVideo.muted = isMuted; // Let browser handle mute if gainNode fails
-                  if(gainNode) gainNode.gain.setValueAtTime(isMuted ? 0 : savedVolume, audioContext.currentTime); // Also control gain node
-                 muteBtn.textContent = isMuted ? "Unmute" : "Mute";
-                 muteBtn.classList.toggle('active-button', isMuted);
-                 localStorage.setItem('isMuted', isMuted);
-            });
-            volumeSlider.addEventListener('input', () => { /* ... Updated to use GainNode ... */
-                 savedVolume = parseFloat(volumeSlider.value);
-                 setVolume(savedVolume); // Use helper function
-                 // Unmute if volume adjusted
-                 if (savedVolume > 0 && isMuted) {
-                     isMuted = false;
-                     cyclicVideo.muted = false; // Ensure browser mute is off
-                     if(gainNode) gainNode.gain.setValueAtTime(savedVolume, audioContext.currentTime);
-                     muteBtn.textContent = "Mute";
-                     muteBtn.classList.remove('active-button');
-                     localStorage.setItem('isMuted', false);
-                 }
-                 localStorage.setItem('playerVolume', savedVolume);
-            });
-            function setVolume(value) { // Helper to set volume via GainNode
-                 savedVolume = Math.max(0, Math.min(1, value)); // Clamp 0-1
-                 volumeSlider.value = savedVolume;
-                 if (gainNode && !isMuted) { // Only set gain if not muted
-                     gainNode.gain.linearRampToValueAtTime(savedVolume, audioContext.currentTime + 0.05); // Smooth ramp
-                 }
-                 // We still set video.volume for browsers/cases where GainNode might not work perfectly
-                  cyclicVideo.volume = savedVolume;
+                    this.textContent = 'TRANSMITTED';
+                    inputs.forEach(input => { input.value = ''; });
+                    setTimeout(() => {
+                        this.textContent = 'TRANSMIT';
+                        this.disabled = false;
+                    }, 2000);
+                }, 1500); // Shorter transmit time
             }
+        });
+    }
+     
+    // --- Interactive Glyphs (Glitch Effect) ---
+    const glyphs = document.querySelectorAll('.glyph');
+    const mainContent = document.getElementById('main-content');
+    const glitchClasses = ['viewport-glitch-blur', 'viewport-glitch-invert', 'viewport-glitch-hue', 'viewport-glitch-contrast'];
+    glyphs.forEach(glyph => {
+       // Initial random glyph on load
+        glyph.textContent = String.fromCodePoint(0x2980 + Math.floor(Math.random() * 127));
 
-            seekBar.addEventListener('input', () => { /* ... same ... */
-                cyclicVideo.currentTime = parseFloat(seekBar.value);
-                 currentTimeDisplay.textContent = formatTime(cyclicVideo.currentTime);
-             });
-             seekBar.addEventListener('mousedown', () => { /* ... same ... */
-                  wasPausedBeforeSeek = cyclicVideo.paused;
-                  if (!wasPausedBeforeSeek) cyclicVideo.pause();
-              });
-             seekBar.addEventListener('mouseup', () => { /* ... same ... */
-                  if (!wasPausedBeforeSeek) cyclicVideo.play();
-              });
+        glyph.addEventListener('mouseover', function() {
+            this.textContent = String.fromCodePoint(0x2980 + Math.floor(Math.random() * 127));
+        });
+       
+        glyph.addEventListener('click', function() {
+            if (!mainContent) return;
+            // Remove any existing glitch class first
+            glitchClasses.forEach(cls => mainContent.classList.remove(cls));
+             
+            // Add a new random glitch class
+            const randomGlitchClass = glitchClasses[Math.floor(Math.random() * glitchClasses.length)];
+            mainContent.classList.add(randomGlitchClass);
+             
+            // Remove the class after a short duration
+            setTimeout(() => {
+                mainContent.classList.remove(randomGlitchClass);
+            }, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--glitch-filter-duration') || '0.2') * 1000);
+        });
+    });
+     
+    // --- Unstable Containers ---
+    const containers = document.querySelectorAll('.container');
+    containers.forEach(container => {
+      container.addEventListener('mouseenter', () => {
+        container.classList.add('unstable');
+      });
+      container.addEventListener('mouseleave', () => {
+        container.classList.remove('unstable');
+      });
+    });
 
-            speedButtons.forEach(button => { /* ... same ... */
-                 button.addEventListener('click', function() {
-                     cyclicVideo.playbackRate = parseFloat(this.dataset.speed);
-                     updateButtonStates();
-                 });
-             });
-            document.getElementById("prevVideo").addEventListener("click", () => { /* ... same ... */
-                 currentVideoIndex = (currentVideoIndex - 1 + currentVideoSources.length) % currentVideoSources.length;
-                 logMarkers = []; updateUI();
-             });
-            document.getElementById("nextVideo").addEventListener("click", () => { /* ... same ... */
-                 currentVideoIndex = (currentVideoIndex + 1) % currentVideoSources.length;
-                 logMarkers = []; updateUI();
-             });
-            downloadBtn.addEventListener("click", () => { /* ... same ... */ });
-            shuffleBtn.addEventListener("click", () => { /* ... same + populatePlaylist ... */
-                isShuffled = !isShuffled;
-                const currentVideoPath = currentVideoSources[currentVideoIndex];
-                if (isShuffled) {
-                    currentVideoSources = [...originalVideoOrder];
-                    const currentIdxOriginal = currentVideoSources.findIndex(src => src === currentVideoPath);
-                    if(currentIdxOriginal !== -1) currentVideoSources.splice(currentIdxOriginal, 1);
-                    for (let i = currentVideoSources.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [currentVideoSources[i], currentVideoSources[j]] = [currentVideoSources[j], currentVideoSources[i]]; }
-                    currentVideoSources.unshift(currentVideoPath);
-                    currentVideoIndex = 0;
-                    console.log("Playlist Shuffled");
+    // --- Text Scramble/Decryption ---
+    const alienTexts = document.querySelectorAll('.alien-text');
+    const scrambleChars = '▓▒░█▄▌▐▀⍋⍒⍣⍦⍯⎔⎚⌇⌖⌰⌬⍼⍽≈≡≠≤≥∈∉∩∪∀∃∠⊥⋅⊙⊗⊕'; // Characters for scrambling
+
+    function scrambleText(element, duration = 500) {
+        const originalText = element.dataset.original || '';
+        const length = originalText.length;
+        let intervalId = null;
+        let startTime = Date.now();
+
+        function updateText() {
+            let scrambled = '';
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(1, elapsed / duration);
+
+            for (let i = 0; i < length; i++) {
+                const revealPoint = (i + 1) / length; // When this character should reveal
+                if (progress >= revealPoint) {
+                    scrambled += originalText[i];
                 } else {
-                    currentVideoSources = [...originalVideoOrder];
-                    currentVideoIndex = currentVideoSources.findIndex(src => src === currentVideoPath);
-                    if (currentVideoIndex === -1) currentVideoIndex = 0;
-                    console.log("Playlist Unshuffled");
+                    scrambled += scrambleChars[Math.floor(Math.random() * scrambleChars.length)];
                 }
-                localStorage.setItem('isShuffled', isShuffled);
-                populatePlaylist();
-                updateUI(false);
-                renderMarkers(); // Re-render markers as video index might change
-             });
-            repeatBtn.addEventListener("click", () => { /* ... same ... */
-                 repeatMode = !repeatMode;
-                 cyclicVideo.loop = repeatMode;
-                 localStorage.setItem('repeatMode', repeatMode);
-                 updateButtonStates();
-             });
-            pipBtn.addEventListener('click', () => { /* ... same ... */
-                 if (!document.pictureInPictureElement) { cyclicVideo.requestPictureInPicture().catch(error => console.error('PiP Error:', error)); }
-                 else { document.exitPictureInPicture().catch(error => console.error('Exit PiP Error:', error)); }
-            });
-             fullscreenBtn.addEventListener('click', () => { /* ... same logic as city generator ... */
-                 try {
-                     const elem = videoContainer; // Fullscreen the container
-                     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
-                        const promise = elem.requestFullscreen ? elem.requestFullscreen() : elem.webkitRequestFullscreen ? elem.webkitRequestFullscreen() : elem.msRequestFullscreen ? elem.msRequestFullscreen() : null;
-                        if (promise) promise.catch(err => console.error(`Fullscreen request failed: ${err.message}`)); else console.error("Fullscreen API not supported.");
-                     } else {
-                        const promise = document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen ? document.webkitExitFullscreen() : document.msExitFullscreen ? document.msExitFullscreen() : null;
-                        if (promise) promise.catch(err => console.error(`Exit Fullscreen failed: ${err.message}`)); else console.error("Exit Fullscreen API not supported.");
-                     }
-                 } catch (err) { console.error('Fullscreen API error:', err); }
-             });
-            toggleMatrixBtn.addEventListener('click', toggleMatrix); // Listener for matrix toggle
-
-
-            // Keyboard Shortcuts
-            document.addEventListener('keydown', (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return; // Ignore inputs/selects
-                let handled = true;
-                switch (e.code) {
-                    case 'Space': playPauseBtn.click(); break;
-                    case 'ArrowRight': document.getElementById("nextVideo").click(); break;
-                    case 'ArrowLeft': document.getElementById("prevVideo").click(); break;
-                    case 'KeyS': shuffleBtn.click(); break;
-                    case 'KeyR': repeatBtn.click(); break;
-                    case 'KeyL': addLogMarker(); break; // New: Add Marker
-                    case 'KeyM': muteBtn.click(); break; // New: Mute
-                    case 'KeyP': if(pipBtn.disabled === false) pipBtn.click(); break; // New: PiP
-                    case 'ArrowUp': e.preventDefault(); setVolume(savedVolume + 0.05); break; // New: Vol Up
-                    case 'ArrowDown': e.preventDefault(); setVolume(savedVolume - 0.05); break; // New: Vol Down
-                    case 'KeyD': distortBtn.click(); break; // New: Distort
-                    case 'KeyA': spatialBtn.click(); break; // New: Spatial/Drift
-                    case 'KeyX': scrambleBtn.click(); break; // New: Scramble
-                    case 'KeyG': toggleMatrixBtn.click(); break; // New: Matrix Toggle
-                    case 'Tab': // Allow tab for accessibility, but also toggle playlist
-                         e.preventDefault();
-                         togglePlaylistBtn.click();
-                         break;
-                    default: handled = false;
-                }
-                if (handled) {
-                    e.preventDefault(); // Prevent default only if key was handled
-                    showTooltip(); // Show tooltip on interaction
-                }
-            });
-
-            // Tooltip
-            let tooltipTimeout;
-            function showTooltip(message = null) {
-                clearTimeout(tooltipTimeout);
-                keyboardTooltip.textContent = message || "Keys: [Space] Play/Pause | [←/→] Prev/Next | [S] Shuffle | [R] Repeat | [L] Log Time | [M] Mute | [P] PiP | [↑/↓] Volume | [D] Muffle | [A] Drift | [X] Scramble | [G] Matrix | [Tab] Playlist";
-                keyboardTooltip.style.opacity = '1';
-                tooltipTimeout = setTimeout(() => { keyboardTooltip.style.opacity = '0'; }, 3500); // Show longer
             }
-             document.addEventListener('keydown', () => showTooltip()); // Show tooltip on any keydown initially
-             setTimeout(showTooltip, 1000); // Show on load as well
+            element.textContent = scrambled;
 
-
-            // Resize Handling
-            window.addEventListener('resize', function() {
-                setupMatrix(); // Recalculate matrix columns/drops
-                resizeVisualizer(); // Resize visualizer canvas
-            });
-
-            // --- Initial Load ---
-            // Apply initial states from localStorage before first UI update
-            if (isShuffled) {
-                const currentVideoPath = currentVideoSources[currentVideoIndex]; // Might be wrong index if playlist changed, ideally save path
-                // Re-shuffle based on original order but try to find current video
-                currentVideoSources = [...originalVideoOrder];
-                const currentIdxOriginal = currentVideoSources.findIndex(src => src === currentVideoPath);
-                if(currentIdxOriginal !== -1) currentVideoSources.splice(currentIdxOriginal, 1); else currentVideoIndex = 0; // Reset if not found
-                for (let i = currentVideoSources.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [currentVideoSources[i], currentVideoSources[j]] = [currentVideoSources[j], currentVideoSources[i]]; }
-                if(currentIdxOriginal !== -1) currentVideoSources.unshift(currentVideoPath);
-                 if(currentIdxOriginal === -1) currentVideoIndex = 0; else currentVideoIndex=0; // Start at beginning of shuffled list
+            if (progress >= 1) {
+                clearInterval(intervalId);
+                element.textContent = originalText; // Ensure final text is correct
             }
+        }
+         // Clear any existing interval before starting a new one
+         if (element.scrambleIntervalId) {
+             clearInterval(element.scrambleIntervalId);
+         }
+         element.textContent = Array(length).fill(0).map(() => scrambleChars[Math.floor(Math.random() * scrambleChars.length)]).join(''); // Initial fast scramble
+         startTime = Date.now(); // Reset start time
+         intervalId = setInterval(updateText, 30); // Update frequently for smooth effect
+         element.scrambleIntervalId = intervalId; // Store interval ID on the element
+    }
 
-            populatePlaylist(); // Populate playlist display first
-            updateUI(false); // Load first video metadata, apply settings, but don't force play yet
-            if (matrixActive) startMatrix(); else stopMatrix(); // Start/Stop matrix based on saved state
-            toggleScramble(isScrambleOn, false); // Apply initial scramble state without saving
+    function scrambleInitial(element) {
+         const originalText = element.dataset.original || '';
+         const length = originalText.length;
+          if (element.scrambleIntervalId) { // Clear if hover effect was interrupted
+              clearInterval(element.scrambleIntervalId);
+              element.scrambleIntervalId = null;
+          }
+         element.textContent = Array(length).fill(0).map(() => scrambleChars[Math.floor(Math.random() * scrambleChars.length)]).join('');
+    }
 
-             // Disable PiP if not supported
-             pipBtn.disabled = !document.pictureInPictureEnabled;
+    alienTexts.forEach(textElement => {
+        scrambleInitial(textElement); // Scramble on load
+        textElement.addEventListener('mouseenter', () => scrambleText(textElement, 600)); // Decrypt on hover
+        textElement.addEventListener('mouseleave', () => scrambleInitial(textElement)); // Re-scramble on leave
+    });
+
+    // --- Flickering Footer ---
+    const footerDataElement = document.getElementById('footer-data');
+    const originalFooterData = footerDataElement ? footerDataElement.textContent : '';
+    let footerGlitchInterval;
+
+    function glitchFooter() {
+      if (!footerDataElement) return;
+      const chance = Math.random();
+      if (chance < 0.85) { // High chance of showing original
+        if (footerDataElement.textContent !== originalFooterData) {
+          footerDataElement.textContent = originalFooterData;
+        }
+      } else if (chance < 0.95) { // Chance of showing garbled text
+        let glitchText = '';
+        for (let i = 0; i < originalFooterData.length; i++) {
+          glitchText += (Math.random() < 0.3) ? scrambleChars[Math.floor(Math.random() * scrambleChars.length)] : originalFooterData[i];
+        }
+        footerDataElement.textContent = glitchText;
+      } else { // Chance of rapidly changing coordinates/cycle
+        const cycle = (Math.random() * 10000).toFixed(1);
+        const x = Math.floor(Math.random() * 1000 - 500);
+        const y = Math.floor(Math.random() * 1000 - 500);
+        const z = Math.floor(Math.random() * 1000 - 500);
+        footerDataElement.textContent = `COSMIC CYCLE: ${cycle} • SPATIAL COORDINATE: X-${x}.Y-${y}.Z-${z}`;
+      }
+      // Vary the interval slightly
+      clearInterval(footerGlitchInterval);
+      footerGlitchInterval = setInterval(glitchFooter, 80 + Math.random() * 100);
+    }
+    // Start the footer glitch after a small delay
+    if (footerDataElement) {
+        setTimeout(() => {
+             footerGlitchInterval = setInterval(glitchFooter, 120);
+        }, 500);
+    }
 
 
-        })(); // End IIFE
-    </script>
+    // --- Header Scroll Effect ---
+    const mainTitle = document.getElementById('main-title');
+    let lastScrollY = window.scrollY;
+    let currentRotation = 0;
+    const maxRotation = 5; // Max degrees rotation
 
+    window.addEventListener('scroll', () => {
+      if (!mainTitle) return;
+      const scrollY = window.scrollY;
+      const scrollDelta = scrollY - lastScrollY;
+      const viewportHeight = window.innerHeight;
+      const scrollPercentage = scrollY / (document.body.scrollHeight - viewportHeight);
+
+      // Apply rotation based on scroll direction, clamped
+      currentRotation += scrollDelta * 0.05; // Adjust multiplier for sensitivity
+      currentRotation = Math.max(-maxRotation, Math.min(maxRotation, currentRotation));
+
+      // Apply subtle perspective rotation - rotateX or rotateY
+      // Using rotateX makes it tilt forward/backward
+      mainTitle.style.transform = `rotateX(${currentRotation}deg) translateZ(${Math.abs(currentRotation) * 2}px)`;
+
+      // Dampen the rotation back towards 0 when not actively scrolling quickly
+      if (Math.abs(scrollDelta) < 5) { // If scroll is slow or stopped
+        currentRotation *= 0.95; // Gradually return to center
+      }
+
+      lastScrollY = scrollY;
+    }, { passive: true }); // Use passive listener for performance
+
+
+    // --- Smooth Scrolling for Nav Links ---
+    document.querySelectorAll('nav a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('href');
+            const targetElement = document.querySelector(targetId);
+            if(targetElement) {
+                targetElement.scrollIntoView({
+                    behavior: 'smooth'
+                });
+            }
+        });
+    });
+
+    // --- Hide Loading Indicator after Load ---
+    window.addEventListener('load', () => {
+        const loader = document.querySelector('.loading-indicator');
+        if(loader) {
+          loader.style.opacity = '0';
+          // Optional: remove it from DOM after transition
+          setTimeout(() => loader.style.display = 'none', 1000);
+        }
+    });
+
+
+  </script>
 </body>
 </html>
