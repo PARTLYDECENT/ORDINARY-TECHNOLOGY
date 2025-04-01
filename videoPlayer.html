@@ -1,664 +1,517 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AXIOM Player // v5.1 // Stable & Unique</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
-    <style>
-        /* ---===[ Configuration & Theming ]===--- */
-        :root {
-            --hue-primary: 180; --glow-primary: hsl(var(--hue-primary), 100%, 50%);
-            --hue-secondary: 280; --glow-secondary: hsl(var(--hue-secondary), 100%, 60%);
-            --hue-tertiary: 120; --glow-tertiary: hsl(var(--hue-tertiary), 100%, 50%);
-            --text-primary: hsl(var(--hue-primary), 100%, 85%); --text-secondary: hsl(var(--hue-primary), 50%, 70%); --text-muted: hsl(var(--hue-primary), 30%, 50%);
-            --bg-deep: #020408; --bg-medium: #0a0d14; --bg-panel: rgba(10, 13, 20, 0.85); /* More opaque */
-            --blur-panel: 8px;
-            --border-color: hsla(var(--hue-primary), 100%, 50%, 0.4); --border-active: var(--glow-primary);
-            --button-active-bg: hsla(var(--hue-secondary), 100%, 60%, 0.2); --button-active-border: var(--glow-secondary);
-            --slider-thumb-bg: var(--glow-secondary); --slider-track-bg: hsla(var(--hue-primary), 100%, 50%, 0.25);
-            --playlist-bg: rgba(5, 8, 15, 0.9); --playlist-item-hover: hsla(var(--hue-primary), 100%, 50%, 0.1); --playlist-item-active: var(--button-active-bg);
-            --padding-base: 15px; --header-height: 50px; --playlist-width: 260px;
-            --controls-panel-height-peek: 60px; /* How much controls show when collapsed */
-            --controls-panel-height-full: 200px; /* Max height when expanded */
-            --transition-speed: 0.35s;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alien Video Player 2026</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* CSS Variables for the neon theme */
+    :root {
+      --primary-color: #00ffff;
+      --secondary-color: #ff00ff;
+      --bg-color-dark: #0d0d2b;
+      --bg-color-darker: #050018;
+      --accent-glow: 0 0 15px var(--primary-color), 0 0 30px var(--secondary-color);
+    }
 
-        /* ---===[ Base & Reset ]===--- */
-        *, *::before, *::after { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body {
-            margin: 0; background-color: var(--bg-deep); color: var(--text-primary);
-            font-family: 'Roboto', sans-serif; font-weight: 300; font-size: 14px;
-            min-height: 100vh; width: 100vw; /* Ensure full viewport */
-            overflow: hidden; /* Prevent body scroll */
-            display: flex; /* Use flex for main layout */
-        }
-        h1, h2, h3 { font-family: 'Orbitron', sans-serif; font-weight: 700; margin: 0; }
-        button, select, input { font-family: inherit; font-size: inherit; }
-        button:focus, select:focus, input:focus { outline: 1px solid var(--glow-primary); outline-offset: 1px; }
+    /* Global Reset & Body styling */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: radial-gradient(circle at center, var(--bg-color-dark), var(--bg-color-darker));
+      font-family: 'Orbitron', sans-serif;
+      color: var(--primary-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+    }
 
-        /* ---===[ Background Effects ]===--- */
-        #matrixCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; opacity: 1; transition: opacity 0.5s ease; }
-        #matrixCanvas.hidden { opacity: 0; }
+    /* Matrix background canvas */
+    #matrixCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: -2;
+    }
 
-        /* ---===[ Main Layout (Playlist Left, Content Right) ]===--- */
-        #playlistPanel {
-            position: fixed; /* Fixed position */
-            top: 0; left: 0; width: var(--playlist-width); height: 100vh;
-            background: var(--playlist-bg); backdrop-filter: blur(var(--blur-panel));
-            border-right: 1px solid var(--border-color); box-shadow: 3px 0 15px rgba(0,0,0,0.5);
-            padding: var(--padding-base); padding-top: calc(var(--header-height) + var(--padding-base));
-            overflow-y: auto; z-index: 100;
-            transform: translateX(-100%); /* Start hidden */
-            transition: transform var(--transition-speed) ease-in-out;
-            display: flex; flex-direction: column;
-        }
-        body.playlist-open #playlistPanel { transform: translateX(0); }
-        #playlistPanel h3 { color: var(--glow-secondary); margin-bottom: var(--padding-base); border-bottom: 1px solid var(--button-active-border); padding-bottom: 10px; flex-shrink: 0; }
-        #playlist { list-style: none; padding: 0; margin: 0; flex-grow: 1; overflow-y: auto; }
-        #playlist li { padding: 8px 10px; margin-bottom: 4px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; color: var(--text-secondary); transition: background-color 0.2s, color 0.2s; border: 1px solid transparent; }
-        #playlist li:hover { background-color: var(--playlist-item-hover); color: var(--text-primary); }
-        #playlist li.playing { background-color: var(--playlist-item-active); color: var(--glow-secondary); border-color: var(--button-active-border); font-weight: bold; }
-        #playlistPanel::-webkit-scrollbar { width: 6px; }
-        #playlistPanel::-webkit-scrollbar-track { background: transparent; }
-        #playlistPanel::-webkit-scrollbar-thumb { background-color: hsla(var(--hue-secondary), 100%, 60%, 0.5); border-radius: 3px; }
+    /* Header styling */
+    header {
+      width: 100%;
+      padding: 15px 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(10px);
+      background: rgba(0, 0, 0, 0.3);
+      border-bottom: 1px solid var(--primary-color);
+      z-index: 10;
+    }
+    header h1 {
+      font-size: 2.5rem;
+      text-shadow: var(--accent-glow);
+    }
+    header button {
+      background: transparent;
+      border: 2px solid var(--primary-color);
+      color: var(--primary-color);
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    header button:hover {
+      background: rgba(0, 255, 255, 0.15);
+      transform: scale(1.05);
+    }
+    header button:active {
+      transform: scale(0.95);
+    }
 
-        /* Main content area (takes remaining space) */
-        .main-content {
-            flex-grow: 1; height: 100vh;
-            display: flex; flex-direction: column; /* Stack header, video, controls */
-            overflow: hidden; /* Prevent content scroll */
-            position: relative; /* Needed for controls panel */
-            transition: margin-left var(--transition-speed) ease-in-out; /* Adjust margin when playlist opens */
-        }
-        body.playlist-open .main-content { margin-left: var(--playlist-width); }
+    /* Main content styling */
+    main {
+      width: 90%;
+      max-width: 1200px;
+      margin-top: 20px;
+      z-index: 5;
+    }
+    .video-container {
+      position: relative;
+      border: 4px solid var(--primary-color);
+      border-radius: 15px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 0 25px var(--primary-color);
+      transition: box-shadow 0.5s ease;
+    }
+    .video-container:hover {
+      box-shadow: 0 0 40px var(--secondary-color);
+    }
+    .video-container video {
+      width: 100%;
+      display: block;
+    }
+    .ambient-border {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 15px;
+      pointer-events: none;
+      box-shadow: inset 0 0 40px rgba(0, 255, 255, 0.5);
+      z-index: 1;
+      transition: box-shadow 1s ease;
+    }
+    .video-info {
+      margin-top: 15px;
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 15px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 2px solid var(--primary-color);
+      border-radius: 10px;
+      backdrop-filter: blur(5px);
+    }
+    .video-title {
+      font-size: 1.5rem;
+      color: var(--secondary-color);
+      text-shadow: 0 0 10px var(--primary-color);
+    }
+    .video-counter {
+      font-size: 1.2rem;
+      color: var(--secondary-color);
+    }
 
-        /* --- Header within Main Content --- */
-        .player-header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 var(--padding-base); height: var(--header-height);
-            background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
-            flex-shrink: 0; z-index: 30; /* Above bottom panel */
-        }
-        .player-header h1 { font-size: clamp(1.1rem, 3vw, 1.5rem); color: var(--text-primary); text-shadow: 0 0 8px var(--glow-primary); letter-spacing: 2px; margin: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .header-buttons { display: flex; gap: 10px; }
-        .header-button { background: none; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; text-transform: uppercase; transition: all 0.2s ease; }
-        .header-button:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-active); background: rgba(0,0,0,0.3); }
-        .header-button.active-button { color: var(--bg-deep); background: var(--glow-secondary); border-color: var(--glow-secondary); box-shadow: 0 0 8px var(--glow-secondary);}
+    /* Control Panel */
+    .control-panel,
+    .speed-panel,
+    .feature-panel {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    .control-panel button,
+    .speed-panel button,
+    .feature-panel button {
+      background: transparent;
+      border: 2px solid var(--primary-color);
+      color: var(--primary-color);
+      padding: 0.7rem 1.2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 1rem;
+    }
+    .control-panel button:hover,
+    .speed-panel button:hover,
+    .feature-panel button:hover {
+      background: rgba(0, 255, 255, 0.2);
+      transform: scale(1.05);
+    }
+    .control-panel button:active,
+    .speed-panel button:active,
+    .feature-panel button:active {
+      transform: scale(0.95);
+    }
+    .active-button,
+    .speed-panel button.active {
+      background: rgba(255, 0, 255, 0.3);
+      border-color: var(--secondary-color);
+    }
 
-        /* --- Video Area within Main Content --- */
-        .video-area {
-            flex-grow: 1; /* Takes remaining vertical space */
-            position: relative; display: flex; justify-content: center; align-items: center;
-            overflow: hidden; background-color: #000;
-        }
-        #cyclicVideo { display: block; max-width: 100%; max-height: 100%; object-fit: contain; transition: filter 0.4s ease; z-index: 1; }
-        /* Filters (remain same) */
-        #cyclicVideo.filter-none { filter: none; } #cyclicVideo.filter-grayscale { filter: grayscale(1); } #cyclicVideo.filter-sepia { filter: sepia(1); } #cyclicVideo.filter-invert { filter: invert(1); } #cyclicVideo.filter-hue-rotate-90 { filter: hue-rotate(90deg); } #cyclicVideo.filter-hue-rotate-180 { filter: hue-rotate(180deg); } #cyclicVideo.filter-contrast-saturate { filter: contrast(1.5) saturate(2); } #cyclicVideo.filter-blur-bright { filter: blur(2px) brightness(1.3); } #cyclicVideo.filter-vintage { filter: sepia(0.8) contrast(1.1) brightness(0.9); } #cyclicVideo.filter-xray { filter: invert(1) contrast(1.5) brightness(0.8); } #cyclicVideo.filter-saturated-bright { filter: saturate(3) brightness(1.1); }
-
-        #audioVisualizer { position: absolute; bottom: 0; left: 0; width: 100%; height: 60px; pointer-events: none; z-index: 2; opacity: 0.65; transition: opacity 0.3s; mix-blend-mode: screen; }
-        #audioVisualizer.hidden { opacity: 0; }
-
-        /* --- Controls Panel (Bottom) --- */
-        #controlsPanel {
-            position: absolute; bottom: 0; left: 0; width: 100%;
-            height: var(--controls-panel-height-peek); /* Start peek height */
-            max-height: 80vh; /* Limit growth */
-            background: var(--bg-panel); backdrop-filter: blur(var(--blur-panel));
-            border-top: 1px solid var(--border-color); box-shadow: 0 -5px 15px rgba(0,0,0,0.4);
-            z-index: 20;
-            overflow: hidden; /* Hide overflow initially */
-            transition: height var(--transition-speed) ease-in-out;
-            display: flex; flex-direction: column;
-        }
-        /* Expand controls on hover/focus or when body class is set */
-         #controlsPanel:hover, #controlsPanel:focus-within, body.controls-open #controlsPanel {
-             height: auto; /* Allow content height */
-             min-height: var(--controls-panel-height-peek);
-             max-height: var(--controls-panel-height-full);
-             overflow-y: auto; /* Allow scroll if content exceeds max height */
-         }
-
-        /* Handle bar/toggle */
-         .controls-handle {
-            flex-shrink: 0; text-align: center; padding: 5px 0; cursor: pointer;
-            border-bottom: 1px solid var(--control-border); /* Separator */
-         }
-         .controls-handle::before { content: ''; display: inline-block; width: 40px; height: 5px; background: var(--border-color); border-radius: 3px; opacity: 0.5; transition: opacity 0.2s; }
-         .controls-handle:hover::before { opacity: 1; }
-         body.controls-open .controls-handle::before { background: var(--glow-secondary); } /* Indicate open state */
-
-
-        .controls-content { /* Container for all control rows */
-            padding: var(--padding-base);
-            display: flex; flex-direction: column; gap: 10px;
-            flex-grow: 1; overflow-y: auto; /* Allows scrolling within content */
-        }
-        .controls-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; justify-content: center; }
-        .controls-row label { font-size: 0.8rem; color: var(--text-secondary); margin: 0 5px 0 0; }
-
-        /* Main Playback Controls (First Row) */
-        .playback-controls { justify-content: space-around; }
-        .playback-controls button { font-size: 1.1rem; padding: 8px; min-width: 45px; height: 40px; flex-grow: 1; max-width: 60px;} /* Equal width buttons */
-        .seek-time-container { display: flex; align-items: center; gap: 10px; width: 100%; flex-grow: 1; }
-        #seekBar { flex-grow: 1; height: 6px; margin: 0; min-width: 100px; }
-        .time-display { font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; }
-
-        /* Volume Control */
-        .volume-control { display: flex; align-items: center; gap: 8px; }
-        .volume-control button { font-size: 0.8rem; padding: 5px 8px; }
-        #volumeSlider { height: 6px; max-width: 100px; }
-
-        /* Feature Controls */
-        .feature-controls { justify-content: center; }
-        .feature-controls button, .feature-controls select { font-size: 0.8rem; padding: 5px 10px; }
-
-        /* General Controls Styling */
-        .active-button { background: var(--button-active-bg) !important; border-color: var(--button-active-border) !important; box-shadow: 0 0 8px var(--button-active-border); }
-        input[type="range"] { cursor: pointer; background: var(--slider-track-bg); border-radius: 3px; appearance: none; -webkit-appearance: none; }
-        input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 15px; height: 15px; background: var(--slider-thumb-bg); border-radius: 50%; cursor: pointer; box-shadow: 0 0 8px var(--glow-secondary); margin-top: -4px; }
-        input[type="range"]::-moz-range-thumb { width: 15px; height: 15px; background: var(--slider-thumb-bg); border-radius: 50%; cursor: pointer; border: none; box-shadow: 0 0 8px var(--glow-secondary); }
-
-        /* --- Tooltip --- */
-        .tooltip { /* Same styling as before */
-            position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); color: #ccc; padding: 8px 15px; border-radius: 4px; font-size: 0.8rem; border: 1px solid #555; z-index: 110; opacity: 0; transition: opacity 0.5s; pointer-events: none; white-space: nowrap;
-        }
-
-        /* ---===[ Responsive Design ]===--- */
-        @media (max-width: 768px) {
-            :root {
-                --panel-width: 240px; /* Narrower playlist */
-                --controls-panel-height-full: 250px; /* Allow more height */
-                --padding-base: 10px;
-            }
-            body { font-size: 13px; }
-             /* Adjust main content margin, not padding */
-            .main-content { transition: margin-left var(--transition-speed) ease-in-out; margin-left: 0; }
-            body.playlist-open .main-content { margin-left: var(--panel-width); }
-
-            /* Playlist becomes overlay on mobile */
-            #playlistPanel { box-shadow: 5px 0 15px rgba(0,0,0,0.6); }
-            body:not(.playlist-open) #playlistPanel { transform: translateX(-100%); } /* Ensure hidden */
-
-            /* Controls panel is already bottom, just ensure it works */
-             #controlsPanel { max-height: 60vh; } /* Limit height on mobile */
-             body.controls-open #controlsPanel { height: auto; } /* Let it size to content when open */
-
-             .controls-content { padding: 10px; gap: 15px; } /* More vertical gap */
-             .controls-row { flex-direction: column; align-items: stretch; gap: 8px;} /* Stack rows vertically */
-             .playback-controls { flex-direction: row; justify-content: space-around; } /* Keep main buttons horizontal */
-             .feature-controls, .volume-control { flex-direction: row; justify-content: center; flex-wrap: wrap; }
-             .seek-time-container { gap: 8px; }
-             .volume-control { justify-content: center; margin-top: 10px;}
-             #volumeSlider { max-width: 120px; }
-             button, select { width: auto; flex-grow: 1; text-align: center; } /* Allow buttons to grow */
-             .playback-controls button { max-width: 60px; } /* Limit playback button growth */
-
-             .tooltip { left: 10px; transform: none; width: calc(100% - 20px); text-align: center; white-space: normal; bottom: 5px; }
-        }
-         @media (max-width: 480px) {
-              :root { --playlist-width: 200px; }
-              .header-button { font-size: 0.7rem; padding: 4px 6px; }
-              .playback-controls button { font-size: 1rem; min-width: 40px; height: 35px; }
-              button, select { font-size: 0.75rem; padding: 4px 6px; }
-              .feature-group label { display: none; }
-         }
-
-    </style>
+    /* Tracker Marker and Focus Area */
+    .tracker-marker {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background-color: rgba(0, 255, 255, 0.8);
+      box-shadow: 0 0 12px var(--primary-color);
+      pointer-events: all;
+      cursor: pointer;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    .tracker-marker:hover {
+      transform: scale(1.5);
+    }
+    .focused-area {
+      position: absolute;
+      border: 3px solid var(--secondary-color);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 10;
+      box-shadow: 0 0 25px rgba(255, 0, 255, 0.8);
+    }
+  </style>
 </head>
-
-<body> <canvas id="matrixCanvas"></canvas>
-
-    <div id="playlistPanel" class="slide-panel">
-        <h3>Playlist</h3>
-        <ul id="playlist"></ul>
+<body>
+  <canvas id="matrixCanvas"></canvas>
+  <header>
+    <button class="back-button" onclick="goBack()">BACK</button>
+    <h1>ALIEN VIDEO PLAYER 2026</h1>
+  </header>
+  <main>
+    <div class="video-container">
+      <video id="cyclicVideo" autoplay loop controls>
+        <source src="video1.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      <div id="ambientBorder" class="ambient-border"></div>
     </div>
+    <div class="video-info">
+      <div class="video-title" id="videoTitle">Video 1</div>
+      <div class="video-counter">
+        <span id="videoCounter">1</span> / 20
+      </div>
+    </div>
+    <div class="control-panel">
+      <div class="video-navigation">
+        <button id="prevVideo">Previous</button>
+        <button id="nextVideo">Next</button>
+        <button id="downloadBtn">Download</button>
+      </div>
+    </div>
+    <div class="speed-panel">
+      <button data-speed="0.5">0.5x</button>
+      <button data-speed="0.75">0.75x</button>
+      <button data-speed="1.0" class="active">1.0x</button>
+      <button data-speed="1.25">1.25x</button>
+      <button data-speed="1.5">1.5x</button>
+      <button data-speed="1.75">1.75x</button>
+      <button data-speed="2.0">2.0x</button>
+    </div>
+    <div class="feature-panel">
+      <button id="trackingBtn">Scene Tracking</button>
+      <button id="focusModeBtn">Precision Focus</button>
+      <button id="ambientGlowBtn">Edge Glow</button>
+    </div>
+  </main>
 
-    <div class="main-content">
-        <header class="player-header">
-            <button id="togglePlaylistBtn" class="header-button" title="Toggle Playlist (Tab)">☰</button>
-            <h1>AXIOM PLAYER</h1>
-            <div class="header-buttons">
-                 <button id="toggleMatrixBtn" class="header-button" title="Toggle Matrix (G)">Matrix</button>
-                 <button id="toggleControlsBtn" class="header-button" title="Toggle Controls Panel (C)">Controls</button>
-            </div>
-        </header>
+  <script>
+    // Matrix background animation
+    const canvas = document.getElementById('matrixCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const fontSize = 16;
+    const columns = canvas.width / fontSize;
+    const drops = Array.from({length: columns}).fill(1);
+    function drawMatrix() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#00ff00';
+      ctx.font = fontSize + 'px monospace';
+      for (let i = 0; i < drops.length; i++) {
+        const text = String.fromCharCode(Math.random() * 128);
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+      }
+    }
+    setInterval(drawMatrix, 33);
 
-        <main class="video-area">
-            <div id="videoWrapper" class="video-wrapper">
-                <video id="cyclicVideo" loop controlslist="nodownload" crossorigin="anonymous" playsinline></video>
-                <canvas id="audioVisualizer"></canvas>
-            </div>
-        </main>
+    // Video player setup
+    const videoSources = Array.from({ length: 20 }, (_, i) => `video${i + 1}.mp4`);
+    let currentVideoIndex = 0;
+    const cyclicVideo = document.getElementById("cyclicVideo");
+    const videoTitle = document.getElementById("videoTitle");
+    const videoCounter = document.getElementById("videoCounter");
+    const speedButtons = document.querySelectorAll('.speed-panel button');
+    const downloadBtn = document.getElementById("downloadBtn");
+    const trackingBtn = document.getElementById("trackingBtn");
+    const focusModeBtn = document.getElementById("focusModeBtn");
+    const ambientGlowBtn = document.getElementById("ambientGlowBtn");
+    const videoContainer = document.querySelector('.video-container');
+    const ambientBorder = document.getElementById('ambientBorder');
 
-        <div id="controlsPanel">
-            <div class="controls-handle" id="controlsHandle" title="Toggle Controls Panel (C)"></div>
-            <div class="controls-content">
-                <div class="controls-row seek-time-container">
-                    <span class="time-display" id="currentTime">0:00</span>
-                    <input type="range" id="seekBar" value="0" min="0" max="100" step="0.1" title="Seek">
-                    <span class="time-display" id="duration">0:00</span>
-                </div>
-                <div class="controls-row playback-controls">
-                    <button id="prevVideo" title="Previous (←)">«</button>
-                    <button id="playPauseBtn" title="Play/Pause (Space)">▶</button>
-                    <button id="nextVideo" title="Next (→)">»</button>
-                     <div class="volume-control">
-                        <button id="muteBtn" title="Mute (M)">Vol</button>
-                        <input type="range" id="volumeSlider" min="0" max="1" value="1" step="0.01" title="Volume (↑/↓)">
-                    </div>
-                </div>
-                <div class="controls-row feature-controls">
-                     <div class="feature-group">
-                        <label>Speed:</label>
-                        <button data-speed="0.5">0.5x</button>
-                        <button data-speed="0.75">0.75x</button>
-                        <button data-speed="1.0">1.0x</button>
-                        <button data-speed="1.5">1.5x</button>
-                        <button data-speed="2.0">2.0x</button>
-                    </div>
-                     <div class="feature-group">
-                        <label for="filterSelect">Filter:</label>
-                        <select id="filterSelect" title="Video Filter"></select>
-                     </div>
-                     <div class="feature-group">
-                         <label for="visualizerSelect">Viz:</label>
-                         <select id="visualizerSelect" title="Visualizer Style">
-                             <option value="bars">Bars</option>
-                             <option value="line">Line</option>
-                             <option value="off">Off</option>
-                         </select>
-                     </div>
-                    <div class="feature-group">
-                        <button id="shuffleBtn" title="Toggle Shuffle (S)">Shuffle</button>
-                        <button id="repeatBtn" title="Toggle Repeat (R)">Repeat</button>
-                    </div>
-                    <div class="feature-group">
-                        <button id="pipBtn" title="Picture-in-Picture (P)">PiP</button>
-                        <button id="fullscreenBtn" title="Fullscreen">Full</button>
-                        <button id="downloadBtn" title="Download Video">DL</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div><div id="keyboardTooltip" class="tooltip">Loading shortcuts...</div>
+    // Feature flags
+    let trackingEnabled = false;
+    let focusModeEnabled = false;
+    let ambientGlowEnabled = false;
+    let trackerMarkers = [];
+    let focusedArea = null;
 
-    <script>
-        // Wrap in IIFE
-        (function() {
-            "use strict";
+    function updateUI() {
+      cyclicVideo.src = videoSources[currentVideoIndex];
+      cyclicVideo.load();
+      cyclicVideo.play();
+      videoTitle.textContent = `Video ${currentVideoIndex + 1}`;
+      videoCounter.textContent = currentVideoIndex + 1;
+      clearTrackingMarkers();
+    }
+    updateUI();
 
-            // ---===[ State Variables & Constants ]===---
-            const videoSources = Array.from({ length: 20 }, (_, i) => `video${i + 1}.mp4`); // CHECK PATHS!
-            const filters = [ /* Filters array same as before */
-                 { name: 'NONE', class: 'filter-none' }, { name: 'GRAYSCALE', class: 'filter-grayscale' }, { name: 'SEPIA', class: 'filter-sepia' },
-                 { name: 'INVERT', class: 'filter-invert' }, { name: 'ALIEN', class: 'filter-hue-rotate-90' }, { name: 'PSYCHEDELIC', class: 'filter-hue-rotate-180' },
-                 { name: 'VIBRANT', class: 'filter-contrast-saturate' }, { name: 'BLURRY', class: 'filter-blur-bright' }, { name: 'VINTAGE', class: 'filter-vintage' },
-                 { name: 'X-RAY', class: 'filter-xray' }, { name: 'OVERDRIVE', class: 'filter-saturated-bright' }
-            ];
-            const originalVideoOrder = [...videoSources];
-            let currentVideoSources = [...videoSources];
-            let currentVideoIndex = 0;
-            let audioContext, analyser, sourceNode, gainNode, dataArray, visualizerAnimationId;
-            let matrixInterval, matrixColumns, matrixDrops, matrixCtx, matrixCanvas;
-            let matrixFontSize = 16;
-            let baseMatrixIntervalTime = 55; // Slightly slower base
-            let currentMatrixIntervalTime = baseMatrixIntervalTime;
-            let wasPausedBeforeSeek = false;
-            let tooltipTimeout;
+    // Speed control
+    speedButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const speed = parseFloat(this.dataset.speed);
+        cyclicVideo.playbackRate = speed;
+        speedButtons.forEach(btn => btn.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
 
-            // Load persistent states
-            let isShuffled = localStorage.getItem('isShuffled') === 'true';
-            let repeatMode = localStorage.getItem('repeatMode') === 'true';
-            let savedVolume = parseFloat(localStorage.getItem('playerVolume')); if (isNaN(savedVolume)) savedVolume = 0.8;
-            let isMuted = localStorage.getItem('isMuted') === 'true';
-            let savedFilterIndex = parseInt(localStorage.getItem('filterIndex')) || 0;
-            let matrixActive = localStorage.getItem('matrixActive') !== 'false';
-            let currentVisualizerStyle = localStorage.getItem('visualizerStyle') || 'bars';
-            let currentFilterIndex = (savedFilterIndex >= 0 && savedFilterIndex < filters.length) ? savedFilterIndex : 0;
+    // Navigation buttons
+    document.getElementById("prevVideo").addEventListener("click", function() {
+      currentVideoIndex = (currentVideoIndex - 1 + videoSources.length) % videoSources.length;
+      updateUI();
+    });
+    document.getElementById("nextVideo").addEventListener("click", function() {
+      currentVideoIndex = (currentVideoIndex + 1) % videoSources.length;
+      updateUI();
+    });
 
-            // DOM Elements
-            const body = document.body;
-            const cyclicVideo = document.getElementById("cyclicVideo");
-            const videoTitle = document.getElementById("videoTitle");
-            const speedButtons = document.querySelectorAll('#controlsPanel button[data-speed]'); // Target only bottom panel buttons
-            const downloadBtn = document.getElementById("downloadBtn");
-            const shuffleBtn = document.getElementById("shuffleBtn");
-            const repeatBtn = document.getElementById("repeatBtn");
-            const keyboardTooltip = document.getElementById("keyboardTooltip");
-            const filterSelect = document.getElementById("filterSelect");
-            const playlistElement = document.getElementById("playlist");
-            const togglePlaylistBtn = document.getElementById("togglePlaylistBtn");
-            const toggleMatrixBtn = document.getElementById("toggleMatrixBtn");
-            const playPauseBtn = document.getElementById('playPauseBtn');
-            const muteBtn = document.getElementById('muteBtn');
-            const volumeSlider = document.getElementById('volumeSlider');
-            const seekBar = document.getElementById('seekBar');
-            const currentTimeDisplay = document.getElementById('currentTime');
-            const durationDisplay = document.getElementById('duration');
-            const pipBtn = document.getElementById('pipBtn');
-            const fullscreenBtn = document.getElementById('fullscreenBtn');
-            const videoWrapper = document.getElementById('videoWrapper');
-            const visualizerCanvas = document.getElementById('audioVisualizer');
-            const visualizerCtx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
-            const visualizerSelect = document.getElementById('visualizerSelect');
-            const controlsPanel = document.getElementById('controlsPanel'); // Bottom panel
-            const toggleControlsBtn = document.getElementById('toggleControlsBtn'); // Now toggles bottom panel fully open/peek
-            const controlsHandle = document.getElementById('controlsHandle'); // Handle for bottom panel
-            matrixCanvas = document.getElementById('matrixCanvas'); // Assign to cached variable
-            matrixCtx = matrixCanvas ? matrixCanvas.getContext('2d') : null;
+    // Download button
+    downloadBtn.addEventListener("click", function() {
+      const a = document.createElement('a');
+      a.href = videoSources[currentVideoIndex];
+      a.download = `video-${currentVideoIndex + 1}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
 
-            // ---===[ Initialization ]===---
+    // Scene Tracking
+    trackingBtn.addEventListener("click", function() {
+      trackingEnabled = !trackingEnabled;
+      this.classList.toggle('active-button');
+      if (trackingEnabled) {
+        generateTrackingMarkers();
+      } else {
+        clearTrackingMarkers();
+      }
+    });
 
-            function initializePlayer() {
-                console.log("Initializing AXIOM Player v5.1...");
-                setStatus('Initializing...');
-                if (!cyclicVideo || !matrixCanvas || !playlistElement || !controlsPanel) {
-                    console.error("FATAL: Essential HTML elements not found!");
-                    setStatus("Error: Player structure missing.");
-                    return;
-                 }
+    function generateTrackingMarkers() {
+      clearTrackingMarkers();
+      const numMarkers = Math.floor(Math.random() * 3) + 3;
+      const videoRect = cyclicVideo.getBoundingClientRect();
+      for (let i = 0; i < numMarkers; i++) {
+        const marker = document.createElement('div');
+        marker.className = 'tracker-marker';
+        const x = Math.random() * (videoRect.width - 30) + 15;
+        const y = Math.random() * (videoRect.height - 30) + 15;
+        marker.style.left = `${x}px`;
+        marker.style.top = `${y}px`;
+        marker.addEventListener('click', function() {
+          this.style.backgroundColor = var('--secondary-color');
+          setTimeout(() => {
+            this.style.backgroundColor = 'rgba(0, 255, 255, 0.8)';
+          }, 300);
+        });
+        videoContainer.appendChild(marker);
+        trackerMarkers.push(marker);
+        animateMarker(marker);
+      }
+    }
 
-                setupEventListeners();
-                // setupAudioNodes(); // Delay audio setup until first user interaction/play
-                populatePlaylist();
-                populateFilterSelect();
-                applyInitialStates();
-                updateUI(false); // Load first video metadata without auto-playing
-                setupMatrix(); // Setup matrix dimensions
-                if (matrixActive) startMatrix(); else stopMatrix();
-                updateTooltip();
-                setStatus('Ready');
-                console.log("Player Initialized.");
+    function animateMarker(marker) {
+      let posX = parseFloat(marker.style.left);
+      let posY = parseFloat(marker.style.top);
+      let dirX = Math.random() * 2 - 1;
+      let dirY = Math.random() * 2 - 1;
+      const speed = 0.5;
+      function moveMarker() {
+        if (!trackingEnabled) return;
+        const videoRect = cyclicVideo.getBoundingClientRect();
+        posX += dirX * speed;
+        posY += dirY * speed;
+        if (posX < 15 || posX > videoRect.width - 15) {
+          dirX *= -1;
+          posX = Math.max(15, Math.min(videoRect.width - 15, posX));
+        }
+        if (posY < 15 || posY > videoRect.height - 15) {
+          dirY *= -1;
+          posY = Math.max(15, Math.min(videoRect.height - 15, posY));
+        }
+        marker.style.left = `${posX}px`;
+        marker.style.top = `${posY}px`;
+        requestAnimationFrame(moveMarker);
+      }
+      moveMarker();
+    }
 
-                // Prompt for interaction to enable audio/autoplay
-                showTooltip("Click or press Space to begin playback");
-                 const interactionHandler = () => {
-                     console.log("User interaction detected.");
-                     setupAudioNodes(); // Setup audio context now
-                     if (cyclicVideo.paused) {
-                         // Optional: Autoplay only if metadata is loaded
-                         // if (cyclicVideo.readyState >= 1) playVideo();
-                     } else {
-                        // If already playing somehow, ensure audio context is running
-                         if (audioContext && audioContext.state === 'suspended') {
-                             audioContext.resume().catch(e => console.error("Audio context resume failed:", e));
-                         }
-                     }
-                     document.removeEventListener('click', interactionHandler, true);
-                     document.removeEventListener('keydown', interactionHandler, true);
-                 };
-                 document.addEventListener('click', interactionHandler, { capture: true, once: true });
-                 document.addEventListener('keydown', interactionHandler, { capture: true, once: true });
-            }
+    function clearTrackingMarkers() {
+      trackerMarkers.forEach(marker => {
+        if (marker.parentNode) marker.parentNode.removeChild(marker);
+      });
+      trackerMarkers = [];
+    }
 
-             if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initializePlayer); }
-             else { initializePlayer(); }
+    // Precision Focus Mode
+    focusModeBtn.addEventListener("click", function() {
+      focusModeEnabled = !focusModeEnabled;
+      this.classList.toggle('active-button');
+      if (!focusModeEnabled && focusedArea) {
+        videoContainer.removeChild(focusedArea);
+        focusedArea = null;
+      }
+    });
 
+    cyclicVideo.addEventListener("click", function(e) {
+      if (!focusModeEnabled) return;
+      const rect = this.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (focusedArea) videoContainer.removeChild(focusedArea);
+      focusedArea = document.createElement('div');
+      focusedArea.className = 'focused-area';
+      const size = 80;
+      focusedArea.style.width = `${size}px`;
+      focusedArea.style.height = `${size}px`;
+      focusedArea.style.left = `${x - size / 2}px`;
+      focusedArea.style.top = `${y - size / 2}px`;
+      videoContainer.appendChild(focusedArea);
+      animateFocusEffect(focusedArea);
+    });
 
-            // ---===[ Core Player & UI Logic (Mostly similar to v4/previous) ]===---
+    function animateFocusEffect(element) {
+      let opacity = 1;
+      let size = 80;
+      function animate() {
+        if (!focusModeEnabled || !element.parentNode) return;
+        opacity -= 0.01;
+        size += 0.5;
+        if (opacity <= 0) {
+          videoContainer.removeChild(element);
+          focusedArea = null;
+          return;
+        }
+        element.style.opacity = opacity;
+        element.style.width = `${size}px`;
+        element.style.height = `${size}px`;
+        element.style.left = `${parseFloat(element.style.left) - 0.25}px`;
+        element.style.top = `${parseFloat(element.style.top) - 0.25}px`;
+        requestAnimationFrame(animate);
+      }
+      animate();
+    }
 
-             function updateUI(playRequest = false) {
-                 if (!cyclicVideo) return;
-                 // Validate Index
-                 if (currentVideoIndex < 0 || currentVideoIndex >= currentVideoSources.length) {
-                    currentVideoIndex = 0;
-                    if (currentVideoSources.length === 0) { handleEmptyPlaylist(); return; }
-                 }
-                 const videoPath = currentVideoSources[currentVideoIndex];
-                 const videoName = extractVideoName(videoPath, currentVideoIndex);
-                 videoTitle.textContent = videoName;
+    // Ambient Edge Glow
+    ambientGlowBtn.addEventListener("click", function() {
+      ambientGlowEnabled = !ambientGlowEnabled;
+      this.classList.toggle('active-button');
+      if (ambientGlowEnabled) {
+        setupAmbientGlow();
+      } else {
+        ambientBorder.style.boxShadow = 'inset 0 0 40px rgba(0, 255, 255, 0.5)';
+      }
+    });
 
-                 const currentVideoFilename = cyclicVideo.currentSrc?.split('/').pop();
-                 const nextVideoFilename = videoPath?.split('/').pop();
+    function setupAmbientGlow() {
+      if (!ambientGlowEnabled) return;
+      const offscreenCanvas = document.createElement('canvas');
+      const offCtx = offscreenCanvas.getContext('2d');
+      offscreenCanvas.width = 50;
+      offscreenCanvas.height = 50;
+      function updateAmbientGlow() {
+        if (!ambientGlowEnabled) return;
+        try {
+          offCtx.drawImage(cyclicVideo, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+          const imageData = offCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+          const data = imageData.data;
+          const edgePixels = [];
+          for (let i = 0; i < offscreenCanvas.width; i++) {
+            let idx = (i + 0 * offscreenCanvas.width) * 4;
+            edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+            idx = (i + (offscreenCanvas.height - 1) * offscreenCanvas.width) * 4;
+            edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+          }
+          for (let i = 0; i < offscreenCanvas.height; i++) {
+            let idx = (0 + i * offscreenCanvas.width) * 4;
+            edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+            idx = ((offscreenCanvas.width - 1) + i * offscreenCanvas.width) * 4;
+            edgePixels.push([data[idx], data[idx + 1], data[idx + 2]]);
+          }
+          let totalR = 0, totalG = 0, totalB = 0;
+          edgePixels.forEach(pixel => {
+            totalR += pixel[0];
+            totalG += pixel[1];
+            totalB += pixel[2];
+          });
+          const avgR = Math.round(totalR / edgePixels.length);
+          const avgG = Math.round(totalG / edgePixels.length);
+          const avgB = Math.round(totalB / edgePixels.length);
+          ambientBorder.style.boxShadow = `inset 0 0 40px rgba(${avgR}, ${avgG}, ${avgB}, 0.7)`;
+        } catch (e) {
+          console.error("Error updating ambient glow", e);
+        }
+        requestAnimationFrame(updateAmbientGlow);
+      }
+      updateAmbientGlow();
+    }
 
-                 // Load Source if Changed
-                 if (!cyclicVideo.currentSrc || currentVideoFilename !== nextVideoFilename) {
-                     console.log("Loading:", videoPath);
-                     cyclicVideo.src = videoPath;
-                     cyclicVideo.load();
-                     setStatus(`Loading: ${videoName}`);
-                     resetPlaybackUI();
-                 }
-                 // Apply States (Volume handled by setVolume)
-                 cyclicVideo.muted = isMuted;
-                 cyclicVideo.loop = repeatMode;
-                 if (playRequest && cyclicVideo.paused) { playVideo(); }
-                 updateButtonStates();
-                 updatePlaylistHighlight();
-                 applyFilterClass();
-             }
-             function handleEmptyPlaylist() { console.error("Playlist is empty!"); videoTitle.textContent = "NO MEDIA LOADED"; resetPlaybackUI(); /* Disable controls */ }
-             function resetPlaybackUI() { currentTimeDisplay.textContent="0:00"; durationDisplay.textContent="0:00"; seekBar.value=0; seekBar.max=100; seekBar.disabled=true; }
-             function playVideo() { /* ... same promise handling ... */
-                  if (!cyclicVideo || currentVideoSources.length === 0) return;
-                  // Ensure audio context is running after user interaction
-                  if (audioContext && audioContext.state === 'suspended') {
-                      audioContext.resume().catch(e => console.error("AudioContext resume failed:", e));
-                  }
-                  const playPromise = cyclicVideo.play();
-                  if (playPromise !== undefined) { playPromise.then(() => {}).catch(error => { console.warn("Playback initiation failed:", error); setStatus(`Playback Error`); updateButtonStates(); }); }
-              }
-             function pauseVideo() { /* ... same ... */ if (cyclicVideo) cyclicVideo.pause(); }
-             function togglePlayPause() { /* ... same ... */ if (cyclicVideo.paused) playVideo(); else pauseVideo(); }
-             function nextTrack() { /* ... same ... */ if (currentVideoSources.length === 0) return; currentVideoIndex = (currentVideoIndex + 1) % currentVideoSources.length; updateUI(true); }
-             function prevTrack() { /* ... same ... */ if (currentVideoSources.length === 0) return; currentVideoIndex = (currentVideoIndex - 1 + currentVideoSources.length) % currentVideoSources.length; updateUI(true); }
-             function setPlaybackSpeed(speed) { if(cyclicVideo) { cyclicVideo.playbackRate = parseFloat(speed); updateButtonStates(); } }
-
-             // ---===[ Playlist Logic ]===---
-             function populatePlaylist() { /* ... same ... */
-                 if (!playlistElement) return; playlistElement.innerHTML = '';
-                 currentVideoSources.forEach((src, index) => {
-                     const li = document.createElement('li'); const displayName = extractVideoName(src, index);
-                     li.textContent = displayName; li.title = displayName; li.dataset.index = index;
-                     if (index === currentVideoIndex) { li.classList.add('playing'); }
-                     li.addEventListener('click', () => { currentVideoIndex = index; updateUI(true); if (window.innerWidth <= 768) body.classList.remove('playlist-open'); });
-                     playlistElement.appendChild(li);
-                 });
-             }
-             function updatePlaylistHighlight() { /* ... same ... */
-                  if (!playlistElement) return; const items = playlistElement.querySelectorAll('li'); items.forEach((li, index) => li.classList.toggle('playing', index === currentVideoIndex)); const activeItem = playlistElement.querySelector('.playing'); if (activeItem) activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-             }
-             function toggleShuffle(save = true) { /* ... same shuffle logic ... */
-                 isShuffled = !isShuffled; const currentVideoPath = currentVideoSources[currentVideoIndex];
-                 if (isShuffled) {
-                     currentVideoSources = [...originalVideoOrder]; const idx = currentVideoSources.findIndex(s=>s===currentVideoPath); if(idx!==-1) currentVideoSources.splice(idx, 1); else currentVideoIndex=0;
-                     for (let i = currentVideoSources.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [currentVideoSources[i], currentVideoSources[j]] = [currentVideoSources[j], currentVideoSources[i]]; }
-                     if(idx!==-1) currentVideoSources.unshift(currentVideoPath); currentVideoIndex = 0; console.log("Playlist Shuffled");
-                 } else { currentVideoSources = [...originalVideoOrder]; currentVideoIndex = currentVideoSources.findIndex(s=>s===currentVideoPath); if (currentVideoIndex === -1) currentVideoIndex = 0; console.log("Playlist Unshuffled"); }
-                 if(save) localStorage.setItem('isShuffled', isShuffled); populatePlaylist(); updateButtonStates(); updatePlaylistHighlight();
-             }
-             function toggleRepeat(save = true) { /* ... same ... */ repeatMode = !repeatMode; cyclicVideo.loop = repeatMode; if(save) localStorage.setItem('repeatMode', repeatMode); updateButtonStates(); }
-
-             // ---===[ Controls & UI Logic ]===---
-             function setVolume(value, save = true) { /* ... same gain node logic ... */
-                  savedVolume = Math.max(0, Math.min(1, value));
-                  if (volumeSlider) volumeSlider.value = savedVolume;
-                  if (gainNode && audioContext) gainNode.gain.linearRampToValueAtTime(isMuted ? 0 : savedVolume, audioContext.currentTime + 0.02);
-                  else if (cyclicVideo) cyclicVideo.volume = savedVolume;
-                  if (save) localStorage.setItem('playerVolume', savedVolume);
-                  if (savedVolume > 0 && isMuted) toggleMute(false); // Unmute if volume adjusted
-                  updateButtonStates();
-             }
-             function toggleMute(save = true) { /* ... same gain node logic ... */
-                  isMuted = !isMuted; if (gainNode && audioContext) gainNode.gain.linearRampToValueAtTime(isMuted ? 0 : savedVolume, audioContext.currentTime + 0.05);
-                  if (cyclicVideo) cyclicVideo.muted = isMuted; if (save) localStorage.setItem('isMuted', isMuted); updateButtonStates();
-             }
-             function handleSeek() { if(cyclicVideo && isFinite(cyclicVideo.duration)) cyclicVideo.currentTime = parseFloat(seekBar.value); }
-             function updatePlaybackTime() { /* ... same ... */
-                  if(cyclicVideo && isFinite(cyclicVideo.duration)) {
-                     currentTimeDisplay.textContent=formatTime(cyclicVideo.currentTime); durationDisplay.textContent=formatTime(cyclicVideo.duration);
-                     if (!seekBar.matches(':active')) seekBar.value=cyclicVideo.currentTime; seekBar.max=cyclicVideo.duration; seekBar.disabled=false;
-                  } else { resetPlaybackUI(); }
-             }
-             function togglePiP() { /* ... same ... */ if (!document.pictureInPictureEnabled || pipBtn.disabled) return; if (!document.pictureInPictureElement) cyclicVideo.requestPictureInPicture().catch(e=>console.error(e)); else document.exitPictureInPicture().catch(e=>console.error(e)); }
-             function toggleFullscreen() { /* ... same, use videoWrapper */ const elem = videoWrapper; try{if(!document.fullscreenElement){const p=elem.requestFullscreen?elem.requestFullscreen():elem.webkitRequestFullscreen?elem.webkitRequestFullscreen():elem.msRequestFullscreen?elem.msRequestFullscreen():null; if(p)p.catch(e=>console.error(e));}else{const p=document.exitFullscreen?document.exitFullscreen():document.webkitExitFullscreen?document.webkitExitFullscreen():document.msExitFullscreen?document.msExitFullscreen():null; if(p)p.catch(e=>console.error(e));}}catch(e){console.error(e);}}
-
-             function updateButtonStates() { // Update all buttons based on state
-                 if (!cyclicVideo) return;
-                 playPauseBtn.textContent = cyclicVideo.paused ? "▶" : "❚❚";
-                 playPauseBtn.title = cyclicVideo.paused ? "Play (Space)" : "Pause (Space)";
-                 muteBtn.textContent = isMuted ? "Vol X" : "Vol ♪"; // Use symbols maybe
-                 muteBtn.title = isMuted ? "Unmute (M)" : "Mute (M)";
-                 muteBtn.classList.toggle('active-button', isMuted);
-                 shuffleBtn.classList.toggle('active-button', isShuffled);
-                 repeatBtn.textContent = `Repeat ${repeatMode ? 'On' : 'Off'}`;
-                 repeatBtn.classList.toggle('active-button', repeatMode);
-                 speedButtons.forEach(btn => btn.classList.toggle('active-button', parseFloat(btn.dataset.speed) === cyclicVideo.playbackRate));
-                 filterSelect.value = filters[currentFilterIndex]?.class || filters[0].class;
-                 visualizerSelect.value = currentVisualizerStyle;
-                 toggleMatrixBtn.textContent = `Matrix ${matrixActive ? 'On' : 'Off'}`;
-                 toggleMatrixBtn.classList.toggle('active-button', matrixActive);
-             }
-
-            // ---===[ Audio & Visualizer Logic ]===---
-            function setupAudioNodes() { // Setup or ensure audio nodes exist
-                if (audioContext || !cyclicVideo) return;
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    sourceNode = audioContext.createMediaElementSource(cyclicVideo);
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.8;
-                    gainNode = audioContext.createGain();
-                    // Chain: Source -> Gain -> Analyser -> Destination
-                    sourceNode.connect(gainNode);
-                    gainNode.connect(analyser);
-                    analyser.connect(audioContext.destination);
-                    const bufferLength = analyser.frequencyBinCount; dataArray = new Uint8Array(bufferLength);
-                    setVolume(savedVolume, false); // Apply saved volume via gain node now
-                    cyclicVideo.muted = isMuted; // Sync browser mute state too
-                    console.log('Audio Nodes Initialized');
-                } catch (e) { console.error("Web Audio API setup failed:", e); if(visualizerCanvas) visualizerCanvas.style.display='none'; if(visualizerSelect) visualizerSelect.disabled=true; }
-            }
-            function resizeVisualizer() { if(!visualizerCtx || visualizerCanvas.style.opacity === '0') return; visualizerCanvas.width=visualizerCanvas.offsetWidth; visualizerCanvas.height=60;}
-            function drawVisualizer() { /* ... same draw logic for bars/line + matrix speed update ... */
-                 if (!analyser || currentVisualizerStyle === 'off') { stopVisualizer(); return; }
-                 visualizerAnimationId = requestAnimationFrame(drawVisualizer);
-                 const bufferLength = analyser.frequencyBinCount;
-                 if (!dataArray || dataArray.length !== bufferLength) dataArray = new Uint8Array(bufferLength);
-                 visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
-                 const WIDTH = visualizerCanvas.width; const HEIGHT = visualizerCanvas.height; let audioLevel = 0; let sum = 0;
-
-                 if (currentVisualizerStyle === 'bars') {
-                     analyser.getByteFrequencyData(dataArray);
-                     const barCount = numBars; // Use constant
-                     const barWidth = (WIDTH / barCount) * 1.5; let x = 0;
-                     for (let i = 0; i < barCount; i++) {
-                         const barHeight = (dataArray[i % bufferLength] / 255.0) * HEIGHT * 1.2; sum += dataArray[i % bufferLength];
-                         const hue = (i / barCount) * 180 + 180; visualizerCtx.fillStyle = `hsla(${hue}, 100%, 60%, 0.85)`;
-                         visualizerCtx.fillRect(x, HEIGHT - barHeight, barWidth -1, barHeight); x += barWidth;
-                     }
-                     audioLevel = (sum / barCount) / 200;
-                 } else if (currentVisualizerStyle === 'line') {
-                     analyser.getByteTimeDomainData(dataArray);
-                     visualizerCtx.lineWidth = 2; visualizerCtx.strokeStyle = 'var(--glow-tertiary)'; visualizerCtx.beginPath();
-                     const sliceWidth = WIDTH * 1.0 / bufferLength; let x = 0;
-                     for (let i = 0; i < bufferLength; i++) { const v = dataArray[i]/128.0; const y = v*HEIGHT/2; sum += Math.abs(v - 1.0); if (i === 0) visualizerCtx.moveTo(x, y); else visualizerCtx.lineTo(x, y); x += sliceWidth; }
-                     visualizerCtx.lineTo(WIDTH, HEIGHT / 2); visualizerCtx.stroke();
-                     audioLevel = (sum / bufferLength) * 1.5;
-                 }
-                 updateMatrixSpeed(Math.min(1, audioLevel));
-            }
-            function stopVisualizer() { /* ... same ... */ if(visualizerAnimationId){cancelAnimationFrame(visualizerAnimationId); visualizerAnimationId = null;} if(visualizerCtx) visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height); }
-
-            // ---===[ Matrix Logic ]===---
-            function setupMatrix() { /* ... same ... */ if(!matrixCtx) return; matrixCanvas.width=window.innerWidth; matrixCanvas.height=window.innerHeight; matrixColumns=matrixCanvas.width/matrixFontSize; matrixDrops=Array(Math.floor(matrixColumns)).fill(1); }
-            function drawMatrix() { /* ... same ... */ if (!matrixActive || !matrixCtx) return; matrixCtx.fillStyle='rgba(0,0,0,0.05)'; matrixCtx.fillRect(0,0,matrixCanvas.width,matrixCanvas.height); matrixCtx.fillStyle='var(--glow-tertiary)'; matrixCtx.font=matrixFontSize+'px monospace'; const chars="01"; for(let i=0;i<matrixDrops.length;i++){const t=chars.charAt(Math.floor(Math.random()*chars.length)); matrixCtx.fillText(t, i*matrixFontSize, matrixDrops[i]*matrixFontSize); if(matrixDrops[i]*matrixFontSize>matrixCanvas.height&&Math.random()>0.975)matrixDrops[i]=0; matrixDrops[i]++;} }
-            function startMatrix() { /* ... same, uses currentMatrixIntervalTime ... */ stopMatrix(); if(matrixActive){setupMatrix(); matrixInterval=setInterval(drawMatrix, currentMatrixIntervalTime); matrixCanvas.classList.remove('hidden'); updateButtonStates(); console.log('Matrix Started');} }
-            function stopMatrix() { /* ... same ... */ if(matrixInterval){clearInterval(matrixInterval); matrixInterval=null; if(matrixCtx)matrixCtx.clearRect(0,0,matrixCanvas.width,matrixCanvas.height); matrixCanvas.classList.add('hidden'); updateButtonStates(); console.log('Matrix Stopped');} }
-            function toggleMatrix(save = true) { matrixActive = !matrixActive; if(save) localStorage.setItem('matrixActive', matrixActive); if(matrixActive) startMatrix(); else stopMatrix(); }
-            function updateMatrixSpeed(audioLevel = 0) { /* ... same logic ... */
-                 if (!matrixActive) return; const minI=30; const maxI=70; // Adjusted range
-                 const newInterval = Math.max(minI, maxI - (audioLevel * (maxI - minI)));
-                 if (matrixInterval && Math.abs(newInterval - currentMatrixIntervalTime) > 3) { currentMatrixIntervalTime = newInterval; startMatrix(); } // Restart if significant change
-            }
-
-            // ---===[ Filter Logic ]===---
-            function populateFilterSelect() { filters.forEach((f) => { const o=document.createElement('option'); o.value=f.class; o.textContent=f.name; filterSelect.appendChild(o); }); }
-            function applyFilterClass() { filters.forEach(f=>cyclicVideo.classList.remove(f.class)); if(filters[currentFilterIndex]) cyclicVideo.classList.add(filters[currentFilterIndex].class); updateButtonStates(); }
-
-            // ---===[ Utility & Init Call ]===---
-            function formatTime(s){const t=Math.max(0,Math.floor(s));const m=Math.floor(t/60);const c=t%60;return `${m}:${c<10?'0':''}${c}`;}
-            function extractVideoName(p, i){try{let n=p.split('/').pop()?.replace('.mp4','').replace(/[_-]/g,' ')||`Track ${i+1}`; return n.toLowerCase().split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');}catch{return `Track ${i+1}`;}}
-            function updateTooltip(m=null){clearTimeout(tooltipTimeout);keyboardTooltip.textContent=m||"Keys: [Space] Play/Pause | [←/→] Prev/Next | [S] Shuffle | [R] Repeat | [M] Mute | [P] PiP | [↑/↓] Vol | [G] Matrix | [Tab] Playlist | [C] Controls"; keyboardTooltip.style.opacity='1'; tooltipTimeout=setTimeout(()=>{keyboardTooltip.style.opacity='0'},3500);}
-            function applyInitialStates() { // Called once during init
-                 if(isShuffled) toggleShuffle(false); if(repeatMode) toggleRepeat(false);
-                 filterSelect.value = filters[currentFilterIndex]?.class || filters[0].class; applyFilterClass();
-                 visualizerSelect.value = currentVisualizerStyle; visualizerCanvas.style.opacity = currentVisualizerStyle==='off'?'0':'0.65';
-                 pipBtn.disabled = !document.pictureInPictureEnabled;
-                 // Volume/Mute applied when audio nodes setup
-            }
-
-             // Simplified setupEventListeners - Add all listeners needed
-             function setupEventListeners() {
-                 // Video Element Listeners (Attach Once)
-                 cyclicVideo.addEventListener('loadedmetadata', () => { updatePlaybackTime(); if (!audioContext) setupAudioNodes(); });
-                 cyclicVideo.addEventListener('timeupdate', updatePlaybackTime);
-                 cyclicVideo.addEventListener('play', () => { updateButtonStates(); if(!audioContext) setupAudioNodes(); else if (audioContext.state==='suspended') audioContext.resume().catch(e=>console.error(e)); if (currentVisualizerStyle !== 'off' && !visualizerAnimationId) drawVisualizer(); setStatus(`Playing: ${extractVideoName(cyclicVideo.currentSrc, currentVideoIndex)}`); });
-                 cyclicVideo.addEventListener('pause', () => { updateButtonStates(); stopVisualizer(); setStatus('Paused'); });
-                 cyclicVideo.addEventListener('ended', () => { if (!repeatMode) nextTrack(); else playVideo(); });
-                 cyclicVideo.addEventListener('error', (e) => { console.error(`Error loading video: ${cyclicVideo.currentSrc}`, cyclicVideo.error || e); videoTitle.textContent = `Error Loading Track ${currentVideoIndex + 1}`; setTimeout(nextTrack, 1500); });
-
-                 // Global / Document Listeners (Attach Once)
-                 togglePlaylistBtn.addEventListener('click', () => body.classList.toggle('playlist-open'));
-                 toggleMatrixBtn.addEventListener('click', () => toggleMatrix());
-                 toggleControlsBtn.addEventListener('click', () => body.classList.toggle('controls-open'));
-                 controlsHandle.addEventListener('click', () => body.classList.toggle('controls-open')); // Allow handle click too
-                 window.addEventListener('resize', () => { setupMatrix(); resizeVisualizer(); });
-                 document.addEventListener('keydown', handleKeyboard);
-                 document.addEventListener('keydown', () => showTooltip()); // Show tooltip on keypress
-
-                 // Control Panel Listeners (Could be complex if panels differ wildly mobile/desktop)
-                 // Using specific IDs should work even if elements are just visually rearranged by CSS
-                 playPauseBtn.addEventListener('click', togglePlayPause);
-                 document.getElementById("prevVideo").addEventListener("click", prevTrack);
-                 document.getElementById("nextVideo").addEventListener("click", nextTrack);
-                 muteBtn.addEventListener('click', () => toggleMute());
-                 volumeSlider.addEventListener('input', (e) => setVolume(parseFloat(e.target.value)));
-                 seekBar.addEventListener('input', handleSeek);
-                 seekBar.addEventListener('mousedown', () => { wasPausedBeforeSeek = cyclicVideo.paused; if (!wasPausedBeforeSeek) cyclicVideo.pause(); });
-                 seekBar.addEventListener('touchstart', () => { wasPausedBeforeSeek = cyclicVideo.paused; if (!wasPausedBeforeSeek) cyclicVideo.pause(); }, { passive: true });
-                 seekBar.addEventListener('mouseup', () => { if (!wasPausedBeforeSeek) cyclicVideo.play(); });
-                 seekBar.addEventListener('touchend', () => { if (!wasPausedBeforeSeek) cyclicVideo.play(); });
-                 shuffleBtn.addEventListener("click", () => toggleShuffle());
-                 repeatBtn.addEventListener("click", () => toggleRepeat());
-                 pipBtn.addEventListener("click", togglePiP);
-                 fullscreenBtn.addEventListener("click", toggleFullscreen);
-                 downloadBtn.addEventListener("click", () => { /* download logic */ });
-                 filterSelect.addEventListener('change', (e) => { /* filter change logic */ });
-                 visualizerSelect.addEventListener('change', (e) => { /* visualizer change logic */ });
-                 speedButtons.forEach(button => button.addEventListener('click', function() { setPlaybackSpeed(this.dataset.speed); }));
-             }
-
-             // Placeholder for Keyboard handler (needs update)
-             function handleKeyboard(e) {
-                  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-                  let handled = true;
-                  switch (e.code) {
-                      case 'Space': playPauseBtn.click(); break;
-                      case 'ArrowRight': nextTrack(); break;
-                      case 'ArrowLeft': prevTrack(); break;
-                      case 'KeyS': shuffleBtn.click(); break;
-                      case 'KeyR': repeatBtn.click(); break;
-                      case 'KeyM': muteBtn.click(); break;
-                      case 'KeyP': if(!pipBtn.disabled) pipBtn.click(); break;
-                      case 'ArrowUp': e.preventDefault(); setVolume(savedVolume + 0.05); break;
-                      case 'ArrowDown': e.preventDefault(); setVolume(savedVolume - 0.05); break;
-                      case 'KeyG': toggleMatrixBtn.click(); break;
-                      case 'Tab': e.preventDefault(); togglePlaylistBtn.click(); break;
-                      case 'KeyC': toggleControlsBtn.click(); break; // Use assigned button's logic
-                      default: handled = false;
-                  }
-                  if (handled) { e.preventDefault(); showTooltip(); }
-             }
-
-
-        })(); // End IIFE
-
-    </script>
-
+    // Back button function
+    function goBack() {
+      window.history.back();
+    }
+    // Handle window resize
+    window.addEventListener('resize', function() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (trackingEnabled) {
+        clearTrackingMarkers();
+        generateTrackingMarkers();
+      }
+    });
+    // Reinitialize ambient glow on play
+    cyclicVideo.addEventListener('play', function() {
+      if (ambientGlowEnabled) setupAmbientGlow();
+    });
+  </script>
 </body>
 </html>
