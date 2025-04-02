@@ -228,243 +228,31 @@
     <div id="keyboardTooltip" class="tooltip">Space: Play/Pause | ←/→: Prev/Next | S: Shuffle | R: Repeat | F: Filter</div>
 
     <script>
-    // --- Enhanced Matrix Background ---
-const matrixCanvas = document.getElementById('matrixCanvas');
-const matrixCtx = matrixCanvas.getContext('2d');
-matrixCanvas.width = window.innerWidth;
-matrixCanvas.height = window.innerHeight;
+        // --- Matrix Background ---
+        const matrixCanvas = document.getElementById('matrixCanvas');
+        const matrixCtx = matrixCanvas.getContext('2d');
+        matrixCanvas.width = window.innerWidth;
+        matrixCanvas.height = window.innerHeight;
+        const matrixFontSize = 16;
+        const matrixColumns = matrixCanvas.width / matrixFontSize;
+        const matrixDrops = Array(Math.floor(matrixColumns)).fill(1);
 
-// Configuration
-const config = {
-    fontSize: 16,
-    baseSpeed: 0.8,
-    densityFactor: 1,    // Controls column density
-    fadeSpeed: 0.05,     // Fade speed of trail
-    glitchInterval: 800, // Milliseconds between glitch effects
-    colorMode: 0,        // 0: classic green, 1: multi-color, 2: color shift
-    glitchIntensity: 3   // How many glitches per cycle
-};
-
-// Matrix state
-const columns = Math.floor(matrixCanvas.width / config.fontSize * config.densityFactor);
-const drops = Array(columns).fill(0);
-const glyphs = "日ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-const glyphsLength = glyphs.length;
-const speeds = Array(columns).fill(0).map(() => (Math.random() * 0.5 + 0.5) * config.baseSpeed);
-const highlights = Array(columns).fill(false); // Tracks highlighted columns
-const glowEffect = 10; // Glow intensity
-
-// Color management
-let hue = 120; // Start with green
-let colorShiftSpeed = 0.5;
-let lastTime = 0;
-let glitchTimer = 0;
-
-// Mouse interaction
-let mouseX = 0, mouseY = 0;
-let lastMouseMove = 0;
-let interactionRadius = 100;
-
-// Handle window resize
-window.addEventListener('resize', () => {
-    matrixCanvas.width = window.innerWidth;
-    matrixCanvas.height = window.innerHeight;
-    const newColumns = Math.floor(matrixCanvas.width / config.fontSize * config.densityFactor);
-    
-    // Adjust arrays for new width
-    if (newColumns > columns) {
-        // Add new columns
-        for (let i = columns; i < newColumns; i++) {
-            drops.push(0);
-            speeds.push((Math.random() * 0.5 + 0.5) * config.baseSpeed);
-            highlights.push(false);
-        }
-    } else {
-        // Remove excess columns
-        drops.length = newColumns;
-        speeds.length = newColumns;
-        highlights.length = newColumns;
-    }
-});
-
-// Track mouse for interaction
-document.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    lastMouseMove = Date.now();
-});
-
-// Toggle color mode on click
-document.addEventListener('click', () => {
-    config.colorMode = (config.colorMode + 1) % 3;
-    // Reset to green when returning to classic mode
-    if (config.colorMode === 0) {
-        hue = 120;
-    }
-});
-
-// Create keyboard interaction
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'g') {
-        triggerGlitch();
-    } else if (e.key === '+' || e.key === '=') {
-        config.baseSpeed = Math.min(config.baseSpeed + 0.1, 3);
-        updateSpeeds();
-    } else if (e.key === '-') {
-        config.baseSpeed = Math.max(config.baseSpeed - 0.1, 0.2);
-        updateSpeeds();
-    }
-});
-
-function updateSpeeds() {
-    for (let i = 0; i < speeds.length; i++) {
-        speeds[i] = (Math.random() * 0.5 + 0.5) * config.baseSpeed;
-    }
-}
-
-function triggerGlitch() {
-    // Set random columns to highlight
-    for (let i = 0; i < config.glitchIntensity; i++) {
-        const randomCol = Math.floor(Math.random() * columns);
-        highlights[randomCol] = true;
-        
-        // Schedule unhighlight
-        setTimeout(() => {
-            highlights[randomCol] = false;
-        }, 100 + Math.random() * 200);
-    }
-    
-    // Create screen shake effect
-    const shakeAmount = 5;
-    matrixCanvas.style.transform = `translate(${Math.random() * shakeAmount - shakeAmount/2}px, ${Math.random() * shakeAmount - shakeAmount/2}px)`;
-    setTimeout(() => {
-        matrixCanvas.style.transform = 'translate(0, 0)';
-    }, 100);
-}
-
-function drawMatrix(timestamp) {
-    // Calculate delta time for smooth animations
-    const deltaTime = timestamp - lastTime;
-    lastTime = timestamp;
-
-    // Color shifting in mode 2
-    if (config.colorMode === 2) {
-        hue = (hue + colorShiftSpeed * deltaTime / 16) % 360;
-    }
-    
-    // Random glitch effects
-    glitchTimer += deltaTime;
-    if (glitchTimer > config.glitchInterval) {
-        glitchTimer = 0;
-        if (Math.random() > 0.7) {
-            triggerGlitch();
-        }
-    }
-
-    // Semi-transparent fade effect
-    matrixCtx.fillStyle = `rgba(0, 0, 0, ${config.fadeSpeed})`;
-    matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
-
-    // Check if mouse is active (recent movement)
-    const mouseActive = Date.now() - lastMouseMove < 2000;
-    
-    // Draw matrix characters
-    for (let i = 0; i < drops.length; i++) {
-        const x = i * config.fontSize / config.densityFactor;
-        const y = drops[i] * config.fontSize;
-        
-        // Get a random character from our extended set
-        const text = glyphs.charAt(Math.floor(Math.random() * glyphsLength));
-        
-        // Determine color based on mode and position
-        let color;
-        if (highlights[i]) {
-            // Highlighted columns appear white during glitch effects
-            color = '#ffffff';
-            matrixCtx.shadowBlur = glowEffect * 2;
-            matrixCtx.shadowColor = 'white';
-        } else if (config.colorMode === 0) {
-            // Classic green Matrix with brightness based on position
-            const brightness = Math.floor(Math.max(0, Math.min(255, 100 + 155 * (1 - drops[i] / matrixCanvas.height))));
-            color = `rgb(0, ${brightness}, 0)`;
-            matrixCtx.shadowBlur = 0;
-        } else if (config.colorMode === 1) {
-            // Multi-color mode - different color for each column
-            const columnHue = (i * 360 / columns) % 360;
-            const brightness = Math.floor(Math.max(0, Math.min(100, 50 + 50 * (1 - drops[i] / matrixCanvas.height))));
-            color = `hsl(${columnHue}, 100%, ${brightness}%)`;
-            matrixCtx.shadowBlur = 0;
-        } else {
-            // Color shift mode - entire matrix shifts color over time
-            const brightness = Math.floor(Math.max(0, Math.min(100, 50 + 50 * (1 - drops[i] / matrixCanvas.height))));
-            color = `hsl(${hue}, 100%, ${brightness}%)`;
-            matrixCtx.shadowBlur = 0;
-        }
-        
-        // Mouse interaction: create distortion effect around cursor
-        if (mouseActive) {
-            const dx = x - mouseX;
-            const dy = y - mouseY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < interactionRadius) {
-                // Push characters away from cursor
-                const pushFactor = 1 - distance / interactionRadius;
-                const pushX = dx * pushFactor * 0.5;
-                const pushY = dy * pushFactor * 0.5;
-                
-                // Draw distorted character
-                matrixCtx.fillStyle = color;
-                matrixCtx.font = `${config.fontSize + pushFactor * 8}px monospace`;
-                matrixCtx.fillText(text, x + pushX, y + pushY);
-                
-                // Add a glow effect
-                matrixCtx.shadowBlur = glowEffect;
-                matrixCtx.shadowColor = color;
-            } else {
-                // Normal drawing
-                matrixCtx.fillStyle = color;
-                matrixCtx.font = `${config.fontSize}px monospace`;
-                matrixCtx.fillText(text, x, y);
+        function drawMatrix() {
+            matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+            matrixCtx.fillStyle = '#00ff00'; // Green matrix color
+            matrixCtx.font = matrixFontSize + 'px monospace';
+            for (let i = 0; i < matrixDrops.length; i++) {
+                const text = String.fromCharCode(Math.random() * 128);
+                matrixCtx.fillText(text, i * matrixFontSize, matrixDrops[i] * matrixFontSize);
+                if (matrixDrops[i] * matrixFontSize > matrixCanvas.height && Math.random() > 0.975) {
+                    matrixDrops[i] = 0;
+                }
+                matrixDrops[i]++;
             }
-        } else {
-            // Normal drawing without mouse interaction
-            matrixCtx.fillStyle = color;
-            matrixCtx.font = `${config.fontSize}px monospace`;
-            matrixCtx.fillText(text, x, y);
         }
-        
-        // Update drop position with variable speed
-        drops[i] += speeds[i];
-        
-        // Reset if hit bottom or random chance for cascade effect
-        if (drops[i] * config.fontSize > matrixCanvas.height && Math.random() > 0.975) {
-            drops[i] = 0;
-        }
-    }
-    
-    // Next frame
-    requestAnimationFrame(drawMatrix);
-}
+        const matrixInterval = setInterval(drawMatrix, 50); // Adjusted speed slightly
 
-// Initialize
-function initMatrix() {
-    // Start at different positions
-    for (let i = 0; i < drops.length; i++) {
-        drops[i] = Math.floor(Math.random() * matrixCanvas.height / config.fontSize);
-    }
-    
-    // Start animation
-    requestAnimationFrame(drawMatrix);
-}
-
-// Start matrix effect
-initMatrix();
-
-// Remove old interval if it exists
-if (typeof matrixInterval !== 'undefined') {
-    clearInterval(matrixInterval);
-}
         // --- Video Player Setup ---
         const videoSources = Array.from({ length: 20 }, (_, i) => `video${i + 1}.mp4`); // Ensure you have 20 videos or adjust length
         let originalVideoOrder = [...videoSources]; // Keep original order for unshuffle
