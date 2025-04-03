@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alien Environment PLY Generator</title>
+    <title>Advanced Alien Environment PLY Generator</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #0f0f1a;
             color: #ddd;
@@ -18,23 +18,26 @@
         h1 {
             color: #8af;
             text-align: center;
+            text-shadow: 0 0 10px rgba(136, 170, 255, 0.5);
         }
         canvas {
             border: 1px solid #444;
             display: block;
             margin: 0 auto;
             background-color: #000;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
         }
         .controls {
             margin: 20px 0;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 10px;
         }
         .control-group {
             background-color: #1a1a2a;
-            padding: 10px;
-            border-radius: 5px;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
         }
         label {
             display: block;
@@ -43,11 +46,25 @@
         }
         input, select {
             width: 100%;
-            padding: 5px;
+            padding: 8px;
             background-color: #252540;
             border: 1px solid #444;
             color: #fff;
-            border-radius: 3px;
+            border-radius: 4px;
+        }
+        input[type="range"] {
+            height: 6px;
+            -webkit-appearance: none;
+            background: #333355;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            background: #5a90c0;
+            border-radius: 50%;
+            cursor: pointer;
         }
         button {
             padding: 10px 15px;
@@ -57,10 +74,18 @@
             border-radius: 4px;
             cursor: pointer;
             margin: 5px;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
         }
         button:hover {
             background-color: #5a90c0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
         .buttons {
             display: flex;
@@ -71,15 +96,74 @@
             display: flex;
             justify-content: center;
             margin: 20px 0;
+            position: relative;
+        }
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .tab {
+            padding: 8px 16px;
+            background-color: #252540;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            margin: 0 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab.active {
+            background-color: #4a80b0;
+            color: white;
+        }
+        .info-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(10, 10, 25, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        .preset-selector {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .preset-btn {
+            padding: 8px 12px;
+            margin: 0 5px;
+            background-color: #2a3050;
+            border: none;
+            color: #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .preset-btn:hover {
+            background-color: #3a4060;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Alien Environment PLY Generator</h1>
+        <h1>Advanced Alien Environment PLY Generator</h1>
+        
+        <div class="tabs">
+            <button class="tab active" data-view="2d">2D View</button>
+            <button class="tab" data-view="3d">3D Preview</button>
+        </div>
+
+        <div class="preset-selector">
+            <button class="preset-btn" data-preset="crystalline">Crystalline</button>
+            <button class="preset-btn" data-preset="volcanic">Volcanic</button>
+            <button class="preset-btn" data-preset="oceanic">Oceanic</button>
+            <button class="preset-btn" data-preset="biomechanical">Biomechanical</button>
+        </div>
         
         <div class="preview-container">
             <canvas id="preview" width="600" height="400"></canvas>
+            <div class="info-panel" id="infoPanel">Hover for terrain info</div>
         </div>
         
         <div class="controls">
@@ -92,11 +176,11 @@
             </div>
             
             <div class="control-group">
-                <label for="noiseScale">Noise Scale:</label>
+                <label for="noiseScale">Primary Noise Scale:</label>
                 <input type="range" id="noiseScale" min="1" max="100" value="30">
                 
-                <label for="iterations">Iterations:</label>
-                <input type="number" id="iterations" value="3" min="1" max="10">
+                <label for="secondaryNoiseScale">Secondary Noise Scale:</label>
+                <input type="range" id="secondaryNoiseScale" min="1" max="100" value="60">
             </div>
             
             <div class="control-group">
@@ -105,7 +189,22 @@
                     <option value="minimal">Minimal</option>
                     <option value="moderate" selected>Moderate</option>
                     <option value="extreme">Extreme</option>
+                    <option value="chaotic">Chaotic</option>
                 </select>
+                
+                <label for="biomeType">Biome Type:</label>
+                <select id="biomeType">
+                    <option value="standard">Standard</option>
+                    <option value="crystal">Crystalline</option>
+                    <option value="volcanic">Volcanic</option>
+                    <option value="aquatic">Aquatic</option>
+                    <option value="biomech">Biomechanical</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="iterations">Iterations:</label>
+                <input type="number" id="iterations" value="3" min="1" max="10">
                 
                 <label for="seed">Seed (0 for random):</label>
                 <input type="number" id="seed" value="0">
@@ -118,20 +217,34 @@
                     <option value="medium" selected>Medium</option>
                     <option value="high">High</option>
                 </select>
+                
+                <label for="erosionFactor">Erosion Factor:</label>
+                <input type="range" id="erosionFactor" min="0" max="100" value="30">
+            </div>
+            
+            <div class="control-group">
+                <label for="verticalScale">Vertical Scale:</label>
+                <input type="range" id="verticalScale" min="1" max="30" value="10">
+                
+                <label for="featureSize">Feature Size:</label>
+                <input type="range" id="featureSize" min="1" max="100" value="50">
             </div>
         </div>
         
         <div class="buttons">
-            <button id="generateBtn">Generate Alien Map</button>
+            <button id="generateBtn">Generate Terrain</button>
+            <button id="randomizeBtn">Randomize</button>
             <button id="downloadBtn" disabled>Download PLY</button>
         </div>
     </div>
 
     <script>
-        // PRNG with seed support
+        // PRNG with improved seed support
         class PRNG {
             constructor(seed = Math.floor(Math.random() * 10000)) {
                 this.seed = seed || Math.floor(Math.random() * 10000);
+                // Initialize state with multiple rounds to improve randomness
+                for (let i = 0; i < 10; i++) this.next();
             }
             
             next() {
@@ -150,56 +263,211 @@
             }
         }
 
-        // Noise generation function
-        function generateNoise(width, height, scale, seed) {
-            const prng = new PRNG(seed);
-            const noise = new Array(height);
+        // Improved Perlin-like noise generation
+        function generatePerlinNoise(width, height, scale, prng, octaves = 4, persistence = 0.5) {
+            // Generate random gradient vectors
+            const gradients = [];
+            for (let i = 0; i < 256; i++) {
+                const angle = prng.next() * Math.PI * 2;
+                gradients.push([Math.cos(angle), Math.sin(angle)]);
+            }
             
+            // Helper functions
+            function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+            function lerp(a, b, t) { return a + t * (b - a); }
+            function grad(hash, x, y) {
+                const g = gradients[hash & 255];
+                return g[0] * x + g[1] * y;
+            }
+            
+            function noise2D(x, y) {
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                
+                x -= Math.floor(x);
+                y -= Math.floor(y);
+                
+                const u = fade(x);
+                const v = fade(y);
+                
+                const A = (prng.nextInt(0, 255) + X) & 255;
+                const B = (prng.nextInt(0, 255) + X + 1) & 255;
+                const AA = (prng.nextInt(0, 255) + A + Y) & 255;
+                const AB = (prng.nextInt(0, 255) + A + Y + 1) & 255;
+                const BA = (prng.nextInt(0, 255) + B + Y) & 255;
+                const BB = (prng.nextInt(0, 255) + B + Y + 1) & 255;
+                
+                return lerp(
+                    lerp(grad(AA, x, y), grad(BA, x-1, y), u),
+                    lerp(grad(AB, x, y-1), grad(BB, x-1, y-1), u),
+                    v
+                );
+            }
+            
+            // Generate multi-octave noise
+            const noise = new Array(height);
             for (let y = 0; y < height; y++) {
                 noise[y] = new Array(width);
                 for (let x = 0; x < width; x++) {
-                    // Simple value noise
-                    noise[y][x] = prng.next();
-                }
-            }
-            
-            // Smooth the noise
-            const smoothedNoise = new Array(height);
-            for (let y = 0; y < height; y++) {
-                smoothedNoise[y] = new Array(width);
-                for (let x = 0; x < width; x++) {
-                    let sum = 0;
-                    let count = 0;
+                    let amplitude = 1;
+                    let frequency = 1;
+                    let noiseValue = 0;
+                    let ampSum = 0;
                     
-                    for (let dy = -1; dy <= 1; dy++) {
-                        for (let dx = -1; dx <= 1; dx++) {
-                            const nx = x + dx;
-                            const ny = y + dy;
-                            
-                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                                sum += noise[ny][nx];
-                                count++;
-                            }
-                        }
+                    for (let o = 0; o < octaves; o++) {
+                        const sampleX = x / width * scale * frequency;
+                        const sampleY = y / height * scale * frequency;
+                        
+                        noiseValue += noise2D(sampleX, sampleY) * amplitude;
+                        ampSum += amplitude;
+                        
+                        amplitude *= persistence;
+                        frequency *= 2;
                     }
                     
-                    smoothedNoise[y][x] = sum / count;
+                    // Normalize
+                    noise[y][x] = (noiseValue / ampSum + 1) / 2;
                 }
             }
             
-            return smoothedNoise;
+            return noise;
         }
         
-        // Apply cellular automata to make patterns more alien
-        function applyAlienPatterns(heightMap, iterations, alienFactor) {
+        // Apply more sophisticated cellular automata for alien patterns
+        function applyAlienPatterns(heightMap, iterations, alienFactor, biome, prng) {
             const width = heightMap[0].length;
             const height = heightMap.length;
             
+            // Initialize secondary features based on biome
+            const featureMap = new Array(height);
+            for (let y = 0; y < height; y++) {
+                featureMap[y] = new Array(width).fill(0);
+            }
+            
+            // Add biome-specific features
+            if (biome === 'crystal') {
+                // Create crystalline structures
+                const crystalCount = alienFactor === 'extreme' ? 8 : (alienFactor === 'chaotic' ? 12 : 4);
+                
+                for (let i = 0; i < crystalCount; i++) {
+                    const centerX = prng.nextInt(0, width - 1);
+                    const centerY = prng.nextInt(0, height - 1);
+                    const angleCount = prng.nextInt(3, 8);  // Number of crystal facets
+                    
+                    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI * 2 / angleCount) {
+                        const length = prng.nextInt(5, width / 5);
+                        const dirX = Math.cos(angle);
+                        const dirY = Math.sin(angle);
+                        
+                        for (let step = 0; step < length; step++) {
+                            const x = Math.floor(centerX + dirX * step);
+                            const y = Math.floor(centerY + dirY * step);
+                            
+                            if (x >= 0 && x < width && y >= 0 && y < height) {
+                                featureMap[y][x] = 1;
+                                heightMap[y][x] = Math.min(1, heightMap[y][x] + 0.3);
+                            }
+                        }
+                    }
+                }
+            } else if (biome === 'volcanic') {
+                // Create volcano craters
+                const craterCount = alienFactor === 'extreme' ? 6 : (alienFactor === 'chaotic' ? 10 : 3);
+                
+                for (let i = 0; i < craterCount; i++) {
+                    const centerX = prng.nextInt(0, width - 1);
+                    const centerY = prng.nextInt(0, height - 1);
+                    const radius = prng.nextInt(width / 20, width / 8);
+                    const innerRadius = radius * 0.6;
+                    
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                            
+                            if (distance < radius) {
+                                if (distance < innerRadius) {
+                                    // Crater interior (depression)
+                                    heightMap[y][x] = Math.max(0, heightMap[y][x] - 0.4 * (1 - distance / innerRadius));
+                                    featureMap[y][x] = 1;  // Mark as crater
+                                } else {
+                                    // Crater rim (elevation)
+                                    const rimFactor = (distance - innerRadius) / (radius - innerRadius);
+                                    const elevation = 0.5 * Math.sin(rimFactor * Math.PI);
+                                    heightMap[y][x] = Math.min(1, heightMap[y][x] + elevation);
+                                    featureMap[y][x] = 2;  // Mark as rim
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (biome === 'aquatic') {
+                // Create water bodies and underwater features
+                const seaLevel = 0.4;
+                
+                // Lower terrain below sea level
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (heightMap[y][x] < seaLevel) {
+                            featureMap[y][x] = 1;  // Mark as underwater
+                            
+                            // Create underwater features
+                            if (heightMap[y][x] < seaLevel - 0.1 && prng.next() < 0.1) {
+                                const featureHeight = prng.nextRange(0.1, 0.3);
+                                heightMap[y][x] = Math.min(seaLevel - 0.05, heightMap[y][x] + featureHeight);
+                                featureMap[y][x] = 2;  // Mark as underwater feature
+                            }
+                        }
+                    }
+                }
+            } else if (biome === 'biomech') {
+                // Create grid-like structures and mechanical features
+                const gridSpacing = prng.nextInt(5, 12);
+                
+                // Add grid lines
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (x % gridSpacing === 0 || y % gridSpacing === 0) {
+                            heightMap[y][x] = Math.min(1, heightMap[y][x] + 0.2);
+                            featureMap[y][x] = 1;  // Mark as grid line
+                        }
+                    }
+                }
+                
+                // Add "nodes" at intersections
+                for (let y = 0; y < height; y += gridSpacing) {
+                    for (let x = 0; x < width; x += gridSpacing) {
+                        if (x < width && y < height) {
+                            const nodeRadius = prng.nextInt(1, 3);
+                            
+                            for (let dy = -nodeRadius; dy <= nodeRadius; dy++) {
+                                for (let dx = -nodeRadius; dx <= nodeRadius; dx++) {
+                                    const nx = x + dx;
+                                    const ny = y + dy;
+                                    
+                                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                        const distance = Math.sqrt(dx * dx + dy * dy);
+                                        
+                                        if (distance <= nodeRadius) {
+                                            heightMap[ny][nx] = Math.min(1, heightMap[ny][nx] + 0.3 * (1 - distance / nodeRadius));
+                                            featureMap[ny][nx] = 2;  // Mark as node
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Apply cellular automata iterations
             for (let iter = 0; iter < iterations; iter++) {
                 const newMap = JSON.parse(JSON.stringify(heightMap));
                 
                 for (let y = 1; y < height - 1; y++) {
                     for (let x = 1; x < width - 1; x++) {
+                        // Skip if it's a fixed feature
+                        if (featureMap[y][x] > 0) continue;
+                        
                         let neighbors = 0;
                         let neighborSum = 0;
                         
@@ -213,15 +481,23 @@
                         
                         const neighborAvg = neighborSum / 8;
                         
-                        // Apply cellular automata rules for alien patterns
-                        if (alienFactor === 'extreme') {
-                            // More extreme patterns
+                        // Apply rules based on alien factor
+                        if (alienFactor === 'chaotic') {
+                            // Highly chaotic patterns
+                            if (neighbors > 5 || neighbors < 2) {
+                                newMap[y][x] = 1 - heightMap[y][x]; // Invert height
+                            } else if (prng.next() < 0.1) {
+                                newMap[y][x] = prng.next(); // Random height
+                            }
+                        } else if (alienFactor === 'extreme') {
+                            // Extreme patterns
                             if (neighbors > 4) {
                                 newMap[y][x] = Math.min(1, heightMap[y][x] + 0.3);
                             } else if (neighbors < 3) {
                                 newMap[y][x] = Math.max(0, heightMap[y][x] - 0.3);
                             } else {
-                                newMap[y][x] = neighborAvg;
+                                const factor = prng.next() * 0.4 - 0.2;
+                                newMap[y][x] = Math.max(0, Math.min(1, neighborAvg + factor));
                             }
                         } else if (alienFactor === 'moderate') {
                             // Moderate patterns
@@ -244,22 +520,132 @@
                 heightMap = newMap;
             }
             
-            return heightMap;
+            return { heightMap, featureMap };
         }
         
-        // Add alien-specific features
-        function addAlienFeatures(heightMap, alienFactor, prng) {
+        // Apply hydraulic erosion to make terrain more realistic
+        function applyErosion(heightMap, iterations, strength, prng) {
             const width = heightMap[0].length;
             const height = heightMap.length;
             
+            // Water and sediment maps
+            const waterMap = new Array(height).fill().map(() => new Array(width).fill(0));
+            const sedimentMap = new Array(height).fill().map(() => new Array(width).fill(0));
+            
+            // Constants
+            const rainAmount = 0.01 * strength;
+            const solubility = 0.01 * strength;
+            const evaporation = 0.5;
+            const gravity = 0.1 * strength;
+            
+            for (let iter = 0; iter < iterations; iter++) {
+                // Add water (rain)
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        waterMap[y][x] += rainAmount;
+                    }
+                }
+                
+                // Calculate water flow
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (waterMap[y][x] < 0.01) continue; // Skip if not enough water
+                        
+                        // Find lowest neighbor
+                        let lowestHeight = heightMap[y][x] + waterMap[y][x];
+                        let lowestX = x;
+                        let lowestY = y;
+                        
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                if (dx === 0 && dy === 0) continue;
+                                
+                                const nx = x + dx;
+                                const ny = y + dy;
+                                
+                                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                    const neighborHeight = heightMap[ny][nx] + waterMap[ny][nx];
+                                    
+                                    if (neighborHeight < lowestHeight) {
+                                        lowestHeight = neighborHeight;
+                                        lowestX = nx;
+                                        lowestY = ny;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // If found a lower point, move water and sediment
+                        if (lowestX !== x || lowestY !== y) {
+                            const currentHeight = heightMap[y][x] + waterMap[y][x];
+                            const heightDiff = currentHeight - lowestHeight;
+                            
+                            const waterTransfer = Math.min(waterMap[y][x], heightDiff * gravity);
+                            
+                            // Erode soil
+                            const sedimentCapacity = waterTransfer * solubility;
+                            const sedimentTransfer = Math.min(sedimentCapacity, heightMap[y][x] * 0.1);
+                            
+                            // Update maps
+                            waterMap[y][x] -= waterTransfer;
+                            waterMap[lowestY][lowestX] += waterTransfer;
+                            
+                            heightMap[y][x] -= sedimentTransfer;
+                            sedimentMap[lowestY][lowestX] += sedimentTransfer;
+                        }
+                    }
+                }
+                
+                // Deposit sediment and evaporate water
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        heightMap[y][x] += sedimentMap[y][x];
+                        sedimentMap[y][x] = 0;
+                        
+                        waterMap[y][x] *= (1 - evaporation);
+                    }
+                }
+            }
+            
+            // Normalize heightmap
+            let min = 1, max = 0;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    min = Math.min(min, heightMap[y][x]);
+                    max = Math.max(max, heightMap[y][x]);
+                }
+            }
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    heightMap[y][x] = (heightMap[y][x] - min) / (max - min);
+                }
+            }
+            
+            return heightMap;
+        }
+        
+        // Add more complex alien features
+        function addAlienFeatures(heightMap, featureMap, alienFactor, biome, prng, featureSize) {
+            const width = heightMap[0].length;
+            const height = heightMap.length;
+            
+            // Scale feature size
+            const scaledFeatureSize = featureSize / 100;
+            
             // Add floating islands
             if (alienFactor !== 'minimal') {
-                const islandCount = alienFactor === 'extreme' ? 7 : 3;
+                const islandCountMap = {
+                    'moderate': 3,
+                    'extreme': 7,
+                    'chaotic': 12
+                };
+                const islandCount = islandCountMap[alienFactor] || 3;
                 
                 for (let i = 0; i < islandCount; i++) {
                     const centerX = prng.nextInt(width * 0.2, width * 0.8);
                     const centerY = prng.nextInt(height * 0.2, height * 0.8);
-                    const radius = prng.nextInt(3, width * 0.15);
+                    const radius = prng.nextInt(3, width * 0.15 * scaledFeatureSize);
                     
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
@@ -274,39 +660,76 @@
                 }
             }
             
-            // Add alien crevices
-            if (alienFactor === 'extreme') {
-                const creviceCount = prng.nextInt(2, 5);
+            // Add alien crevices or features based on alien factor
+            if (alienFactor === 'extreme' || alienFactor === 'chaotic') {
+                const featureCount = alienFactor === 'chaotic' ? 
+                    prng.nextInt(5, 10) : prng.nextInt(2, 5);
                 
-                for (let i = 0; i < creviceCount; i++) {
+                for (let i = 0; i < featureCount; i++) {
                     const startX = prng.nextInt(0, width - 1);
                     const startY = prng.nextInt(0, height - 1);
                     let curX = startX;
                     let curY = startY;
                     
-                    const length = prng.nextInt(width / 4, width / 2);
+                    const length = prng.nextInt(width / 4, width / 2) * scaledFeatureSize;
+                    
+                    // Choose feature type based on biome
+                    let featureType = 'crevice';
+                    if (biome === 'crystal') featureType = 'crystal';
+                    else if (biome === 'volcanic') featureType = 'lavaFlow';
+                    else if (biome === 'aquatic') featureType = 'riverbed';
+                    else if (biome === 'biomech') featureType = 'circuit';
                     
                     for (let j = 0; j < length; j++) {
-                        // Random walk
-                        const dx = prng.nextInt(-1, 1);
-                        const dy = prng.nextInt(-1, 1);
+                        // More controlled random walk with persistence
+                        let dx, dy;
+                        
+                        if (j === 0 || prng.next() < 0.3) {
+                            // New random direction
+                            dx = prng.nextInt(-1, 1);
+                            dy = prng.nextInt(-1, 1);
+                        } else {
+                            // Continue in similar direction with slight variation
+                            dx = Math.max(-1, Math.min(1, prng.nextRange(-0.5, 0.5)));
+                            dy = Math.max(-1, Math.min(1, prng.nextRange(-0.5, 0.5)));
+                        }
                         
                         curX = Math.max(1, Math.min(width - 2, curX + dx));
                         curY = Math.max(1, Math.min(height - 2, curY + dy));
                         
-                        // Create crevice
-                        heightMap[curY][curX] = 0;
+                        // Apply feature effect based on type
+                        if (featureType === 'crevice') {
+                            heightMap[curY][curX] = 0;
+                        } else if (featureType === 'crystal') {
+                            heightMap[curY][curX] = 1;
+                        } else if (featureType === 'lavaFlow') {
+                            heightMap[curY][curX] = 0.2;
+						} else if (featureType === 'lavaFlow') {
+                            heightMap[curY][curX] = 0.2;
+                        } else if (featureType === 'riverbed') {
+                            heightMap[curY][curX] = Math.max(0, heightMap[curY][curX] - 0.3);
+                        } else if (featureType === 'circuit') {
+                            heightMap[curY][curX] = Math.min(1, heightMap[curY][curX] + 0.3);
+                        }
                         
-                        // Affect surrounding cells
-                        for (let sy = -1; sy <= 1; sy++) {
-                            for (let sx = -1; sx <= 1; sx++) {
-                                if (sx === 0 && sy === 0) continue;
+                        // Apply to neighbors for wider features
+                        for (let ny = -1; ny <= 1; ny++) {
+                            for (let nx = -1; nx <= 1; nx++) {
+                                const effectX = curX + nx;
+                                const effectY = curY + ny;
                                 
-                                const nx = curX + sx;
-                                const ny = curY + sy;
-                                
-                                if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1) {
-                                    heightMap[ny][nx] = Math.max(0, heightMap[ny][nx] - 0.5);
+                                if (effectX > 0 && effectX < width - 1 && effectY > 0 && effectY < height - 1) {
+                                    if (featureType === 'crevice') {
+                                        heightMap[effectY][effectX] = Math.min(heightMap[effectY][effectX], 0.3);
+                                    } else if (featureType === 'crystal') {
+                                        heightMap[effectY][effectX] = Math.max(heightMap[effectY][effectX], 0.7);
+                                    } else if (featureType === 'lavaFlow') {
+                                        heightMap[effectY][effectX] = Math.min(heightMap[effectY][effectX], 0.4);
+                                    } else if (featureType === 'riverbed') {
+                                        heightMap[effectY][effectX] = Math.max(0, heightMap[effectY][effectX] - 0.2);
+                                    } else if (featureType === 'circuit') {
+                                        heightMap[effectY][effectX] = Math.min(1, heightMap[effectY][effectX] + 0.2);
+                                    }
                                 }
                             }
                         }
@@ -317,121 +740,220 @@
             return heightMap;
         }
         
-        // Create 3D mesh from heightmap
-        function createMesh(heightMap, resolution) {
+        // Generate PLY file content
+        function generatePLY(heightMap, verticalScale) {
             const width = heightMap[0].length;
             const height = heightMap.length;
-            
-            // Set resolution factor
-            let step = 1;
-            if (resolution === 'low') step = 4;
-            else if (resolution === 'medium') step = 2;
-            
-            // Calculate vertices, faces, and colors
             const vertices = [];
             const faces = [];
-            const colors = [];
             
-            // Generate vertices
-            for (let y = 0; y < height; y += step) {
-                for (let x = 0; x < width; x += step) {
-                    // Vertex position
-                    vertices.push(
-                        x - width / 2,          // X
-                        heightMap[y][x] * 10,   // Y (height)
-                        y - height / 2          // Z
-                    );
-                    
-                    // Vertex color based on height
-                    const h = heightMap[y][x];
-                    if (h < 0.2) {
-                        // Deep terrain - dark purple
-                        colors.push(0.2, 0, 0.3);
-                    } else if (h < 0.4) {
-                        // Medium terrain - blue/purple
-                        colors.push(0.1, 0.2, 0.6);
-                    } else if (h < 0.6) {
-                        // Hills - green/blue
-                        colors.push(0, 0.5, 0.5);
-                    } else if (h < 0.8) {
-                        // Mountains - orange/red
-                        colors.push(0.8, 0.4, 0.2);
-                    } else {
-                        // Peaks - bright yellow/white
-                        colors.push(1, 0.9, 0.7);
-                    }
+            // Create vertices
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    vertices.push([
+                        x / (width - 1),  // Normalize to 0-1
+                        y / (height - 1), // Normalize to 0-1
+                        heightMap[y][x] * verticalScale / 10 // Apply vertical scale
+                    ]);
                 }
             }
             
-            // Generate faces
-            const vertsPerRow = Math.floor(width / step);
-            
-            for (let y = 0; y < Math.floor(height / step) - 1; y++) {
-                for (let x = 0; x < vertsPerRow - 1; x++) {
-                    const topLeft = y * vertsPerRow + x;
-                    const topRight = topLeft + 1;
-                    const bottomLeft = (y + 1) * vertsPerRow + x;
-                    const bottomRight = bottomLeft + 1;
+            // Create faces (triangles)
+            for (let y = 0; y < height - 1; y++) {
+                for (let x = 0; x < width - 1; x++) {
+                    const idx = y * width + x;
                     
-                    // Add two triangles to create a quad
-                    faces.push(topLeft, bottomLeft, topRight);
-                    faces.push(topRight, bottomLeft, bottomRight);
+                    // First triangle (top-left, bottom-left, top-right)
+                    faces.push([idx, idx + width, idx + 1]);
+                    
+                    // Second triangle (bottom-left, bottom-right, top-right)
+                    faces.push([idx + width, idx + width + 1, idx + 1]);
                 }
             }
             
-            return { vertices, faces, colors };
-        }
-        
-        // Convert mesh to PLY format
-        function generatePLY(mesh) {
-            const { vertices, faces, colors } = mesh;
-            const vertexCount = vertices.length / 3;
-            const faceCount = faces.length / 3;
+            // Generate PLY header
+            let plyContent = "ply\n";
+            plyContent += "format ascii 1.0\n";
+            plyContent += `element vertex ${vertices.length}\n`;
+            plyContent += "property float x\n";
+            plyContent += "property float y\n";
+            plyContent += "property float z\n";
+            plyContent += `element face ${faces.length}\n`;
+            plyContent += "property list uchar int vertex_index\n";
+            plyContent += "end_header\n";
             
-            let plyHeader = `ply
-format ascii 1.0
-comment Generated by Alien Environment PLY Generator
-element vertex ${vertexCount}
-property float x
-property float y
-property float z
-property float red
-property float green
-property float blue
-element face ${faceCount}
-property list uchar int vertex_indices
-end_header
-`;
-            
-            let plyContent = plyHeader;
-            
-            // Add vertices with colors
-            for (let i = 0; i < vertexCount; i++) {
-                const vx = vertices[i * 3];
-                const vy = vertices[i * 3 + 1];
-                const vz = vertices[i * 3 + 2];
-                
-                const r = colors[i * 3];
-                const g = colors[i * 3 + 1];
-                const b = colors[i * 3 + 2];
-                
-                plyContent += `${vx} ${vy} ${vz} ${r} ${g} ${b}\n`;
+            // Add vertices
+            for (const v of vertices) {
+                plyContent += `${v[0]} ${v[1]} ${v[2]}\n`;
             }
             
             // Add faces
-            for (let i = 0; i < faceCount; i++) {
-                const a = faces[i * 3];
-                const b = faces[i * 3 + 1];
-                const c = faces[i * 3 + 2];
-                
-                plyContent += `3 ${a} ${b} ${c}\n`;
+            for (const f of faces) {
+                plyContent += `3 ${f[0]} ${f[1]} ${f[2]}\n`;
             }
             
             return plyContent;
         }
         
         // Render heightmap to canvas
-        function renderPreview(heightMap) {
+        function renderHeightmap(canvas, heightMap, featureMap, biome) {
+            const ctx = canvas.getContext('2d');
+            const width = heightMap[0].length;
+            const height = heightMap.length;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate pixel size
+            const pixelWidth = canvas.width / width;
+            const pixelHeight = canvas.height / height;
+            
+            // Define color palettes for different biomes
+            const colorPalettes = {
+                standard: {
+                    low: [50, 100, 50],
+                    mid: [150, 170, 80],
+                    high: [220, 220, 220]
+                },
+                crystal: {
+                    low: [70, 90, 120],
+                    mid: [100, 150, 200],
+                    high: [200, 230, 255]
+                },
+                volcanic: {
+                    low: [50, 20, 20],
+                    mid: [150, 50, 20],
+                    high: [220, 180, 150]
+                },
+                aquatic: {
+                    low: [10, 50, 100],
+                    mid: [50, 100, 150],
+                    high: [150, 200, 220]
+                },
+                biomech: {
+                    low: [30, 50, 30],
+                    mid: [50, 100, 50],
+                    high: [100, 200, 120]
+                }
+            };
+            
+            // Use default if biome palette not found
+            const palette = colorPalettes[biome] || colorPalettes.standard;
+            
+            // Render heightmap with biome-specific coloring
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const h = heightMap[y][x];
+                    let color;
+                    
+                    // Determine color based on height and biome
+                    if (h < 0.4) {
+                        // Low terrain
+                        color = palette.low;
+                    } else if (h < 0.7) {
+                        // Mid terrain
+                        color = palette.mid;
+                    } else {
+                        // High terrain
+                        color = palette.high;
+                    }
+                    
+                    // Apply feature-specific coloring if available
+                    if (featureMap && featureMap[y][x]) {
+                        // Modify color based on feature type and biome
+                        if (biome === 'crystal' && featureMap[y][x] === 1) {
+                            // Crystal features
+                            color = [180, 220, 255];
+                        } else if (biome === 'volcanic' && featureMap[y][x] === 1) {
+                            // Crater interior
+                            color = [60, 20, 20];
+                        } else if (biome === 'volcanic' && featureMap[y][x] === 2) {
+                            // Crater rim
+                            color = [180, 80, 20];
+                        } else if (biome === 'aquatic' && featureMap[y][x] === 1) {
+                            // Underwater
+                            color = [20, 80, 150];
+                        } else if (biome === 'biomech' && featureMap[y][x] === 1) {
+                            // Grid lines
+                            color = [80, 200, 100];
+                        } else if (biome === 'biomech' && featureMap[y][x] === 2) {
+                            // Nodes
+                            color = [180, 255, 180];
+                        }
+                    }
+                    
+                    // Apply shading based on height
+                    const brightness = 0.7 + 0.3 * h;
+                    
+                    // Set fill color
+                    ctx.fillStyle = `rgb(${Math.floor(color[0] * brightness)}, ${Math.floor(color[1] * brightness)}, ${Math.floor(color[2] * brightness)})`;
+                    
+                    // Draw pixel
+                    ctx.fillRect(x * pixelWidth, y * pixelHeight, pixelWidth, pixelHeight);
+                }
+            }
+        }
+        
+        // Main function to generate terrain
+        function generateTerrain() {
+            // Get parameters
+            const mapWidth = parseInt(document.getElementById('mapWidth').value);
+            const mapHeight = parseInt(document.getElementById('mapHeight').value);
+            const noiseScale = parseInt(document.getElementById('noiseScale').value);
+            const secondaryNoiseScale = parseInt(document.getElementById('secondaryNoiseScale').value);
+            const alienFeatures = document.getElementById('alienFeatures').value;
+            const biomeType = document.getElementById('biomeType').value;
+            const iterations = parseInt(document.getElementById('iterations').value);
+            const seedValue = parseInt(document.getElementById('seed').value);
+            const resolution = document.getElementById('resolution').value;
+            const erosionFactor = parseInt(document.getElementById('erosionFactor').value) / 100;
+            const verticalScale = parseInt(document.getElementById('verticalScale').value);
+            const featureSize = parseInt(document.getElementById('featureSize').value);
+            
+            // Set seed
+            const seed = seedValue === 0 ? Math.floor(Math.random() * 10000) : seedValue;
+            document.getElementById('seed').value = seed;
+            const prng = new PRNG(seed);
+            
+            // Generate base noise
+            const heightMap = generatePerlinNoise(mapWidth, mapHeight, noiseScale, prng);
+            
+            // Generate secondary noise and blend with primary
+            const secondaryNoise = generatePerlinNoise(mapWidth, mapHeight, secondaryNoiseScale, prng, 2, 0.7);
+            
+            // Blend noises
+            for (let y = 0; y < mapHeight; y++) {
+                for (let x = 0; x < mapWidth; x++) {
+                    heightMap[y][x] = 0.7 * heightMap[y][x] + 0.3 * secondaryNoise[y][x];
+                }
+            }
+            
+            // Apply alien patterns
+            const { heightMap: alienMap, featureMap } = applyAlienPatterns(
+                heightMap, iterations, alienFeatures, biomeType, prng
+            );
+            
+            // Apply erosion
+            const erodedMap = applyErosion(alienMap, 5, erosionFactor, prng);
+            
+            // Add alien features
+            const finalMap = addAlienFeatures(erodedMap, featureMap, alienFeatures, biomeType, prng, featureSize);
+            
+            // Render 2D view
+            const canvas = document.getElementById('preview');
+            renderHeightmap(canvas, finalMap, featureMap, biomeType);
+            
+            // Generate PLY data and store it
+            window.plyData = generatePLY(finalMap, verticalScale);
+            
+            // Enable download button
+            document.getElementById('downloadBtn').disabled = false;
+            
+            return { finalMap, featureMap };
+        }
+        
+        // Function to render 3D preview (basic implementation)
+        function render3DPreview(heightMap) {
             const canvas = document.getElementById('preview');
             const ctx = canvas.getContext('2d');
             const width = heightMap[0].length;
@@ -440,94 +962,65 @@ end_header
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Calculate scale to fit canvas
-            const scaleX = canvas.width / width;
-            const scaleY = canvas.height / height;
+            // Calculate isometric projection parameters
+            const tileWidth = canvas.width / (width + height) * 2;
+            const tileHeight = tileWidth * 0.5;
+            const vertScale = document.getElementById('verticalScale').value / 5;
             
-            // Draw heightmap
+            // Calculate starting point to center the map
+            const startX = canvas.width / 2 - (width * tileWidth) / 2;
+            const startY = canvas.height / 4;
+            
+            // Draw tiles in isometric view (back to front)
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
-                    const h = heightMap[y][x];
+                    const isoX = startX + (x - y) * tileWidth / 2;
+                    const isoY = startY + (x + y) * tileHeight / 2 - heightMap[y][x] * vertScale * tileHeight;
                     
-                    // Convert height to color
-                    let r, g, b;
+                    // Calculate brightness based on height for shading
+                    const brightness = 0.4 + 0.6 * heightMap[y][x];
                     
-                    if (h < 0.2) {
-                        // Deep terrain - dark purple
-                        r = 50; g = 0; b = 80;
-                    } else if (h < 0.4) {
-                        // Medium terrain - blue/purple
-                        r = 30; g = 50; b = 150;
-                    } else if (h < 0.6) {
-                        // Hills - green/blue
-                        r = 0; g = 130; b = 130;
-                    } else if (h < 0.8) {
-                        // Mountains - orange/red
-                        r = 200; g = 100; b = 50;
-                    } else {
-                        // Peaks - bright yellow/white
-                        r = 255; g = 230; b = 180;
+                    // Change color based on biome
+                    let baseColor;
+                    const biomeType = document.getElementById('biomeType').value;
+                    
+                    switch (biomeType) {
+                        case 'crystal':
+                            baseColor = [100, 150, 200];
+                            break;
+                        case 'volcanic':
+                            baseColor = [150, 50, 20];
+                            break;
+                        case 'aquatic':
+                            baseColor = [50, 100, 150];
+                            break;
+                        case 'biomech':
+                            baseColor = [50, 150, 80];
+                            break;
+                        default:
+                            baseColor = [120, 150, 80];
                     }
                     
-                    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-                    ctx.fillRect(x * scaleX, y * scaleY, scaleX, scaleY);
+                    // Apply brightness to color
+                    const color = `rgb(${Math.floor(baseColor[0] * brightness)}, ${Math.floor(baseColor[1] * brightness)}, ${Math.floor(baseColor[2] * brightness)})`;
+                    
+                    // Draw a simple rectangle for each tile (simplified 3D)
+                    ctx.fillStyle = color;
+                    ctx.fillRect(isoX, isoY, tileWidth, tileHeight);
                 }
             }
-        }
-        
-        // Main generation function
-        function generateAlienMap() {
-            // Get parameters from UI
-            const mapWidth = parseInt(document.getElementById('mapWidth').value);
-            const mapHeight = parseInt(document.getElementById('mapHeight').value);
-            const noiseScale = parseInt(document.getElementById('noiseScale').value) / 100;
-            const iterations = parseInt(document.getElementById('iterations').value);
-            const alienFeatures = document.getElementById('alienFeatures').value;
-            const resolution = document.getElementById('resolution').value;
-            let seed = parseInt(document.getElementById('seed').value);
-            
-            if (seed === 0) {
-                seed = Math.floor(Math.random() * 10000);
-                document.getElementById('seed').value = seed;
-            }
-            
-            const prng = new PRNG(seed);
-            
-            // Generate base heightmap
-            let heightMap = generateNoise(mapWidth, mapHeight, noiseScale, seed);
-            
-            // Apply cellular automata for alien patterns
-            heightMap = applyAlienPatterns(heightMap, iterations, alienFeatures);
-            
-            // Add alien-specific features
-            heightMap = addAlienFeatures(heightMap, alienFeatures, prng);
-            
-            // Create 3D mesh
-            const mesh = createMesh(heightMap, resolution);
-            
-            // Create PLY content
-            const plyContent = generatePLY(mesh);
-            
-            // Store PLY content for download
-            window.plyData = plyContent;
-            
-            // Render preview
-            renderPreview(heightMap);
-            
-            // Enable download button
-            document.getElementById('downloadBtn').disabled = false;
         }
         
         // Download PLY file
         function downloadPLY() {
             if (!window.plyData) return;
             
-            const blob = new Blob([window.plyData], { type: 'text/plain' });
+            const blob = new Blob([window.plyData], {type: 'text/plain'});
             const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = `alien_environment_${new Date().getTime()}.ply`;
+            a.download = 'alien_terrain.ply';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -536,11 +1029,165 @@ end_header
         
         // Set up event listeners
         document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('generateBtn').addEventListener('click', generateAlienMap);
+            // Generate button
+            document.getElementById('generateBtn').addEventListener('click', function() {
+                const result = generateTerrain();
+                
+                // Store the result for 3D view
+                window.currentTerrainData = result;
+                
+                // If in 3D view, render in 3D
+                if (document.querySelector('.tab[data-view="3d"]').classList.contains('active')) {
+                    render3DPreview(result.finalMap);
+                }
+            });
+            
+            // Randomize button
+            document.getElementById('randomizeBtn').addEventListener('click', function() {
+                document.getElementById('seed').value = 0;
+                const result = generateTerrain();
+                window.currentTerrainData = result;
+                
+                // Update view based on current tab
+                if (document.querySelector('.tab[data-view="3d"]').classList.contains('active')) {
+                    render3DPreview(result.finalMap);
+                }
+            });
+            
+            // Download button
             document.getElementById('downloadBtn').addEventListener('click', downloadPLY);
             
-            // Generate initial preview
-            generateAlienMap();
+            // View tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Update active tab
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Switch view
+                    const view = this.getAttribute('data-view');
+                    if (view === '2d' && window.currentTerrainData) {
+                        renderHeightmap(
+                            document.getElementById('preview'), 
+                            window.currentTerrainData.finalMap, 
+                            window.currentTerrainData.featureMap,
+                            document.getElementById('biomeType').value
+                        );
+                    } else if (view === '3d' && window.currentTerrainData) {
+                        render3DPreview(window.currentTerrainData.finalMap);
+                    }
+                });
+            });
+            
+            // Preset buttons
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const preset = this.getAttribute('data-preset');
+                    
+                    // Set parameters based on preset
+                    switch (preset) {
+                        case 'crystalline':
+                            document.getElementById('biomeType').value = 'crystal';
+                            document.getElementById('alienFeatures').value = 'moderate';
+                            document.getElementById('noiseScale').value = 25;
+                            document.getElementById('secondaryNoiseScale').value = 50;
+                            document.getElementById('verticalScale').value = 12;
+                            document.getElementById('featureSize').value = 60;
+                            break;
+                        case 'volcanic':
+                            document.getElementById('biomeType').value = 'volcanic';
+                            document.getElementById('alienFeatures').value = 'extreme';
+                            document.getElementById('noiseScale').value = 20;
+                            document.getElementById('secondaryNoiseScale').value = 40;
+                            document.getElementById('verticalScale').value = 15;
+                            document.getElementById('erosionFactor').value = 50;
+                            document.getElementById('featureSize').value = 70;
+                            break;
+                        case 'oceanic':
+                            document.getElementById('biomeType').value = 'aquatic';
+                            document.getElementById('alienFeatures').value = 'moderate';
+                            document.getElementById('noiseScale').value = 35;
+                            document.getElementById('secondaryNoiseScale').value = 70;
+                            document.getElementById('verticalScale').value = 8;
+                            document.getElementById('erosionFactor').value = 70;
+                            document.getElementById('featureSize').value = 45;
+                            break;
+                        case 'biomechanical':
+                            document.getElementById('biomeType').value = 'biomech';
+                            document.getElementById('alienFeatures').value = 'chaotic';
+                            document.getElementById('noiseScale').value = 15;
+                            document.getElementById('secondaryNoiseScale').value = 30;
+                            document.getElementById('verticalScale').value = 10;
+                            document.getElementById('featureSize').value = 40;
+                            break;
+                    }
+                    
+                    // Generate terrain with new settings
+                    const result = generateTerrain();
+                    window.currentTerrainData = result;
+                    
+                    // Update view based on current tab
+                    if (document.querySelector('.tab[data-view="3d"]').classList.contains('active')) {
+                        render3DPreview(result.finalMap);
+                    }
+                });
+            });
+            
+            // Info panel hover effect on canvas
+            const canvas = document.getElementById('preview');
+            const infoPanel = document.getElementById('infoPanel');
+            
+            canvas.addEventListener('mousemove', function(e) {
+                if (!window.currentTerrainData) return;
+                
+                // Get canvas coordinates
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor((e.clientX - rect.left) / rect.width * window.currentTerrainData.finalMap[0].length);
+                const y = Math.floor((e.clientY - rect.top) / rect.height * window.currentTerrainData.finalMap.length);
+                
+                // Check if coordinates are valid
+                if (x >= 0 && x < window.currentTerrainData.finalMap[0].length && 
+                    y >= 0 && y < window.currentTerrainData.finalMap.length) {
+                    
+                    // Get height value
+                    const height = window.currentTerrainData.finalMap[y][x];
+                    
+                    // Update info panel
+                    infoPanel.textContent = `Position: (${x}, ${y}) | Height: ${height.toFixed(2)}`;
+                    
+                    // Determine terrain type based on height and display it
+                    let terrainType = "Unknown";
+                    const biomeType = document.getElementById('biomeType').value;
+                    
+                    if (biomeType === 'standard') {
+                        if (height < 0.3) terrainType = "Lowland";
+                        else if (height < 0.6) terrainType = "Highland";
+                        else terrainType = "Mountain";
+                    } else if (biomeType === 'crystal') {
+                        if (height < 0.3) terrainType = "Crystal Base";
+                        else if (height < 0.6) terrainType = "Crystal Formation";
+                        else terrainType = "Crystal Peak";
+                    } else if (biomeType === 'volcanic') {
+                        if (height < 0.3) terrainType = "Lava Plain";
+                        else if (height < 0.6) terrainType = "Volcanic Rock";
+                        else terrainType = "Volcano Peak";
+                    } else if (biomeType === 'aquatic') {
+                        if (height < 0.3) terrainType = "Deep Water";
+                        else if (height < 0.6) terrainType = "Shallow Water";
+                        else terrainType = "Island";
+                    } else if (biomeType === 'biomech') {
+                        if (height < 0.3) terrainType = "Base Circuit";
+                        else if (height < 0.6) terrainType = "Circuit Node";
+                        else terrainType = "Power Core";
+                    }
+                    
+                    infoPanel.textContent += ` | Type: ${terrainType}`;
+                }
+            });
+            
+            // Generate initial terrain
+            const result = generateTerrain();
+            window.currentTerrainData = result;
         });
     </script>
 </body>
