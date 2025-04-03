@@ -5,14 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Neuromantic Player</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
     
     :root {
-      --primary: #ff4b00;
-      --secondary: #00ffd0;
-      --bg-dark: #0a0b0c;
-      --bg-light: #121416;
+      --primary: #00e5ff;
+      --secondary: #3bff00;
+      --accent: #ff4b00;
+      --bg-dark: #050607;
+      --bg-medium: #0a0c0e;
+      --bg-light: #10171f; 
       --text: #e0e0e0;
+      --grid-color: rgba(0, 229, 255, 0.1);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,13 +23,27 @@
     body {
       background-color: var(--bg-dark);
       color: var(--text);
-      font-family: 'Space Mono', monospace;
+      font-family: 'JetBrains Mono', monospace;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       overflow-x: hidden;
+      position: relative;
+    }
+    
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        radial-gradient(circle at top right, rgba(0, 229, 255, 0.05), transparent 60%),
+        radial-gradient(circle at bottom left, rgba(59, 255, 0, 0.05), transparent 60%);
+      z-index: -2;
     }
     
     #background-canvas {
@@ -36,15 +53,52 @@
       width: 100%;
       height: 100%;
       z-index: -1;
+      opacity: 0.8;
+    }
+    
+    .grid {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+      background-size: 20px 20px;
+      z-index: -1;
+      opacity: 0.3;
+      perspective: 1000px;
+      transform-style: preserve-3d;
+      animation: gridPulse 8s infinite linear;
+    }
+    
+    @keyframes gridPulse {
+      0% { opacity: 0.2; }
+      50% { opacity: 0.4; }
+      100% { opacity: 0.2; }
     }
     
     header {
-      font-size: 1.5rem;
+      font-size: 2rem;
       font-weight: 700;
       margin-bottom: 2rem;
       position: relative;
       text-transform: uppercase;
+      letter-spacing: 4px;
       color: var(--primary);
+      text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+      animation: glitch 5s infinite;
+    }
+    
+    @keyframes glitch {
+      0% { transform: translate(0); }
+      2% { transform: translate(-3px, 2px); filter: hue-rotate(0deg); }
+      3% { transform: translate(0); }
+      10% { transform: translate(0); }
+      12% { transform: translate(5px, -2px); filter: hue-rotate(45deg); }
+      13% { transform: translate(0); }
+      100% { transform: translate(0); }
     }
     
     header::after {
@@ -54,15 +108,32 @@
       top: 0;
       color: var(--secondary);
       clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
+      animation: flicker 4s infinite;
+    }
+    
+    @keyframes flicker {
+      0% { opacity: 1; }
+      5% { opacity: 0.8; }
+      10% { opacity: 1; }
+      15% { opacity: 0.3; }
+      20% { opacity: 1; }
+      55% { opacity: 1; }
+      60% { opacity: 0.3; }
+      65% { opacity: 1; }
+      100% { opacity: 1; }
     }
     
     .player-container {
       width: 90%;
       max-width: 800px;
       background: var(--bg-light);
-      border-radius: 2px;
+      border-radius: 0;
       position: relative;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(0, 229, 255, 0.1),
+        0 0 30px rgba(0, 229, 255, 0.2);
+      overflow: hidden;
     }
     
     .player-container::before {
@@ -71,15 +142,30 @@
       top: 0;
       left: 0;
       width: 100%;
-      height: 2px;
+      height: 3px;
       background: linear-gradient(90deg, var(--primary), var(--secondary));
+      z-index: 10;
+      box-shadow: 0 0 15px var(--primary);
+    }
+    
+    .player-container::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        linear-gradient(90deg, transparent 0%, rgba(0, 229, 255, 0.05) 50%, transparent 100%);
+      pointer-events: none;
     }
     
     .track-info {
       display: grid;
       grid-template-columns: 1fr auto;
-      padding: 1rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 1.5rem;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+      position: relative;
     }
     
     .track-title {
@@ -88,34 +174,70 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-size: 1.2rem;
+      text-shadow: 0 0 5px rgba(0, 229, 255, 0.5);
+      letter-spacing: 1px;
     }
     
-    .track-number { color: var(--secondary); }
+    .track-number { 
+      color: var(--secondary);
+      font-weight: bold;
+      font-size: 1.2rem;
+      text-shadow: 0 0 5px rgba(59, 255, 0, 0.5);
+    }
+    
+    .track-info::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    }
     
     .progress-container {
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
+      height: 6px;
+      background: rgba(255, 255, 255, 0.05);
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
     }
     
     .progress-bar {
       height: 100%;
       background: linear-gradient(90deg, var(--primary), var(--secondary));
       width: 0%;
+      box-shadow: 0 0 15px var(--primary);
+      position: relative;
+    }
+    
+    .progress-bar::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: 8px;
+      background: var(--text);
+      box-shadow: 0 0 10px white;
     }
     
     .time-display {
       display: flex;
       justify-content: space-between;
-      padding: 0.5rem 1rem;
-      font-size: 0.7rem;
-      color: rgba(255, 255, 255, 0.5);
+      padding: 0.75rem 1.5rem;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: bold;
+      letter-spacing: 1px;
     }
     
     .controls {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      padding: 0.5rem 1rem;
+      padding: 1rem 1.5rem;
+      border-top: 1px solid rgba(0, 229, 255, 0.1);
     }
     
     .controls button {
@@ -123,13 +245,37 @@
       border: none;
       color: var(--text);
       font-family: inherit;
-      padding: 0.5rem;
+      padding: 0.8rem;
       cursor: pointer;
       text-transform: uppercase;
       font-weight: bold;
+      letter-spacing: 2px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
     }
     
-    .controls button:hover { color: var(--primary); }
+    .controls button:hover {
+      color: var(--primary);
+      text-shadow: 0 0 10px var(--primary);
+    }
+    
+    .controls button::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 2px;
+      background: var(--primary);
+      transition: width 0.3s;
+    }
+    
+    .controls button:hover::after {
+      width: 80%;
+      box-shadow: 0 0 10px var(--primary);
+    }
     
     canvas {
       width: 100%;
@@ -138,18 +284,33 @@
     }
     
     .visualizer-container {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      pointer-events: none;
+      overflow: hidden;
+      background: var(--bg-medium);
+    }
+    
+    .visualizer-container::before {
+      content: '';
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
-      height: 200px;
+      height: 100%;
+      background: 
+        radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.8) 100%),
+        linear-gradient(0deg, var(--bg-medium), transparent 80%);
+      z-index: 1;
       pointer-events: none;
     }
     
     .visualizer-controls {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      background: rgba(0, 0, 0, 0.2);
+      background: var(--bg-medium);
+      border-top: 1px solid rgba(0, 229, 255, 0.2);
     }
     
     .visualizer-controls button {
@@ -157,52 +318,355 @@
       border: none;
       color: rgba(255, 255, 255, 0.5);
       font-family: inherit;
-      font-size: 0.6rem;
-      padding: 0.25rem;
+      font-size: 0.65rem;
+      padding: 0.75rem 0.25rem;
       cursor: pointer;
       text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.3s;
+      position: relative;
     }
     
-    .visualizer-controls button.active { color: var(--secondary); }
+    .visualizer-controls button::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--secondary);
+      transition: width 0.3s;
+    }
+    
+    .visualizer-controls button:hover::after {
+      width: 100%;
+    }
+    
+    .visualizer-controls button.active { 
+      color: var(--secondary);
+      text-shadow: 0 0 5px var(--secondary);
+    }
+    
+    .visualizer-controls button.active::after {
+      width: 100%;
+      box-shadow: 0 0 10px var(--secondary);
+    }
     
     .playlist-toggle {
       width: 100%;
-      background: none;
+      background: var(--bg-medium);
       border: none;
-      padding: 0.75rem;
+      padding: 1rem;
       color: var(--text);
       font-family: inherit;
       cursor: pointer;
       text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: bold;
+      position: relative;
+      border-top: 1px solid rgba(0, 229, 255, 0.2);
+    }
+    
+    .playlist-toggle:hover {
+      color: var(--primary);
+    }
+    
+    .playlist-toggle::after {
+      content: "▼";
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      transition: transform 0.3s;
+    }
+    
+    .playlist-toggle.active::after {
+      transform: translateY(-50%) rotate(180deg);
     }
     
     .playlist-container {
-      max-height: 200px;
+      max-height: 300px;
       overflow-y: auto;
-      background: rgba(0, 0, 0, 0.2);
+      background: var(--bg-medium);
+      border-top: 1px solid rgba(0, 229, 255, 0.1);
+      scrollbar-width: thin;
+      scrollbar-color: var(--primary) var(--bg-medium);
+    }
+    
+    .playlist-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .playlist-container::-webkit-scrollbar-track {
+      background: var(--bg-medium);
+    }
+    
+    .playlist-container::-webkit-scrollbar-thumb {
+      background-color: var(--primary);
     }
     
     .playlist-item {
       display: grid;
-      grid-template-columns: auto 1fr;
+      grid-template-columns: 30px 1fr;
       gap: 1rem;
-      padding: 0.75rem 1rem;
+      padding: 1rem 1.5rem;
       cursor: pointer;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(0, 229, 255, 0.05);
+      transition: all 0.3s;
     }
     
-    .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
-    .playlist-item.active { background: rgba(255, 75, 0, 0.1); }
-    .playlist-item.active span:last-child { color: var(--primary); }
+    .playlist-item:hover { 
+      background: rgba(0, 229, 255, 0.1);
+      transform: translateX(5px);
+    }
+    
+    .playlist-item.active { 
+      background: rgba(0, 229, 255, 0.15);
+      border-left: 3px solid var(--primary);
+    }
+    
+    .playlist-item.active span:last-child { 
+      color: var(--primary);
+      text-shadow: 0 0 5px rgba(0, 229, 255, 0.5);
+    }
+    
+    /* Volume control */
+    .volume-control {
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1.5rem;
+      background: var(--bg-medium);
+      border-top: 1px solid rgba(0, 229, 255, 0.1);
+    }
+    
+    .volume-icon {
+      margin-right: 10px;
+      color: var(--text);
+      font-size: 1.2rem;
+    }
+    
+    .volume-slider {
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      position: relative;
+      cursor: pointer;
+    }
+    
+    .volume-level {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--primary));
+      border-radius: 2px;
+      width: 75%;
+    }
+    
+    .volume-knob {
+      position: absolute;
+      top: 50%;
+      left: 75%;
+      transform: translate(-50%, -50%);
+      width: 12px;
+      height: 12px;
+      background: var(--text);
+      border-radius: 50%;
+      box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    }
+    
+    /* Equalizer toggle */
+    .eq-toggle {
+      background: none;
+      border: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 10;
+      background: rgba(10, 12, 14, 0.7);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+    }
+    
+    .eq-toggle:hover {
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+    
+    /* Equalizer panel */
+    .equalizer {
+      display: none;
+      padding: 1rem;
+      background: var(--bg-medium);
+      border-top: 1px solid rgba(0, 229, 255, 0.1);
+    }
+    
+    .equalizer.active {
+      display: block;
+    }
+    
+    .eq-sliders {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0.5rem;
+    }
+    
+    .eq-band {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .eq-slider {
+      height: 100px;
+      width: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      position: relative;
+      margin: 0 10px;
+    }
+    
+    .eq-level {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: linear-gradient(0deg, var(--primary), var(--secondary));
+    }
+    
+    .eq-knob {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 12px;
+      height: 6px;
+      background: var(--text);
+      cursor: pointer;
+    }
+    
+    .eq-label {
+      margin-top: 0.5rem;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    /* Now playing indicator */
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+    
+    .now-playing {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      animation: pulse 2s infinite;
+    }
+    
+    .now-playing::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-right: 5px;
+      box-shadow: 0 0 5px var(--accent);
+    }
+    
+    /* Audio spectrum animation */
+    .spectrum-animation {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      z-index: 5;
+      animation: spectrumPulse 2s infinite;
+    }
+    
+    @keyframes spectrumPulse {
+      0% { opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
+    
+    /* Dark mode toggle */
+    .dark-mode-toggle {
+      position: absolute;
+      top: 10px;
+      right: 120px;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      background: rgba(10, 12, 14, 0.7);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+    }
+    
+    .dark-mode-toggle:hover {
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+    
+    /* Cyberpunk effects */
+    .glitch-effect {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+      background: rgba(0, 229, 255, 0.05);
+      mix-blend-mode: overlay;
+    }
+    
+    .glitch-active {
+      animation: glitchEffect 0.5s;
+    }
+    
+    @keyframes glitchEffect {
+      0% { opacity: 0; }
+      10% { opacity: 0.8; transform: translate(10px, 0); }
+      20% { opacity: 0; }
+      30% { opacity: 0.6; transform: translate(-15px, 0); }
+      40% { opacity: 0; }
+      50% { opacity: 0.9; transform: translate(5px, 0); }
+      60% { opacity: 0; }
+      100% { opacity: 0; }
+    }
   </style>
 </head>
 <body>
+  <div class="grid"></div>
   <canvas id="background-canvas"></canvas>
   
   <header>Neuromantic</header>
   <div class="player-container">
+    <div class="now-playing">Now Playing</div>
+    <button class="eq-toggle">EQ</button>
+    <button class="dark-mode-toggle">HDMI</button>
+    
     <div class="visualizer-container">
       <canvas id="visualizer"></canvas>
+      <div class="spectrum-animation"></div>
     </div>
   
     <audio id="musicPlayer" src="track1.mp3"></audio>
@@ -210,13 +674,24 @@
       <div class="track-title" id="trackTitle">Liquid Dreams</div>
       <div class="track-number"><span id="currentTrackNum">1</span>/20</div>
     </div>
+    
     <div class="progress-container" id="progressContainer">
       <div class="progress-bar" id="progressBar"></div>
     </div>
+    
     <div class="time-display">
       <span id="currentTime">0:00</span>
       <span id="totalTime">0:00</span>
     </div>
+    
+    <div class="volume-control">
+      <div class="volume-icon">◄</div>
+      <div class="volume-slider">
+        <div class="volume-level"></div>
+        <div class="volume-knob"></div>
+      </div>
+    </div>
+    
     <div class="controls">
       <button id="prevTrack">Prev</button>
       <button id="playPause">Play</button>
@@ -227,12 +702,199 @@
       <button id="viz1" class="active">Bars</button>
       <button id="viz2">Circles</button>
       <button id="viz3">Wave</button>
-      <button id="viz4">Stars</button>
-      <button id="viz5">Spectrum</button>
+      <button id="viz4">Grid</button>
+      <button id="viz5">Plasma</button>
     </div>
+    
+    <div class="equalizer">
+      <div class="eq-sliders">
+        <div class="eq-band">
+          <div class="eq-slider">
+            <div class="eq-level" style="height: 70%;"></div>
+            <div class="eq-knob" style="top: 30%;"></div>
+          </div>
+          <div class="eq-label">60Hz</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-slider">
+            <div class="eq-level" style="height: 50%;"></div>
+            <div class="eq-knob" style="top: 50%;"></div>
+          </div>
+          <div class="eq-label">250Hz</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-slider">
+            <div class="eq-level" style="height: 60%;"></div>
+            <div class="eq-knob" style="top: 40%;"></div>
+          </div>
+          <div class="eq-label">1kHz</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-slider">
+            <div class="eq-level" style="height: 80%;"></div>
+            <div class="eq-knob" style="top: 20%;"></div>
+          </div>
+          <div class="eq-label">4kHz</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-slider">
+            <div class="eq-level" style="height: 40%;"></div>
+            <div class="eq-knob" style="top: 60%;"></div>
+          </div>
+          <div class="eq-label">16kHz</div>
+        </div>
+      </div>
+    </div>
+    
     <button class="playlist-toggle" id="playlistToggle">Playlist</button>
-    <div class="playlist-container" id="playlist" style="display:none;"></div>
+    <div class="playlist-container" id="playlist" style="display:none;">
+      <div class="playlist-item active">
+        <span>01</span>
+        <span>Liquid Dreams</span>
+      </div>
+      <div class="playlist-item">
+        <span>02</span>
+        <span>Binary Sunset</span>
+      </div>
+      <div class="playlist-item">
+        <span>03</span>
+        <span>Neon Rainfall</span>
+      </div>
+      <div class="playlist-item">
+        <span>04</span>
+        <span>Digital Wasteland</span>
+      </div>
+      <div class="playlist-item">
+        <span>05</span>
+        <span>Chrome Hearts</span>
+      </div>
+      <div class="playlist-item">
+        <span>06</span>
+        <span>Neural Network</span>
+      </div>
+      <div class="playlist-item">
+        <span>07</span>
+        <span>Electric Dreams</span>
+      </div>
+    </div>
+    
+    <div class="glitch-effect"></div>
   </div>
+  
+  <script>
+    // Initialize background canvas
+    const backgroundCanvas = document.getElementById('background-canvas');
+    const bgCtx = backgroundCanvas.getContext('2d');
+    
+    // Set canvas dimensions
+    backgroundCanvas.width = window.innerWidth;
+    backgroundCanvas.height = window.innerHeight;
+    
+    // Hexagon grid background
+    function drawHexagonGrid() {
+      bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+      
+      const hexSize = 30;
+      const hexHeight = hexSize * Math.sqrt(3);
+      const hexWidth = hexSize * 2;
+      
+      for (let y = -hexHeight; y < backgroundCanvas.height + hexHeight; y += hexHeight) {
+        for (let x = -hexWidth; x < backgroundCanvas.width + hexWidth; x += hexWidth * 0.75) {
+          const offsetY = (Math.floor(x / (hexWidth * 0.75)) % 2) * (hexHeight / 2);
+          
+          bgCtx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = 2 * Math.PI / 6 * i;
+            const xPos = x + hexSize * Math.cos(angle);
+            const yPos = y + offsetY + hexSize * Math.sin(angle);
+            
+            if (i === 0) {
+              bgCtx.moveTo(xPos, yPos);
+            } else {
+              bgCtx.lineTo(xPos, yPos);
+            }
+          }
+          bgCtx.closePath();
+          
+          // Random opacity and color variations
+          const opacity = 0.05 + Math.random() * 0.08;
+          const colorVariation = Math.floor(Math.random() * 40);
+          
+          if (Math.random() > 0.97) {
+            // Occasionally make a hexagon glow
+            bgCtx.fillStyle = `rgba(0, ${180 + colorVariation}, ${230 + colorVariation}, ${opacity * 3})`;
+            bgCtx.shadowColor = 'rgba(0, 229, 255, 0.5)';
+            bgCtx.shadowBlur = 10;
+          } else {
+            bgCtx.fillStyle = `rgba(0, ${200 + colorVariation}, 255, ${opacity})`;
+            bgCtx.shadowBlur = 0;
+          }
+          
+          bgCtx.strokeStyle = `rgba(0, ${200 + colorVariation}, 255, ${opacity * 1.5})`;
+          bgCtx.lineWidth = 1;
+          bgCtx.stroke();
+          
+          if (Math.random() > 0.8) {
+            bgCtx.fill();
+          }
+        }
+      }
+      
+      // Add some floating particles
+      for (let i = 0; i < 50; i++) {
+        const x = Math.random() * backgroundCanvas.width;
+        const y = Math.random() * backgroundCanvas.height;
+        const size = Math.random() * 2 + 1;
+        
+        bgCtx.beginPath();
+        bgCtx.arc(x, y, size, 0, Math.PI * 2);
+        bgCtx.fillStyle = `rgba(${Math.random() > 0.5 ? '0, 229, 255' : '59, 255, 0'}, ${Math.random() * 0.5 + 0.2})`;
+        bgCtx.fill();
+      }
+      
+      requestAnimationFrame(drawHexagonGrid);
+    }
+    
+    // Initialize visualizer canvas
+    const visualizerCanvas = document.getElementById('visualizer');
+    const vizCtx = visualizerCanvas.getContext('2d');
+    
+    visualizerCanvas.width = visualizerCanvas.offsetWidth;
+    visualizerCanvas.height = visualizerCanvas.offsetHeight;
+    
+    // Simulated audio data for visualization
+    function simulateAudioData() {
+      const dataArray = new Uint8Array(128);
+      for (let i = 0; i < 128; i++) {
+        // Create wave-like pattern
+        dataArray[i] = 128 + Math.sin(Date.now() * 0.001 + i * 0.1) * 64 * Math.random();
+      }
+      return dataArray;
+    }
+    
+    // Draw visualizer
+    let currentViz = 'bars';
+    
+    function drawVisualizer() {
+      vizCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+      
+      const audioData = simulateAudioData();
+      
+      switch(current
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
   <script>
     // DOM elements
     const $ = id => document.getElementById(id);
