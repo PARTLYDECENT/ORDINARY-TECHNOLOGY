@@ -7,7 +7,648 @@
     :root {
       --neon-blue: #00f3ff;
       --neon-purple: #9600ff;
-      --neon-red: #ff003c; /* Kept for potential future use, e.g., highlighting */
+      --neon-red: #ff003<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ADVANCED WEAPONS LAB - Prototype Viewer</title>
+  <style>
+    :root {
+      --lab-primary: #0af7d9;
+      --lab-secondary: #ff8a00;
+      --lab-accent: #ff003c;
+      --lab-dark: #0a1a2a;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--lab-dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: white;
+    }
+
+    #renderCanvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      position: absolute;
+      z-index: 1;
+    }
+
+    .lab-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 30%, rgba(10, 26, 42, 0.6) 100%);
+    }
+
+    /* Grid effect for lab environment */
+    .grid-effect {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(rgba(10, 247, 217, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(10, 247, 217, 0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.3;
+    }
+
+    /* HUD Elements */
+    .hud {
+      position: absolute;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .header {
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.8rem;
+      font-weight: 600;
+      text-align: center;
+      text-shadow: 0 0 8px var(--lab-primary);
+      letter-spacing: 3px;
+    }
+
+    .header::before, .header::after {
+      content: "//";
+      color: var(--lab-secondary);
+      margin: 0 10px;
+      font-size: 1.5rem;
+      opacity: 0.8;
+    }
+
+    .status-bar {
+      bottom: 30px;
+      left: 30px;
+      width: auto;
+      min-width: 280px;
+      height: auto;
+      border: 1px solid var(--lab-primary);
+      border-radius: 3px;
+      background: rgba(10, 26, 42, 0.8);
+      padding: 12px;
+      box-shadow: 0 0 15px rgba(10, 247, 217, 0.3);
+    }
+
+    .status-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .weapon-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--lab-primary);
+      letter-spacing: 1px;
+    }
+
+    .tech-readout {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      border-top: 1px solid rgba(10, 247, 217, 0.3);
+      padding-top: 5px;
+      margin-top: 5px;
+      font-family: 'Courier Prime', monospace;
+    }
+
+    /* Lab decorations */
+    .corner-indicator {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      z-index: 3;
+      opacity: 0.8;
+    }
+
+    .top-left {
+      top: 15px;
+      left: 15px;
+      border-top: 2px solid var(--lab-primary);
+      border-left: 2px solid var(--lab-primary);
+    }
+
+    .top-right {
+      top: 15px;
+      right: 15px;
+      border-top: 2px solid var(--lab-primary);
+      border-right: 2px solid var(--lab-primary);
+    }
+
+    .bottom-left {
+      bottom: 15px;
+      left: 15px;
+      border-bottom: 2px solid var(--lab-secondary);
+      border-left: 2px solid var(--lab-secondary);
+    }
+
+    .bottom-right {
+      bottom: 15px;
+      right: 15px;
+      border-bottom: 2px solid var(--lab-secondary);
+      border-right: 2px solid var(--lab-secondary);
+    }
+
+    /* Lab monitor effects */
+    .scan-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(10, 247, 217, 0.03) 50%, rgba(255,255,255,0) 100%);
+      animation: scanline 6s linear infinite;
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0.5;
+    }
+
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+
+    /* Control panel */
+    .lab-control-panel {
+      position: absolute;
+      top: 30px;
+      right: 30px;
+      width: 160px;
+      background: rgba(10, 26, 42, 0.85);
+      border: 1px solid var(--lab-secondary);
+      border-radius: 3px;
+      padding: 12px;
+      z-index: 10;
+      box-shadow: 0 0 15px rgba(255, 138, 0, 0.3);
+    }
+
+    .panel-title {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      color: var(--lab-secondary);
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .panel-title::before, .panel-title::after {
+      content: "—";
+      margin: 0 5px;
+      opacity: 0.7;
+    }
+
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .lab-btn {
+      background: rgba(10, 26, 42, 0.9);
+      border: 1px solid var(--lab-primary);
+      color: white;
+      padding: 8px;
+      border-radius: 2px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      pointer-events: auto;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .lab-btn:hover {
+      background: rgba(10, 247, 217, 0.2);
+      box-shadow: 0 0 10px rgba(10, 247, 217, 0.4);
+    }
+
+    /* Weapon Selection Panel */
+    .weapon-selection {
+      position: absolute;
+      bottom: 30px;
+      right: 30px;
+      width: 240px;
+      background: rgba(10, 26, 42, 0.85);
+      border: 1px solid var(--lab-primary);
+      border-radius: 3px;
+      padding: 12px;
+      z-index: 10;
+      box-shadow: 0 0 15px rgba(10, 247, 217, 0.3);
+    }
+
+    .weapon-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* Loading screen */
+    .lab-loading {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--lab-dark);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      transition: opacity 0.8s;
+    }
+
+    .loading-title {
+      font-size: 2rem;
+      color: var(--lab-primary);
+      margin-bottom: 25px;
+      text-shadow: 0 0 10px var(--lab-primary);
+    }
+
+    .loading-bar-container {
+      width: 300px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 15px;
+      border: 1px solid rgba(10, 247, 217, 0.3);
+    }
+
+    .loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--lab-primary), var(--lab-secondary));
+      box-shadow: 0 0 8px var(--lab-primary);
+      transition: width 0.3s;
+    }
+
+    .loading-text {
+      color: white;
+      font-size: 0.9rem;
+      font-family: 'Courier Prime', monospace;
+    }
+
+    /* Environment indicators */
+    .lab-indicator {
+      position: absolute;
+      z-index: 3;
+      font-size: 0.7rem;
+      font-family: 'Courier Prime', monospace;
+      color: var(--lab-primary);
+      opacity: 0.7;
+    }
+
+    .top-indicator {
+      top: 15px;
+      left: 80px;
+    }
+
+    .side-indicator {
+      top: 50%;
+      left: 15px;
+      transform: translateY(-50%) rotate(-90deg);
+      transform-origin: left;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Courier+Prime&display=swap" rel="stylesheet">
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
+</head>
+<body>
+  <canvas id="renderCanvas"></canvas>
+
+  <div class="lab-overlay"></div>
+  <div class="grid-effect"></div>
+  <div class="scan-line"></div>
+  
+  <div class="hud header">ADVANCED WEAPONS LAB</div>
+  <div class="hud status-bar">
+    <div class="status-container">
+      <div class="weapon-name" id="weapon-name">O.T.S.F.M.B.R.C.A. XXXKENJOXXX</div>
+      <div class="tech-readout" id="tech-readout">PROTOTYPE STATUS: ACTIVE // POWER: 100% // CLEARANCE: ALPHA</div>
+    </div>
+  </div>
+
+  <div class="corner-indicator top-left"></div>
+  <div class="corner-indicator top-right"></div>
+  <div class="corner-indicator bottom-left"></div>
+  <div class="corner-indicator bottom-right"></div>
+
+  <div class="lab-indicator top-indicator">SEC.LEVEL: CLASSIFIED</div>
+  <div class="lab-indicator side-indicator">LAB.PROTOTYPE.VIEWER.V2.5</div>
+
+  <div class="lab-control-panel">
+    <div class="panel-title">LAB CONTROLS</div>
+    <div class="control-grid">
+      <button class="lab-btn" id="rotate-btn">ROTATION</button>
+      <button class="lab-btn" id="zoom-in-btn">ZOOM IN</button>
+      <button class="lab-btn" id="zoom-out-btn">ZOOM OUT</button>
+      <button class="lab-btn" id="lights-btn">LAB LIGHTS</button>
+      <button class="lab-btn" id="env-btn">ENVIRONMENT</button>
+    </div>
+  </div>
+
+  <div class="weapon-selection">
+    <div class="panel-title">PROTOTYPE SELECT</div>
+    <div class="weapon-grid">
+      <button class="lab-btn" id="weapon1-btn">KENJO</button>
+      <button class="lab-btn" id="weapon2-btn">DISRUPTOR</button>
+      <button class="lab-btn" id="weapon3-btn">PHASE BLAST</button>
+      <button class="lab-btn" id="weapon4-btn">VOID SHARD</button>
+      <button class="lab-btn" id="weapon5-btn">QUANTUM</button>
+    </div>
+  </div>
+
+  <div class="lab-loading" id="loading-screen">
+    <div class="loading-title">INITIALIZING VIEWER</div>
+    <div class="loading-bar-container">
+      <div class="loading-bar" id="loading-bar"></div>
+    </div>
+    <div class="loading-text" id="loading-text">ACCESSING CLASSIFIED DATABASE...</div>
+  </div>
+
+  <script>
+    // Initialize the loading sequence
+    const loadingBar = document.getElementById("loading-bar");
+    const loadingText = document.getElementById("loading-text");
+    const loadingScreen = document.getElementById("loading-screen");
+    const weaponNameElement = document.getElementById("weapon-name");
+    const techReadoutElement = document.getElementById("tech-readout");
+
+    // Weapon data with enhanced descriptions
+    const weaponData = [
+      { filename: "weapon1.glb", name: "O.T.S.F.M.B.R.C.A. XXXKENJOXXX", tech: "PROTOTYPE STATUS: ACTIVE // POWER: 100% // CLEARANCE: ALPHA" },
+      { filename: "weapon2.glb", name: "ZERO-POINT DISRUPTOR", tech: "PROTOTYPE STATUS: UNSTABLE // POWER: 187% // CLEARANCE: OMEGA" },
+      { filename: "weapon3.glb", name: "PHASE BLAST REPEATER", tech: "PROTOTYPE STATUS: READY // POWER: 92% // CLEARANCE: BETA" },
+      { filename: "weapon4.glb", name: "VOID SHARD LAUNCHER", tech: "PROTOTYPE STATUS: TESTING // POWER: 65% // CLEARANCE: DELTA" },
+      { filename: "weapon5.glb", name: "QUANTUM PULSE RIFLE", tech: "PROTOTYPE STATUS: CLASSIFIED // POWER: UNKNOWN // CLEARANCE: PRIME" }
+    ];
+
+    // Initialize Babylon.js scene
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+    const scene = new BABYLON.Scene(engine);
+
+    // Set scene background and properties
+    scene.clearColor = new BABYLON.Color4(0.04, 0.1, 0.16, 1); // Lab dark blue
+
+    // Create a camera - ArcRotateCamera is good for model viewing
+    const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+    camera.lowerRadiusLimit = 1;
+    camera.upperRadiusLimit = 15;
+    camera.wheelDeltaPercentage = 0.02;
+
+    // Add lights
+    const mainLight = new BABYLON.HemisphericLight("mainLight", new BABYLON.Vector3(0, 1, 0), scene);
+    mainLight.intensity = 0.7;
+    mainLight.diffuse = new BABYLON.Color3(0.4, 0.7, 0.9); // Blue-tinted light
+
+    // Add directed spotlights for lab effect
+    const spotLight1 = new BABYLON.SpotLight("spotLight1", new BABYLON.Vector3(5, 5, 0), new BABYLON.Vector3(-1, -1, 0), Math.PI/4, 2, scene);
+    spotLight1.diffuse = new BABYLON.Color3(0.04, 0.97, 0.86); // Primary lab color
+    spotLight1.intensity = 0.8;
+
+    const spotLight2 = new BABYLON.SpotLight("spotLight2", new BABYLON.Vector3(-5, 3, -5), new BABYLON.Vector3(1, -0.5, 1), Math.PI/4, 2, scene);
+    spotLight2.diffuse = new BABYLON.Color3(1, 0.54, 0); // Secondary lab color
+    spotLight2.intensity = 0.6;
+
+    // Add a glow layer for emissive parts
+    const gl = new BABYLON.GlowLayer("glow", scene);
+    gl.intensity = 0.7;
+
+    // Create environment for reflections
+    const hdrTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("https://assets.babylonjs.com/environments/environmentSpecular.env", scene);
+    scene.environmentTexture = hdrTexture;
+    
+    // Create a subtle fog effect
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+    scene.fogDensity = 0.01;
+    scene.fogColor = new BABYLON.Color3(0.04, 0.1, 0.16);
+
+    // Variable to store loaded weapon and states
+    let weapon;
+    let isRotating = true;
+    let currentWeaponIndex = 0;
+    let environmentMode = 0; // 0: normal, 1: hologram, 2: xray
+
+    // Function to load weapon
+    function loadWeapon(weaponIndex) {
+      // Show loading screen
+      loadingScreen.style.display = "flex";
+      loadingScreen.style.opacity = "1";
+      loadingBar.style.width = "0%";
+      loadingText.textContent = "ACCESSING CLASSIFIED DATABASE...";
+
+      // Get weapon data
+      const weaponInfo = weaponData[weaponIndex];
+      currentWeaponIndex = weaponIndex;
+
+      // Update weapon info in the UI
+      weaponNameElement.textContent = weaponInfo.name;
+      techReadoutElement.textContent = weaponInfo.tech;
+
+      // Simulate loading progress
+      let loadProgress = 0;
+      const loadingInterval = setInterval(() => {
+        loadProgress += Math.random() * 15;
+        if (loadProgress >= 100) {
+          loadProgress = 100;
+          clearInterval(loadingInterval);
+          loadingBar.style.width = "100%";
+          loadingText.textContent = "PROTOTYPE LOADED";
+          setTimeout(() => {
+            loadingScreen.style.opacity = "0";
+            setTimeout(() => {
+              loadingScreen.style.display = "none";
+            }, 800);
+          }, 600);
+        } else {
+          loadingBar.style.width = loadProgress + "%";
+          if (loadProgress > 30 && loadProgress < 60) {
+            loadingText.textContent = "DECRYPTING PROTOTYPE DATA...";
+          } else if (loadProgress >= 60 && loadProgress < 90) {
+            loadingText.textContent = "RENDERING PROTOTYPE...";
+          }
+        }
+      }, 100);
+
+      // Remove previous weapon if exists
+      if (weapon) {
+        const animGroup = scene.getAnimationGroupByName("rotationGroup");
+        if (animGroup) {
+          animGroup.stop();
+        }
+        weapon.dispose();
+      }
+
+      // Load the new weapon
+      BABYLON.SceneLoader.ImportMesh("", "assets/weapons/", weaponInfo.filename, scene, (meshes) => {
+        if (meshes.length > 0) {
+          weapon = meshes[0];
+          weapon.position = new BABYLON.Vector3(0, 0, 0);
+
+          // Apply materials based on environment mode
+          updateEnvironmentMode();
+
+          // Apply glow to emissive materials
+          meshes.forEach(mesh => {
+            if (mesh.material && mesh.material.emissiveColor && 
+               (mesh.material.emissiveColor.r > 0 || 
+                mesh.material.emissiveColor.g > 0 || 
+                mesh.material.emissiveColor.b > 0)) {
+              gl.addIncludedOnlyMesh(mesh);
+            }
+          });
+
+          // Setup rotation animation
+          const rotationAnimation = new BABYLON.Animation(
+            "rotationAnimation", "rotation.y", 30,
+            BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+            BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+          );
+          rotationAnimation.setKeys([
+            { frame: 0, value: 0 }, 
+            { frame: 300, value: 2 * Math.PI }
+          ]);
+          weapon.animations.push(rotationAnimation);
+
+          // Start rotation if enabled
+          if (isRotating) {
+            scene.beginAnimation(weapon, 0, 300, true, 0.5, null, "rotationGroup");
+          }
+        } else {
+          console.error("Failed to load weapon model");
+          loadingText.textContent = "ERROR: PROTOTYPE DATA CORRUPTED";
+        }
+      }, null, (scene, message, exception) => {
+        console.error("Error during model loading:", message, exception);
+        loadingText.textContent = "ERROR: PROTOTYPE DATA CORRUPTED";
+      });
+    }
+
+    // Function to update environment display mode
+    function updateEnvironmentMode() {
+      if (!weapon) return;
+      
+      // Apply different material effects based on mode
+      weapon.getChildMeshes().forEach(mesh => {
+        if (mesh.material) {
+          switch(environmentMode) {
+            case 0: // Normal
+              mesh.material.emissiveColor = mesh.material._originalEmissive || mesh.material.emissiveColor;
+              mesh.material.wireframe = false;
+              mesh.visibility = 1.0;
+              break;
+            case 1: // Hologram
+              mesh.material._originalEmissive = mesh.material._originalEmissive || mesh.material.emissiveColor.clone();
+              mesh.material.emissiveColor = new BABYLON.Color3(0.04, 0.97, 0.86);
+              mesh.material.wireframe = true;
+              mesh.visibility = 0.7;
+              break;
+            case 2: // X-Ray
+              mesh.material._originalEmissive = mesh.material._originalEmissive || mesh.material.emissiveColor.clone();
+              mesh.material.emissiveColor = new BABYLON.Color3(1, 0.54, 0);
+              mesh.material.wireframe = false;
+              mesh.material.alpha = 0.5;
+              mesh.visibility = 0.7;
+              break;
+          }
+        }
+      });
+    }
+
+    // Load the initial weapon
+    loadWeapon(0);
+
+    // Weapon selection buttons
+    document.getElementById("weapon1-btn").addEventListener("click", () => loadWeapon(0));
+    document.getElementById("weapon2-btn").addEventListener("click", () => loadWeapon(1));
+    document.getElementById("weapon3-btn").addEventListener("click", () => loadWeapon(2));
+    document.getElementById("weapon4-btn").addEventListener("click", () => loadWeapon(3));
+    document.getElementById("weapon5-btn").addEventListener("click", () => loadWeapon(4));
+
+    // Control panel functionality
+    document.getElementById("rotate-btn").addEventListener("click", function() {
+      if (weapon) {
+        isRotating = !isRotating;
+        const animGroup = scene.getAnimationGroupByName("rotationGroup");
+        if (isRotating) {
+          if (animGroup && animGroup.isStarted && !animGroup.isPlaying) {
+            animGroup.play(true);
+          } else if (!animGroup || !animGroup.isStarted) {
+            scene.beginAnimation(weapon, 0, 300, true, 0.5, null, "rotationGroup");
+          }
+        } else {
+          if (animGroup && animGroup.isPlaying) {
+            animGroup.pause();
+          }
+        }
+      }
+    });
+
+    document.getElementById("zoom-in-btn").addEventListener("click", function() {
+      BABYLON.Animation.CreateAndStartAnimation('zoomIn', camera, 'radius', 30, 15, 
+        camera.radius, Math.max(camera.lowerRadiusLimit, camera.radius * 0.7), 
+        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+    });
+    
+    document.getElementById("zoom-out-btn").addEventListener("click", function() {
+      BABYLON.Animation.CreateAndStartAnimation('zoomOut', camera, 'radius', 30, 15, 
+        camera.radius, Math.min(camera.upperRadiusLimit, camera.radius * 1.3), 
+        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+    });
+
+    // Toggle lab lights
+    let lightsOn = true;
+    document.getElementById("lights-btn").addEventListener("click", function() {
+      lightsOn = !lightsOn;
+      mainLight.intensity = lightsOn ? 0.7 : 0.2;
+      spotLight1.intensity = lightsOn ? 0.8 : 0.1;
+      spotLight2.intensity = lightsOn ? 0.6 : 0.1;
+      gl.intensity = lightsOn ? 0.7 : 1.0; // Increase glow in dark
+    });
+
+    // Toggle environment mode
+    document.getElementById("env-btn").addEventListener("click", function() {
+      environmentMode = (environmentMode + 1) % 3; // Cycle through modes
+      updateEnvironmentMode();
+    });
+
+    // Resize the engine on window resize
+    window.addEventListener("resize", function() {
+      engine.resize();
+    });
+
+    // Run the render loop
+    engine.runRenderLoop(function() {
+      scene.render();
+    });
+  </script>
+</body>
+</html>c; /* Kept for potential future use, e.g., highlighting */
     }
 
     * {
