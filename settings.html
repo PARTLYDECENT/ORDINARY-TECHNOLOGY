@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Megastructure PLY Generator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f1a;
+            color: #e0e0ff;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a2e;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        h1 {
+            color: #50d8d7;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 0 0 5px rgba(80, 216, 215, 0.3);
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            background-color: #16162c;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        h3 {
+            color: #50d8d7;
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #3a3a5a;
+            padding-bottom: 8px;
+        }
+        
+        .control-row {
+            margin-bottom: 10px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b8b8ff;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            background: #2d2d4a;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            background-color: #2d2d4a;
+            border: 1px solid #3a3a5a;
+            border-radius: 4px;
+            color: #e0e0ff;
+        }
+        
+        button {
+            background-color: #50d8d7;
+            color: #16162c;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s, transform 0.1s;
+            box-shadow: 0 0 10px rgba(80, 216, 215, 0.3);
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: #65fff6;
+            transform: translateY(-2px);
+        }
+        
+        .button-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        
+        .button-container button {
+            width: auto;
+            min-width: 180px;
+        }
+        
+        .preview-container {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        canvas {
+            background-color: #0a0a18;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            margin-top: 20px;
+        }
+
+        .dropdown-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dropdown-row label {
+            flex: 1;
+        }
+
+        .dropdown-row select {
+            flex: 2;
+        }
+
+        .color-input {
+            width: 100%;
+            padding: 8px;
+            background-color: #2d2d4a;
+            border: 1px solid #3a3a5a;
+            border-radius: 4px;
+            color: #e0e0ff;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #50d8d7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Megastructure PLY Generator</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h3>Base Structure</h3>
+                <div class="control-row dropdown-row">
+                    <label>Structure Type</label>
+                    <select id="structureType">
+                        <option value="ringworld">Ringworld</option>
+                        <option value="dyson-sphere">Dyson Sphere</option>
+                        <option value="dyson-swarm">Dyson Swarm</option>
+                        <option value="matrioshka-brain">Matrioshka Brain</option>
+                        <option value="alderson-disk">Alderson Disk</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="control-row">
+                    <label>Size (Radius) <span id="sizeValue">1000</span></label>
+                    <input type="range" id="sizeSlider" min="100" max="10000" value="1000" step="50">
+                </div>
+                <div class="control-row">
+                    <label>Complexity <span id="complexityValue">3</span></label>
+                    <input type="range" id="complexitySlider" min="1" max="10" value="3" step="1">
+                </div>
+                <div class="control-row">
+                    <label>Resolution <span id="resolutionValue">32</span></label>
+                    <input type="range" id="resolutionSlider" min="16" max="128" value="32" step="8">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Features</h3>
+                <div class="control-row checkbox-row">
+                    <input type="checkbox" id="addTowers" checked>
+                    <label for="addTowers">Include Towers</label>
+                </div>
+                <div class="control-row">
+                    <label>Tower Height <span id="towerHeightValue">200</span></label>
+                    <input type="range" id="towerHeightSlider" min="50" max="1000" value="200" step="10">
+                </div>
+                <div class="control-row">
+                    <label>Tower Density <span id="towerDensityValue">3</span></label>
+                    <input type="range" id="towerDensitySlider" min="1" max="10" value="3" step="1">
+                </div>
+                <div class="control-row checkbox-row">
+                    <input type="checkbox" id="addPlates" checked>
+                    <label for="addPlates">Include Plates</label>
+                </div>
+                <div class="control-row">
+                    <label>Plate Size <span id="plateSizeValue">300</span></label>
+                    <input type="range" id="plateSizeSlider" min="50" max="1000" value="300" step="10">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Distortion & Chaos</h3>
+                <div class="control-row">
+                    <label>Irregularity <span id="irregularityValue">2</span></label>
+                    <input type="range" id="irregularitySlider" min="0" max="10" value="2" step="0.5">
+                </div>
+                <div class="control-row">
+                    <label>Fragmentation <span id="fragmentationValue">0.5</span></label>
+                    <input type="range" id="fragmentationSlider" min="0" max="1" value="0.5" step="0.05">
+                </div>
+                <div class="control-row">
+                    <label>Asymmetry <span id="asymmetryValue">1</span></label>
+                    <input type="range" id="asymmetrySlider" min="0" max="5" value="1" step="0.2">
+                </div>
+                <div class="control-row checkbox-row">
+                    <input type="checkbox" id="addDamage">
+                    <label for="addDamage">Include Damage/Erosion</label>
+                </div>
+                <div class="control-row">
+                    <label>Damage Level <span id="damageLevelValue">2</span></label>
+                    <input type="range" id="damageLevelSlider" min="0" max="10" value="2" step="0.5">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Colors & Output</h3>
+                <div class="control-row">
+                    <label>Primary Color</label>
+                    <input type="color" id="primaryColor" value="#3498db" class="color-input">
+                </div>
+                <div class="control-row">
+                    <label>Secondary Color</label>
+                    <input type="color" id="secondaryColor" value="#e74c3c" class="color-input">
+                </div>
+                <div class="control-row">
+                    <label>Color Variation <span id="colorVariationValue">20</span>%</label>
+                    <input type="range" id="colorVariationSlider" min="0" max="100" value="20" step="5">
+                </div>
+                <div class="control-row">
+                    <label>Output File Name</label>
+                    <input type="text" id="fileName" value="alien_megastructure" placeholder="Enter filename (without extension)">
+                </div>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <button id="generateBtn">Generate Structure</button>
+            <button id="downloadBtn">Download PLY File</button>
+            <button id="randomizeBtn">Randomize Parameters</button>
+        </div>
+        
+        <div class="preview-container">
+            <h3>Structure Preview</h3>
+            <canvas id="previewCanvas" width="800" height="500"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Initialize variables to store generated structure data
+        let vertices = [];
+        let faces = [];
+        let colors = [];
+        let plyData = '';
+        
+        // Helper functions for 3D geometry
+        function normalizeVector(v) {
+            const length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            return [v[0] / length, v[1] / length, v[2] / length];
+        }
+        
+        function crossProduct(a, b) {
+            return [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+            ];
+        }
+        
+        function applyNoise(value, amount) {
+            return value + (Math.random() * 2 - 1) * amount;
+        }
+        
+        // Function to convert HSL to RGB
+        function hslToRgb(h, s, l) {
+            let r, g, b;
+            
+            if (s === 0) {
+                r = g = b = l;
+            } else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+            
+            return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+        }
+        
+        // Function to convert hex color to RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? [
+                parseInt(result[1], 16),
+                parseInt(result[2], 16),
+                parseInt(result[3], 16)
+            ] : [0, 0, 0];
+        }
+        
+        // Function to generate points on a ring
+        function generateRingPoints(radius, segments, height, irregularity) {
+            const points = [];
+            const angleStep = (2 * Math.PI) / segments;
+            
+            for (let i = 0; i < segments; i++) {
+                const angle = i * angleStep;
+                const radiusJitter = radius * (1 + (Math.random() * 2 - 1) * irregularity * 0.1);
+                const heightJitter = height * (1 + (Math.random() * 2 - 1) * irregularity * 0.2);
+                
+                const x = radiusJitter * Math.cos(angle);
+                const y = heightJitter;
+                const z = radiusJitter * Math.sin(angle);
+                
+                points.push([x, y, z]);
+            }
+            
+            return points;
+        }
+        
+        // Function to generate a sphere of points
+        function generateSpherePoints(radius, resolution, irregularity) {
+            const points = [];
+            
+            for (let i = 0; i <= resolution; i++) {
+                const phi = (Math.PI * i) / resolution;
+                const sinPhi = Math.sin(phi);
+                const cosPhi = Math.cos(phi);
+                
+                for (let j = 0; j <= resolution; j++) {
+                    const theta = (2 * Math.PI * j) / resolution;
+                    const sinTheta = Math.sin(theta);
+                    const cosTheta = Math.cos(theta);
+                    
+                    const radiusJitter = radius * (1 + (Math.random() * 2 - 1) * irregularity * 0.1);
+                    
+                    const x = radiusJitter * sinPhi * cosTheta;
+                    const y = radiusJitter * cosPhi;
+                    const z = radiusJitter * sinPhi * sinTheta;
+                    
+                    points.push([x, y, z]);
+                }
+            }
+            
+            return points;
+        }
+
+        // Function to generate a disk
+        function generateDiskPoints(radius, resolution, irregularity) {
+            const points = [];
+            const segmentsRadial = resolution;
+            const segmentsRing = resolution * 2;
+            
+            for (let r = 0; r <= segmentsRadial; r++) {
+                const currentRadius = (radius * r) / segmentsRadial;
+                
+                for (let t = 0; t < segmentsRing; t++) {
+                    const angle = (2 * Math.PI * t) / segmentsRing;
+                    
+                    const radiusJitter = currentRadius * (1 + (Math.random() * 2 - 1) * irregularity * 0.1);
+                    const heightJitter = (Math.random() * 2 - 1) * irregularity * radius * 0.05;
+                    
+                    const x = radiusJitter * Math.cos(angle);
+                    const y = heightJitter;
+                    const z = radiusJitter * Math.sin(angle);
+                    
+                    points.push([x, y, z]);
+                }
+            }
+            
+            return points;
+        }
+
+        // Function to generate Dyson swarm components
+        function generateSwarmComponents(radius, count, irregularity) {
+            const components = [];
+            
+            for (let i = 0; i < count; i++) {
+                // Generate random position on a sphere
+                const u = Math.random();
+                const v = Math.random();
+                const theta = 2 * Math.PI * u;
+                const phi = Math.acos(2 * v - 1);
+                
+                const radiusJitter = radius * (0.8 + Math.random() * 0.4); // Vary the distance from center
+                
+                const x = radiusJitter * Math.sin(phi) * Math.cos(theta);
+                const y = radiusJitter * Math.sin(phi) * Math.sin(theta);
+                const z = radiusJitter * Math.cos(phi);
+                
+                const size = radius * (0.05 + Math.random() * 0.15); // Size of component
+                
+                components.push({
+                    position: [x, y, z],
+                    size: size,
+                    orientation: [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]
+                });
+            }
+            
+            return components;
+        }
+        
+        // Function to generate towers
+        function generateTowers(basePoints, height, density, complexity) {
+            const towers = [];
+            const towerCount = Math.max(1, Math.floor(basePoints.length * density / 10));
+            
+            for (let i = 0; i < towerCount; i++) {
+                const baseIndex = Math.floor(Math.random() * basePoints.length);
+                const basePoint = basePoints[baseIndex];
+                
+                // Calculate up vector (normal to the surface)
+                let upVector = normalizeVector(basePoint);
+                
+                // Create tower segments
+                const segments = Math.max(2, Math.floor(complexity * 2));
+                const towerPoints = [];
+                
+                for (let j = 0; j <= segments; j++) {
+                    const t = j / segments;
+                    const segmentHeight = height * t;
+                    const segmentRadius = height * 0.1 * (1 - t * 0.7); // Taper the tower
+                    
+                    // Add some randomness to the direction
+                    const jitterAmount = 0.2 * (1 - t); // Less jitter as we go up
+                    const jitteredVector = [
+                        upVector[0] + (Math.random() * 2 - 1) * jitterAmount,
+                        upVector[1] + (Math.random() * 2 - 1) * jitterAmount,
+                        upVector[2] + (Math.random() * 2 - 1) * jitterAmount
+                    ];
+                    upVector = normalizeVector(jitteredVector);
+                    
+                    // Create point at this height
+                    const point = [
+                        basePoint[0] + upVector[0] * segmentHeight,
+                        basePoint[1] + upVector[1] * segmentHeight,
+                        basePoint[2] + upVector[2] * segmentHeight
+                    ];
+                    
+                    towerPoints.push({point, radius: segmentRadius});
+                }
+                
+                towers.push(towerPoints);
+            }
+            
+            return towers;
+        }
+        
+        // Function to generate plates or panels
+        function generatePlates(basePoints, size, complexity) {
+            const plates = [];
+            const plateCount = Math.max(1, Math.floor(basePoints.length / 10));
+            
+            for (let i = 0; i < plateCount; i++) {
+                const baseIndex = Math.floor(Math.random() * basePoints.length);
+                const basePoint = basePoints[baseIndex];
+                
+                // Calculate normal vector
+                const normal = normalizeVector(basePoint);
+                
+                // Create arbitrary tangent vectors
+                let tangent1;
+                if (Math.abs(normal[0]) < 0.9) {
+                    tangent1 = normalizeVector(crossProduct([1, 0, 0], normal));
+                } else {
+                    tangent1 = normalizeVector(crossProduct([0, 1, 0], normal));
+                }
+                const tangent2 = normalizeVector(crossProduct(normal, tangent1));
+                
+                // Generate plate corners with some randomness
+                const corners = [];
+                const edgeCount = Math.max(3, Math.floor(Math.random() * complexity) + 3);
+                const angleStep = (2 * Math.PI) / edgeCount;
+                
+                for (let j = 0; j < edgeCount; j++) {
+                    const angle = j * angleStep;
+                    const radius = size * (0.5 + Math.random() * 0.5);
+                    
+                    const offsetX = radius * Math.cos(angle);
+                    const offsetZ = radius * Math.sin(angle);
+                    
+                    const point = [
+                        basePoint[0] + tangent1[0] * offsetX + tangent2[0] * offsetZ,
+                        basePoint[1] + tangent1[1] * offsetX + tangent2[1] * offsetZ,
+                        basePoint[2] + tangent1[2] * offsetX + tangent2[2] * offsetZ
+                    ];
+                    
+                    corners.push(point);
+                }
+                
+                plates.push(corners);
+            }
+            
+            return plates;
+        }
+        
+        // Function to apply damage/erosion to the structure
+        function applyDamage(vertices, faces, damageLevel) {
+            if (damageLevel <= 0) return {vertices, faces};
+            
+            const newFaces = [];
+            const deletionProbability = damageLevel * 0.05;
+            
+            for (let face of faces) {
+                if (Math.random() > deletionProbability) {
+                    newFaces.push(face);
+                }
+            }
+            
+            return {vertices, faces: newFaces};
+        }
+        
+        // Main function to generate the megastructure
+        function generateMegastructure() {
+            // Get parameters from UI
+            const structureType = document.getElementById('structureType').value;
+            const size = parseFloat(document.getElementById('sizeSlider').value);
+            const complexity = parseInt(document.getElementById('complexitySlider').value);
+            const resolution = parseInt(document.getElementById('resolutionSlider').value);
+            const irregularity = parseFloat(document.getElementById('irregularitySlider').value);
+            const fragmentation = parseFloat(document.getElementById('fragmentationSlider').value);
+            const asymmetry = parseFloat(document.getElementById('asymmetrySlider').value);
+            
+            const addTowers = document.getElementById('addTowers').checked;
+            const towerHeight = parseFloat(document.getElementById('towerHeightSlider').value);
+            const towerDensity = parseInt(document.getElementById('towerDensitySlider').value);
+            
+            const addPlates = document.getElementById('addPlates').checked;
+            const plateSize = parseFloat(document.getElementById('plateSizeSlider').value);
+            
+            const addDamage = document.getElementById('addDamage').checked;
+            const damageLevel = parseFloat(document.getElementById('damageLevelSlider').value);
+            
+            const primaryColor = document.getElementById('primaryColor').value;
+            const secondaryColor = document.getElementById('secondaryColor').value;
+            const colorVariation = parseInt(document.getElementById('colorVariationSlider').value) / 100;
+            
+            // Reset data structures
+            vertices = [];
+            faces = [];
+            colors = [];
+            
+            // Generate base structure points
+            let basePoints = [];
+            
+            switch (structureType) {
+                case 'ringworld':
+                    // Generate a ring
+                    const ringSegments = Math.max(16, resolution * 2);
+                    const ringThickness = size * 0.1;
+                    basePoints = generateRingPoints(size, ringSegments, ringThickness, irregularity);
+                    break;
+                    
+                case 'dyson-sphere':
+                    // Generate a sphere
+                    basePoints = generateSpherePoints(size, resolution, irregularity);
+                    break;
+                    
+                case 'dyson-swarm':
+                    // Generate swarm components
+                    const swarmComponents = generateSwarmComponents(size, resolution * 3, irregularity);
+                    
+                    // For each component, generate a small structure
+                    for (const component of swarmComponents) {
+                        const componentPoints = generateSpherePoints(component.size, 8, irregularity);
+                        
+                        // Translate component points to the component position
+                        for (const point of componentPoints) {
+                            point[0] += component.position[0];
+                            point[1] += component.position[1];
+                            point[2] += component.position[2];
+                            basePoints.push(point);
+                        }
+                    }
+                    break;
+                    
+                case 'matrioshka-brain':
+                    // Generate nested spheres
+                    const layerCount = Math.max(2, Math.min(5, complexity));
+                    
+                    for (let i = 0; i < layerCount; i++) {
+                        const layerRadius = size * (0.5 + i * 0.3);
+                        const layerResolution = Math.max(8, resolution / (i + 1));
+                        const layerPoints = generateSpherePoints(layerRadius, layerResolution, irregularity);
+                        
+                        basePoints = basePoints.concat(layerPoints);
+                    }
+                    break;
+                    
+                case 'alderson-disk':
+                    // Generate a flat disk
+                    basePoints = generateDiskPoints(size, resolution, irregularity);
+                    break;
+                    
+                case 'custom':
+                default:
+                    // Generate a hybrid structure with elements from different types
+                    // Start with a partial ring
+                    const ringPoints = generateRingPoints(size, resolution, size * 0.05, irregularity);
+                    
+                    // Add some sphere elements
+                    const spherePoints = generateSpherePoints(size * 0.6, resolution / 2, irregularity);
+                    
+                    // Add some disk elements
+                    const diskPoints = generateDiskPoints(size * 0.8, resolution / 2, irregularity);
+                    
+                    basePoints = ringPoints.concat(spherePoints, diskPoints);
+                    break;
+            }
+            
+            // Apply asymmetry if needed
+            if (asymmetry > 0) {
+                const skewMatrix = [
+                    1 + asymmetry * 0.1 * (Math.random() * 2 - 1),
+                    asymmetry * 0.05 * (Math.random() * 2 - 1),
+                    asymmetry * 0.05 * (Math.random() * 2 - 1),
+                    
+                    asymmetry * 0.05 * (Math.random() * 2 - 1),
+                    1 + asymmetry * 0.1 * (Math.random() * 2 - 1),
+                    asymmetry * 0.05 * (Math.random() * 2 - 1),
+                    
+                    asymmetry * 0.05 * (Math.random() * 2 - 1),
+                    asymmetry * 0.05 * (Math.random() * 2 - 1),
+                    1 + asymmetry * 0.1 * (Math.random() * 2 - 1)
+                ];
+                
+                for (let i = 0; i < basePoints.length; i++) {
+                    const point = basePoints[i];
+                    const newPoint = [
+                        point[0] * skewMatrix[0] + point[1] * skewMatrix[1] + point[2] * skewMatrix[2],
+                        point[0] * skewMatrix[3] + point[1] * skewMatrix[4] + point[2] * skewMatrix[5],
+                        point[0] * skewMatrix[6] + point[1] * skewMatrix[7] + point[2] * skewMatrix[8]
+                    ];
+                    basePoints[i] = newPoint;
+                }
+            }
+            
+            // Add all base points to the vertices array
+            vertices = vertices.concat(basePoints);
+            
+            // Get primary and secondary colors
+            const primaryRgb = hexToRgb(primaryColor);
+            const secondaryRgb = hexToRgb(secondaryColor);
+            
+            // Add colors for all base vertices
+            for (let i = 0; i < basePoints.length; i++) {
+                // Mix between primary and secondary based on position
+                const mixFactor = Math.random();
+                const r = Math.round(primaryRgb[0] * mixFactor + secondaryRgb[0] * (1 - mixFactor));
+                const g = Math.round(primaryRgb[1] * mixFactor + secondaryRgb[1] * (1 - mixFactor));
+                const b = Math.round(primaryRgb[2] * mixFactor + secondaryRgb[2] * (1 - mixFactor));
+                
+                // Add color variation
+                const vr = Math.round(r + (Math.random() * 2 - 1) * colorVariation * 50);
+                const vg = Math.round(g + (Math.random() * 2 - 1) * colorVariation * 50);
+                const vb = Math.round(b + (Math.random() * 2 - 1) * colorVariation * 50);
+                
+                colors.push([
+                    Math.max(0, Math.min(255, vr)),
+                    Math.max(0, Math.min(255, vg)),
+                    Math.max(0, Math.min(255, vb))
+                ]);
+            }
+            
+            // Generate faces for the base structure
+            for (let i = 0; i < basePoints.length; i++) {
+                if (Math.random() > fragmentation) {
+                    const indices = [];
+                    
+                    // Find nearby points to form a face
+                    for (let j = 0; j < basePoints.length; j++) {
+                        if (i !== j) {
+                            const dx = basePoints[i][0] - basePoints[j][0];
+                            const dy = basePoints[i][1] - basePoints[j][1];
+                            const dz = basePoints[i][2] - basePoints[j][2];
+							const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                            
+                            if (distance < size * 0.2) {
+                                indices.push(j);
+                                if (indices.length >= 2) break;
+                            }
+                        }
+                    }
+                    
+                    if (indices.length >= 2) {
+                        faces.push([i, indices[0], indices[1]]);
+                    }
+                }
+            }
+            
+            // Add towers if enabled
+            if (addTowers) {
+                const towers = generateTowers(basePoints, towerHeight, towerDensity, complexity);
+                
+                for (const tower of towers) {
+                    const startIndex = vertices.length;
+                    
+                    // Add tower points
+                    for (const segment of tower) {
+                        vertices.push(segment.point);
+                        
+                        // Use a mix of primary and secondary color with variation
+                        const mixFactor = Math.random() * 0.7 + 0.3; // Bias toward primary color
+                        const r = Math.round(primaryRgb[0] * mixFactor + secondaryRgb[0] * (1 - mixFactor));
+                        const g = Math.round(primaryRgb[1] * mixFactor + secondaryRgb[1] * (1 - mixFactor));
+                        const b = Math.round(primaryRgb[2] * mixFactor + secondaryRgb[2] * (1 - mixFactor));
+                        
+                        colors.push([
+                            Math.max(0, Math.min(255, r + (Math.random() * 2 - 1) * colorVariation * 30)),
+                            Math.max(0, Math.min(255, g + (Math.random() * 2 - 1) * colorVariation * 30)),
+                            Math.max(0, Math.min(255, b + (Math.random() * 2 - 1) * colorVariation * 30))
+                        ]);
+                    }
+                    
+                    // Create faces for the tower
+                    for (let i = 0; i < tower.length - 1; i++) {
+                        faces.push([startIndex + i, startIndex + i + 1, startIndex + ((i + 2) % tower.length)]);
+                    }
+                }
+            }
+            
+            // Add plates if enabled
+            if (addPlates) {
+                const plates = generatePlates(basePoints, plateSize, complexity);
+                
+                for (const plate of plates) {
+                    const startIndex = vertices.length;
+                    
+                    // Add plate corner points
+                    for (const point of plate) {
+                        vertices.push(point);
+                        
+                        // Use secondary color with variation for plates
+                        colors.push([
+                            Math.max(0, Math.min(255, secondaryRgb[0] + (Math.random() * 2 - 1) * colorVariation * 50)),
+                            Math.max(0, Math.min(255, secondaryRgb[1] + (Math.random() * 2 - 1) * colorVariation * 50)),
+                            Math.max(0, Math.min(255, secondaryRgb[2] + (Math.random() * 2 - 1) * colorVariation * 50))
+                        ]);
+                    }
+                    
+                    // Create triangular faces for the plate
+                    for (let i = 2; i < plate.length; i++) {
+                        faces.push([startIndex, startIndex + i - 1, startIndex + i]);
+                    }
+                }
+            }
+            
+            // Apply damage/erosion if enabled
+            if (addDamage && damageLevel > 0) {
+                const result = applyDamage(vertices, faces, damageLevel);
+                faces = result.faces;
+            }
+            
+            // Generate PLY file content
+            generatePlyFile();
+            
+            // Update preview
+            updatePreview();
+            
+            return {vertices, faces, colors};
+        }
+        
+        // Function to generate PLY file content
+        function generatePlyFile() {
+            const header = [
+                'ply',
+                'format ascii 1.0',
+                `comment Alien Megastructure generated on ${new Date().toISOString()}`,
+                `element vertex ${vertices.length}`,
+                'property float x',
+                'property float y',
+                'property float z',
+                'property uchar red',
+                'property uchar green',
+                'property uchar blue',
+                `element face ${faces.length}`,
+                'property list uchar int vertex_index',
+                'end_header'
+            ].join('\n');
+            
+            // Build vertex list
+            let vertexLines = [];
+            for (let i = 0; i < vertices.length; i++) {
+                const v = vertices[i];
+                const c = colors[i];
+                vertexLines.push(`${v[0].toFixed(6)} ${v[1].toFixed(6)} ${v[2].toFixed(6)} ${c[0]} ${c[1]} ${c[2]}`);
+            }
+            
+            // Build face list
+            let faceLines = [];
+            for (const face of faces) {
+                faceLines.push(`3 ${face[0]} ${face[1]} ${face[2]}`);
+            }
+            
+            // Combine all parts
+            plyData = header + '\n' + vertexLines.join('\n') + '\n' + faceLines.join('\n');
+        }
+        
+        // Function to update the preview canvas
+        function updatePreview() {
+            const canvas = document.getElementById('previewCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.fillStyle = '#0a0a18';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Simple 3D projection
+            const scale = 50;
+            const offsetX = canvas.width / 2;
+            const offsetY = canvas.height / 2;
+            
+            // Draw faces
+            for (const face of faces) {
+                const v1 = vertices[face[0]];
+                const v2 = vertices[face[1]];
+                const v3 = vertices[face[2]];
+                
+                // Simple Z-buffering (closer objects are brighter)
+                const avgZ = (v1[2] + v2[2] + v3[2]) / 3;
+                const brightness = Math.min(255, Math.max(50, 150 - avgZ / 10));
+                
+                // Use color of first vertex
+                const color = colors[face[0]];
+                
+                // Simple perspective projection
+                const z1 = Math.max(1, 10 + v1[2]);
+                const z2 = Math.max(1, 10 + v2[2]);
+                const z3 = Math.max(1, 10 + v3[2]);
+                
+                const x1 = offsetX + (v1[0] * scale) / z1;
+                const y1 = offsetY - (v1[1] * scale) / z1;
+                const x2 = offsetX + (v2[0] * scale) / z2;
+                const y2 = offsetY - (v2[1] * scale) / z2;
+                const x3 = offsetX + (v3[0] * scale) / z3;
+                const y3 = offsetY - (v3[1] * scale) / z3;
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.lineTo(x3, y3);
+                ctx.closePath();
+                
+                // Adjust color for depth
+                const depthColor = `rgba(${color[0] * brightness / 255}, ${color[1] * brightness / 255}, ${color[2] * brightness / 255}, 0.8)`;
+                ctx.fillStyle = depthColor;
+                ctx.fill();
+                
+                // Draw edges
+                ctx.strokeStyle = `rgba(${Math.min(255, color[0] + 50)}, ${Math.min(255, color[1] + 50)}, ${Math.min(255, color[2] + 50)}, 0.5)`;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            }
+        }
+        
+        // Function to download the PLY file
+        function downloadPly() {
+            if (!plyData) {
+                alert('Please generate a structure first!');
+                return;
+            }
+            
+            const filename = document.getElementById('fileName').value || 'alien_megastructure';
+            const blob = new Blob([plyData], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filename}.ply`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // Function to randomize parameters
+        function randomizeParameters() {
+            document.getElementById('structureType').value = ['ringworld', 'dyson-sphere', 'dyson-swarm', 'matrioshka-brain', 'alderson-disk', 'custom'][Math.floor(Math.random() * 6)];
+            document.getElementById('sizeSlider').value = Math.floor(Math.random() * 9900) + 100;
+            document.getElementById('complexitySlider').value = Math.floor(Math.random() * 10) + 1;
+            document.getElementById('resolutionSlider').value = [16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128][Math.floor(Math.random() * 15)];
+            document.getElementById('irregularitySlider').value = Math.floor(Math.random() * 20) / 2;
+            document.getElementById('fragmentationSlider').value = Math.floor(Math.random() * 20) / 20;
+            document.getElementById('asymmetrySlider').value = Math.floor(Math.random() * 25) / 5;
+            
+            document.getElementById('addTowers').checked = Math.random() > 0.3;
+            document.getElementById('towerHeightSlider').value = Math.floor(Math.random() * 950) + 50;
+            document.getElementById('towerDensitySlider').value = Math.floor(Math.random() * 10) + 1;
+            
+            document.getElementById('addPlates').checked = Math.random() > 0.3;
+            document.getElementById('plateSizeSlider').value = Math.floor(Math.random() * 950) + 50;
+            
+            document.getElementById('addDamage').checked = Math.random() > 0.5;
+            document.getElementById('damageLevelSlider').value = Math.floor(Math.random() * 20) / 2;
+            
+            // Random colors
+            document.getElementById('primaryColor').value = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+            document.getElementById('secondaryColor').value = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+            document.getElementById('colorVariationSlider').value = Math.floor(Math.random() * 100);
+            
+            // Update displayed values
+            updateDisplayedValues();
+        }
+        
+        // Function to update all displayed values
+        function updateDisplayedValues() {
+            document.getElementById('sizeValue').textContent = document.getElementById('sizeSlider').value;
+            document.getElementById('complexityValue').textContent = document.getElementById('complexitySlider').value;
+            document.getElementById('resolutionValue').textContent = document.getElementById('resolutionSlider').value;
+            document.getElementById('irregularityValue').textContent = document.getElementById('irregularitySlider').value;
+            document.getElementById('fragmentationValue').textContent = document.getElementById('fragmentationSlider').value;
+            document.getElementById('asymmetryValue').textContent = document.getElementById('asymmetrySlider').value;
+            document.getElementById('towerHeightValue').textContent = document.getElementById('towerHeightSlider').value;
+            document.getElementById('towerDensityValue').textContent = document.getElementById('towerDensitySlider').value;
+            document.getElementById('plateSizeValue').textContent = document.getElementById('plateSizeSlider').value;
+            document.getElementById('damageLevelValue').textContent = document.getElementById('damageLevelSlider').value;
+            document.getElementById('colorVariationValue').textContent = document.getElementById('colorVariationSlider').value;
+        }
+        
+        // Set up event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize displayed values
+            updateDisplayedValues();
+            
+            // Add event listeners for sliders
+            const sliders = document.querySelectorAll('input[type="range"]');
+            sliders.forEach(slider => {
+                slider.addEventListener('input', function() {
+                    document.getElementById(this.id + 'Value').textContent = this.value;
+                });
+            });
+            
+            // Button event listeners
+            document.getElementById('generateBtn').addEventListener('click', generateMegastructure);
+            document.getElementById('downloadBtn').addEventListener('click', downloadPly);
+            document.getElementById('randomizeBtn').addEventListener('click', randomizeParameters);
+            
+            // Generate initial structure
+            setTimeout(() => {
+                generateMegastructure();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
