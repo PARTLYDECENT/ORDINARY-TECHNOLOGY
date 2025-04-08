@@ -768,629 +768,500 @@
     }
   </script>
 
+  <script>
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // WebGL Setup
+    const webglCanvas = document.getElementById('webglCanvas');
+    let gl; // Declare gl globally within this script block
+    if (webglCanvas) {
+        webglCanvas.width = window.innerWidth;
+        webglCanvas.height = window.innerHeight;
+        gl = webglCanvas.getContext('webgl') || webglCanvas.getContext('experimental-webgl');
+    } else {
+        console.error("WebGL Canvas element not found!");
+    }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   // Assume 'gl' is the WebGLRenderingContext obtained from your canvas
-  // Assume 'webglCanvas' is your canvas element (e.g., const webglCanvas = gl.canvas;)
-  // Make sure this script runs *after* the canvas element exists in the DOM
-
-  if (!gl) {
+    if (!gl) {
       console.log("WebGL not supported, falling back. Background will be static.");
-      document.body.style.backgroundColor = '#050511'; // Ensure dark bg
-  } else {
-      // Vertex shader source (remains simple)
-      const vertexShaderSource = `
-        attribute vec4 a_position;
-        void main() {
-          gl_Position = a_position;
-        }
-      `;
-
-      // REVISED Fragment shader source - Original Phases 0-5, NEW Phases 6-11
-      const fragmentShaderSource = \`
-        precision highp float;
-        uniform float u_time;
-        uniform vec2 u_resolution;
-
-        // --- Helper Functions (Keep all helpers) ---
-        float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
-        float hash(float n) { return fract(sin(n) * 43758.5453); }
-        float noise(vec2 p) {
-            vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
-            float n = i.x + i.y * 57.0;
-            return mix(mix(hash(n), hash(n + 1.0), f.x), mix(hash(n + 57.0), hash(n + 58.0), f.x), f.y);
-        }
-        float fbm(vec2 p) {
-            float s=0.0, a=0.8, f=1.0;
-            for(int i=0; i<5; i++) { s += noise(p * f) * a; a *= 0.5; f *= 2.1; }
-            return s;
-        }
-        float advancedFbm(vec2 p) {
-            float s=0.0, a=0.9, f=1.0;
-            mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
-            for(int i=0; i<6; i++) { s += noise(p * f) * a; p = rot * p * 2.02; a *= 0.5; f *= 2.0; }
-            return s;
-        }
-        vec2 warp(vec2 p) {
-            vec2 q = vec2( fbm(p + vec2(0.0, 0.1 * u_time)), fbm(p + vec2(5.2, 1.3)) );
-            return p + 0.15 * q;
-        }
-        vec2 doubleWarp(vec2 p) {
-            vec2 q = vec2( fbm(p + 0.1*vec2(cos(u_time*0.3), sin(u_time*0.2))), fbm(p + 0.5*vec2(sin(u_time*0.1), cos(u_time*0.4))) );
-            vec2 r = vec2( fbm(p + 1.0*q + vec2(1.7,9.2)), fbm(p + 1.0*q + vec2(8.3,2.8)) );
-            return p + 0.5 * r;
-        }
-        // Simplified getColorAtUV for CA simulation
-        vec3 getColorAtUV(vec2 sampleUV, float time, vec2 resolution) {
-            float noiseVal = fbm(sampleUV * 3.0 + time * 0.1);
-            vec3 colP = vec3(106./255., 0., 1.); // Purple
-            vec3 colS = vec3(0., 1., 204./255.); // Cyan
-            return mix(colP, colS, noiseVal);
-        }
-
-        // --- Color Definitions (Keep all colors) ---
-        vec3 colPrimary = vec3(106.0/255.0, 0.0/255.0, 255.0/255.0); // Purple
-        vec3 colSecondary = vec3(0.0/255.0, 255.0/255.0, 204.0/255.0); // Cyan
-        vec3 colTertiary = vec3(0.0/255.0, 184.0/255.0, 212.0/255.0); // Teal
-        vec3 colGreen = vec3(0.0, 0.8, 0.4);
-        vec3 colGold = vec3(0.8, 0.7, 0.0);
-        vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2);
-        vec3 colDeepRed = vec3(0.5, 0.0, 0.1);
-        vec3 colBackground = vec3(5.0/255.0, 5.0/255.0, 17.0/255.0);
-        vec3 colElectricBlue = vec3(0.1, 0.3, 0.9);
-        vec3 colMagenta = vec3(0.8, 0.1, 0.8);
-        vec3 colAmber = vec3(1.0, 0.75, 0.0);
-        vec3 colToxic = vec3(0.8, 1.0, 0.0);
-        vec3 colBlood = vec3(0.55, 0.0, 0.05);
-        vec3 colNeon = vec3(0.9, 0.0, 0.9);
-        // New colors for new phases
-        vec3 colSandLight = vec3(0.9, 0.8, 0.6);
-        vec3 colSandDark = vec3(0.6, 0.5, 0.3);
-        vec3 colDeepSeaBlue = vec3(0.05, 0.1, 0.4);
-        vec3 colBioLumGreen = vec3(0.3, 1.0, 0.7);
-        vec3 colInkDark = vec3(0.05, 0.05, 0.1);
-        vec3 colInkHighlight = vec3(0.7, 0.9, 1.0);
-        vec3 colHyperPink = vec3(1.0, 0.2, 0.7);
-        vec3 colHyperLime = vec3(0.5, 1.0, 0.3);
-
-        // --- Main Shader Logic ---
-        void main() {
-            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
-            vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
-            float time_warp = u_time * 0.1; // Use the faster cycle speed
-            float phase = mod(time_warp, 12.0); // 12 phases total
-            vec3 color = colBackground;
-            float scanline = sin(originalUV.y * u_resolution.y * 0.8 + u_time * 0.1) * 0.5 + 0.5;
-            float scanlineIntensity = 0.04 + 0.02 * sin(u_time);
-            float phaseProgress = fract(phase);
-
-            // --- ORIGINAL PHASES 0-5 ---
-
-            // Phase 0: Distorted Grid
-            if (phase < 1.0) {
-                float warpFactor = 0.1 + 0.05 * sin(u_time * 0.2); warpFactor = max(0.001, warpFactor);
-                float z = 0.1 / max(0.01, 0.1 - uv.y * warpFactor + 0.02 * fbm(uv + u_time * 0.05)); z = clamp(z, 0.1, 15.0);
-                vec2 warp_uv = uv * z; vec2 grid = abs(fract(warp_uv * vec2(5.0, 3.0) + u_time * 0.1) - 0.5);
-                float line = smoothstep(0.04, 0.05, min(grid.x, grid.y)) * 0.6; float depth = fract(z * 0.1 + u_time * 0.15);
-                vec3 baseCol = mix(mix(colPrimary, colTertiary, sin(u_time * 0.1) * 0.5 + 0.5), colSecondary, sin(length(warp_uv) * 0.5 - u_time * 0.5) * 0.5 + 0.5);
-                color = mix(baseCol * 0.15, baseCol, line * depth * 1.5);
-                color *= smoothstep(1.0, 0.8, phaseProgress); // Fade out
-            }
-            // Phase 1: Circular Waves
-            else if (phase < 2.0) {
-                float dist = length(uv); float rings = sin(dist * 18.0 - u_time * 2.5) * 0.5 + 0.5; rings *= smoothstep(1.8, 0.4, dist);
-                float wave = sin(uv.y * 25.0 + u_time * 1.2) * 0.04; vec2 waved_uv = uv + vec2(wave, sin(uv.x * 15.0 + u_time * 0.8) * 0.03);
-                float n = fbm(waved_uv * 3.5 + u_time * 0.25);
-                vec3 baseCol = mix(mix(colSecondary, colTertiary, rings), mix(colGreen, colGold, n), 0.5 + 0.5 * sin(u_time * 0.6 + dist * 2.0));
-                color = mix(baseCol * 0.2, baseCol, rings * 0.8 + n * 0.6);
-                // Transition out
-                if (phaseProgress > 0.7) { float t = smoothstep(0.7, 1.0, phaseProgress); float cellNoise = fbm(waved_uv * 8.0 + u_time * 0.5); color = mix(color, colStrangeGreen * cellNoise, t * 0.5); }
-            }
-            // Phase 2: Electric Pulse / Hex Grid
-            else if (phase < 3.0) {
-                vec2 r = vec2(1.0, 1.73); vec2 h = r * 0.5; vec2 a = mod(uv * 2.0 + u_time * 0.1, r) - h; vec2 b = mod(uv * 2.0 - h + u_time * 0.1, r) - h; vec2 gv = length(a) < length(b) ? a : b;
-                float pulse = sin(u_time * 3.5) * 0.5 + 0.5; float electric = sin(length(gv) * 25.0 - u_time * 3.5); electric = smoothstep(-0.1, 0.15, electric) - smoothstep(0.15, 0.4, electric);
-                float distortion = fbm(uv * 2.5 + vec2(u_time * 0.15, 0.0)); vec3 baseColor = mix(colTertiary, colGreen, distortion); vec3 glowColor = mix(colSecondary, colPrimary, pulse);
-                color = mix(baseColor * 0.1, glowColor, electric * pulse * 1.5); float detail = abs(sin(uv.x * 22.0 + u_time * 1.1)) * abs(sin(uv.y * 22.0 - u_time * 1.3)); color += glowColor * detail * 0.08;
-                // Transition out
-                if (phaseProgress > 0.6) { float t = smoothstep(0.6, 1.0, phaseProgress); float angle = atan(uv.y, uv.x); float radius = length(uv); float vortex = fract(angle * 3.0 + radius * mix(0.0, 5.0, t) - u_time * 0.5); color = mix(color, colPrimary * vortex, t * 0.7); }
-            }
-            // Phase 3: Vortex / Spiral
-            else if (phase < 4.0) {
-                float angle = atan(uv.y, uv.x) + 0.1 * fbm(uv * 0.5 + u_time * 0.05); float radius = length(uv); float spiral_angle = angle * 6.0 + radius * 8.0 - u_time * 2.2;
-                float spiral = smoothstep(-0.2, 0.2, sin(spiral_angle)); float radius_distorted = radius + sin(angle * 10.0 + u_time * 0.3) * 0.08;
-                float bands = fract(radius_distorted * 6.0 - u_time * 0.6); bands = smoothstep(0.0, 0.1, bands) * smoothstep(0.8, 0.5, bands);
-                float turb = fbm(vec2(radius_distorted * 6.0, angle * 3.0) + u_time * 0.15); vec3 deepColor = mix(colPrimary, colDeepRed, sin(radius_distorted * 12.0) * 0.5 + 0.5); vec3 brightColor = mix(colGold, colSecondary, cos(angle * 4.0) * 0.5 + 0.5);
-                color = mix(deepColor * 0.5, brightColor, bands + turb * 0.4); color += brightColor * spiral * 0.3;
-                // Transition out
-                if (phaseProgress > 0.7) { float t = smoothstep(0.7, 1.0, phaseProgress); color = mix(color, colStrangeGreen * 0.5, t); }
-            }
-            // Phase 4: Organic / Cellular
-            else if (phase < 5.0) {
-                vec2 cellUV = uv * mix(3.0, 5.0, phaseProgress); float n = fbm(cellUV + u_time * 0.2); float cells = 0.0;
-                for (float x = -1.0; x <= 1.0; x += 1.0) { for (float y = -1.0; y <= 1.0; y += 1.0) { vec2 neighbor = vec2(x, y); vec2 point = floor(cellUV) + neighbor + 0.5 + sin(u_time * 0.1 + floor(cellUV)) * 0.3; float dist = length(cellUV - point); cells += smoothstep(0.4, 0.38, dist); } }
-                cells = clamp(cells, 0.0, 1.0); vec3 cellColor = mix(colStrangeGreen, colPrimary, n); cellColor = mix(cellColor, colDeepRed, smoothstep(0.6, 0.8, n));
-                color = mix(colBackground * 0.5, cellColor, cells * 1.2); color += fbm(uv * 15.0 + u_time * 0.5) * 0.05;
-                // Transition out
-                if (phaseProgress > 0.75) { float t = smoothstep(0.75, 1.0, phaseProgress); float glitch = rand(originalUV + fract(u_time)); if (glitch > 0.95) { color.rg = color.gr; color *= 1.5; } color = mix(color, colBackground, t * smoothstep(0.9, 1.0, glitch)); }
-            }
-            // Phase 5: Glitch / Corruption
-            else if (phase < 6.0) {
-                float t = phaseProgress; vec2 blockUV = floor(originalUV * mix(20.0, 60.0, sin(u_time * 2.0)*0.5+0.5)) / mix(20.0, 60.0, sin(u_time * 2.0)*0.5+0.5);
-                float blockNoise = fbm(blockUV * 5.0 + u_time * 0.5); color = mix(colPrimary, colSecondary, blockNoise);
-                float tear = sin(originalUV.y * 10.0 + u_time * 5.0) * 0.5 + 0.5; tear = smoothstep(0.8, 0.85, tear);
-                float offset = tear * (rand(vec2(floor(u_time*2.0), floor(originalUV.y*10.0))) - 0.5) * 0.1; vec2 tearUV = uv + vec2(offset * mix(0.0, 1.0, t), 0.0);
-                float tearNoise = fbm(tearUV * 4.0 + u_time * 0.3); color = mix(color, mix(colTertiary, colDeepRed, tearNoise), tear);
-                // Simplified Chromatic Aberration simulation
-                float ca_offset = (0.005 + 0.01 * abs(sin(u_time * 3.0))) * t;
-                vec3 colR = getColorAtUV(uv + vec2(ca_offset, 0.0), u_time, u_resolution);
-                vec3 colB = getColorAtUV(uv - vec2(ca_offset, 0.0), u_time, u_resolution);
-                color = vec3(colR.r, color.g, colB.b); // Use calculated 'color' as Green channel
-                color += (rand(originalUV + fract(u_time * 10.0)) - 0.5) * 0.15 * t;
-                // Transition to NEW Phase 6 (Shifting Sands)
-                if (phaseProgress > 0.8) {
-                    float fade = smoothstep(0.8, 1.0, phaseProgress);
-                    vec2 sandUV = doubleWarp(uv * 1.5 + u_time * 0.05);
-                    float sandNoise = fbm(sandUV * 3.0);
-                    vec3 sandColor = mix(colSandDark, colSandLight, sandNoise);
-                    color = mix(color, sandColor, fade);
-                }
-            }
-
-            // --- NEW PHASES 6-11 ---
-
-            // Phase 6: Shifting Sands / Desert Mirage
-            else if (phase < 7.0) {
-                vec2 warpedUV = doubleWarp(uv * 1.2 + u_time * 0.03); // Heavy warp
-                float sandPattern = fbm(warpedUV * 4.0); // Base sand texture
-                float dunes = sin(warpedUV.x * 5.0 + fbm(warpedUV * 0.5 + u_time * 0.1) * 2.0) * 0.5 + 0.5; // Dune shapes
-                dunes = smoothstep(0.4, 0.6, dunes);
-
-                // Heat haze distortion (shift UV based on noise and vertical position)
-                float hazeNoise = noise(uv * vec2(1.0, 0.3) + u_time * 0.3);
-                vec2 hazeOffset = vec2(hazeNoise * 0.03 * (1.0 - originalUV.y), 0.0); // Stronger near bottom
-                float finalSandPattern = fbm((warpedUV + hazeOffset) * 4.0);
-
-                vec3 sandColor = mix(colSandDark, colSandLight, finalSandPattern * 0.7 + dunes * 0.3);
-
-                // Add mirage effect (reflect sky or add blue tint near horizon)
-                float mirage = smoothstep(0.0, 0.15, originalUV.y - 0.45); // Only near bottom
-                color = mix(sandColor, colTertiary * 0.6, mirage * 0.5);
-
-                // Transition to Deep Sea
-                if (phaseProgress > 0.8) {
-                    float t = smoothstep(0.8, 1.0, phaseProgress);
-                    color = mix(color, colDeepSeaBlue * (0.6 + 0.4*sin(u_time)), t); // Fade to pulsing dark blue
-                }
-            }
-
-            // Phase 7: Bio-luminescent Deep Sea
-            else if (phase < 8.0) {
-                vec2 deepUV = doubleWarp(uv * 2.0 + u_time * 0.02);
-                float baseNoise = fbm(deepUV * 0.8); // Smoother base noise
-                color = mix(colDeepSeaBlue, colBackground * 0.5, baseNoise * 0.6); // Darker background
-
-                // Glowing plankton/particles
-                float plankton = 0.0;
-                float scale = 6.0; // Start scale
-                for(int i=0; i < 5; i++) { // More layers
-                    float timeOffset = float(i) * 0.35;
-                    vec2 p = deepUV * scale + u_time * 0.15 * (float(i+1)*0.6);
-                    vec2 id = floor(p);
-                    vec2 fd = fract(p);
-                    float sparkle = hash(id.x + id.y * 31.3 + timeOffset);
-                    if (sparkle > 0.97) { // Slightly more particles
-                       float particleDist = length(fd - 0.5);
-                       // Brighter, sharper pulse
-                       plankton += smoothstep(0.1, 0.05, particleDist) * (0.7 + 0.3 * sin(u_time * 4.0 + sparkle * 15.0));
-                    }
-                    scale *= 1.6; // Adjust scale progression
-                }
-
-                color += mix(colBioLumGreen, colSecondary, rand(uv + 10.0)) * plankton * 1.8; // Brighter particles
-
-                // Enhanced water caustics effect
-                float caustics = fbm(uv * 5.0 + warp(uv + u_time * 0.15) * 0.7);
-                caustics = pow(smoothstep(0.35, 0.65, caustics), 2.0); // Sharper contrast
-                color += colSecondary * caustics * 0.12; // More visible caustics
-
-                 // Transition to Fractured View
-                if (phaseProgress > 0.75) {
-                    float t = smoothstep(0.75, 1.0, phaseProgress);
-                    vec2 shardUV = floor(originalUV * 10.0); // Smaller initial shards
-                    color = mix(color, colBackground * rand(shardUV), t * 0.9); // Stronger breakup
-                }
-            }
-
-            // Phase 8: Glitching Reality / Fractured View
-            else if (phase < 9.0) {
-                float gridSize = mix(4.0, 25.0, sin(u_time*0.5)*0.5+0.5); // Animated grid size
-                vec2 gridID = floor(originalUV * gridSize);
-                float gridRand = rand(gridID + floor(u_time * 3.0)); // Faster random changes
-
-                // Calculate offset
-                vec2 offset = vec2(0.0);
-                if (gridRand > 0.6) { offset = (rand(gridID + 1.0) - 0.5) * 0.15 * phaseProgress * (0.5 + gridRand); } // Larger offset
-
-                // Calculate rotation
-                float angle = 0.0;
-                if (gridRand < 0.4) { angle = (rand(gridID + 2.0) - 0.5) * 1.5 * phaseProgress; } // More rotation
-                mat2 rotMat = mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
-
-                // Apply transform
-                vec2 cellCenter = (gridID + 0.5) / gridSize;
-                vec2 transformedUV = rotMat * (originalUV - cellCenter) + cellCenter + offset;
-
-                // Sample color using a different pattern for variety
-                float patternNoise = noise(transformedUV * 5.0 + u_time * 0.2); // Different noise scale
-                color = mix(colDeepRed, colElectricBlue, patternNoise); // Different color mix
-
-                // Stronger Chromatic Aberration
-                float ca_offset_shard = 0.015 * gridRand * phaseProgress;
-                vec3 colR_shard = mix(colDeepRed, colElectricBlue, noise((transformedUV + vec2(ca_offset_shard, 0.0)) * 5.0 + u_time * 0.2));
-                vec3 colB_shard = mix(colDeepRed, colElectricBlue, noise((transformedUV - vec2(ca_offset_shard, 0.0)) * 5.0 + u_time * 0.2));
-                color = vec3(colR_shard.r, color.g, colB_shard.b);
-
-                // Shard boundaries with pulse
-                vec2 gridFract = fract(originalUV * gridSize);
-                float edge = min(smoothstep(0.0, 0.03, gridFract.x), smoothstep(0.0, 0.03, gridFract.y));
-                edge = max(edge, min(smoothstep(1.0, 0.97, gridFract.x), smoothstep(1.0, 0.97, gridFract.y)));
-                color = mix(color, colNeon * (0.5 + 0.5*sin(u_time*5.0)), edge * 0.8); // Pulsing Neon edges
-
-                // Transition to Energy Core
-                if (phaseProgress > 0.8) {
-                    float t = smoothstep(0.8, 1.0, phaseProgress);
-                    float coreDist = length(uv);
-                    float coreGlow = smoothstep(0.6, 0.0, coreDist); // Larger initial glow
-                    color = mix(color, colGold * coreGlow * 2.5, t);
-                }
-            }
-
-            // Phase 9: Pulsating Energy Core
-            else if (phase < 10.0) {
-                float dist = length(uv);
-                float corePulse = sin(u_time * 4.0) * 0.5 + 0.5; // Faster pulse
-                float coreSize = mix(0.05, 0.35, corePulse); // Smaller min, larger max size
-
-                // Core glow falloff - softer edge
-                float coreGlow = smoothstep(coreSize + 0.2, coreSize - 0.05, dist);
-
-                // Radiating waves - more complex pattern
-                float waveSpeed = 5.0; float waveFreq = 12.0;
-                float waveShape = sin(dist * waveFreq - u_time * waveSpeed) * 0.4 + // Base wave
-                                  sin(dist * waveFreq * 0.6 + u_time * waveSpeed * 0.7) * 0.3 + // Secondary wave
-                                  fbm(vec2(dist*5.0, u_time*0.5)) * 0.3; // Noise distortion
-                float waves = smoothstep(-0.1, 0.4, waveShape); // Adjust threshold for visibility
-                waves *= smoothstep(coreSize + 0.02, coreSize + 0.8, dist); // Waves start just outside core, fade further out
-                waves *= smoothstep(1.8, 1.0, dist);
-
-                // Inner core color - brighter white center
-                vec3 coreColor = mix(colGold, vec3(1.0), smoothstep(coreSize * 0.3, 0.0, dist));
-                coreColor = mix(coreColor, colAmber, smoothstep(coreSize, coreSize * 0.5, dist));
-
-                // Wave color - more vibrant mix
-                vec3 waveColor = mix(colMagenta, colElectricBlue, sin(dist * 6.0 - u_time * 1.5) * 0.5 + 0.5);
-
-                color = mix(colBackground * 0.5, coreColor, coreGlow * 2.0); // Brighter core
-                color = mix(color, waveColor, waves * 1.0); // Brighter waves
-
-                // Add noise texture to waves
-                float waveNoise = fbm(uv * 6.0 + vec2(u_time * 0.3, dist * 2.5));
-                color += waveNoise * waves * 0.15; // More noise influence
-
-                // Transition to Ink Bleed
-                if (phaseProgress > 0.7) {
-                    float t = smoothstep(0.7, 1.0, phaseProgress);
-                    vec2 inkUV = doubleWarp(uv * 1.8 + u_time * 0.05); // Stronger initial warp
-                    float inkNoise = fbm(inkUV * 3.5); // Denser noise
-                    color = mix(color, colInkDark * (1.0 - inkNoise * 0.5), t); // Mix in dark ink more strongly
-                }
-            }
-
-            // Phase 10: Shifting Ink / Watercolor Bleed
-            else if (phase < 11.0) {
-                vec2 inkUV = doubleWarp(uv * 1.5 + u_time * 0.08); // Increased speed and scale
-                float inkNoise = advancedFbm(inkUV * 3.0); // Base ink pattern
-
-                // Bleeding edges - more pronounced
-                float edgeNoise = advancedFbm(inkUV * 3.0 + 0.15);
-                float edge = abs(inkNoise - edgeNoise);
-                edge = pow(smoothstep(0.0, 0.15, edge), 0.7) * 1.0; // Sharper, brighter edges
-
-                // Color mixing - more contrast
-                vec3 darkInk = mix(colInkDark, colBlood * 0.8, smoothstep(0.3, 0.7, inkNoise)); // More blood red
-                vec3 lightInk = mix(colInkHighlight, colTertiary, fract(inkNoise * 7.0)); // More teal in highlights
-
-                color = mix(darkInk, lightInk, edge * 1.2); // Stronger edge influence
-                color *= (0.5 + inkNoise * 0.5); // Stronger brightness variation
-
-                // Color shifts based on warp - more intense
-                vec2 warpAmount = inkUV - uv * 1.5;
-                color.gb += length(warpAmount) * 0.2; // Add green/blue based on warp
-
-                 // Transition to Hyperspace Tunnel
-                if (phaseProgress > 0.75) {
-                    float t = smoothstep(0.75, 1.0, phaseProgress);
-                    float tunnelDist = length(uv);
-                    float tunnelAngle = atan(uv.y, uv.x);
-                    // Faster, more complex tunnel pattern
-                    float tunnelPattern = fract(tunnelDist * 7.0 - tunnelAngle * 4.0 + u_time * 3.0 + fbm(uv*2.0)*2.0);
-                    vec3 tunnelColor = mix(colHyperPink, colHyperLime, tunnelPattern);
-                    color = mix(color, tunnelColor, t * smoothstep(1.0, 0.0, tunnelDist)); // Fade in tunnel faster
-                }
-            }
-
-            // Phase 11: Geometric Hyperspace Tunnel
-            else { // phase < 12.0
-                float tunnelSpeed = u_time * 4.0; // Faster speed
-                float dist = length(uv);
-                float angle = atan(uv.y, uv.x);
-
-                // Stronger Perspective effect
-                float perspective = 1.0 / (dist * 1.5 + 0.3);
-                vec2 perspectiveUV = uv * perspective;
-
-                // Complex geometric pattern
-                float patternAngle = angle * 10.0 + sin(dist * 6.0 + tunnelSpeed * 0.6) * 1.5;
-                float patternDist = fract(dist * 5.0 - tunnelSpeed + fbm(vec2(angle*2.0, dist*3.0))*2.0 ); // Noise in distance
-                float patternShape = noise(vec2(patternAngle * 0.5, patternDist * 6.0));
-                patternShape = smoothstep(0.35, 0.65, patternShape); // Sharper shapes
-
-                // More vibrant colors
-                vec3 tunnelColor1 = mix(colHyperPink, colElectricBlue * 1.2, fract(angle * 2.5 + u_time*0.1));
-                vec3 tunnelColor2 = mix(colHyperLime, colSecondary * 1.2, fract(dist * 4.0 + u_time * 0.3));
-                color = mix(tunnelColor1, tunnelColor2, patternShape);
-
-                // Brighter Center glow/fade
-                float centerGlow = smoothstep(0.2, 0.0, dist);
-                color = mix(color, vec3(1.5), centerGlow * 0.7); // Brighter white center
-
-                // Faster edge fade
-                color *= smoothstep(1.2, 0.7, dist);
-
-                 // Transition back to Phase 0 (Grid)
-                if (phaseProgress > 0.8) {
-                    float t = smoothstep(0.8, 1.0, phaseProgress);
-                    // Calculate Phase 0 color again
-                    float warpFactor0 = 0.1 + 0.05 * sin(u_time * 0.2); warpFactor0 = max(0.001, warpFactor0);
-                    float z0 = 0.1 / max(0.01, 0.1 - uv.y * warpFactor0 + 0.02 * fbm(uv + u_time * 0.05)); z0 = clamp(z0, 0.1, 15.0);
-                    vec2 warp0 = uv * z0; vec2 grid0 = abs(fract(warp0 * vec2(5.0, 3.0) + u_time * 0.1) - 0.5);
-                    float line0 = smoothstep(0.04, 0.05, min(grid0.x, grid0.y)) * 0.6; float depth0 = fract(z0 * 0.1 + u_time * 0.15);
-                    vec3 baseCol0 = mix(mix(colPrimary, colTertiary, sin(u_time * 0.1)*0.5+0.5), colSecondary, sin(length(warp0)*0.5 - u_time*0.5)*0.5+0.5);
-                    vec3 phase0Color = mix(baseCol0 * 0.15, baseCol0, line0 * depth0 * 1.5);
-                    // Mix current color towards phase 0 color
-                    color = mix(color, phase0Color, t);
-                }
-            }
-
-            // --- Final Adjustments ---
-            color = mix(color, vec3(0.0), scanlineIntensity * (1.0 - scanline)); // Apply subtle scanline
-            color = clamp(color, 0.0, 1.0); // Clamp final color
-            gl_FragColor = vec4(color, 1.0);
-        }
-      \`; // End of fragmentShaderSource template literal
-
-      // WebGL utility functions (createShader, createProgram - Keep as is)
-      function createShader(gl, type, source) {
-          const shader = gl.createShader(type);
-          gl.shaderSource(shader, source);
-          gl.compileShader(shader);
-          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-              console.error(\`Shader compile error (\${type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment'}):\n\${gl.getShaderInfoLog(shader)}\nSource:\n\${source.split('\\n').map((line, i) => \`\${i + 1}: \${line}\`).join('\\n')}\`);
-              gl.deleteShader(shader);
-              return null;
+      // Optional: Add a static fallback background style to the body or canvas container
+       document.body.style.backgroundColor = '#050511'; // Ensure dark bg
+    } else {
+        // Vertex shader source (remains simple)
+        const vertexShaderSource = `
+          attribute vec4 a_position;
+          void main() {
+            gl_Position = a_position;
           }
-          return shader;
-      }
+        `;
 
-      function createProgram(gl, vertexShader, fragmentShader) {
-          if (!vertexShader || !fragmentShader) return null; // Added check
-          const program = gl.createProgram();
-          gl.attachShader(program, vertexShader);
-          gl.attachShader(program, fragmentShader);
-          gl.linkProgram(program);
-          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-              console.error('Program link error:', gl.getProgramInfoLog(program));
-              gl.deleteProgram(program);
-              return null;
+        // REVISED Fragment shader source - LONGER sequence, MORE UNCANNY effects
+        const fragmentShaderSource = `
+          precision highp float;
+          uniform float u_time;
+          uniform vec2 u_resolution;
+
+          // --- Helper Functions ---
+          // Simple pseudo-random number generator
+          float rand(vec2 co){
+              return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
           }
-          return program;
-      }
 
-      // Initialize WebGL shaders and program
-      let program;
-      let positionAttributeLocation;
-      let timeUniformLocation;
-      let resolutionUniformLocation;
-      let positionBuffer;
+          // Noise function (Classic Perlin/Value noise)
+          float hash(float n) { return fract(sin(n) * 43758.5453); }
+          float noise(vec2 p) {
+              vec2 i = floor(p);
+              vec2 f = fract(p);
+              f = f * f * (3.0 - 2.0 * f); // Smoothstep interpolation
+              float n = i.x + i.y * 57.0;
+              return mix(mix(hash(n), hash(n + 1.0), f.x),
+                         mix(hash(n + 57.0), hash(n + 58.0), f.x), f.y);
+          }
 
-      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-      let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource); // Use let for potential updates
-      program = createProgram(gl, vertexShader, fragmentShader);
+          // Fractal Brownian Motion (fBm) for texture
+          float fbm(vec2 p) {
+              float sum = 0.0;
+              float amp = 0.8; // Start with slightly less amplitude
+              float freq = 1.0;
+              for(int i = 0; i < 5; i++) { // Increased octaves for detail
+                  sum += noise(p * freq) * amp;
+                  amp *= 0.5;
+                  freq *= 2.1; // Slightly non-integer frequency multiplier
+              }
+              return sum;
+          }
 
-      if (program) {
-          positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-          timeUniformLocation = gl.getUniformLocation(program, "u_time");
-          resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+          // Chromatic Aberration simulation
+          vec3 chromaticAberration(sampler2D tex, vec2 uv, float offset) {
+              // This function expects a texture, but we'll simulate the effect directly on generated color
+              // We need to calculate the color multiple times with slight uv shifts.
+              // This is computationally expensive, so we'll define a function to get color at a point
+              // and call it multiple times. (See usage below in Phase 5)
+              // Placeholder - actual implementation depends on how color is generated.
+              return vec3(0.0); // Implemented inline where needed
+          }
 
-          positionBuffer = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-           // Define vertices for two triangles covering the viewport
-          const positions = [
-            -1.0, -1.0, // Triangle 1
-             1.0, -1.0,
-            -1.0,  1.0,
-            -1.0,  1.0, // Triangle 2
-             1.0, -1.0,
-             1.0,  1.0,
-          ];
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+          // --- Color Definitions (Including Uncanny additions) ---
+          vec3 colPrimary = vec3(106.0/255.0, 0.0/255.0, 255.0/255.0); // Purple
+          vec3 colSecondary = vec3(0.0/255.0, 255.0/255.0, 204.0/255.0); // Cyan
+          vec3 colTertiary = vec3(0.0/255.0, 184.0/255.0, 212.0/255.0); // Teal
+          vec3 colGreen = vec3(0.0, 0.8, 0.4);
+          vec3 colGold = vec3(0.8, 0.7, 0.0);
+          vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2); // Muted, unsettling green
+          vec3 colDeepRed = vec3(0.5, 0.0, 0.1);      // Dark, ominous red
+          vec3 colBackground = vec3(5.0/255.0, 5.0/255.0, 17.0/255.0); // Base background
 
-          let startTime = performance.now();
-          function render(now) {
-              if (!program || gl.isContextLost()) return; // Stop if program is invalid or context lost
+          // Function to get the base color calculation - to avoid repetition in Chromatic Aberration
+          // Note: This will need to be adapted based on the active phase logic.
+          // Simplified example for now:
+          vec3 getColorAtUV(vec2 sampleUV, float time, vec2 resolution) {
+              // Re-calculate basic elements based on sampleUV
+              float noiseVal = fbm(sampleUV * 3.0 + time * 0.1);
+              // Placeholder: Return a simple noise-based color for demonstration
+              return mix(colPrimary, colSecondary, noiseVal);
+          }
 
-              let time = (now - startTime) * 0.001;
 
-              // Resize canvas logic
-              const displayWidth  = gl.canvas.clientWidth;
-              const displayHeight = gl.canvas.clientHeight;
-              if (gl.canvas.width  !== displayWidth || gl.canvas.height !== displayHeight) {
-                  gl.canvas.width  = displayWidth;
-                  gl.canvas.height = displayHeight;
-                  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+          // --- Main Shader Logic ---
+          void main() {
+              vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x); // Aspect corrected, centered UV
+              vec2 originalUV = gl_FragCoord.xy / u_resolution.xy; // Original 0-1 UV
+
+              // Longer cycle, adjust speed factor (e.g., 0.08 is slower than 0.1)
+              float time_warp = u_time * 0.08;
+              float phase = mod(time_warp, 6.0); // 6 phases total
+
+              vec3 color = colBackground; // Initialize with background color
+
+              // --- Scanline Effect (Subtle, persistent) ---
+              float scanline = sin(originalUV.y * u_resolution.y * 0.8 + u_time * 0.1) * 0.5 + 0.5;
+              float scanlineIntensity = 0.04 + 0.02 * sin(u_time); // Varying intensity
+
+              // --- Phase Logic ---
+              float phaseProgress = fract(phase); // Progress within the current phase (0-1)
+
+              // Phase 0: Distorted Grid (Original, slightly enhanced)
+              if (phase < 1.0) {
+                  float warpFactor = 0.1 + 0.05 * sin(u_time * 0.2);
+                  warpFactor = max(0.001, warpFactor); // Ensure non-zero
+                  float z = 0.1 / max(0.01, 0.1 - uv.y * warpFactor + 0.02 * fbm(uv + u_time * 0.05)); // Added noise to perspective
+                  z = clamp(z, 0.1, 15.0);
+                  vec2 warp = uv * z;
+
+                  vec2 grid = abs(fract(warp * vec2(5.0, 3.0) + u_time * 0.1) - 0.5); // Slightly non-square grid
+                  float line = smoothstep(0.04, 0.05, min(grid.x, grid.y)) * 0.6; // Thinner lines
+
+                  float depth = fract(z * 0.1 + u_time * 0.15);
+
+                  vec3 baseCol = mix(
+                      mix(colPrimary, colTertiary, sin(u_time * 0.1) * 0.5 + 0.5),
+                      colSecondary,
+                      sin(length(warp) * 0.5 - u_time * 0.5) * 0.5 + 0.5
+                  );
+                  color = mix(baseCol * 0.15, baseCol, line * depth * 1.5); // Brighter lines
+
+                   // Transition effect (fade out grid intensity at end)
+                  color *= smoothstep(1.0, 0.8, phaseProgress);
               }
 
-              gl.useProgram(program);
+              // Phase 1: Circular Waves (Original, slightly enhanced)
+              else if (phase < 2.0) {
+                  float dist = length(uv);
+                  float rings = sin(dist * 18.0 - u_time * 2.5) * 0.5 + 0.5; // Faster, more rings
+                  rings *= smoothstep(1.8, 0.4, dist); // Different falloff
 
-              gl.enableVertexAttribArray(positionAttributeLocation);
-              gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-              gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+                  float wave = sin(uv.y * 25.0 + u_time * 1.2) * 0.04;
+                  vec2 waved_uv = uv + vec2(wave, sin(uv.x * 15.0 + u_time * 0.8) * 0.03); // Added x-wave
 
-              gl.uniform1f(timeUniformLocation, time);
-              gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+                  float n = fbm(waved_uv * 3.5 + u_time * 0.25);
 
-              // Clear might not be needed if shader draws fullscreen opaque
-              // gl.clearColor(0, 0, 0, 0);
-              // gl.clear(gl.COLOR_BUFFER_BIT);
+                  vec3 baseCol = mix(
+                      mix(colSecondary, colTertiary, rings),
+                      mix(colGreen, colGold, n),
+                      0.5 + 0.5 * sin(u_time * 0.6 + dist * 2.0) // Added distance modulation
+                  );
 
-              gl.drawArrays(gl.TRIANGLES, 0, 6); // Draw 6 vertices for 2 triangles
+                  color = mix(baseCol * 0.2, baseCol, rings * 0.8 + n * 0.6); // Adjusted mix
 
-              requestAnimationFrame(render);
+                  // Transition: Introduce cellular pattern subtly towards the end
+                   if (phaseProgress > 0.7) {
+                       float t = smoothstep(0.7, 1.0, phaseProgress);
+                       float cellNoise = fbm(waved_uv * 8.0 + u_time * 0.5);
+                       color = mix(color, colStrangeGreen * cellNoise, t * 0.5);
+                   }
+              }
+
+              // Phase 2: Electric Pulse / Hex Grid (Original, slightly enhanced)
+              else if (phase < 3.0) {
+                  vec2 r = vec2(1.0, 1.73); // Hex grid vectors
+                  vec2 h = r * 0.5;
+                  vec2 a = mod(uv * 2.0 + u_time * 0.1, r) - h; // Added slight movement
+                  vec2 b = mod(uv * 2.0 - h + u_time * 0.1, r) - h;
+                  vec2 gv = length(a) < length(b) ? a : b;
+
+                  float pulse = sin(u_time * 3.5) * 0.5 + 0.5; // Faster pulse
+                  float electric = sin(length(gv) * 25.0 - u_time * 3.5);
+                  electric = smoothstep(-0.1, 0.15, electric) - smoothstep(0.15, 0.4, electric); // Sharper electric lines
+
+                  float distortion = fbm(uv * 2.5 + vec2(u_time * 0.15, 0.0));
+
+                  vec3 baseColor = mix(colTertiary, colGreen, distortion);
+                  vec3 glowColor = mix(colSecondary, colPrimary, pulse);
+
+                  color = mix(baseColor * 0.1, glowColor, electric * pulse * 1.5); // Brighter glow
+
+                  float detail = abs(sin(uv.x * 22.0 + u_time * 1.1)) * abs(sin(uv.y * 22.0 - u_time * 1.3)); // More detail
+                  color += glowColor * detail * 0.08;
+
+                  // Transition: Start vortex effect gradually
+                  if (phaseProgress > 0.6) {
+                      float t = smoothstep(0.6, 1.0, phaseProgress);
+                      float angle = atan(uv.y, uv.x);
+                      float radius = length(uv);
+                      float vortex = fract(angle * 3.0 + radius * mix(0.0, 5.0, t) - u_time * 0.5);
+                      color = mix(color, colPrimary * vortex, t * 0.7);
+                  }
+              }
+
+              // Phase 3: Vortex / Spiral (Original, slightly enhanced)
+              else if (phase < 4.0) {
+                  float angle = atan(uv.y, uv.x) + 0.1 * fbm(uv * 0.5 + u_time * 0.05); // Distort angle slightly
+                  float radius = length(uv);
+                  float spiral_angle = angle * 6.0 + radius * 8.0 - u_time * 2.2; // Tighter spiral
+                  float spiral = smoothstep(-0.2, 0.2, sin(spiral_angle)); // Sharper spiral lines
+
+                  float radius_distorted = radius + sin(angle * 10.0 + u_time * 0.3) * 0.08; // More radius distortion
+
+                  float bands = fract(radius_distorted * 6.0 - u_time * 0.6);
+                  bands = smoothstep(0.0, 0.1, bands) * smoothstep(0.8, 0.5, bands); // Thinner bands
+
+                  float turb = fbm(vec2(radius_distorted * 6.0, angle * 3.0) + u_time * 0.15);
+
+                  vec3 deepColor = mix(colPrimary, colDeepRed, sin(radius_distorted * 12.0) * 0.5 + 0.5); // Introduce deep red
+                  vec3 brightColor = mix(colGold, colSecondary, cos(angle * 4.0) * 0.5 + 0.5);
+
+                  color = mix(deepColor * 0.5, brightColor, bands + turb * 0.4); // Adjusted mix
+                  color += brightColor * spiral * 0.3; // Brighter spiral
+
+                  // Transition: Fade towards organic green
+                  if (phaseProgress > 0.7) {
+                      float t = smoothstep(0.7, 1.0, phaseProgress);
+                      color = mix(color, colStrangeGreen * 0.5, t);
+                  }
+              }
+
+              // --- NEW Phase 4: Organic / Cellular ---
+              else if (phase < 5.0) {
+                  vec2 cellUV = uv * mix(3.0, 5.0, phaseProgress); // Zoom in slightly
+                  float n = fbm(cellUV + u_time * 0.2); // Base noise pattern
+
+                  float cells = 0.0;
+                  for (float x = -1.0; x <= 1.0; x += 1.0) {
+                      for (float y = -1.0; y <= 1.0; y += 1.0) {
+                          vec2 neighbor = vec2(x, y);
+                          vec2 point = floor(cellUV) + neighbor + 0.5 + sin(u_time * 0.1 + floor(cellUV)) * 0.3; // Jittery cell centers
+                          float dist = length(cellUV - point);
+                          cells += smoothstep(0.4, 0.38, dist); // Voronoi-like cells
+                      }
+                  }
+                  cells = clamp(cells, 0.0, 1.0);
+
+                  vec3 cellColor = mix(colStrangeGreen, colPrimary, n); // Mix green and purple
+                  cellColor = mix(cellColor, colDeepRed, smoothstep(0.6, 0.8, n)); // Add red highlights
+
+                  color = mix(colBackground * 0.5, cellColor, cells * 1.2); // Mix with background
+                  color += fbm(uv * 15.0 + u_time * 0.5) * 0.05; // Add fine texture noise
+
+                  // Transition: Introduce glitch elements
+                   if (phaseProgress > 0.75) {
+                       float t = smoothstep(0.75, 1.0, phaseProgress);
+                       float glitch = rand(originalUV + fract(u_time));
+                       if (glitch > 0.95) {
+                           color.rg = color.gr; // Swap channels
+                           color *= 1.5;
+                       }
+                       color = mix(color, colBackground, t * smoothstep(0.9, 1.0, glitch)); // Blocky fade out
+                   }
+              }
+
+              // --- NEW Phase 5: Glitch / Corruption ---
+              else { // phase >= 5.0
+                  float t = phaseProgress; // Use phase progress for effect intensity
+
+                  // 1. Blocky Glitch
+                  vec2 blockUV = floor(originalUV * mix(20.0, 60.0, sin(u_time * 2.0)*0.5+0.5)) / mix(20.0, 60.0, sin(u_time * 2.0)*0.5+0.5);
+                  float blockNoise = fbm(blockUV * 5.0 + u_time * 0.5);
+                  color = mix(colPrimary, colSecondary, blockNoise);
+
+                  // 2. Screen Tearing / Offset
+                  float tear = sin(originalUV.y * 10.0 + u_time * 5.0) * 0.5 + 0.5;
+                  tear = smoothstep(0.8, 0.85, tear); // Sharp tear line
+                  float offset = tear * (rand(vec2(floor(u_time*2.0), floor(originalUV.y*10.0))) - 0.5) * 0.1; // Random offset per line/time
+                  vec2 tearUV = uv + vec2(offset * mix(0.0, 1.0, t), 0.0); // Apply offset based on progress
+
+                  // Recalculate color based on offset UV (simplified here)
+                   float tearNoise = fbm(tearUV * 4.0 + u_time * 0.3);
+                   color = mix(color, mix(colTertiary, colDeepRed, tearNoise), tear); // Blend based on tear
+
+
+                  // 3. Chromatic Aberration (Simulated)
+                  float ca_offset = (0.005 + 0.01 * abs(sin(u_time * 3.0))) * t; // Varying offset
+                  // Sample color at slightly offset positions (using simplified example color function)
+                  vec3 colR = getColorAtUV(uv + vec2(ca_offset, 0.0), u_time, u_resolution);
+                  vec3 colG = getColorAtUV(uv, u_time, u_resolution); // Center sample
+                  vec3 colB = getColorAtUV(uv - vec2(ca_offset * 0.5, ca_offset * 0.8), u_time, u_resolution); // Diagonal offset for blue
+                  // Combine channels - Use the calculated 'color' as Green for simplicity here
+                  color = vec3(colR.r, color.g, colB.b);
+
+
+                  // 4. Noise Overlay
+                  color += (rand(originalUV + fract(u_time * 10.0)) - 0.5) * 0.15 * t;
+
+                  // Transition: Fade back to the grid phase smoothly
+                  if (phaseProgress > 0.8) {
+                      float fade = smoothstep(0.8, 1.0, phaseProgress);
+                       // Calculate phase 0 color again for mixing
+                       float warpFactor0 = 0.1 + 0.05 * sin(u_time * 0.2); warpFactor0 = max(0.001, warpFactor0);
+                       float z0 = 0.1 / max(0.01, 0.1 - uv.y * warpFactor0 + 0.02 * fbm(uv + u_time * 0.05)); z0 = clamp(z0, 0.1, 15.0);
+                       vec2 warp0 = uv * z0;
+                       vec2 grid0 = abs(fract(warp0 * vec2(5.0, 3.0) + u_time * 0.1) - 0.5);
+                       float line0 = smoothstep(0.04, 0.05, min(grid0.x, grid0.y)) * 0.6;
+                       float depth0 = fract(z0 * 0.1 + u_time * 0.15);
+                       vec3 baseCol0 = mix(mix(colPrimary, colTertiary, sin(u_time * 0.1)*0.5+0.5), colSecondary, sin(length(warp0)*0.5 - u_time*0.5)*0.5+0.5);
+                       vec3 phase0Color = mix(baseCol0 * 0.15, baseCol0, line0 * depth0 * 1.5);
+
+                      color = mix(color, phase0Color, fade);
+                  }
+              }
+
+              // --- Apply Scanlines ---
+              // Mix scanlines subtly, more visible on darker areas
+              color = mix(color, color * (1.0 - scanlineIntensity * 0.8), smoothstep(0.3, 0.0, scanline));
+              color = mix(color, color * (1.0 + scanlineIntensity * 0.5), smoothstep(0.7, 1.0, scanline));
+
+              // --- Vignette Effect ---
+              float vignette = smoothstep(1.4, 0.6, length(uv)); // Slightly stronger vignette
+              color *= vignette;
+
+              // Final Output - clamp color to avoid overbright areas
+              gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
           }
-          requestAnimationFrame(render); // Start the loop
-      } else {
-          console.error("Failed to create WebGL program. Background will be static.");
-          document.body.style.backgroundColor = '#050511';
-      }
+        `;
 
-      // Function to update shader dynamically (Keep existing logic)
-      // Ensure this function uses the new fragmentShaderSource if called
-      window.updateShader = function(newShaderCode) {
-          if (!gl) { /* showNotification("WebGL inactive..."); */ return; }
-          try {
-              if (!newShaderCode || newShaderCode.indexOf('main()') === -1) {
-                  /* showNotification("Invalid shader code..."); */
-                  console.error("Invalid shader code provided:", newShaderCode); return;
-              }
-              // IMPORTANT: Use the *new* full shader source structure here
-              const completeNewFragmentSource = \`
-                  precision highp float;
-                  uniform float u_time;
-                  uniform vec2 u_resolution;
-                  // --- Include Common Helper Functions ---
-                  float hash(float n) { return fract(sin(n) * 43758.5453); }
-                  float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
-                  float fbm(vec2 p) { float s=0.,a=.8,f=1.;for(int i=0;i<5;i++){s+=noise(p*f)*a;a*=.5;f*=2.1;}return s;}
-                  float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
-                  float advancedFbm(vec2 p) { float s=0.,a=.9,f=1.;mat2 rot=mat2(cos(.5),sin(.5),-sin(.5),cos(.5));for(int i=0;i<6;i++){s+=noise(p*f)*a;p=rot*p*2.02;a*=.5;f*=2.;}return s;}
-                  vec2 warp(vec2 p){vec2 q=vec2(fbm(p+vec2(0.,.1*u_time)),fbm(p+vec2(5.2,1.3)));return p+.15*q;}
-                  vec2 doubleWarp(vec2 p){vec2 q=vec2(fbm(p+.1*vec2(cos(u_time*.3),sin(u_time*.2))),fbm(p+.5*vec2(sin(u_time*.1),cos(u_time*.4))));vec2 r=vec2(fbm(p+1.*q+vec2(1.7,9.2)),fbm(p+1.*q+vec2(8.3,2.8)));return p+.5*r;}
-                  vec3 getColorAtUV(vec2 uv,float t,vec2 res){float n=fbm(uv*3.+t*.1);vec3 p=vec3(106./255.,0.,1.);vec3 s=vec3(0.,1.,204./255.);return mix(p,s,n);}
-                  // --- END Helper Functions ---
-                  // --- Common Colors ---
-                  vec3 colPrimary=vec3(106./255.,0.,1.);vec3 colSecondary=vec3(0.,1.,204./255.);vec3 colTertiary=vec3(0.,184./255.,212./255.);vec3 colGreen=vec3(0.,.8,.4);vec3 colGold=vec3(.8,.7,0.);vec3 colStrangeGreen=vec3(.1,.4,.2);vec3 colDeepRed=vec3(.5,0.,.1);vec3 colBackground=vec3(5./255.,5./255.,17./255.);vec3 colElectricBlue=vec3(.1,.3,.9);vec3 colMagenta=vec3(.8,.1,.8);vec3 colAmber=vec3(1.,.75,0.);vec3 colToxic=vec3(.8,1.,0.);vec3 colBlood=vec3(.55,0.,.05);vec3 colNeon=vec3(.9,0.,.9);vec3 colSandLight=vec3(.9,.8,.6);vec3 colSandDark=vec3(.6,.5,.3);vec3 colDeepSeaBlue=vec3(.05,.1,.4);vec3 colBioLumGreen=vec3(.3,1.,.7);vec3 colInkDark=vec3(.05,.05,.1);vec3 colInkHighlight=vec3(.7,.9,1.);vec3 colHyperPink=vec3(1.,.2,.7);vec3 colHyperLime=vec3(.5,1.,.3);vec3 colCircuitGreen=vec3(.2,1.,.3);vec3 colCircuitBlue=vec3(.3,.6,1.);vec3 colNebulaDark=vec3(.2,.05,.3);vec3 colNebulaMid=vec3(.6,.2,.7);vec3 colNebulaBright=vec3(1.,.7,.9);
-                  // --- END Colors ---
-                  \${newShaderCode} // Inject the user's main() and other functions here
-              \`;
+        // WebGL utility functions (createShader, createProgram - Keep as is)
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(`Shader compile error (${type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment'}):\n${gl.getShaderInfoLog(shader)}\nSource:\n${source.split('\n').map((line, i) => `${i + 1}: ${line}`).join('\n')}`);
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
 
-              const currentVertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-              const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, completeNewFragmentSource); // Use the combined source
+        function createProgram(gl, vertexShader, fragmentShader) {
+            if (!vertexShader || !fragmentShader) return null; // Added check
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                return null;
+            }
+            return program;
+        }
 
-              if (!newFragmentShader || !currentVertexShader) {
-                  console.error("Failed to compile new shaders.");
-                  if (newFragmentShader) gl.deleteShader(newFragmentShader);
-                  if (currentVertexShader) gl.deleteShader(currentVertexShader);
-                  // showNotification("SHADER COMPILE ERROR. Check console.");
-                  return;
-              }
+        // Initialize WebGL shaders and program
+        let program;
+        let positionAttributeLocation;
+        let timeUniformLocation;
+        let resolutionUniformLocation;
+        let positionBuffer;
 
-              const newProgram = createProgram(gl, currentVertexShader, newFragmentShader);
-              gl.deleteShader(newFragmentShader); gl.deleteShader(currentVertexShader); // Clean up temps
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource); // Use let for potential updates
+        program = createProgram(gl, vertexShader, fragmentShader);
 
-              if (!newProgram) {
-                  console.error("Failed to link new program.");
-                  // showNotification("SHADER LINK ERROR. Check console.");
-                  return; // Old program remains active
-              }
+        if (program) {
+            positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+            timeUniformLocation = gl.getUniformLocation(program, "u_time");
+            resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-              if (program) { gl.deleteProgram(program); } // Clean up old program
-              program = newProgram; // Switch to the new program
+            positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            const positions = [-1, 1, -1, -1, 1, 1, 1, -1]; // Fullscreen quad TRIANGLE_STRIP
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-              // Re-get uniform/attribute locations
-              positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-              timeUniformLocation = gl.getUniformLocation(program, "u_time");
-              resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
-              gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); // Rebind buffer
+            let startTime = performance.now();
+            function render(now) {
+                if (!program) return; // Stop if program is invalid
 
-              console.log("Shader updated successfully.");
-              // showNotification("SHADER UPDATE SUCCESSFUL.");
-          } catch (e) {
-              console.error('Shader update error:', e);
-              // showNotification(\`SHADER UPDATE FAILED: \${e.message}\`);
-          }
-      };
+                let time = (now - startTime) * 0.001;
 
-  } // End of WebGL check
+                // Resize canvas here if necessary (more efficient than resize event for continuous resizing)
+                if (webglCanvas.width !== window.innerWidth || webglCanvas.height !== window.innerHeight) {
+                   webglCanvas.width = window.innerWidth;
+                   webglCanvas.height = window.innerHeight;
+                   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+                }
 
 
+                // gl.clearColor(0, 0, 0, 1); // Clear not strictly needed if shader covers full screen
+                // gl.clear(gl.COLOR_BUFFER_BIT); // Usually not needed for fullscreen shader
+
+                gl.useProgram(program);
+
+                gl.enableVertexAttribArray(positionAttributeLocation);
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+                gl.uniform1f(timeUniformLocation, time);
+                gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                requestAnimationFrame(render);
+            }
+            requestAnimationFrame(render); // Start the loop
+        } else {
+            console.error("Failed to create WebGL program. Background will be static.");
+             document.body.style.backgroundColor = '#050511';
+        }
+
+        // Function to update shader dynamically (Keep existing logic, ensure it handles new complexity)
+        window.updateShader = function(newShaderCode) {
+             if (!gl) { showNotification("WebGL inactive. Cannot update shader."); return; }
+             try {
+                // Basic validation: check if 'main()' exists. More robust parsing is complex.
+                if (!newShaderCode || newShaderCode.indexOf('main()') === -1) {
+                    showNotification("Invalid shader code: Missing main() function.");
+                    console.error("Invalid shader code provided:", newShaderCode);
+                    return;
+                }
+
+                const completeNewFragmentSource = `
+                    precision highp float;
+                    uniform float u_time;
+                    uniform vec2 u_resolution;
+
+                    // --- Include Common Helper Functions ---
+                    float hash(float n) { return fract(sin(n) * 43758.5453); }
+                    float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
+                    float fbm(vec2 p) { float s=0.,a=.5,f=1.;for(int i=0;i<5;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
+                    float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
+                    // --- END Helper Functions ---
+
+                    // --- Common Colors ---
+                    vec3 colPrimary = vec3(106./255., 0., 1.);
+                    vec3 colSecondary = vec3(0., 1., 204./255.);
+                    vec3 colTertiary = vec3(0., 184./255., 212./255.);
+                    // --- END Colors ---
+
+                    ${newShaderCode} // Inject the user's main() and other functions here
+
+                    // Fallback main if user didn't provide one properly (though checked above)
+                    // void main() { if(false){}; /* Ensure main exists even if user code fails */ gl_FragColor = vec4(0.,0.,0.,1.); }
+                `;
+
+                // Recreate vertex shader to be safe (it's simple)
+                const currentVertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+                const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, completeNewFragmentSource);
+
+                if (!newFragmentShader || !currentVertexShader) {
+                    console.error("Failed to compile new shaders.");
+                    if (newFragmentShader) gl.deleteShader(newFragmentShader);
+                    if (currentVertexShader) gl.deleteShader(currentVertexShader);
+                    showNotification("SHADER COMPILE ERROR. Check console.");
+                    return;
+                }
+
+                const newProgram = createProgram(gl, currentVertexShader, newFragmentShader);
+
+                // Clean up temporary shaders immediately after linking attempt
+                gl.deleteShader(newFragmentShader);
+                gl.deleteShader(currentVertexShader);
 
 
+                if (!newProgram) {
+                    console.error("Failed to link new program.");
+                    showNotification("SHADER LINK ERROR. Check console.");
+                    // Old program remains active
+                    return;
+                }
+
+                // Clean up old program *after* new one is confirmed valid
+                if (program) {
+                    gl.deleteProgram(program);
+                }
+                // Note: Original fragment shader object is implicitly garbage collected if not referenced
+
+                program = newProgram; // Switch to the new program
+
+                // Re-get uniform/attribute locations for the new program
+                positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+                timeUniformLocation = gl.getUniformLocation(program, "u_time");
+                resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+                // Rebind buffer just in case state was lost (usually not needed)
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
 
+                console.log("Shader updated successfully.");
+                showNotification("SHADER UPDATE SUCCESSFUL.");
 
+            } catch (e) {
+                console.error('Shader update error:', e);
+                showNotification(`SHADER UPDATE FAILED: ${e.message}`);
+            }
+        };
 
+        // Handle window resize (listener already present below)
 
+    } // End of WebGL check
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////
  // Advanced Particle System (Ultra Uncanny)
 function createParticles() {
