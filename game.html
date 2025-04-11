@@ -3,267 +3,552 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquid Launch</title>
+    <title>Void Command Terminal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Liquid Cool Palette (Cyan/Indigo focus) */
-            --hue1: 190; /* Cyan */
-            --hue2: 240; /* Indigo */
-            --hue3: 280; /* Violet */
+            /* Deep Space Terminal Palette */
+            --hue1: 195; /* Cryogenic Blue */
+            --hue2: 260; /* Quantum Purple */
+            --hue3: 330; /* Radiation Red */
+            --hue4: 140; /* Biohazard Green */
 
-            --bg-deep: hsl(var(--hue2), 40%, 5%);   /* Deep Indigo */
-            --bg-mid: hsl(var(--hue2), 35%, 12%);  /* Dark Indigo */
-
-            --liquid-glow1: hsla(var(--hue1), 90%, 60%, 0.7);
-            --liquid-glow2: hsla(var(--hue3), 80%, 65%, 0.6);
-            --liquid-highlight: hsla(var(--hue1), 100%, 80%, 1);
-
-            --text-color: hsla(var(--hue1), 80%, 85%, 0.9);
-
-            --glow-soft1: 0 0 25px hsla(var(--hue1), 90%, 60%, 0.5);
-            --glow-soft2: 0 0 20px hsla(var(--hue3), 80%, 65%, 0.4);
-
-            --transition-speed: 0.4s;
+            --terminal-dark: hsl(var(--hue2), 45%, 3%);
+            --terminal-grid: hsl(var(--hue2), 35%, 10%);
+            --terminal-accent: hsl(var(--hue1), 90%, 60%);
+            
+            --glow-primary: hsla(var(--hue1), 90%, 60%, 0.7);
+            --glow-secondary: hsla(var(--hue3), 80%, 60%, 0.6);
+            --glow-tertiary: hsla(var(--hue4), 85%, 55%, 0.5);
+            
+            --scan-line: hsla(var(--hue1), 50%, 80%, 0.08);
+            --terminal-text: hsla(var(--hue1), 90%, 85%, 0.9);
+            
+            --hologram-glow: 0 0 25px hsla(var(--hue1), 90%, 60%, 0.6),
+                            0 0 40px hsla(var(--hue1), 90%, 60%, 0.3);
+            --scanner-glow: 0 0 15px hsla(var(--hue4), 90%, 55%, 0.5);
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        html { font-size: 16px; }
+        @keyframes terminalBoot {
+            0% { opacity: 0; transform: scale(0.94); }
+            5% { opacity: 0.2; }
+            10% { opacity: 0.1; }
+            14% { opacity: 0.7; }
+            20% { opacity: 0.2; }
+            25% { opacity: 1; transform: scale(1.02); }
+            30% { transform: scale(0.98); }
+            40% { transform: scale(1.01); }
+            50% { transform: scale(0.99); }
+            70% { transform: scale(1); }
+        }
+
+        @keyframes scanLine {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        @keyframes flickerText {
+            0%, 100% { opacity: 1; }
+            6% { opacity: 0.85; }
+            8% { opacity: 1; }
+            10% { opacity: 0.9; }
+            20% { opacity: 1; }
+            89% { opacity: 1; }
+            91% { opacity: 0.9; }
+            93% { opacity: 1; }
+            94% { opacity: 0.92; }
+        }
+
+        @keyframes hexaRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulseOutline {
+            0%, 100% { border-color: hsla(var(--hue1), 80%, 70%, 0.2); }
+            50% { border-color: hsla(var(--hue1), 90%, 80%, 0.5); }
+        }
+
+        @keyframes terminalBackgroundShift {
+            0% { 
+                background-position: 0% 0%;
+                filter: hue-rotate(0deg);
+            }
+            50% { 
+                filter: hue-rotate(10deg);
+            }
+            100% { 
+                background-position: 100% 100%;
+                filter: hue-rotate(0deg);
+            }
+        }
 
         body {
-            background-color: var(--bg-deep);
-            color: var(--text-color);
-            font-family: 'Oxanium', sans-serif;
+            background-color: var(--terminal-dark);
+            color: var(--terminal-text);
+            font-family: 'Share Tech Mono', monospace;
             min-height: 100vh;
             overflow: hidden;
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
+            text-shadow: 0 0 5px var(--glow-primary);
+            animation: terminalBoot 2s ease-out forwards;
         }
 
-        /* Noise Overlay (Subtle) */
+        /* Hexagon Grid Background */
         body::before {
             content: '';
-            position: fixed; inset: 0;
-            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)" opacity="0.02"/></svg>');
-            opacity: 0.5;
-            pointer-events: none;
-            z-index: 1; /* Above background, below content */
-            animation: subtleNoiseShift 30s linear infinite alternate;
-        }
-        @keyframes subtleNoiseShift {
-            from { background-position: 0% 0%; } to { background-position: 5% 10%; }
-        }
-
-        /* Liquid Background Layer */
-        .background-layer {
-            position: fixed; inset: -50%; /* Extend beyond viewport */
-            z-index: 0;
-            background: radial-gradient(ellipse at 20% 80%, hsla(var(--hue1), 50%, 20%, 0.6) 0%, transparent 60%),
-                        radial-gradient(ellipse at 80% 30%, hsla(var(--hue3), 40%, 25%, 0.5) 0%, transparent 55%),
-                        radial-gradient(ellipse at 50% 50%, hsla(var(--hue2), 30%, 15%, 0.7) 0%, transparent 70%);
-            background-size: 150% 150%; /* Make gradients larger */
+            position: fixed;
+            inset: 0;
+            background-image: 
+                repeating-linear-gradient(
+                    to right,
+                    transparent,
+                    transparent 50px,
+                    hsla(var(--hue2), 60%, 50%, 0.03) 50px,
+                    hsla(var(--hue2), 60%, 50%, 0.03) 51px
+                ),
+                repeating-linear-gradient(
+                    to bottom,
+                    transparent,
+                    transparent 50px,
+                    hsla(var(--hue2), 60%, 50%, 0.03) 50px,
+                    hsla(var(--hue2), 60%, 50%, 0.03) 51px
+                ),
+                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><path d="M15,0 L45,0 L60,26 L45,52 L15,52 L0,26 Z" fill="none" stroke="rgba(120,200,255,0.05)" stroke-width="0.5"/></svg>');
+            background-size: 100% 100%, 100% 100%, 80px 90px;
             opacity: 0.8;
-            animation: liquidFlow 45s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+            z-index: 0;
+            animation: terminalBackgroundShift 120s linear infinite alternate;
+        }
+
+        /* Scan Line Effect */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: var(--scan-line);
+            z-index: 12;
+            box-shadow: 0 0 15px var(--glow-primary);
+            animation: scanLine 8s linear infinite;
+            opacity: 0.6;
+        }
+
+        /* Terminal Background with Radial Gradient Effects */
+        .background-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            background: 
+                radial-gradient(ellipse at 30% 20%, hsla(var(--hue1), 90%, 20%, 0.7) 0%, transparent 70%),
+                radial-gradient(ellipse at 70% 80%, hsla(var(--hue3), 80%, 25%, 0.6) 0%, transparent 70%),
+                radial-gradient(ellipse at 65% 35%, hsla(var(--hue4), 70%, 20%, 0.5) 0%, transparent 65%),
+                radial-gradient(circle at 50% 50%, hsla(var(--hue2), 40%, 10%, 0.8) 0%, var(--terminal-dark) 100%);
+            opacity: 0.9;
+            filter: contrast(1.2);
+            animation: terminalBackgroundShift 60s ease-in-out infinite alternate;
             will-change: transform;
+            pointer-events: none;
         }
 
-        @keyframes liquidFlow {
-            0% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
-            100% { transform: translate(5%, -5%) rotate(10deg) scale(1.15); }
-        }
-
-        /* Game Launchers Container */
-        .game-launchers {
-            position: relative; /* Ensure it's above background */
+        /* Terminal Display Frame */
+        .terminal-frame {
+            position: relative;
             z-index: 10;
-            display: flex;
-            flex-wrap: wrap; /* Allow wrapping on smaller screens */
-            justify-content: center;
-            align-items: center;
-            gap: 35px; /* Spacing between orbs */
-            padding: 20px;
-            max-width: 800px; /* Limit width */
+            padding: 30px;
+            background-color: hsla(var(--hue2), 40%, 6%, 0.7);
+            border: 1px solid hsla(var(--hue1), 80%, 70%, 0.2);
+            border-radius: 10px;
+            box-shadow: 0 0 30px hsla(var(--hue1), 90%, 40%, 0.3),
+                        inset 0 0 20px hsla(var(--hue2), 70%, 5%, 0.9);
+            backdrop-filter: blur(2px);
+            animation: pulseOutline 8s infinite;
+            max-width: 900px;
+            width: 90%;
         }
 
-        /* Individual Game Orb */
+        /* Display Header */
+        .terminal-header {
+            text-align: center;
+            margin-bottom: 20px;
+            position: relative;
+            padding-bottom: 15px;
+            border-bottom: 1px solid hsla(var(--hue1), 80%, 60%, 0.15);
+        }
+
+        .terminal-header::before {
+            content: "VOID COMMAND SYSTEM v3.8.5";
+            display: block;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            color: hsla(var(--hue1), 90%, 75%, 0.9);
+            margin-bottom: 8px;
+            animation: flickerText 10s infinite;
+        }
+
+        .terminal-header::after {
+            content: "• QUANTUM SECURED LAUNCH INTERFACE •";
+            display: block;
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+            color: hsla(var(--hue4), 90%, 70%, 0.8);
+            margin-top: 5px;
+        }
+
+        /* Game Orbs Container */
+        .game-launchers {
+            position: relative;
+            z-index: 10;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 25px;
+            padding: 15px 5px;
+            justify-items: center;
+        }
+
+        /* Hexagonal Game Orbs */
         .game-orb {
-            width: 90px;
-            height: 90px;
-            border-radius: 50%; /* Perfect circle */
-            background: radial-gradient(ellipse at 30% 30%, hsla(var(--hue1), 70%, 40%, 0.6), var(--bg-mid) 75%);
-            border: 1px solid hsla(var(--hue1), 80%, 70%, 0.15);
-            box-shadow: inset 0 2px 15px rgba(0,0,0,0.5),
-                        0 0 10px hsla(var(--hue1), 80%, 50%, 0.2),
-                        0 0 15px hsla(var(--hue3), 70%, 55%, 0.15);
+            width: 95px;
+            height: 110px;
+            background: linear-gradient(45deg, 
+                      hsla(var(--hue2), 70%, 10%, 0.8),
+                      hsla(var(--hue1), 70%, 20%, 0.7) 50%,
+                      hsla(var(--hue2), 70%, 10%, 0.8));
+            position: relative;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            text-align: center;
             cursor: pointer;
-            transition: transform var(--transition-speed) cubic-bezier(0.175, 0.885, 0.32, 1.275), /* Overshoot */
-                        box-shadow var(--transition-speed) ease,
-                        background var(--transition-speed) ease;
-            font-size: 0.65rem; /* Smaller text */
-            font-weight: 600;
-            color: var(--text-color);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            position: relative;
-            overflow: hidden; /* For pseudo-element effects */
-            will-change: transform, box-shadow;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-family: 'Oxanium', sans-serif;
+            text-align: center;
+            border: 1px solid hsla(var(--hue1), 80%, 60%, 0.3);
+            box-shadow: 0 0 10px hsla(var(--hue1), 80%, 50%, 0.2),
+                        inset 0 0 15px hsla(var(--hue2), 70%, 10%, 0.9);
+            will-change: transform, box-shadow, background;
         }
 
-        /* Orb Icon/Glyph */
-        .game-orb span {
-            font-size: 1.8rem; /* Larger icon */
-            margin-bottom: 4px;
-            line-height: 1;
-            display: block;
-            filter: drop-shadow(0 0 5px var(--liquid-glow1));
-            transition: transform 0.3s ease;
+        /* Orb Pseudo-elements for Additional Visual Effects */
+        .game-orb::before {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            background: radial-gradient(circle at 30% 30%, 
+                         hsla(var(--hue1), 90%, 40%, 0.3) 0%, 
+                         transparent 70%);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            z-index: -1;
+            opacity: 0.7;
+            transition: opacity 0.4s ease;
         }
 
-        /* Liquid Ripple/Glow Effect on Hover */
         .game-orb::after {
             content: '';
             position: absolute;
-            top: 50%; left: 50%;
-            width: 5px; height: 5px;
-            background: var(--liquid-highlight);
+            width: 70%;
+            height: 70%;
+            background: conic-gradient(
+                from 0deg,
+                hsla(var(--hue1), 90%, 60%, 0) 0%,
+                hsla(var(--hue1), 90%, 60%, 0.2) 25%,
+                hsla(var(--hue1), 90%, 60%, 0.3) 50%,
+                hsla(var(--hue1), 90%, 60%, 0.2) 75%,
+                hsla(var(--hue1), 90%, 60%, 0) 100%
+            );
             border-radius: 50%;
-            transform: translate(-50%, -50%) scale(0);
+            transform: scale(0);
+            transition: transform 0.5s ease-out;
+            filter: blur(5px);
+            z-index: -1;
+        }
+
+        .game-orb span {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            line-height: 1;
+            display: block;
+            filter: drop-shadow(0 0 5px var(--glow-primary));
+            position: relative;
+            z-index: 2;
+            transition: transform 0.3s ease, filter 0.3s ease;
+        }
+
+        .orb-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: hsla(var(--hue1), 90%, 85%, 0.9);
+            font-weight: 600;
+            position: relative;
+            z-index: 2;
+            transition: color 0.3s ease;
+        }
+
+        /* Core ID Indicator */
+        .orb-label::after {
+            content: attr(data-core-id);
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.45rem;
+            color: hsla(var(--hue4), 90%, 70%, 0.7);
             opacity: 0;
-            transition: transform calc(var(--transition-speed) * 1.5) ease-out,
-                        opacity calc(var(--transition-speed) * 1.5) ease-out;
-            filter: blur(3px);
-            z-index: 0; /* Behind text/icon */
+            transition: opacity 0.3s ease;
         }
 
+        /* Hover & Focus Effects */
         .game-orb:hover,
-        .game-orb:focus-visible { /* Combine states */
+        .game-orb:focus-visible {
             outline: none;
-            transform: scale(1.15) translateY(-5px); /* Pop up */
-            background: radial-gradient(ellipse at 30% 30%, hsla(var(--hue1), 80%, 50%, 0.7), var(--bg-mid) 80%);
-            box-shadow: inset 0 1px 10px rgba(0,0,0,0.4), var(--glow-soft1), var(--glow-soft2);
-            border-color: hsla(var(--hue1), 90%, 75%, 0.3);
+            transform: translateY(-8px) scale(1.1);
+            background: linear-gradient(45deg, 
+                      hsla(var(--hue2), 80%, 15%, 0.9),
+                      hsla(var(--hue1), 80%, 30%, 0.8) 50%,
+                      hsla(var(--hue2), 80%, 15%, 0.9));
+            box-shadow: 0 0 15px hsla(var(--hue1), 90%, 60%, 0.5),
+                        0 0 30px hsla(var(--hue1), 90%, 60%, 0.3),
+                        inset 0 0 20px hsla(var(--hue1), 80%, 30%, 0.3);
+            border-color: hsla(var(--hue1), 90%, 75%, 0.5);
         }
 
-        .game-orb:hover span,
-        .game-orb:focus-visible span {
-            transform: scale(1.05); /* Icon reacts */
+        .game-orb:hover::before,
+        .game-orb:focus-visible::before {
+            opacity: 1;
         }
 
         .game-orb:hover::after,
         .game-orb:focus-visible::after {
-            transform: translate(-50%, -50%) scale(30); /* Expand ripple */
-            opacity: 0.6;
+            transform: scale(1.5);
         }
 
-        /* Click effect */
+        .game-orb:hover span,
+        .game-orb:focus-visible span {
+            transform: scale(1.1) translateY(-2px);
+            filter: drop-shadow(0 0 8px var(--glow-primary));
+        }
+
+        .game-orb:hover .orb-label,
+        .game-orb:focus-visible .orb-label {
+            color: hsla(var(--hue1), 100%, 95%, 1);
+        }
+
+        .game-orb:hover .orb-label::after,
+        .game-orb:focus-visible .orb-label::after {
+            opacity: 1;
+        }
+
+        /* Active/Click Effect */
         .game-orb:active {
-            transform: scale(1.05) translateY(-2px); /* Slight press down */
+            transform: translateY(-4px) scale(1.05);
             transition-duration: 0.1s;
+            box-shadow: 0 0 25px hsla(var(--hue1), 90%, 60%, 0.7),
+                        inset 0 0 30px hsla(var(--hue1), 80%, 40%, 0.5);
         }
 
-        /* Orb Text (below icon) */
-        .orb-label {
-            font-size: 0.6rem;
-            opacity: 0.8;
-            position: relative; /* Ensure text is above ripple */
-            z-index: 1;
-            margin-top: 2px;
+        /* Status Indicators */
+        .terminal-status {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid hsla(var(--hue1), 80%, 60%, 0.15);
+            font-size: 0.65rem;
+            color: hsla(var(--hue1), 80%, 70%, 0.7);
+        }
+
+        .status-left, .status-right {
+            display: flex;
+            gap: 15px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: hsla(var(--hue4), 90%, 60%, 0.8);
+            box-shadow: 0 0 5px hsla(var(--hue4), 90%, 60%, 0.6);
+            position: relative;
+        }
+
+        .status-dot.pulse {
+            animation: statusPulse 2s infinite alternate;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Rotation Animation for Scanner Indicator */
+        .scanner-status::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 5px;
+            border: 1px solid hsla(var(--hue4), 90%, 70%, 0.6);
+            border-top: 1px solid hsla(var(--hue1), 90%, 80%, 0.9);
+            border-radius: 50%;
+            animation: hexaRotate 2s linear infinite;
         }
 
         /* Responsive Adjustments */
-        @media (max-width: 600px) {
+        @media (max-width: 700px) {
             .game-launchers {
-                gap: 25px;
-                padding: 15px;
+                grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+                gap: 20px;
             }
             .game-orb {
-                width: 80px;
+                width: 85px;
+                height: 95px;
+            }
+            .game-orb span {
+                font-size: 1.8rem;
+            }
+            .orb-label {
+                font-size: 0.6rem;
+            }
+            .terminal-status {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .status-left, .status-right {
+                justify-content: space-between;
+            }
+        }
+
+        @media (max-width: 450px) {
+            .terminal-frame {
+                padding: 20px 15px;
+            }
+            .game-launchers {
+                grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+                gap: 15px;
+            }
+            .game-orb {
+                width: 70px;
                 height: 80px;
             }
-            .game-orb span { font-size: 1.6rem; }
-            .orb-label { font-size: 0.55rem; }
+            .game-orb span {
+                font-size: 1.4rem;
+            }
+            .orb-label {
+                font-size: 0.55rem;
+            }
         }
-         @media (max-width: 400px) {
-             .game-launchers {
-                 gap: 20px;
-             }
-             .game-orb {
-                 width: 70px;
-                 height: 70px;
-             }
-             .game-orb span { font-size: 1.4rem; }
-             .orb-label { font-size: 0.5rem; }
-         }
-
     </style>
 </head>
 <body>
     <div class="background-layer"></div>
 
-    <div class="game-launchers">
-        <button class="game-orb" data-url="./ordinary-recycling/index.html" aria-label="Launch Containment Scenario">
-            <span>☣️</span>
-            <div class="orb-label">Contain</div>
-        </button>
+    <div class="terminal-frame">
+        <div class="terminal-header"></div>
 
-        <button class="game-orb" data-url="https://upit.com/up/OrdinaryDefense1" aria-label="Launch Defense Grid Scenario">
-            <span>🛡️</span>
-            <div class="orb-label">Defense</div>
-        </button>
+        <div class="game-launchers">
+            <button class="game-orb" data-url="./ordinary-recycling/index.html" aria-label="Launch Containment Scenario">
+                <span>☣️</span>
+                <div class="orb-label" data-core-id="CTN-6382">Contain</div>
+            </button>
 
-        <button class="game-orb" data-url="./game/index.html" aria-label="Launch Hive Prediction Scenario">
-            <span>🐝</span>
-            <div class="orb-label">Predict</div>
-        </button>
+            <button class="game-orb" data-url="https://upit.com/up/OrdinaryDefense1" aria-label="Launch Defense Grid Scenario">
+                <span>🛡️</span>
+                <div class="orb-label" data-core-id="DEF-9104">Defense</div>
+            </button>
 
-        <button class="game-orb" data-url="./game2/index.html" aria-label="Launch Void Navigation Scenario">
-            <span>🌌</span>
-            <div class="orb-label">Navigate</div>
-        </button>
+            <button class="game-orb" data-url="./game/index.html" aria-label="Launch Hive Prediction Scenario">
+                <span>🐝</span>
+                <div class="orb-label" data-core-id="HIV-3571">Predict</div>
+            </button>
 
-        <button class="game-orb" data-url="./new_game_1/index.html" aria-label="Launch Hydro Flux Scenario">
-            <span>💧</span>
-            <div class="orb-label">HydroFlux</div>
-        </button>
+            <button class="game-orb" data-url="./game2/index.html" aria-label="Launch Void Navigation Scenario">
+                <span>🌌</span>
+                <div class="orb-label" data-core-id="VID-7294">Navigate</div>
+            </button>
 
-        <button class="game-orb" data-url="./new_game_2/index.html" aria-label="Launch Crystal Rift Scenario">
-            <span>💎</span>
-            <div class="orb-label">RiftRun</div>
-        </button>
+            <button class="game-orb" data-url="./new_game_1/index.html" aria-label="Launch Hydro Flux Scenario">
+                <span>💧</span>
+                <div class="orb-label" data-core-id="HYD-1853">HydroFlux</div>
+            </button>
+
+            <button class="game-orb" data-url="./new_game_2/index.html" aria-label="Launch Crystal Rift Scenario">
+                <span>💎</span>
+                <div class="orb-label" data-core-id="RFT-4276">RiftRun</div>
+            </button>
+        </div>
+
+        <div class="terminal-status">
+            <div class="status-left">
+                <div class="status-indicator">
+                    <div class="status-dot pulse"></div>
+                    <span>QUANTUM LINK</span>
+                </div>
+                <div class="status-indicator scanner-status">
+                    <span>SCAN ACTIVE</span>
+                </div>
+            </div>
+            <div class="status-right">
+                <div class="status-indicator">
+                    <span>SECTOR: DELTA-IV</span>
+                </div>
+                <div class="status-indicator">
+                    <span>NODE: 192.3.45</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const launchersContainer = document.querySelector('.game-launchers');
-
-            if (launchersContainer) {
-                launchersContainer.addEventListener('click', (e) => {
-                    // Find the button element that was clicked, even if the click was on its child (span/div)
+            // Add terminal boot sounds
+            const bootSound = new Audio();
+            bootSound.volume = 0.3;
+            
+            // Set core IDs randomly for visual effect (these are purely decorative)
+            const orbLabels = document.querySelectorAll('.orb-label');
+            
+            // Add click event listener to the container using event delegation
+            const terminalFrame = document.querySelector('.terminal-frame');
+            
+            if (terminalFrame) {
+                terminalFrame.addEventListener('click', (e) => {
+                    // Find the button element that was clicked, or its parent if clicked on child
                     const targetOrb = e.target.closest('.game-orb');
-
+                    
                     if (targetOrb) {
+                        // Create a short UI feedback sound
+                        const clickSound = new Audio();
+                        clickSound.volume = 0.2;
+                        
+                        // Get the URL and launch the game
                         const url = targetOrb.getAttribute('data-url');
                         if (url) {
-                            console.log(`Opening: ${url}`);
-                            // Open the URL in a new tab/window
+                            console.log(`TERMINAL: Launching scenario at ${url}`);
                             window.open(url, '_blank', 'noopener,noreferrer');
                         } else {
-                            console.warn('Game orb clicked, but no data-url found:', targetOrb);
+                            console.warn('TERMINAL ERROR: No launch coordinates found for this module.');
                         }
                     }
                 });
             } else {
-                console.error('Game launchers container not found!');
+                console.error('CRITICAL ERROR: Terminal interface not initialized!');
             }
         });
     </script>
