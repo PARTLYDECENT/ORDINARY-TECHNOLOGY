@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neuromantic Player (30 Visualizers)</title>
+  <title>Neuromantic Player</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
@@ -14,140 +14,247 @@
       --bg-dark: #0a0b0c;    /* Very Dark Blue/Black (RGB: 10, 11, 12) */
       --bg-light: #121416;   /* Slightly Lighter Dark */
       --text: #e0e0e0;      /* Light Gray Text */
-      --glass-bg: rgba(18, 20, 22, 0.65); /* Slightly less transparent glass */
-      --glass-border: rgba(255, 255, 255, 0.1);
     }
 
     /* Global Reset and Box Sizing */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
     /* Body Styling */
     body {
-      background-color: var(--bg-dark); color: var(--text); font-family: 'Space Mono', monospace;
-      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; padding: 1rem; overflow: hidden;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden; /* Prevent scrollbars from background canvas */
     }
 
     /* Background Canvas Styling */
-    #background-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+    #background-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1; /* Behind all other content */
+    }
 
     /* Header Styling */
-    header { font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; position: relative; text-transform: uppercase; color: var(--primary); z-index: 1; }
-    header::after { content: 'PLAYER'; position: absolute; left: 0; top: 0; color: var(--secondary); clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); }
+    header {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      position: relative; /* For pseudo-element positioning */
+      text-transform: uppercase;
+      color: var(--primary);
+      z-index: 1; /* Above background */
+    }
+
+    /* Header Glitch Effect */
+    header::after {
+      content: 'PLAYER';
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--secondary);
+      clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); /* Clips the 'PLAYER' text */
+    }
 
     /* Player Container Styling */
     .player-container {
-      width: 90%; max-width: 800px; border-radius: 4px; position: relative; z-index: 1;
-      overflow: hidden; background: var(--glass-bg); backdrop-filter: blur(12px);
-      border: 1px solid var(--glass-border); box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
-      display: grid;
-      grid-template-areas:
-        "visualizer visualizer"
-        "info info"
-        "progress progress"
-        "time time"
-        "controls controls"
-        "viz-controls viz-controls"
-        "playlist-toggle playlist-toggle"
-        "playlist playlist";
-      grid-template-columns: 1fr; grid-template-rows: auto;
+      width: 90%;
+      max-width: 800px;
+      background: var(--bg-light);
+      border-radius: 2px;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      z-index: 1; /* Above background */
+      overflow: hidden; /* Keep inner elements contained */
     }
 
-    /* Top Border Gradient - Animated */
-    .player-container::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, var(--primary), var(--secondary), var(--primary)); background-size: 200% 100%; animation: borderFlow 4s linear infinite; }
-    @keyframes borderFlow { 0% { background-position: 200% 50%; } 100% { background-position: 0% 50%; } }
+    /* Top Border Gradient */
+    .player-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+    }
 
-     /* Grid Area Assignments */
-    .visualizer-canvas-container { grid-area: visualizer; }
-    .track-info-wrapper { grid-area: info; }
-    .progress-container { grid-area: progress; }
-    .time-display { grid-area: time; }
-    .controls { grid-area: controls; }
-    .visualizer-controls { grid-area: viz-controls; }
-    .playlist-toggle { grid-area: playlist-toggle; }
-    .playlist-container { grid-area: playlist; }
+     /* Container for the visualizer canvas itself */
+     .visualizer-canvas-container {
+       height: 150px; /* Fixed height for visualizer area */
+       position: relative;
+       overflow: hidden; /* Clip potential overflows from visualizer */
+       background: rgba(0,0,0,0.1); /* Slight background for definition */
+    }
 
-     /* Visualizer Canvas Container */
-     .visualizer-canvas-container { height: 150px; position: relative; overflow: hidden; }
-    #visualizer { width: 100%; height: 100%; display: block; }
+     /* Visualizer Canvas Styling */
+    #visualizer {
+      width: 100%;
+      height: 100%; /* Fill the container */
+      display: block;
+    }
 
-    /* Track Info Wrapper */
-    .track-info-wrapper { padding: 1rem; border-bottom: 1px solid var(--glass-border); display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: center; }
-    .track-title { font-weight: bold; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Track Info Area */
+    .track-info {
+      display: grid;
+      grid-template-columns: 1fr auto; /* Title takes remaining space */
+      gap: 1rem;
+      padding: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .track-title {
+      font-weight: bold;
+      color: var(--primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap; /* Prevent title wrapping */
+    }
+
     .track-number { color: var(--secondary); }
 
     /* Progress Bar Area */
-    .progress-container { height: 5px; background: rgba(255, 255, 255, 0.1); cursor: pointer; overflow: hidden; margin: 0 1rem; border-radius: 3px; }
-    .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.1s linear; border-radius: 3px; }
+    .progress-container {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      overflow: hidden; /* Ensure progress bar stays within */
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      width: 0%;
+      transition: width 0.1s linear; /* Smooth progress updates */
+    }
 
     /* Time Display Area */
-    .time-display { display: flex; justify-content: space-between; padding: 0.5rem 1rem; font-size: 0.7rem; color: rgba(255, 255, 255, 0.6); }
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
 
     /* Controls Area (Prev/Play/Next) */
-    .controls { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.5rem 1rem; border-top: 1px solid var(--glass-border); border-bottom: 1px solid var(--glass-border); }
-    .controls button { background: none; border: none; color: var(--text); font-family: inherit; padding: 0.75rem 0.5rem; cursor: pointer; text-transform: uppercase; font-weight: bold; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-    .controls button:hover { color: var(--primary); transform: translateY(-2px) scale(1.05); text-shadow: 0 0 8px var(--primary); }
-    .controls button:active { transform: translateY(0px) scale(1.0); }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 0.5rem 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
 
-    /* Visualizer Controls Area - Updated for 30 buttons */
+    .controls button {
+      background: none;
+      border: none;
+      color: var(--text);
+      font-family: inherit;
+      padding: 0.5rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      font-weight: bold;
+      transition: color 0.2s ease;
+    }
+
+    .controls button:hover { color: var(--primary); }
+
+    /* Visualizer Controls Area */
     .visualizer-controls {
       display: grid;
-      grid-template-columns: repeat(10, 1fr); /* 10 columns */
-      grid-template-rows: auto auto auto; /* 3 rows */
+      grid-template-columns: repeat(5, 1fr);
       background: rgba(0, 0, 0, 0.2);
-      border-bottom: 1px solid var(--glass-border);
     }
+
     .visualizer-controls button {
-      background: none; border: none; color: rgba(255, 255, 255, 0.5); font-family: inherit;
-      font-size: 0.55rem; padding: 0.4rem 0.1rem; cursor: pointer; text-transform: uppercase;
-      transition: color 0.2s ease, background-color 0.2s ease; text-align: center;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.25rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
     }
-    .visualizer-controls button.active { color: var(--secondary); font-weight: bold; background-color: rgba(0, 255, 208, 0.1); }
-    .visualizer-controls button:hover:not(.active) { color: var(--primary); background-color: rgba(255, 75, 0, 0.1); }
+
+    .visualizer-controls button.active { color: var(--secondary); font-weight: bold; }
+    .visualizer-controls button:hover:not(.active) { color: var(--primary); }
 
     /* Playlist Toggle Button */
-    .playlist-toggle { width: 100%; background: none; border: none; padding: 0.85rem; color: var(--text); font-family: inherit; cursor: pointer; text-transform: uppercase; transition: background-color 0.2s ease, color 0.2s ease; }
-    .playlist-toggle:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--secondary); }
+    .playlist-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0.75rem;
+      color: var(--text);
+      font-family: inherit;
+      cursor: pointer;
+      text-transform: uppercase;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      transition: background-color 0.2s ease;
+    }
+    .playlist-toggle:hover {
+        background-color: rgba(255, 255, 255, 0.03);
+    }
 
     /* Playlist Container */
-    .playlist-container { max-height: 200px; overflow-y: auto; background: rgba(0, 0, 0, 0.1); }
-    .playlist-container::-webkit-scrollbar { width: 6px; }
-    .playlist-container::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
-    .playlist-container::-webkit-scrollbar-thumb { background: var(--secondary); border-radius: 3px; }
-    .playlist-container::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+    .playlist-container {
+      max-height: 200px; /* Limit height and enable scroll */
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      border-top: 1px solid rgba(255, 255, 255, 0.05); /* Add separation */
+    }
+     /* Custom Scrollbar for Playlist (Webkit browsers) */
+    .playlist-container::-webkit-scrollbar {
+        width: 5px;
+    }
+    .playlist-container::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+    }
+    .playlist-container::-webkit-scrollbar-thumb {
+        background: var(--secondary);
+        border-radius: 2px;
+    }
+     .playlist-container::-webkit-scrollbar-thumb:hover {
+        background: var(--primary);
+    }
 
     /* Individual Playlist Item */
-    .playlist-item { display: grid; grid-template-columns: auto auto 1fr; gap: 0.8rem; align-items: center; padding: 0.75rem 1rem; cursor: pointer; border-bottom: 1px solid var(--glass-border); font-size: 0.8rem; transition: background-color 0.2s ease; }
-    .playlist-item:last-child { border-bottom: none; }
-    .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
-    .playlist-item.active { background: rgba(0, 255, 208, 0.1); }
-    .playlist-item span:first-child { color: rgba(255, 255, 255, 0.5); width: 2em; text-align: right;}
-    .playlist-item span:last-child { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .playlist-item.active span { color: var(--secondary); font-weight: bold; }
-    .playlist-item-indicator { display: flex; align-items: flex-end; justify-content: center; gap: 1px; width: 15px; height: 15px; opacity: 0; transition: opacity 0.3s ease; }
-    .playlist-item.active .playlist-item-indicator { opacity: 1; }
-    .wave-bar { width: 2px; height: 100%; background-color: var(--secondary); animation: soundwave 0.8s ease-in-out infinite alternate; }
-    .wave-bar:nth-child(1) { animation-delay: 0s; } .wave-bar:nth-child(2) { animation-delay: 0.2s; } .wave-bar:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes soundwave { 0% { transform: scaleY(0.2); } 100% { transform: scaleY(1.0); } }
-
-    /* Responsive Adjustments */
-    @media (max-width: 600px) {
-      body { padding: 0.5rem; }
-      header { font-size: 1.2rem; margin-bottom: 1rem; }
-      .player-container { width: 100%; }
-      .track-info-wrapper { padding: 0.75rem; }
-      .progress-container { margin: 0 0.75rem; }
-      .controls button { padding: 0.6rem 0.4rem; }
-      /* Adjust viz controls grid for mobile */
-      .visualizer-controls { grid-template-columns: repeat(5, 1fr); grid-template-rows: auto; } /* Let them wrap over more rows if needed */
-      .visualizer-controls button { font-size: 0.5rem; padding: 0.3rem 0.1rem; }
-      .playlist-toggle { padding: 0.75rem; }
-      .playlist-item { padding: 0.6rem 0.75rem; gap: 0.6rem; font-size: 0.75rem;}
-      .playlist-item span:first-child { width: 1.8em; }
-      .playlist-item-indicator { width: 12px; height: 12px;}
-      .wave-bar { width: 1.5px; }
+    .playlist-item {
+      display: grid;
+      grid-template-columns: auto 1fr; /* Track number auto-width, title takes rest */
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.8rem;
+      transition: background-color 0.2s ease;
     }
+
+    .playlist-item:last-child {
+        border-bottom: none; /* Remove border from last item */
+    }
+
+    .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
+    /* Styling for the currently playing item */
+    .playlist-item.active { background: rgba(0, 255, 208, 0.1); } /* Use secondary color highlight */
+    .playlist-item.active span:first-child { color: var(--secondary); }
+    .playlist-item.active span:last-child { color: var(--secondary); font-weight: bold;}
+    /* Default styling for track number */
+    .playlist-item span:first-child { color: rgba(255, 255, 255, 0.5); }
 
   </style>
 </head>
@@ -162,153 +269,341 @@
       <canvas id="visualizer"></canvas>
     </div>
 
-    <audio id="musicPlayer"></audio>
+    <audio id="musicPlayer"></audio> <div class="track-info">
+      <div class="track-title" id="trackTitle">--</div> <div class="track-number">
+          <span id="currentTrackNum">--</span>/<span id="totalTracks">--</span>
+      </div>
+    </div>
 
-     <div class="track-info-wrapper">
-        <div class="track-title" id="trackTitle">--</div>
-        <div class="track-number"> <span id="currentTrackNum">--</span>/<span id="totalTracks">--</span> </div>
-     </div>
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
 
-    <div class="progress-container" id="progressContainer"> <div class="progress-bar" id="progressBar"></div> </div>
-
-    <div class="time-display"> <span id="currentTime">0:00</span> <span id="totalTime">0:00</span> </div>
+    <div class="time-display">
+      <span id="currentTime">0:00</span>
+      <span id="totalTime">0:00</span>
+    </div>
 
     <div class="controls">
-      <button id="prevTrack" title="Previous Track (Left Arrow)">Prev</button>
-      <button id="playPause" title="Play/Pause (Spacebar)">Play</button>
-      <button id="nextTrack" title="Next Track (Right Arrow)">Next</button>
+      <button id="prevTrack">Prev</button>
+      <button id="playPause">Play</button>
+      <button id="nextTrack">Next</button>
     </div>
 
     <div class="visualizer-controls">
-      <button id="viz1" class="active">Viz 1</button> <button id="viz2">Viz 2</button> <button id="viz3">Viz 3</button>
-      <button id="viz4">Viz 4</button> <button id="viz5">Viz 5</button> <button id="viz6">Viz 6</button>
-      <button id="viz7">Viz 7</button> <button id="viz8">Viz 8</button> <button id="viz9">Viz 9</button>
-      <button id="viz10">Viz 10</button> <button id="viz11">Viz 11</button> <button id="viz12">Viz 12</button>
-      <button id="viz13">Viz 13</button> <button id="viz14">Viz 14</button> <button id="viz15">Viz 15</button>
-      <button id="viz16">Viz 16</button> <button id="viz17">Viz 17</button> <button id="viz18">Viz 18</button>
-      <button id="viz19">Viz 19</button> <button id="viz20">Viz 20</button> <button id="viz21">Viz 21</button>
-      <button id="viz22">Viz 22</button> <button id="viz23">Viz 23</button> <button id="viz24">Viz 24</button>
-      <button id="viz25">Viz 25</button> <button id="viz26">Viz 26</button> <button id="viz27">Viz 27</button>
-      <button id="viz28">Viz 28</button> <button id="viz29">Viz 29</button> <button id="viz30">Viz 30</button>
+      <button id="viz1" class="active" title="Neon Holographic Bars">Bars</button>
+      <button id="viz2" title="Quantum Circles X">Circles</button>
+      <button id="viz3" title="Neural Wave V2">Wave</button>
+      <button id="viz4" title="Galactic Nebulae X">Nebula</button>
+      <button id="viz5" title="Hyper 4D Spectrum">Spectrum</button>
     </div>
 
     <button class="playlist-toggle" id="playlistToggle">Playlist</button>
 
-    <div class="playlist-container" id="playlist" style="display:none;"></div>
+    <div class="playlist-container" id="playlist" style="display:none;">
+        </div>
 
   </div> <script>
     // --- DOM Element Selection Helper ---
     const $ = id => document.getElementById(id);
 
     // --- Get DOM Elements ---
-    const musicPlayer = $('musicPlayer'); const playPauseBtn = $('playPause'); const visualizerCanvas = $('visualizer'); const visualizerCtx = visualizerCanvas.getContext('2d'); const progressBar = $('progressBar'); const progressContainer = $('progressContainer'); const bgCanvas = $('background-canvas'); const bgCtx = bgCanvas.getContext('2d'); const trackTitleEl = $('trackTitle'); const currentTrackNumEl = $('currentTrackNum'); const totalTracksEl = $('totalTracks'); const currentTimeEl = $('currentTime'); const totalTimeEl = $('totalTime'); const playlistEl = $('playlist'); const playlistToggleBtn = $('playlistToggle');
+    const musicPlayer = $('musicPlayer');
+    const playPauseBtn = $('playPause');
+    const visualizerCanvas = $('visualizer');
+    const visualizerCtx = visualizerCanvas.getContext('2d');
+    const progressBar = $('progressBar');
+    const progressContainer = $('progressContainer');
+    const bgCanvas = $('background-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    const trackTitleEl = $('trackTitle');
+    const currentTrackNumEl = $('currentTrackNum');
+    const totalTracksEl = $('totalTracks');
+    const currentTimeEl = $('currentTime');
+    const totalTimeEl = $('totalTime');
+    const playlistEl = $('playlist');
+    const playlistToggleBtn = $('playlistToggle');
+
 
     // --- State variables ---
-    let currentTrackIndex = 0; let currentVisualizer = 1; let visualizerAnimationId = null; let bgAnimationId = null; let audioContext, analyser, source, dataArray, bufferLength; let isAudioInitialized = false; let neuralNetwork = null;
+    let currentTrackIndex = 0;
+    let currentVisualizer = 1; // 1-based index for visualizers
+    let visualizerAnimationId = null;
+    let bgAnimationId = null;
+    let audioContext, analyser, source, dataArray, bufferLength;
+    let isAudioInitialized = false; // Flag to track audio context setup
+    let neuralNetwork = null; // Holds the NeuralNetwork instance (declared early!)
+
 
     // --- Background Neural Network Configuration ---
-    const layerCount = 5; const colorSchemes = [ { neuron: '#ff4b00', connection: '#00ffd0' }, { neuron: '#00ffd0', connection: '#ff4b00' }, { neuron: '#ff00ff', connection: '#00ffff' }, { neuron: '#ffff00', connection: '#0088ff' }, { neuron: '#ffffff', connection: '#cccccc' } ]; let currentColorScheme = 0;
+    const layerCount = 5; // Number of layers in the network
+    const colorSchemes = [
+         { neuron: '#ff4b00', connection: '#00ffd0' }, // Original Primary/Secondary
+         { neuron: '#00ffd0', connection: '#ff4b00' }, // Swapped
+         { neuron: '#ff00ff', connection: '#00ffff' }, // Magenta/Cyan
+         { neuron: '#ffff00', connection: '#0088ff' }, // Yellow/Blue
+         { neuron: '#ffffff', connection: '#cccccc' }  // White/Gray
+     ];
+    let currentColorScheme = 0;
+
 
     // --- Track List ---
-    const tracks = [ /* Keep your existing track list here */ { src: 'track1.wav', title: 'Liquid Dreams' }, { src: 'track2.wav', title: 'Neon Flow' }, { src: 'track3.wav', title: 'Cosmic Wave' }, { src: 'track4.wav', title: 'Digital Sunrise' }, { src: 'track5.wav', title: 'Quantum Beat' }, { src: 'track6.wav', title: 'Cyberspace Odyssey' }, { src: 'track7.wav', title: 'Neural Network' }, { src: 'track8.wav', title: 'Binary Echoes' }, { src: 'track9.wav', title: 'Virtual Reality' }, { src: 'track10.wav', title: 'Holographic Memory' }, { src: 'track11.wav', title: 'Singularity' }, { src: 'track12.wav', title: 'Electric Dreams' }, { src: 'track13.wav', title: 'Synthwave Journey' }, { src: 'track14.wav', title: 'Galactic Pulse' }, { src: 'track15.wav', title: 'Cyber Dawn' }, { src: 'track16.wav', title: 'Ethereal Code' }, { src: 'track17.mp3', title: 'Alternatives' }, { src: 'track18.wav', title: 'Astral Projection' }, { src: 'track19.wav', title: 'Plasma Field' }, { src: 'track20.wav', title: 'Quantum Resonance' } ];
-    totalTracksEl.textContent = tracks.length;
+    // IMPORTANT: Ensure these file paths are correct relative to your HTML file's location
+    //            on your server (e.g., GitHub Pages). Check filenames and extensions (.mp3 vs .wav)!
+    const tracks = [
+         { src: 'track1.wav', title: 'Liquid Dreams' },
+         { src: 'track2.wav', title: 'Neon Flow' },
+         { src: 'track3.wav', title: 'Cosmic Wave' },
+         { src: 'track4.wav', title: 'Digital Sunrise' },
+         { src: 'track5.wav', title: 'Quantum Beat' },
+         { src: 'track6.wav', title: 'Cyberspace Odyssey' },
+         { src: 'track7.wav', title: 'Neural Network' },
+         { src: 'track8.wav', title: 'Binary Echoes' },
+         { src: 'track9.wav', title: 'Virtual Reality' },
+         { src: 'track10.wav', title: 'Holographic Memory' },
+         { src: 'track11.wav', title: 'Singularity' },
+         { src: 'track12.wav', title: 'Electric Dreams' },
+         { src: 'track13.wav', title: 'Synthwave Journey' },
+         { src: 'track14.wav', title: 'Galactic Pulse' },
+         { src: 'track15.wav', title: 'Cyber Dawn' },
+         { src: 'track16.wav', title: 'Ethereal Code' },
+         { src: 'track17.mp3', title: 'Alternatives' }, // Example MP3
+         { src: 'track18.wav', title: 'Astral Projection' },
+         { src: 'track19.wav', title: 'Plasma Field' },
+         { src: 'track20.wav', title: 'Quantum Resonance' }
+     ];
+     totalTracksEl.textContent = tracks.length; // Update total tracks display
+
 
     // --- Canvas Resizing Function ---
-    function resizeCanvases() { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; visualizerCanvas.width = visualizerCanvas.offsetWidth; visualizerCanvas.height = visualizerCanvas.offsetHeight; if (neuralNetwork) { neuralNetwork.canvas = bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); } }
+    function resizeCanvases() {
+        // Background Canvas fills window
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
 
-    // --- Helper Function: Format Time ---
-    const formatTime = s => { if (isNaN(s) || !isFinite(s)) return '0:00'; const m = Math.floor(s / 60); const sec = Math.floor(s % 60).toString().padStart(2, '0'); return `${m}:${sec}`; }
+        // Visualizer Canvas fills its container
+        visualizerCanvas.width = visualizerCanvas.offsetWidth;
+        visualizerCanvas.height = visualizerCanvas.offsetHeight;
+
+        // Reinitialize background network layout if dimensions change
+        // This check is safe because neuralNetwork is declared early (as null initially)
+        if (neuralNetwork) {
+             neuralNetwork.canvas = bgCanvas; // Update canvas ref
+             neuralNetwork.initNeurons();    // Recalculate neuron positions
+             neuralNetwork.initConnections(); // Reconnect based on new positions
+        }
+    }
+
+
+    // --- Helper Function: Format Time (Seconds to M:SS) ---
+    const formatTime = s => {
+        if (isNaN(s) || !isFinite(s)) return '0:00'; // Handle invalid input
+        const minutes = Math.floor(s / 60);
+        const seconds = Math.floor(s % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
 
     // --- Audio Context Initialization ---
-    function initAudio() { if (!isAudioInitialized && !audioContext) { try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); analyser = audioContext.createAnalyser(); analyser.fftSize = 512; bufferLength = analyser.frequencyBinCount; dataArray = new Uint8Array(bufferLength); source = audioContext.createMediaElementSource(musicPlayer); source.connect(analyser); analyser.connect(audioContext.destination); isAudioInitialized = true; console.log("AudioContext Initialized, state:", audioContext.state); startVisualizer(); startBackgroundAnimation(); } catch (e) { console.error("Error initializing AudioContext:", e); alert("Could not initialize audio playback."); } } else if (isAudioInitialized) { console.log("initAudio called but already initialized. Context state:", audioContext.state); } }
+    function initAudio() {
+      // Only initialize once
+      if (!isAudioInitialized && !audioContext) {
+        try {
+            // Create audio context and analyser node
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512; // Frequency data detail (power of 2)
+            bufferLength = analyser.frequencyBinCount; // Half of fftSize
+            dataArray = new Uint8Array(bufferLength); // Array to hold frequency data
+
+            // Connect the HTML <audio> element to the analyser
+            source = audioContext.createMediaElementSource(musicPlayer);
+            source.connect(analyser);
+            // Connect analyser to the speakers (destination)
+            analyser.connect(audioContext.destination);
+
+            isAudioInitialized = true; // Set flag
+            console.log("AudioContext Initialized, state:", audioContext.state); // Log initial state
+
+            // Start animation loops now that audio is ready (if not already running)
+            startVisualizer();
+            startBackgroundAnimation();
+
+        } catch (e) {
+            console.error("Error initializing AudioContext:", e);
+            alert("Could not initialize audio playback. Your browser might not support the Web Audio API or have restrictions.");
+        }
+      }
+       // Log state if called again when already initialized
+      else if (isAudioInitialized) {
+          console.log("initAudio called but already initialized. Context state:", audioContext.state);
+      }
+    }
+
 
     // ===============================================================
-    // ======= NEURAL NETWORK BACKGROUND (Minified) =======
+    // ======= NEURAL NETWORK BACKGROUND ANIMATION CLASSES & LOGIC =======
     // ===============================================================
-    class Neuron{constructor(t,o,i,s,h){this.x=t,this.y=o,this.layer=i,this.baseSize=s,this.speed=h,this.pulse=0,this.oscillation=2*Math.random()*Math.PI}update(t,o){this.pulse=t/255*4*o,this.oscillation+=this.speed}render(t,o){const i=Math.sin(this.oscillation)*.5,s=this.baseSize+this.pulse+i;t.shadowColor=o,t.shadowBlur=5+5*this.pulse,t.fillStyle=o,t.beginPath(),t.arc(this.x,this.y,Math.max(1,s),0,2*Math.PI),t.fill(),t.shadowBlur=0}}class Connection{constructor(t,o,i){this.from=t,this.to=o,this.weight=i,this.signal=Math.random()}update(t){const o=.005+t*.05;this.signal=(this.signal+o)%1}render(t,o,i){const s=this.to.x-this.from.x,h=this.to.y-this.from.y;t.strokeStyle=`rgba(255,255,255,${.02+this.weight*.05})`,t.lineWidth=.5,t.beginPath(),t.moveTo(this.from.x,this.from.y),t.lineTo(this.to.x,this.to.y),t.stroke();const e=this.from.x+s*this.signal,n=this.from.y+h*this.signal,a=1+2.5*i;t.fillStyle=o,t.beginPath(),t.arc(e,n,a,0,2*Math.PI),t.fill()}}class NeuralNetwork{constructor(t,o){this.lCount=t,this.canvas=o,this.neurons=[],this.connections=[],this.initNeurons(),this.initConnections()}initNeurons(){this.neurons=[];const t=[.6,.8,1,.8,.6];for(let o=0;o<this.lCount;o++){const i=t[o]||1,s=Math.floor(20*(this.canvas.width/1200)),h=Math.max(5,Math.floor(s*i)),e=this.canvas.width*.1,n=this.canvas.width-2*e,a=e+(this.lCount>1?n/(this.lCount-1)*o:n/2);for(let t=0;t<h;t++){const o=this.canvas.height*.15,i=this.canvas.height-2*o,s=(Math.random()-.5)*i*.1,r=o+(h>1?i*t/(h-1):i/2)+s,l=1.5*Math.random()+1,c=(.01*Math.random()+.005)*(.5+Math.random());this.neurons.push(new Neuron(a,r,o,l,c))}}}initConnections(){this.connections=[],this.neurons.forEach(t=>{if(t.layer<this.lCount-1){const o=this.neurons.filter(o=>o.layer===t.layer+1),i=Math.max(1,Math.floor(o.length*(.3+.3*Math.random()))),s=o.sort(()=>.5-Math.random());for(let t=0;t<i&&t<s.length;t++)this.connections.push(new Connection(fromN,s[t],Math.random()))}})}update(t,o,i){this.neurons.forEach((s,h)=>{const e=Math.floor(Math.pow(h/this.neurons.length,1.5)*(o*.8));s.update(t[e]||0,i)}),this.connections.forEach(t=>t.update(i))}render(t,o,i){this.connections.forEach(s=>s.render(t,o.connection,i)),this.neurons.forEach(i=>i.render(t,o.neuron))}}
-    function initNeuralNetwork() { if (!neuralNetwork) { neuralNetwork = new NeuralNetwork(layerCount, bgCanvas); } else { neuralNetwork.canvas=bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); } console.log(`NN Init/Reinit: ${neuralNetwork?.neurons?.length} neurons, ${neuralNetwork?.connections?.length} connections.`); }
+    // (Using the minified versions from previous step for brevity)
+    class Neuron { constructor(x, y, layer, size, speed) { this.x=x; this.y=y; this.layer=layer; this.baseSize=size; this.speed=speed; this.pulse=0; this.oscillation=Math.random()*Math.PI*2; } update(audioValue, reactivity) { this.pulse=(audioValue/255)*4*reactivity; this.oscillation+=this.speed; } render(ctx, color) { const osc=Math.sin(this.oscillation)*0.5; const size=this.baseSize+this.pulse+osc; ctx.shadowColor=color; ctx.shadowBlur=5+this.pulse*5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(this.x,this.y,Math.max(1,size),0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; } }
+    class Connection { constructor(from, to, weight) { this.from=from; this.to=to; this.weight=weight; this.signal=Math.random(); } update(reactivity) { const speed=0.005+reactivity*0.05; this.signal=(this.signal+speed)%1; } render(ctx, color, reactivity) { const dx=this.to.x-this.from.x; const dy=this.to.y-this.from.y; ctx.strokeStyle=`rgba(255,255,255,${0.02+this.weight*0.05})`; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(this.from.x,this.from.y); ctx.lineTo(this.to.x,this.to.y); ctx.stroke(); const sigX=this.from.x+dx*this.signal; const sigY=this.from.y+dy*this.signal; const size=1+reactivity*2.5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(sigX,sigY,size,0,Math.PI*2); ctx.fill(); } }
+    class NeuralNetwork { constructor(layers, canvas) { this.lCount=layers; this.canvas=canvas; this.neurons=[]; this.connections=[]; this.initNeurons(); this.initConnections(); } initNeurons() { this.neurons=[]; const ratios=[0.6,0.8,1,0.8,0.6]; for(let l=0;l<this.lCount;l++){ const ratio=ratios[l]||1; const baseCount=Math.floor(20*(this.canvas.width/1200)); const num=Math.max(5,Math.floor(baseCount*ratio)); const padX=this.canvas.width*0.1; const availW=this.canvas.width-2*padX; const lx=padX+(this.lCount>1?availW/(this.lCount-1)*l:availW/2); for(let i=0;i<num;i++){ const padY=this.canvas.height*0.15; const availH=this.canvas.height-2*padY; const randY=(Math.random()-0.5)*availH*0.1; const y=padY+(num>1?availH*i/(num-1):availH/2)+randY; const size=Math.random()*1.5+1; const speed=(Math.random()*0.01+0.005)*(0.5+Math.random()); this.neurons.push(new Neuron(lx,y,l,size,speed)); } } } initConnections() { this.connections=[]; this.neurons.forEach(fromN=>{ if(fromN.layer<this.lCount-1){ const nextLayerNs=this.neurons.filter(n=>n.layer===fromN.layer+1); const count=Math.max(1,Math.floor(nextLayerNs.length*(0.3+Math.random()*0.3))); const targets=nextLayerNs.sort(()=>0.5-Math.random()); for(let i=0;i<count&&i<targets.length;i++){ this.connections.push(new Connection(fromN,targets[i],Math.random())); } } }); } update(audioData, bufLen, reactivity) { this.neurons.forEach((neuron,idx)=>{ const freqIdx=Math.floor(Math.pow(idx/this.neurons.length,1.5)*(bufLen*0.8)); neuron.update(audioData[freqIdx]||0,reactivity); }); this.connections.forEach(conn=>conn.update(reactivity)); } render(ctx, colors, reactivity) { this.connections.forEach(conn=>conn.render(ctx,colors.connection,reactivity)); this.neurons.forEach(neuron=>neuron.render(ctx,colors.neuron)); } }
+
+    function initNeuralNetwork() { if (!neuralNetwork) { neuralNetwork = new NeuralNetwork(layerCount, bgCanvas); } else { neuralNetwork.canvas=bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); } console.log(`Neural Network Initialized/Reinitialized with ${neuralNetwork?.neurons?.length} neurons and ${neuralNetwork?.connections?.length} connections.`); }
     function renderNeuralBackground() { if (!isAudioInitialized || !neuralNetwork || !analyser) { bgAnimationId = requestAnimationFrame(renderNeuralBackground); return; } analyser.getByteFrequencyData(dataArray); let sum=0; const relBufLen=Math.floor(bufferLength*0.7); for(let i=0;i<relBufLen;i++){ sum+=dataArray[i]; } const avg=sum/relBufLen||0; const reactivity=Math.min(1,Math.pow(avg/128,1.5)); const trailAlpha=0.08+reactivity*0.07; bgCtx.fillStyle=`rgba(10,11,12,${trailAlpha})`; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height); const colors=colorSchemes[currentColorScheme]; neuralNetwork.update(dataArray,bufferLength,reactivity); neuralNetwork.render(bgCtx,colors,reactivity); if(Math.random()<0.0005+reactivity*0.005){ currentColorScheme=(currentColorScheme+1)%colorSchemes.length; } bgAnimationId = requestAnimationFrame(renderNeuralBackground); }
     function startBackgroundAnimation() { if (!bgAnimationId) { console.log("Starting background animation."); renderNeuralBackground(); } }
     function stopBackgroundAnimation() { if (bgAnimationId) { cancelAnimationFrame(bgAnimationId); bgAnimationId=null; console.log("Stopping background animation."); } }
 
+
     // ===============================================================
     // ======= MUSIC PLAYER CORE FUNCTIONS =======
     // ===============================================================
-    function loadTrack(index) { index = (index + tracks.length) % tracks.length; currentTrackIndex = index; const track = tracks[index]; musicPlayer.src = track.src; trackTitleEl.textContent = track.title; currentTrackNumEl.textContent = index + 1; updatePlaylistActiveState(); progressBar.style.width = '0%'; currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00'; musicPlayer.load(); console.log("Loading track:", track.title, "| Source:", musicPlayer.src); }
-    function createPlaylist() { playlistEl.innerHTML = ''; tracks.forEach((track, i) => { const item = document.createElement('div'); item.className = 'playlist-item'; item.dataset.index = i; item.innerHTML = `<span>${(i + 1).toString().padStart(2, '0')}</span><div class="playlist-item-indicator"><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div></div><span>${track.title}</span>`; item.addEventListener('click', () => { if (currentTrackIndex !== i) loadTrack(i); playTrack(); }); playlistEl.appendChild(item); }); updatePlaylistActiveState(); }
-    function updatePlaylistActiveState() { document.querySelectorAll('.playlist-item').forEach(item => { const isActive = parseInt(item.dataset.index) === currentTrackIndex; item.classList.toggle('active', isActive); }); const activeItem = playlistEl.querySelector('.playlist-item.active'); if (activeItem && playlistEl.style.display !== 'none') { activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
-    function playTrack() { if (!isAudioInitialized) { console.log("Audio not initialized. Initializing..."); initAudio(); return; } if (audioContext) { console.log(`Attempting play. Context: ${audioContext.state}`); audioContext.resume().then(() => { console.log("Context resumed/running. Trying .play()"); if (musicPlayer.paused) { const playP = musicPlayer.play(); if (playP !== undefined) { playP.then(_ => { playPauseBtn.textContent = 'Pause'; startVisualizer(); startBackgroundAnimation(); console.log("Playback started (promise)."); }).catch(e => { console.error(`Play error: ${e.name} - ${e.message}`); playPauseBtn.textContent = 'Play'; }); } else { console.warn(".play() no promise. Assume started."); playPauseBtn.textContent = 'Pause'; startVisualizer(); startBackgroundAnimation(); } } else { console.log("Already playing."); playPauseBtn.textContent = 'Pause'; } }).catch(e => { console.error("Resume error:", e); playPauseBtn.textContent = 'Play'; }); } else { console.error("Cannot play: No AudioContext."); playPauseBtn.textContent = 'Play'; } }
-    function pauseTrack() { musicPlayer.pause(); playPauseBtn.textContent = 'Play'; console.log("Playback paused."); }
-    function updateProgress() { if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100; progressBar.style.width = `${progressPercent}%`; currentTimeEl.textContent = formatTime(musicPlayer.currentTime); }
 
-    // ===============================================================
-    // ======= VISUALIZER DRAWING FUNCTIONS (NOW 30!) =======
-    // ===============================================================
-    function getAverageAmplitude(arr, start, end) { let sum=0; start=Math.max(0,Math.floor(start)); end=Math.min(arr.length,Math.ceil(end)); if(start>=end)return 0; for(let i=start;i<end;i++){ sum+=arr[i]; } return sum/(end-start)/255; }
-    const W = () => visualizerCanvas.width; const H = () => visualizerCanvas.height; const CX = () => W() / 2; const CY = () => H() / 2; const t = () => performance.now() / 1000;
+    function loadTrack(index) {
+      index = (index + tracks.length) % tracks.length;
+      currentTrackIndex = index;
+      const track = tracks[index];
+      musicPlayer.src = track.src;
+      trackTitleEl.textContent = track.title;
+      currentTrackNumEl.textContent = index + 1;
+      updatePlaylistActiveState();
+      progressBar.style.width = '0%';
+      currentTimeEl.textContent = '0:00';
+      totalTimeEl.textContent = '0:00';
+      musicPlayer.load();
+      console.log("Loading track:", track.title, "| Source:", musicPlayer.src);
+    }
 
-    // --- Visualizers 1-20 (Minified for brevity) ---
-    function drawViz1(){const a=(W()/bufferLength)*1.5,o=.5,r=t();visualizerCtx.save();for(let t=0,e=0;t<bufferLength;t++){const n=dataArray[t]/255,i=Math.max(1,n*H()*.9),l=.8+.2*Math.sin(r*5+t*.2),h=(t/bufferLength)*200+r*20,s=visualizerCtx.createLinearGradient(e,H(),e,H()-i*l);s.addColorStop(0,`hsla(${h%360},100%,60%,0.8)`),s.addColorStop(.5,`hsla(${(h+30)%360},90%,65%,0.6)`),s.addColorStop(1,`hsla(${(h+60)%360},80%,70%,0.3)`),visualizerCtx.shadowColor=`hsla(${h%360},100%,70%,0.6)`,visualizerCtx.shadowBlur=8*n,visualizerCtx.fillStyle=s;const c=a*.3;visualizerCtx.beginPath(),visualizerCtx.moveTo(e+c,H()),visualizerCtx.lineTo(e+a-c,H()),visualizerCtx.arcTo(e+a,H(),e+a,H()-c,c),visualizerCtx.lineTo(e+a,H()-i*l+c),visualizerCtx.arcTo(e+a,H()-i*l,e+a-c,H()-i*l,c),visualizerCtx.lineTo(e+c,H()-i*l),visualizerCtx.arcTo(e,H()-i*l,e,H()-i*l+c,c),visualizerCtx.lineTo(e,H()-c),visualizerCtx.arcTo(e,H(),e+c,H(),c),visualizerCtx.closePath(),visualizerCtx.fill(),n>.6&&Math.random()<.05&&(visualizerCtx.save(),visualizerCtx.globalCompositeOperation="lighter",visualizerCtx.fillStyle=`rgba(255,255,255,${.4+.4*Math.random()})`,visualizerCtx.fillRect(e,H()-i*(.2+.6*Math.random()),a,1+3*Math.random()),visualizerCtx.restore()),e+=a+o}visualizerCtx.restore()}
-    function drawViz2(){const a=t()*.5,o=CX(),r=CY(),e=Math.min(o,r)*.7;visualizerCtx.save(),visualizerCtx.lineWidth=1.5;for(let t=0;t<bufferLength;t+=2){const n=dataArray[t]/255,i=(2*Math.PI*t/bufferLength)+a*(t%5+1)*.1,l=n*e,h=1+.2*Math.sin(a*8+t*.5),s=l*h,c=o+Math.cos(i)*s,d=r+Math.sin(i)*s,u=1+5*n,f=(t*360/bufferLength+60*a)%360,g=visualizerCtx.createRadialGradient(c,d,0,c,d,1.5*u);g.addColorStop(0,`hsla(${f},100%,75%,${.8+.2*n})`),g.addColorStop(.5,`hsla(${(f+40)%360},90%,65%,${.5*n})`),g.addColorStop(1,`hsla(${(f+80)%360},80%,55%,0)`),visualizerCtx.fillStyle=g,visualizerCtx.beginPath(),visualizerCtx.arc(c,d,1.5*u,0,2*Math.PI),visualizerCtx.fill(),n>.1&&(visualizerCtx.strokeStyle=`hsla(${f},100%,70%,${.1+.5*n})`,visualizerCtx.beginPath(),visualizerCtx.moveTo(o,r),visualizerCtx.lineTo(c,d),visualizerCtx.stroke())}visualizerCtx.restore()}
-    function drawViz3(){const a=W()/(bufferLength-1),o=t()*1.5,r=H()*.6;visualizerCtx.save(),visualizerCtx.lineWidth=2,visualizerCtx.strokeStyle="rgba(0,255,208,0.7)",visualizerCtx.beginPath();let e=0,n=H()/2;visualizerCtx.moveTo(e,n);for(let t=0;t<bufferLength;t++){const i=dataArray[t]/255,l=t*a,h=(i-.5)*r,s=Math.sin(t*.1+o)*r*.2,c=H()/2+h+s,d=(l+e)/2,u=(c+n)/2;visualizerCtx.quadraticCurveTo(e,n,d,u),e=l,n=c,t%4==0&&i>.1&&(visualizerCtx.fillStyle=`hsla(${(180+100*i)%360},100%,${60+30*i}%,${.5+.5*i})`,visualizerCtx.beginPath(),visualizerCtx.arc(l,c,1+3*i,0,2*Math.PI),visualizerCtx.fill())}visualizerCtx.lineTo(e,n),visualizerCtx.stroke(),visualizerCtx.lineWidth=1,visualizerCtx.strokeStyle="rgba(255,75,0,0.4)",visualizerCtx.beginPath(),e=0,n=H()/2,visualizerCtx.moveTo(e,n);for(let t=0;t<bufferLength;t++){const i=dataArray[t]/255,l=t*a,h=(i-.5)*r*.7,s=Math.sin(t*.12+o+Math.PI/2)*r*.15,c=H()/2+h+s,d=(l+e)/2,u=(c+n)/2;visualizerCtx.quadraticCurveTo(e,n,d,u),e=l,n=c}visualizerCtx.lineTo(e,n),visualizerCtx.stroke(),visualizerCtx.restore()}
-    function drawViz4(){const a=CX(),o=CY(),r=t()/5;visualizerCtx.save(),visualizerCtx.fillStyle="rgba(10,11,12,0.1)",visualizerCtx.fillRect(0,0,W(),H()),visualizerCtx.globalCompositeOperation="lighter";const e=60;for(let t=0;t<e;t++){const n=(t/e)*Math.PI*5+r,i=Math.pow(t/e,.8),l=i*(W()/2.5),h=a+Math.cos(n)*l*(1+.1*Math.sin(2*r+t*.2)),s=o+Math.sin(n)*l*(1+.1*Math.cos(2*r+t*.2)),c=Math.floor(Math.pow(t/e,1.2)*(bufferLength*.6)),d=(dataArray[c]||0)/255,u=5+20*i,f=Math.max(2,u*(.5+1.5*d)),g=(100*i+30*r+180)%360,v=visualizerCtx.createRadialGradient(h,s,0,h,s,f);v.addColorStop(0,`hsla(${g},90%,70%,${.8*d})`),v.addColorStop(.4,`hsla(${(g+30)%360},80%,60%,${.4*d})`),v.addColorStop(1,`hsla(${(g+60)%360},70%,50%,0)`),visualizerCtx.fillStyle=v,visualizerCtx.beginPath(),visualizerCtx.arc(h,s,f,0,2*Math.PI),visualizerCtx.fill()}const n=getAverageAmplitude(dataArray,0,bufferLength*.1),i=Math.max(10,n*H()*.5),l=(10+20*r)%360,h=visualizerCtx.createRadialGradient(a,o,0,a,o,i);h.addColorStop(0,`hsla(${l},100%,65%,${.7*n})`),h.addColorStop(.7,`hsla(${(l+20)%360},90%,55%,${.3*n})`),h.addColorStop(1,`hsla(${(l+40)%360},80%,50%,0)`),visualizerCtx.fillStyle=h,visualizerCtx.beginPath(),visualizerCtx.arc(a,o,i,0,2*Math.PI),visualizerCtx.fill(),visualizerCtx.restore()}
-    function drawViz5(){const a=W()/bufferLength,o=t();visualizerCtx.save();for(let t=0;t<bufferLength;t++){const r=dataArray[t]/255,e=Math.max(1,r*H()),n=t*a,i=(t/bufferLength)*300,l=visualizerCtx.createLinearGradient(n,H(),n,H()-e);l.addColorStop(0,`hsla(${i},100%,40%,0.7)`),l.addColorStop(.8,`hsla(${i},100%,60%,0.9)`),l.addColorStop(1,`hsla(${i},100%,75%,1.0)`),visualizerCtx.fillStyle=l,visualizerCtx.fillRect(n,H()-e,a,e);const h=e*(.4+.1*Math.sin(3*o+t*.1)),s=a*.1;visualizerCtx.fillStyle=`hsla(${(i+30)%360},100%,85%,${.3+.4*r})`,visualizerCtx.fillRect(n+s,H()-h,a-2*s,h),r>.7&&(visualizerCtx.fillStyle=`hsla(${(i+60)%360},100%,95%,${.5+.5*Math.random()})`,visualizerCtx.fillRect(n,H()-e-2,a,2+2*Math.random())),Math.random()<.008&&(visualizerCtx.save(),visualizerCtx.globalCompositeOperation=Math.random()<.5?"lighter":"difference",visualizerCtx.fillStyle=`rgba(255,${150*Math.random()},${150*Math.random()},0.7)`,visualizerCtx.fillRect(n+(Math.random()-.5)*a*1.5,H()-Math.random()*e,a,1+4*Math.random()),visualizerCtx.restore())}visualizerCtx.restore()}
-    function drawViz6(){const a=W()/bufferLength,o=CX();visualizerCtx.save();for(let t=0;t<bufferLength/2;t++){const r=dataArray[t]/255,e=Math.max(1,r*H()),n=(t/(bufferLength/2))*180;visualizerCtx.fillStyle=`hsl(${n},100%,${50+30*r}%)`,visualizerCtx.fillRect(o+t*a,H()-e,a-1,e),visualizerCtx.fillRect(o-(t+1)*a,H()-e,a-1,e)}visualizerCtx.restore()}
-    function drawViz7(){const a=Math.min(CX(),CY())*.8,o=2*Math.PI/bufferLength;visualizerCtx.save(),visualizerCtx.translate(CX(),CY());for(let t=0;t<bufferLength;t++){const r=dataArray[t]/255,e=r*a*.8,n=(t/bufferLength)*360+30*t();visualizerCtx.rotate(o),visualizerCtx.fillStyle=`hsl(${n%360},100%,60%)`,visualizerCtx.fillRect(a*.1,-1,e,2)}visualizerCtx.restore()}
-    function drawViz8(){const a=Math.min(CX(),CY());visualizerCtx.save(),visualizerCtx.lineWidth=2;for(let t=0;t<bufferLength;t+=5){const o=dataArray[t]/255,r=o*a,e=(t/bufferLength)*360+20*t();visualizerCtx.strokeStyle=`hsla(${e%360},100%,${60+20*o}%,${.1+.7*o})`,visualizerCtx.beginPath(),visualizerCtx.arc(CX(),CY(),r,0,2*Math.PI),visualizerCtx.stroke()}visualizerCtx.restore()}
-    function drawViz9(){visualizerCtx.fillStyle="rgba(10,11,12,0.1)",visualizerCtx.fillRect(0,0,W(),H()),visualizerCtx.save();const a=getAverageAmplitude(dataArray,0,bufferLength*.1),o=Math.floor(50*a)+10;for(let t=0;t<o;t++){const a=dataArray[Math.floor(Math.random()*bufferLength)]/255,r=Math.random()*W(),e=Math.random()*H()*.1,n=1+4*a,i=1+5*a,l=60*Math.random()+180;visualizerCtx.fillStyle=`hsla(${l},100%,70%,0.8)`,visualizerCtx.beginPath(),visualizerCtx.arc(r,(e+t()*i)%H(),n,0,2*Math.PI),visualizerCtx.fill()}visualizerCtx.restore()}
-    function drawViz10(){visualizerCtx.save(),visualizerCtx.lineWidth=1,visualizerCtx.strokeStyle="rgba(255,255,255,0.3)",visualizerCtx.translate(CX(),CY());const a=getAverageAmplitude(dataArray,0,bufferLength*.2),o=getAverageAmplitude(dataArray,bufferLength*.2,bufferLength*.6),r=getAverageAmplitude(dataArray,bufferLength*.6,bufferLength),e=1+4*a,n=1+4*o,i=1+2*r,l=Math.min(CX(),CY())*.8;visualizerCtx.beginPath();for(let a=0;a<2*Math.PI;a+=.01){const o=Math.sin(a*e+t())*l,r=Math.sin(a*n+t()*i)*l;0===a?visualizerCtx.moveTo(o,r):visualizerCtx.lineTo(o,r)}visualizerCtx.stroke(),visualizerCtx.restore()}
-    function drawViz11(){const a=H()/bufferLength,o=CY();visualizerCtx.save();for(let t=0;t<bufferLength/2;t++){const r=dataArray[t]/255,e=Math.max(1,r*W()*.45),n=(t/(bufferLength/2))*180+180;visualizerCtx.fillStyle=`hsl(${n},100%,${55+25*r}%)`,visualizerCtx.fillRect(CX(),o+t*a,e,a-1),visualizerCtx.fillRect(CX()-e,o+t*a,e,a-1)}visualizerCtx.restore()}
-    function drawViz12(){const a=3+Math.floor(getAverageAmplitude(dataArray,0,bufferLength*.3)*6),o=Math.min(CX(),CY())*(.3+getAverageAmplitude(dataArray,bufferLength*.3,bufferLength)*.6),r=2*Math.PI/a;visualizerCtx.save(),visualizerCtx.translate(CX(),CY()),visualizerCtx.rotate(.5*t()),visualizerCtx.strokeStyle=`hsl(${20*t()%360},100%,60%)`,visualizerCtx.lineWidth=2+getAverageAmplitude(dataArray,0,bufferLength)*4,visualizerCtx.beginPath();for(let t=0;t<=a;t++){const e=t*r,n=Math.cos(e)*o,i=Math.sin(e)*o;0===t?visualizerCtx.moveTo(n,i):visualizerCtx.lineTo(n,i)}visualizerCtx.stroke(),visualizerCtx.restore()}
-    function drawViz13(){const a=16,o=8,r=W()/a,e=H()/o,n=Math.floor(bufferLength/(a*o));visualizerCtx.save();for(let t=0;t<o;t++){for(let o=0;o<a;o++){const i=(t*a+o)*n,l=getAverageAmplitude(dataArray,i,i+n),h=(t/o)*120+(o/a)*120,s=30+70*l,c=.2+.8*l;visualizerCtx.fillStyle=`hsla(${h%360},100%,${s}%,${c})`,visualizerCtx.fillRect(o*r,t*e,r-1,e-1)}}visualizerCtx.restore()}
-    function drawViz14(){const a=Math.min(CX(),CY())*.5,o=2*Math.PI/bufferLength;visualizerCtx.save(),visualizerCtx.translate(CX(),CY()),visualizerCtx.strokeStyle=`hsl(${15*t()%360},90%,65%)`,visualizerCtx.lineWidth=2,visualizerCtx.beginPath();for(let t=0;t<=bufferLength;t++){const r=t%bufferLength,e=dataArray[r]/255,n=a+e*(a*.8),i=t*o+.1*t(),l=Math.cos(i)*n,h=Math.sin(i)*n;0===t?visualizerCtx.moveTo(l,h):visualizerCtx.lineTo(l,h)}visualizerCtx.closePath(),visualizerCtx.stroke(),visualizerCtx.restore()}
-    function drawViz15(){const a=10;visualizerCtx.save(),visualizerCtx.lineWidth=1.5;for(let o=0;o<a;o++){const r=(H()/(a+1))*(o+1),e=Math.floor(o/a*bufferLength),n=(dataArray[e]||0)/255,i=5+20*n,l=30*n,h=(o/a)*300+60;visualizerCtx.strokeStyle=`hsla(${h%360},100%,60%,${.5+.5*n})`,visualizerCtx.beginPath(),visualizerCtx.moveTo(0,r);for(let a=0;a<W();a+=5){const o=Math.sin(a*.01*i+3*t())*l;visualizerCtx.lineTo(a,r+o)}visualizerCtx.stroke()}visualizerCtx.restore()}
-    function drawViz16(){const a=W()/(bufferLength*.5),o=H()*.45;visualizerCtx.save();for(let t=0;t<bufferLength/2;t++){const r=dataArray[t]/255,e=Math.max(1,r*o),n=t*a,i=(t/(bufferLength/2))*360;visualizerCtx.fillStyle=`hsl(${i},100%,${50+25*r}%)`,visualizerCtx.fillRect(n,0,a-1,e),visualizerCtx.fillRect(W()-n-a,H()-e,a-1,e),visualizerCtx.fillStyle=`hsl(${(i+90)%360},80%,${50+25*r}%)`,visualizerCtx.fillRect(W()-n-a,0,a-1,e),visualizerCtx.fillRect(n,H()-e,a-1,e)}visualizerCtx.restore()}
-    function drawViz17(){const a=getAverageAmplitude(dataArray,0,bufferLength*.1),o=getAverageAmplitude(dataArray,bufferLength*.1,bufferLength*.6),r=getAverageAmplitude(dataArray,bufferLength*.6,bufferLength),e=Math.min(CX(),CY())*.1,n=e+a*Math.min(CX(),CY())*.6,i=3+Math.floor(5*o);visualizerCtx.save(),visualizerCtx.lineWidth=1+3*r;for(let t=0;t<i;t++){const a=n*(t/i),o=(40*t+30*t())%360,r=.1+(1-t/i)*.7;visualizerCtx.strokeStyle=`hsla(${o},100%,60%,${r})`,visualizerCtx.beginPath(),visualizerCtx.arc(CX(),CY(),a,0,2*Math.PI),visualizerCtx.stroke()}visualizerCtx.restore()}
-    function drawViz18(){const a=24,o=16,r=W()/a,e=H()/o,n=Math.min(r,e)*.4;visualizerCtx.save();for(let t=0;t<o;t++){for(let o=0;o<a;o++){const i=Math.floor((t*a+o)/(o*a)*bufferLength),l=dataArray[i]/255,h=l*n;if(!(h<.5)){const t=(o/a)*360,i=40+50*l;visualizerCtx.fillStyle=`hsl(${t},100%,${i}%)`,visualizerCtx.beginPath(),visualizerCtx.arc(o*r+r/2,t*e+e/2,h,0,2*Math.PI),visualizerCtx.fill()}}}visualizerCtx.restore()}
-    function drawViz19(){visualizerCtx.fillStyle="rgba(10,11,12,0.15)",visualizerCtx.fillRect(0,0,W(),H()),visualizerCtx.save();const a=100,o=getAverageAmplitude(dataArray,0,bufferLength),r=.5+10*o;this.stars||(this.stars=[],function(){for(let t=0;t<a;t++)this.stars.push({x:(Math.random()-.5)*W(),y:(Math.random()-.5)*H(),z:Math.random()*W()})}()),visualizerCtx.translate(CX(),CY()),this.stars.forEach(t=>{t.z-=r,t.z<=0&&(t.z=W(),t.x=(Math.random()-.5)*W(),t.y=(Math.random()-.5)*H());const a=128/t.z,o=t.x*a,e=t.y*a,n=(1-t.z/W())*2.5+.5;visualizerCtx.fillStyle=`rgba(255,255,255,${1-t.z/W()})`,visualizerCtx.beginPath(),visualizerCtx.arc(o,e,n,0,2*Math.PI),visualizerCtx.fill()}),visualizerCtx.restore()}
-    function drawViz20(){const a=H()*.3,o=5,r=100,e=.5*t(),n=getAverageAmplitude(dataArray,0,bufferLength*.1),i=getAverageAmplitude(dataArray,bufferLength*.1,bufferLength*.6);visualizerCtx.save(),visualizerCtx.lineWidth=1+3*n;const l=t=>{visualizerCtx.beginPath();for(let n=0;n<=r;n++){const i=n/r,l=W()*i,h=i*Math.PI*o+e+t,s=Math.floor(i*bufferLength),c=(dataArray[s]||0)/255*.5+.5,d=CY()+Math.sin(h)*a*c;0===n?visualizerCtx.moveTo(l,d):visualizerCtx.lineTo(l,d)}const l=0===t?20*t()%360:(20*t()+180)%360;visualizerCtx.strokeStyle=`hsla(${l},100%,60%,0.8)`,visualizerCtx.stroke(),0===t&&(visualizerCtx.lineWidth=.5+1.5*i,visualizerCtx.strokeStyle="rgba(200,200,200,0.4)",function(){for(let t=0;t<=r;t+=5){const n=t/r,l=W()*n,h=n*Math.PI*o+e,s=n*Math.PI*o+e+Math.PI,c=Math.floor(n*bufferLength),d=(dataArray[c]||0)/255*.5+.5,u=CY()+Math.sin(h)*a*d,f=CY()+Math.sin(s)*a*d;visualizerCtx.beginPath(),visualizerCtx.moveTo(l,u),visualizerCtx.lineTo(l,f),visualizerCtx.stroke()}}())};l(0),l(Math.PI),visualizerCtx.restore()}
+    function createPlaylist() {
+      playlistEl.innerHTML = '';
+      tracks.forEach((track, i) => {
+        const item = document.createElement('div');
+        item.className = 'playlist-item';
+        item.dataset.index = i;
+        item.innerHTML = `<span>${(i + 1).toString().padStart(2, '0')}</span><span>${track.title}</span>`;
+        item.addEventListener('click', () => {
+          if (currentTrackIndex !== i) loadTrack(i);
+          playTrack(); // Attempt to play when clicked
+        });
+        playlistEl.appendChild(item);
+      });
+      updatePlaylistActiveState(); // Mark initial track
+    }
 
-    // --- NEW SIMPLE VISUALIZERS (21-30) ---
-    function drawViz21(){const a=W()/bufferLength;visualizerCtx.save();for(let t=0;t<bufferLength;t++){const o=dataArray[t]/255,r=o*H()/2;visualizerCtx.fillStyle=`hsl(${360*o},80%,60%)`,visualizerCtx.fillRect(t*a,CY()-r,a-1,2*r)}visualizerCtx.restore()}
-    function drawViz22(){const a=Math.min(CX(),CY()),o=getAverageAmplitude(dataArray,0,bufferLength*.1);visualizerCtx.save(),visualizerCtx.translate(CX(),CY()),visualizerCtx.fillStyle=`rgba(255,75,0,${.1+o*.6})`;for(let t=0;t<bufferLength;t+=10){const o=dataArray[t]/255,r=o*a*.7,e=(t/bufferLength)*2*Math.PI+t();visualizerCtx.beginPath(),visualizerCtx.arc(Math.cos(e)*r,Math.sin(e)*r,2+o*3,0,2*Math.PI),visualizerCtx.fill()}visualizerCtx.restore()}
-    function drawViz23(){visualizerCtx.fillStyle="rgba(10,11,12,0.1)",visualizerCtx.fillRect(0,0,W(),H()),visualizerCtx.save(),visualizerCtx.lineWidth=1;for(let a=0;a<bufferLength;a+=4){const o=dataArray[a]/255,r=a/bufferLength*W(),e=o*H(),n=(a/bufferLength)*180+t()*10;visualizerCtx.strokeStyle=`hsla(${n%360},100%,70%,${.3+o*.7})`,visualizerCtx.beginPath(),visualizerCtx.moveTo(r,CY()-e/2),visualizerCtx.lineTo(r,CY()+e/2),visualizerCtx.stroke()}visualizerCtx.restore()}
-    function drawViz24(){const a=W()/(bufferLength-1);visualizerCtx.save(),visualizerCtx.translate(0,CY()),visualizerCtx.beginPath(),visualizerCtx.moveTo(0,0);for(let t=0;t<bufferLength;t++){const o=dataArray[t]/255,r=t*a,e=(o-.5)*H()*.8;visualizerCtx.lineTo(r,e)}visualizerCtx.strokeStyle="rgba(0,255,208,0.5)",visualizerCtx.lineWidth=3,visualizerCtx.stroke(),visualizerCtx.restore()}
-    function drawViz25(){const a=8,o=W()/a,r=H()/a;visualizerCtx.save();for(let t=0;t<a;t++)for(let e=0;e<a;e++){const n=Math.floor((t*a+e)/(a*a)*bufferLength),i=dataArray[n]/255,l=(t/a*180+e/a*180)%360;visualizerCtx.fillStyle=`hsla(${l},100%,${10+80*i}%,${.1+i*.9})`,visualizerCtx.beginPath(),visualizerCtx.arc(e*o+o/2,t*r+r/2,i*Math.min(o,r)*.45,0,2*Math.PI),visualizerCtx.fill()}visualizerCtx.restore()}
-    function drawViz26(){const a=W()/bufferLength;visualizerCtx.save();for(let t=0;t<bufferLength;t++){const o=dataArray[t]/255,r=o*H(),e=t*a;visualizerCtx.fillStyle=`hsl(${(180+t*1)%360},70%,${40+o*40}%)`,visualizerCtx.fillRect(e,H()-r,a,r)}visualizerCtx.restore()}
-    function drawViz27(){visualizerCtx.save(),visualizerCtx.fillStyle="rgba(10,11,12,0.08)";for(let a=0;a<15;a++){const o=Math.floor(a/15*bufferLength),r=dataArray[o]/255,e=(W()/(a+1))*(a/2)+Math.sin(t()*2+a)*20,n=(H()/(a+1))*(a/2)+Math.cos(t()*1.5+a)*20,i=r*80+10,l=a*15+t()*20;visualizerCtx.fillRect(0,0,W(),H()),visualizerCtx.beginPath(),visualizerCtx.arc(e,n,i,0,2*Math.PI),visualizerCtx.fillStyle=`hsla(${l%360},100%,60%,0.1)`,visualizerCtx.fill()}visualizerCtx.restore()}
-    function drawViz28(){const a=Math.min(CX(),CY())*.9;visualizerCtx.save(),visualizerCtx.translate(CX(),CY()),visualizerCtx.strokeStyle="rgba(255,75,0,0.7)",visualizerCtx.lineWidth=1;for(let t=0;t<bufferLength;t+=8){const o=dataArray[t]/255,r=a*(.1+o*.9),e=(t/bufferLength)*Math.PI*2+t()*.1;visualizerCtx.beginPath(),visualizerCtx.moveTo(0,0),visualizerCtx.lineTo(Math.cos(e)*r,Math.sin(e)*r),visualizerCtx.stroke()}visualizerCtx.restore()}
-    function drawViz29(){const a=W()/(bufferLength-1);visualizerCtx.save(),visualizerCtx.shadowColor="cyan",visualizerCtx.shadowBlur=10;for(let t=0;t<bufferLength;t+=2){const o=dataArray[t]/255,r=t*a,e=H()*.2+o*H()*.6;visualizerCtx.fillStyle=`hsl(${240+o*120},80%,${50+o*30}%)`,visualizerCtx.fillRect(r,e-o*5,2,10*o+2)}visualizerCtx.restore()}
-    function drawViz30(){const a=W()/bufferLength,o=H()/bufferLength;visualizerCtx.save();for(let t=0;t<bufferLength;t++){const r=dataArray[t]/255;visualizerCtx.fillStyle=`hsla(${(t/bufferLength)*360},100%,50%,${r*.8+.1})`,visualizerCtx.beginPath(),visualizerCtx.rect(t*a,t*o,W()-2*t*a,H()-2*t*o),visualizerCtx.fill()}visualizerCtx.restore()}
+    function updatePlaylistActiveState() {
+         document.querySelectorAll('.playlist-item').forEach(item => {
+             item.classList.toggle('active', parseInt(item.dataset.index) === currentTrackIndex);
+         });
+         // Scroll active item into view if playlist is visible
+         const activeItem = playlistEl.querySelector('.playlist-item.active');
+          if (activeItem && playlistEl.style.display !== 'none') {
+               activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+    }
 
-    // --- Render Loop for Visualizer ---
-    function renderVisualizer() {
-        if (!isAudioInitialized || !analyser) return;
-        visualizerAnimationId = requestAnimationFrame(renderVisualizer);
-        analyser.getByteFrequencyData(dataArray);
-        visualizerCtx.clearRect(0, 0, W(), H());
+    // --- REVISED playTrack Function ---
+    function playTrack() {
+        // 1. Ensure AudioContext is initialized (or initialize it)
+        if (!isAudioInitialized) {
+            console.log("Audio not initialized. Initializing on first play attempt...");
+            initAudio();
+            // IMPORTANT: Don't try to play immediately after init.
+            // Wait for the user's next click now that context might be ready.
+            // You could update UI, e.g., playPauseBtn.textContent = 'Initializing...';
+            return; // Exit function
+        }
 
-        // Array mapping index to function - NOW WITH 30 VISUALIZERS!
-        const visualizers = [
-            drawViz1, drawViz2, drawViz3, drawViz4, drawViz5, drawViz6, drawViz7, drawViz8, drawViz9, drawViz10,
-            drawViz11, drawViz12, drawViz13, drawViz14, drawViz15, drawViz16, drawViz17, drawViz18, drawViz19, drawViz20,
-            drawViz21, drawViz22, drawViz23, drawViz24, drawViz25, drawViz26, drawViz27, drawViz28, drawViz29, drawViz30 // Added Viz 21-30
-        ];
+        // 2. If context exists, always try to resume it (safe even if running)
+        if (audioContext) {
+            console.log(`Attempting play. AudioContext state: ${audioContext.state}`);
+            audioContext.resume()
+                .then(() => {
+                    // 3. Context is running, now try to play the audio element
+                    console.log("AudioContext resumed/running. Attempting musicPlayer.play()...");
+                    // Check if already playing to prevent interruption errors in some cases
+                    if (musicPlayer.paused) {
+                        const playPromise = musicPlayer.play();
 
-        const index = currentVisualizer - 1;
-        if (index >= 0 && index < visualizers.length) {
-            visualizers[index]();
+                        if (playPromise !== undefined) {
+                            playPromise
+                                .then(_ => {
+                                    // 4. Playback started successfully
+                                    playPauseBtn.textContent = 'Pause';
+                                    startVisualizer(); // Ensure animations are running
+                                    startBackgroundAnimation();
+                                    console.log("Playback successfully started via promise.");
+                                })
+                                .catch(error => {
+                                    // 5. Playback failed (even though context is running)
+                                    console.error(`Error playing audio: ${error.name} - ${error.message}`);
+                                    playPauseBtn.textContent = 'Play'; // Keep UI as 'Play'
+                                    // Alert or update UI about the error if desired
+                                    // alert(`Playback failed: ${error.message}`);
+                                });
+                        } else {
+                             // Older browsers might not return a promise - attempt might still work
+                             console.warn("musicPlayer.play() did not return a promise. Assuming playback started.");
+                             playPauseBtn.textContent = 'Pause';
+                             startVisualizer();
+                             startBackgroundAnimation();
+                        }
+                    } else {
+                        console.log("Music player is already playing.");
+                        playPauseBtn.textContent = 'Pause'; // Ensure button state is correct
+                    }
+                })
+                .catch(error => {
+                    // Failed to resume the AudioContext
+                    console.error("Error resuming AudioContext:", error);
+                    playPauseBtn.textContent = 'Play'; // Keep UI as play
+                });
         } else {
-            drawViz1(); // Default fallback
+             console.error("Cannot play: AudioContext is not available.");
+             playPauseBtn.textContent = 'Play'; // Ensure UI is correct
         }
     }
+
+    function pauseTrack() {
+      musicPlayer.pause();
+      playPauseBtn.textContent = 'Play';
+      // Don't stop animations on pause
+      console.log("Playback paused.");
+    }
+
+    function updateProgress() {
+       if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return;
+       const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
+       progressBar.style.width = `${progressPercent}%`;
+       currentTimeEl.textContent = formatTime(musicPlayer.currentTime);
+    }
+
+
+    // ===============================================================
+    // ======= VISUALIZER DRAWING FUNCTIONS =======
+    // ===============================================================
+    // (Using minified versions from previous step for brevity)
+    function getAverageAmplitude(arr, start, end) { let sum=0; start=Math.max(0,Math.floor(start)); end=Math.min(arr.length,Math.ceil(end)); if(start>=end)return 0; for(let i=start;i<end;i++){ sum+=arr[i]; } return sum/(end-start)/255; }
+    function renderVisualizer() { if (!isAudioInitialized || !analyser) return; visualizerAnimationId = requestAnimationFrame(renderVisualizer); analyser.getByteFrequencyData(dataArray); visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height); const visualizers = [ drawNeonHolographicBars, drawQuantumCirclesX, drawNeuralWaveV2, drawGalacticNebulaeX, drawHyper4DSpectrum ]; const index = currentVisualizer - 1; if (index >= 0 && index < visualizers.length) visualizers[index](); }
     function startVisualizer() { if (!visualizerAnimationId && isAudioInitialized) { console.log("Starting visualizer animation."); renderVisualizer(); } }
-    function stopVisualizer() { if (visualizerAnimationId) { cancelAnimationFrame(visualizerAnimationId); visualizerAnimationId=null; console.log("Stopping visualizer animation."); visualizerCtx.clearRect(0,0,W(),H()); } }
+    function stopVisualizer() { if (visualizerAnimationId) { cancelAnimationFrame(visualizerAnimationId); visualizerAnimationId=null; console.log("Stopping visualizer animation."); visualizerCtx.clearRect(0,0,visualizerCanvas.width,visualizerCanvas.height); } }
+    function drawNeonHolographicBars(){const barW=(visualizerCanvas.width/bufferLength)*1.5;const space=0.5;const t=performance.now()*0.001;visualizerCtx.save();for(let i=0,x=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*visualizerCanvas.height*0.9);const pulse=0.8+0.2*Math.sin(t*5+i*0.2);const hue=(i/bufferLength)*200+t*20;const grad=visualizerCtx.createLinearGradient(x,visualizerCanvas.height,x,visualizerCanvas.height-h*pulse);grad.addColorStop(0,`hsla(${hue%360},100%,60%,0.8)`);grad.addColorStop(0.5,`hsla(${(hue+30)%360},90%,65%,0.6)`);grad.addColorStop(1,`hsla(${(hue+60)%360},80%,70%,0.3)`);visualizerCtx.shadowColor=`hsla(${hue%360},100%,70%,0.6)`;visualizerCtx.shadowBlur=8*amp;visualizerCtx.fillStyle=grad;const r=barW*0.3;visualizerCtx.beginPath();visualizerCtx.moveTo(x+r,visualizerCanvas.height);visualizerCtx.lineTo(x+barW-r,visualizerCanvas.height);visualizerCtx.arcTo(x+barW,visualizerCanvas.height,x+barW,visualizerCanvas.height-r,r);visualizerCtx.lineTo(x+barW,visualizerCanvas.height-h*pulse+r);visualizerCtx.arcTo(x+barW,visualizerCanvas.height-h*pulse,x+barW-r,visualizerCanvas.height-h*pulse,r);visualizerCtx.lineTo(x+r,visualizerCanvas.height-h*pulse);visualizerCtx.arcTo(x,visualizerCanvas.height-h*pulse,x,visualizerCanvas.height-h*pulse+r,r);visualizerCtx.lineTo(x,visualizerCanvas.height-r);visualizerCtx.arcTo(x,visualizerCanvas.height,x+r,visualizerCanvas.height,r);visualizerCtx.closePath();visualizerCtx.fill();if(amp>0.6&&Math.random()<0.05){visualizerCtx.save();visualizerCtx.globalCompositeOperation='lighter';visualizerCtx.fillStyle=`rgba(255,255,255,${0.4+Math.random()*0.4})`;const gy=visualizerCanvas.height-h*(0.2+Math.random()*0.6);const gh=1+Math.random()*3;visualizerCtx.fillRect(x,gy,barW,gh);visualizerCtx.restore();}x+=barW+space;}visualizerCtx.restore();}
+    function drawQuantumCirclesX(){const t=performance.now()*0.0005;const cx=visualizerCanvas.width/2;const cy=visualizerCanvas.height/2;const maxR=Math.min(cx,cy)*0.7;visualizerCtx.save();visualizerCtx.lineWidth=1.5;for(let i=0;i<bufferLength;i+=2){const amp=dataArray[i]/255;const ang=(Math.PI*2*i/bufferLength)+t*(i%5+1)*0.1;const baseR=amp*maxR;const pulse=1+0.2*Math.sin(t*8+i*0.5);const orbitR=baseR*pulse;const x=cx+Math.cos(ang)*orbitR;const y=cy+Math.sin(ang)*orbitR;const pSize=1+amp*5;const hue=((i*360/bufferLength)+t*60)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,pSize*1.5);grad.addColorStop(0,`hsla(${hue},100%,75%,${0.8+amp*0.2})`);grad.addColorStop(0.5,`hsla(${(hue+40)%360},90%,65%,${0.5*amp})`);grad.addColorStop(1,`hsla(${(hue+80)%360},80%,55%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,pSize*1.5,0,Math.PI*2);visualizerCtx.fill();if(amp>0.1){visualizerCtx.strokeStyle=`hsla(${hue},100%,70%,${0.1+amp*0.5})`;visualizerCtx.beginPath();visualizerCtx.moveTo(cx,cy);visualizerCtx.lineTo(x,y);visualizerCtx.stroke();}}visualizerCtx.restore();}
+    function drawNeuralWaveV2(){const sliceW=visualizerCanvas.width/(bufferLength-1);const t=performance.now()*0.0015;const waveH=visualizerCanvas.height*0.6;visualizerCtx.save();visualizerCtx.lineWidth=2;visualizerCtx.strokeStyle='rgba(0,255,208,0.7)';visualizerCtx.beginPath();let startX=0,startY=visualizerCanvas.height/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH;const sine=Math.sin(i*0.1+t)*waveH*0.2;const y=visualizerCanvas.height/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;if(i%4===0&&v>0.1){visualizerCtx.fillStyle=`hsla(${(180+v*100)%360},100%,${60+v*30}%,${0.5+v*0.5})`;visualizerCtx.beginPath();visualizerCtx.arc(x,y,1+v*3,0,Math.PI*2);visualizerCtx.fill();}}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.lineWidth=1;visualizerCtx.strokeStyle='rgba(255,75,0,0.4)';visualizerCtx.beginPath();startX=0;startY=visualizerCanvas.height/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH*0.7;const sine=Math.sin(i*0.12+t+Math.PI/2)*waveH*0.15;const y=visualizerCanvas.height/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.restore();}
+    function drawGalacticNebulaeX(){const cx=visualizerCanvas.width/2;const cy=visualizerCanvas.height/2;const t=performance.now()/5000;visualizerCtx.save();visualizerCtx.fillStyle='rgba(10,11,12,0.1)';visualizerCtx.fillRect(0,0,visualizerCanvas.width,visualizerCanvas.height);visualizerCtx.globalCompositeOperation='lighter';const numP=60;for(let i=0;i<numP;i++){const ang=(i/numP)*Math.PI*5+t;const frac=Math.pow(i/numP,0.8);const dist=frac*(visualizerCanvas.width/2.5);const x=cx+Math.cos(ang)*dist*(1+Math.sin(t*2+i*0.2)*0.1);const y=cy+Math.sin(ang)*dist*(1+Math.cos(t*2+i*0.2)*0.1);const dataIdx=Math.floor(Math.pow(i/numP,1.2)*(bufferLength*0.6));const inten=(dataArray[dataIdx]||0)/255;const baseR=5+frac*20;const r=Math.max(2,baseR*(0.5+inten*1.5));const hue=(frac*100+t*30+180)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,`hsla(${hue},90%,70%,${inten*0.8})`);grad.addColorStop(0.4,`hsla(${(hue+30)%360},80%,60%,${inten*0.4})`);grad.addColorStop(1,`hsla(${(hue+60)%360},70%,50%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,r,0,Math.PI*2);visualizerCtx.fill();}const bassAvg=getAverageAmplitude(dataArray,0,bufferLength*0.1);const coreR=Math.max(10,bassAvg*visualizerCanvas.height*0.5);const coreHue=(10+t*20)%360;const coreGrad=visualizerCtx.createRadialGradient(cx,cy,0,cx,cy,coreR);coreGrad.addColorStop(0,`hsla(${coreHue},100%,65%,${bassAvg*0.7})`);coreGrad.addColorStop(0.7,`hsla(${(coreHue+20)%360},90%,55%,${bassAvg*0.3})`);coreGrad.addColorStop(1,`hsla(${(coreHue+40)%360},80%,50%,0)`);visualizerCtx.fillStyle=coreGrad;visualizerCtx.beginPath();visualizerCtx.arc(cx,cy,coreR,0,Math.PI*2);visualizerCtx.fill();visualizerCtx.restore();}
+    function drawHyper4DSpectrum(){const barW=visualizerCanvas.width/bufferLength;const t=performance.now()/1000;visualizerCtx.save();for(let i=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*visualizerCanvas.height);const x=i*barW;const hue=(i/bufferLength)*300;const grad1=visualizerCtx.createLinearGradient(x,visualizerCanvas.height,x,visualizerCanvas.height-h);grad1.addColorStop(0,`hsla(${hue},100%,40%,0.7)`);grad1.addColorStop(0.8,`hsla(${hue},100%,60%,0.9)`);grad1.addColorStop(1,`hsla(${hue},100%,75%,1.0)`);visualizerCtx.fillStyle=grad1;visualizerCtx.fillRect(x,visualizerCanvas.height-h,barW,h);const hlH=h*(0.4+Math.sin(t*3+i*0.1)*0.1);const hlO=barW*0.1;visualizerCtx.fillStyle=`hsla(${(hue+30)%360},100%,85%,${0.3+amp*0.4})`;visualizerCtx.fillRect(x+hlO,visualizerCanvas.height-hlH,barW-2*hlO,hlH);if(amp>0.7){visualizerCtx.fillStyle=`hsla(${(hue+60)%360},100%,95%,${0.5+Math.random()*0.5})`;visualizerCtx.fillRect(x,visualizerCanvas.height-h-2,barW,2+Math.random()*2);}if(Math.random()<0.008){visualizerCtx.save();const gA=(Math.random()-0.5)*barW*1.5;const gY=visualizerCanvas.height-Math.random()*h;const gH=1+Math.random()*4;visualizerCtx.globalCompositeOperation=Math.random()<0.5?'lighter':'difference';visualizerCtx.fillStyle=`rgba(255,${Math.random()*150},${Math.random()*150},0.7)`;visualizerCtx.fillRect(x+gA,gY,barW,gH);visualizerCtx.restore();}}visualizerCtx.restore();}
+
 
     // ===============================================================
     // ======= EVENT LISTENERS & INITIALIZATION =======
     // ===============================================================
-    function updateVisualizerButtons() { document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => { btn.classList.toggle('active', i + 1 === currentVisualizer); }); }
+
+    function updateVisualizerButtons() {
+      document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+        btn.classList.toggle('active', i + 1 === currentVisualizer);
+      });
+    }
+
+    // --- Attach Event Listeners ---
     playPauseBtn.addEventListener('click', () => { if (musicPlayer.paused) playTrack(); else pauseTrack(); });
     $('prevTrack').addEventListener('click', () => { loadTrack(currentTrackIndex - 1); playTrack(); });
     $('nextTrack').addEventListener('click', () => { loadTrack(currentTrackIndex + 1); playTrack(); });
@@ -316,16 +611,30 @@
     musicPlayer.addEventListener('timeupdate', updateProgress);
     musicPlayer.addEventListener('loadedmetadata', () => { totalTimeEl.textContent = formatTime(musicPlayer.duration); console.log("Metadata loaded, duration:", formatTime(musicPlayer.duration)); });
     progressContainer.addEventListener('click', e => { if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; const pos = e.offsetX / progressContainer.offsetWidth; musicPlayer.currentTime = pos * musicPlayer.duration; updateProgress(); });
-    playlistToggleBtn.addEventListener('click', () => { const isHidden = playlistEl.style.display === 'none'; playlistEl.style.display = isHidden ? 'block' : 'none'; playlistToggleBtn.textContent = isHidden ? 'Hide Playlist' : 'Playlist'; if (isHidden) updatePlaylistActiveState(); });
-
-    // Update listener for 30 buttons
+    playlistToggleBtn.addEventListener('click', () => { const isHidden = playlistEl.style.display === 'none'; playlistEl.style.display = isHidden ? 'block' : 'none'; playlistToggleBtn.textContent = isHidden ? 'Hide Playlist' : 'Playlist'; if (isHidden) updatePlaylistActiveState(); /* Scroll happens in update function */ });
     document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => { btn.addEventListener('click', () => { const vizIdx = i + 1; if (currentVisualizer !== vizIdx) { currentVisualizer = vizIdx; updateVisualizerButtons(); console.log("Switched to visualizer:", currentVisualizer); } }); });
 
-    let resizeTimeout; window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(() => { console.log("Window resized."); resizeCanvases(); }, 250); });
-    musicPlayer.addEventListener('error', (e) => { console.error('Audio Player Error:', musicPlayer.error); trackTitleEl.textContent = 'Error loading track'; if (!musicPlayer.error) return; switch (musicPlayer.error.code) { case MediaError.MEDIA_ERR_ABORTED: console.error('Load aborted.'); break; case MediaError.MEDIA_ERR_NETWORK: console.error('Network error.'); break; case MediaError.MEDIA_ERR_DECODE: console.error('Decoding error.'); break; case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: console.error('Source not supported / File not found (404?).'); break; default: console.error('Unknown audio error.'); break; } });
+    let resizeTimeout;
+    window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(() => { console.log("Window resized, recalculating canvas sizes."); resizeCanvases(); }, 250); });
 
-    function initializePlayer() { console.log("Initializing player..."); resizeCanvases(); createPlaylist(); loadTrack(currentTrackIndex); updateVisualizerButtons(); initNeuralNetwork(); startBackgroundAnimation(); console.log("Player initialization complete."); }
+    musicPlayer.addEventListener('error', (e) => { console.error('Audio Player Error:', musicPlayer.error); trackTitleEl.textContent = 'Error loading track'; if (!musicPlayer.error) return; switch (musicPlayer.error.code) { case MediaError.MEDIA_ERR_ABORTED: console.error('Load aborted.'); break; case MediaError.MEDIA_ERR_NETWORK: console.error('Network error.'); break; case MediaError.MEDIA_ERR_DECODE: console.error('Decoding error.'); break; case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: console.error('Source not supported / File not found (404?). Check path/URL.'); break; default: console.error('An unknown audio error occurred.'); break; } });
+
+
+    // --- Initial Setup on Page Load ---
+    function initializePlayer() {
+        console.log("Initializing player...");
+        resizeCanvases();           // Set initial canvas sizes
+        createPlaylist();           // Build the playlist HTML
+        loadTrack(currentTrackIndex); // Load info for the first track (does NOT play)
+        updateVisualizerButtons();  // Set initial active visualizer button
+        initNeuralNetwork();        // Setup the background network structure
+        startBackgroundAnimation(); // Start background animation (waits for audio init)
+        console.log("Player initialization complete. Ready for user interaction.");
+    }
+
+    // Run initialization when the DOM is fully loaded
     document.addEventListener('DOMContentLoaded', initializePlayer);
+
   </script>
 </body>
 </html>
