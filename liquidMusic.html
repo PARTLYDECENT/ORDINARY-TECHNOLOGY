@@ -423,9 +423,9 @@
             analyser.connect(audioContext.destination);
 
             isAudioInitialized = true; // Set flag
-            console.log("AudioContext Initialized");
+            console.log("AudioContext Initialized, state:", audioContext.state); // Log initial state
 
-            // Start animation loops now that audio is ready
+            // Start animation loops now that audio is ready (if not already running)
             startVisualizer();
             startBackgroundAnimation();
 
@@ -434,9 +434,9 @@
             alert("Could not initialize audio playback. Your browser might not support the Web Audio API or have restrictions.");
         }
       }
-      // Resume context if it was suspended (browsers might suspend audio initially)
-      if (audioContext && audioContext.state === 'suspended') {
-          audioContext.resume().catch(err => console.error("Error resuming AudioContext:", err));
+       // Log state if called again when already initialized
+      else if (isAudioInitialized) {
+          console.log("initAudio called but already initialized. Context state:", audioContext.state);
       }
     }
 
@@ -444,42 +444,13 @@
     // ===============================================================
     // ======= NEURAL NETWORK BACKGROUND ANIMATION CLASSES & LOGIC =======
     // ===============================================================
+    // (Using the minified versions from previous step for brevity)
+    class Neuron { constructor(x, y, layer, size, speed) { this.x=x; this.y=y; this.layer=layer; this.baseSize=size; this.speed=speed; this.pulse=0; this.oscillation=Math.random()*Math.PI*2; } update(audioValue, reactivity) { this.pulse=(audioValue/255)*4*reactivity; this.oscillation+=this.speed; } render(ctx, color) { const osc=Math.sin(this.oscillation)*0.5; const size=this.baseSize+this.pulse+osc; ctx.shadowColor=color; ctx.shadowBlur=5+this.pulse*5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(this.x,this.y,Math.max(1,size),0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; } }
+    class Connection { constructor(from, to, weight) { this.from=from; this.to=to; this.weight=weight; this.signal=Math.random(); } update(reactivity) { const speed=0.005+reactivity*0.05; this.signal=(this.signal+speed)%1; } render(ctx, color, reactivity) { const dx=this.to.x-this.from.x; const dy=this.to.y-this.from.y; ctx.strokeStyle=`rgba(255,255,255,${0.02+this.weight*0.05})`; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(this.from.x,this.from.y); ctx.lineTo(this.to.x,this.to.y); ctx.stroke(); const sigX=this.from.x+dx*this.signal; const sigY=this.from.y+dy*this.signal; const size=1+reactivity*2.5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(sigX,sigY,size,0,Math.PI*2); ctx.fill(); } }
+    class NeuralNetwork { constructor(layers, canvas) { this.lCount=layers; this.canvas=canvas; this.neurons=[]; this.connections=[]; this.initNeurons(); this.initConnections(); } initNeurons() { this.neurons=[]; const ratios=[0.6,0.8,1,0.8,0.6]; for(let l=0;l<this.lCount;l++){ const ratio=ratios[l]||1; const baseCount=Math.floor(20*(this.canvas.width/1200)); const num=Math.max(5,Math.floor(baseCount*ratio)); const padX=this.canvas.width*0.1; const availW=this.canvas.width-2*padX; const lx=padX+(this.lCount>1?availW/(this.lCount-1)*l:availW/2); for(let i=0;i<num;i++){ const padY=this.canvas.height*0.15; const availH=this.canvas.height-2*padY; const randY=(Math.random()-0.5)*availH*0.1; const y=padY+(num>1?availH*i/(num-1):availH/2)+randY; const size=Math.random()*1.5+1; const speed=(Math.random()*0.01+0.005)*(0.5+Math.random()); this.neurons.push(new Neuron(lx,y,l,size,speed)); } } } initConnections() { this.connections=[]; this.neurons.forEach(fromN=>{ if(fromN.layer<this.lCount-1){ const nextLayerNs=this.neurons.filter(n=>n.layer===fromN.layer+1); const count=Math.max(1,Math.floor(nextLayerNs.length*(0.3+Math.random()*0.3))); const targets=nextLayerNs.sort(()=>0.5-Math.random()); for(let i=0;i<count&&i<targets.length;i++){ this.connections.push(new Connection(fromN,targets[i],Math.random())); } } }); } update(audioData, bufLen, reactivity) { this.neurons.forEach((neuron,idx)=>{ const freqIdx=Math.floor(Math.pow(idx/this.neurons.length,1.5)*(bufLen*0.8)); neuron.update(audioData[freqIdx]||0,reactivity); }); this.connections.forEach(conn=>conn.update(reactivity)); } render(ctx, colors, reactivity) { this.connections.forEach(conn=>conn.render(ctx,colors.connection,reactivity)); this.neurons.forEach(neuron=>neuron.render(ctx,colors.neuron)); } }
 
-    class Neuron {
-      constructor(x, y, layer, size, speed) { this.x=x; this.y=y; this.layer=layer; this.baseSize=size; this.speed=speed; this.pulse=0; this.oscillation=Math.random()*Math.PI*2; }
-      update(audioValue, reactivity) { this.pulse=(audioValue/255)*4*reactivity; this.oscillation+=this.speed; }
-      render(ctx, color) { const osc=Math.sin(this.oscillation)*0.5; const size=this.baseSize+this.pulse+osc; ctx.shadowColor=color; ctx.shadowBlur=5+this.pulse*5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(this.x,this.y,Math.max(1,size),0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; }
-    }
-    class Connection {
-      constructor(from, to, weight) { this.from=from; this.to=to; this.weight=weight; this.signal=Math.random(); }
-      update(reactivity) { const speed=0.005+reactivity*0.05; this.signal=(this.signal+speed)%1; }
-      render(ctx, color, reactivity) { const dx=this.to.x-this.from.x; const dy=this.to.y-this.from.y; ctx.strokeStyle=`rgba(255,255,255,${0.02+this.weight*0.05})`; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(this.from.x,this.from.y); ctx.lineTo(this.to.x,this.to.y); ctx.stroke(); const sigX=this.from.x+dx*this.signal; const sigY=this.from.y+dy*this.signal; const size=1+reactivity*2.5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(sigX,sigY,size,0,Math.PI*2); ctx.fill(); }
-    }
-    class NeuralNetwork {
-      constructor(layers, canvas) { this.lCount=layers; this.canvas=canvas; this.neurons=[]; this.connections=[]; this.initNeurons(); this.initConnections(); }
-      initNeurons() { this.neurons=[]; const ratios=[0.6,0.8,1,0.8,0.6]; for(let l=0;l<this.lCount;l++){ const ratio=ratios[l]||1; const baseCount=Math.floor(20*(this.canvas.width/1200)); const num=Math.max(5,Math.floor(baseCount*ratio)); const padX=this.canvas.width*0.1; const availW=this.canvas.width-2*padX; const lx=padX+(this.lCount>1?availW/(this.lCount-1)*l:availW/2); for(let i=0;i<num;i++){ const padY=this.canvas.height*0.15; const availH=this.canvas.height-2*padY; const randY=(Math.random()-0.5)*availH*0.1; const y=padY+(num>1?availH*i/(num-1):availH/2)+randY; const size=Math.random()*1.5+1; const speed=(Math.random()*0.01+0.005)*(0.5+Math.random()); this.neurons.push(new Neuron(lx,y,l,size,speed)); } } }
-      initConnections() { this.connections=[]; this.neurons.forEach(fromN=>{ if(fromN.layer<this.lCount-1){ const nextLayerNs=this.neurons.filter(n=>n.layer===fromN.layer+1); const count=Math.max(1,Math.floor(nextLayerNs.length*(0.3+Math.random()*0.3))); const targets=nextLayerNs.sort(()=>0.5-Math.random()); for(let i=0;i<count&&i<targets.length;i++){ this.connections.push(new Connection(fromN,targets[i],Math.random())); } } }); }
-      update(audioData, bufLen, reactivity) { this.neurons.forEach((neuron,idx)=>{ const freqIdx=Math.floor(Math.pow(idx/this.neurons.length,1.5)*(bufLen*0.8)); neuron.update(audioData[freqIdx]||0,reactivity); }); this.connections.forEach(conn=>conn.update(reactivity)); }
-      render(ctx, colors, reactivity) { this.connections.forEach(conn=>conn.render(ctx,colors.connection,reactivity)); this.neurons.forEach(neuron=>neuron.render(ctx,colors.neuron)); }
-    }
-
-    function initNeuralNetwork() {
-        if (!neuralNetwork) { neuralNetwork = new NeuralNetwork(layerCount, bgCanvas); }
-        else { neuralNetwork.canvas=bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); }
-        console.log(`Neural Network Initialized/Reinitialized with ${neuralNetwork?.neurons?.length} neurons and ${neuralNetwork?.connections?.length} connections.`);
-    }
-
-    function renderNeuralBackground() {
-      if (!isAudioInitialized || !neuralNetwork || !analyser) { bgAnimationId = requestAnimationFrame(renderNeuralBackground); return; } // Wait if not ready
-      analyser.getByteFrequencyData(dataArray);
-      let sum=0; const relBufLen=Math.floor(bufferLength*0.7); for(let i=0;i<relBufLen;i++){ sum+=dataArray[i]; }
-      const avg=sum/relBufLen; const reactivity=Math.min(1,Math.pow(avg/128,1.5));
-      const trailAlpha=0.08+reactivity*0.07; bgCtx.fillStyle=`rgba(10,11,12,${trailAlpha})`; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height);
-      const colors=colorSchemes[currentColorScheme]; neuralNetwork.update(dataArray,bufferLength,reactivity); neuralNetwork.render(bgCtx,colors,reactivity);
-      if(Math.random()<0.0005+reactivity*0.005){ currentColorScheme=(currentColorScheme+1)%colorSchemes.length; }
-      bgAnimationId = requestAnimationFrame(renderNeuralBackground);
-    }
-
+    function initNeuralNetwork() { if (!neuralNetwork) { neuralNetwork = new NeuralNetwork(layerCount, bgCanvas); } else { neuralNetwork.canvas=bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); } console.log(`Neural Network Initialized/Reinitialized with ${neuralNetwork?.neurons?.length} neurons and ${neuralNetwork?.connections?.length} connections.`); }
+    function renderNeuralBackground() { if (!isAudioInitialized || !neuralNetwork || !analyser) { bgAnimationId = requestAnimationFrame(renderNeuralBackground); return; } analyser.getByteFrequencyData(dataArray); let sum=0; const relBufLen=Math.floor(bufferLength*0.7); for(let i=0;i<relBufLen;i++){ sum+=dataArray[i]; } const avg=sum/relBufLen||0; const reactivity=Math.min(1,Math.pow(avg/128,1.5)); const trailAlpha=0.08+reactivity*0.07; bgCtx.fillStyle=`rgba(10,11,12,${trailAlpha})`; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height); const colors=colorSchemes[currentColorScheme]; neuralNetwork.update(dataArray,bufferLength,reactivity); neuralNetwork.render(bgCtx,colors,reactivity); if(Math.random()<0.0005+reactivity*0.005){ currentColorScheme=(currentColorScheme+1)%colorSchemes.length; } bgAnimationId = requestAnimationFrame(renderNeuralBackground); }
     function startBackgroundAnimation() { if (!bgAnimationId) { console.log("Starting background animation."); renderNeuralBackground(); } }
     function stopBackgroundAnimation() { if (bgAnimationId) { cancelAnimationFrame(bgAnimationId); bgAnimationId=null; console.log("Stopping background animation."); } }
 
@@ -489,119 +460,132 @@
     // ===============================================================
 
     function loadTrack(index) {
-      // Wrap index around the playlist
       index = (index + tracks.length) % tracks.length;
       currentTrackIndex = index;
-
-      // Set audio source and update UI text
       const track = tracks[index];
       musicPlayer.src = track.src;
       trackTitleEl.textContent = track.title;
       currentTrackNumEl.textContent = index + 1;
-
-      // Update active state in playlist DOM
-      document.querySelectorAll('.playlist-item').forEach(item => {
-        item.classList.toggle('active', parseInt(item.dataset.index) === index);
-      });
-
-      // Scroll playlist to active item if playlist is visible
-      const activeItem = playlistEl.querySelector(`.playlist-item[data-index="${index}"]`);
-      if (activeItem && playlistEl.style.display !== 'none') {
-          activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-
-      // Reset progress/time display before loading new track
-       progressBar.style.width = '0%';
-       currentTimeEl.textContent = '0:00';
-       totalTimeEl.textContent = '0:00'; // Will update on 'loadedmetadata'
-
-       musicPlayer.load(); // Crucial step to load the new source
-       console.log("Loading track:", track.title, "| Source:", musicPlayer.src);
+      updatePlaylistActiveState();
+      progressBar.style.width = '0%';
+      currentTimeEl.textContent = '0:00';
+      totalTimeEl.textContent = '0:00';
+      musicPlayer.load();
+      console.log("Loading track:", track.title, "| Source:", musicPlayer.src);
     }
 
     function createPlaylist() {
-      playlistEl.innerHTML = ''; // Clear previous items
+      playlistEl.innerHTML = '';
       tracks.forEach((track, i) => {
         const item = document.createElement('div');
         item.className = 'playlist-item';
-        item.dataset.index = i; // Store index for click handling
+        item.dataset.index = i;
         item.innerHTML = `<span>${(i + 1).toString().padStart(2, '0')}</span><span>${track.title}</span>`;
         item.addEventListener('click', () => {
-          if (currentTrackIndex !== i) loadTrack(i); // Load if different track
+          if (currentTrackIndex !== i) loadTrack(i);
           playTrack(); // Attempt to play when clicked
         });
         playlistEl.appendChild(item);
       });
-      // Mark the initially loaded track as active
-       updatePlaylistActiveState();
+      updatePlaylistActiveState(); // Mark initial track
     }
 
     function updatePlaylistActiveState() {
          document.querySelectorAll('.playlist-item').forEach(item => {
              item.classList.toggle('active', parseInt(item.dataset.index) === currentTrackIndex);
          });
+         // Scroll active item into view if playlist is visible
+         const activeItem = playlistEl.querySelector('.playlist-item.active');
+          if (activeItem && playlistEl.style.display !== 'none') {
+               activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
     }
 
-
+    // --- REVISED playTrack Function ---
     function playTrack() {
-      if (!isAudioInitialized) initAudio(); // Ensure audio is ready
+        // 1. Ensure AudioContext is initialized (or initialize it)
+        if (!isAudioInitialized) {
+            console.log("Audio not initialized. Initializing on first play attempt...");
+            initAudio();
+            // IMPORTANT: Don't try to play immediately after init.
+            // Wait for the user's next click now that context might be ready.
+            // You could update UI, e.g., playPauseBtn.textContent = 'Initializing...';
+            return; // Exit function
+        }
 
-      if (audioContext && audioContext.state === 'resumed') {
-         musicPlayer.play()
-           .then(() => {
-             playPauseBtn.textContent = 'Pause';
-             startVisualizer(); // Ensure visualizers are running
-             startBackgroundAnimation();
-             console.log("Playback started.");
-           })
-           .catch(error => console.error("Error during play attempt:", error));
-       } else if (audioContext && audioContext.state === 'suspended') {
-           // If suspended, resume and then try playing again
-           console.log("AudioContext suspended, attempting to resume...");
-           audioContext.resume().then(playTrack).catch(err => console.error("Error resuming context for play:", err));
-       } else if (!audioContext) {
-            console.warn("Cannot play track - AudioContext not initialized yet.");
-       } else {
-            console.warn(`Cannot play track - AudioContext state: ${audioContext.state}`);
-       }
+        // 2. If context exists, always try to resume it (safe even if running)
+        if (audioContext) {
+            console.log(`Attempting play. AudioContext state: ${audioContext.state}`);
+            audioContext.resume()
+                .then(() => {
+                    // 3. Context is running, now try to play the audio element
+                    console.log("AudioContext resumed/running. Attempting musicPlayer.play()...");
+                    // Check if already playing to prevent interruption errors in some cases
+                    if (musicPlayer.paused) {
+                        const playPromise = musicPlayer.play();
+
+                        if (playPromise !== undefined) {
+                            playPromise
+                                .then(_ => {
+                                    // 4. Playback started successfully
+                                    playPauseBtn.textContent = 'Pause';
+                                    startVisualizer(); // Ensure animations are running
+                                    startBackgroundAnimation();
+                                    console.log("Playback successfully started via promise.");
+                                })
+                                .catch(error => {
+                                    // 5. Playback failed (even though context is running)
+                                    console.error(`Error playing audio: ${error.name} - ${error.message}`);
+                                    playPauseBtn.textContent = 'Play'; // Keep UI as 'Play'
+                                    // Alert or update UI about the error if desired
+                                    // alert(`Playback failed: ${error.message}`);
+                                });
+                        } else {
+                             // Older browsers might not return a promise - attempt might still work
+                             console.warn("musicPlayer.play() did not return a promise. Assuming playback started.");
+                             playPauseBtn.textContent = 'Pause';
+                             startVisualizer();
+                             startBackgroundAnimation();
+                        }
+                    } else {
+                        console.log("Music player is already playing.");
+                        playPauseBtn.textContent = 'Pause'; // Ensure button state is correct
+                    }
+                })
+                .catch(error => {
+                    // Failed to resume the AudioContext
+                    console.error("Error resuming AudioContext:", error);
+                    playPauseBtn.textContent = 'Play'; // Keep UI as play
+                });
+        } else {
+             console.error("Cannot play: AudioContext is not available.");
+             playPauseBtn.textContent = 'Play'; // Ensure UI is correct
+        }
     }
 
     function pauseTrack() {
       musicPlayer.pause();
       playPauseBtn.textContent = 'Play';
-      // We typically don't stop animations on pause
+      // Don't stop animations on pause
       console.log("Playback paused.");
     }
 
     function updateProgress() {
-       if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; // Skip if duration is invalid
+       if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return;
        const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
        progressBar.style.width = `${progressPercent}%`;
        currentTimeEl.textContent = formatTime(musicPlayer.currentTime);
-       // Total time updated via 'loadedmetadata' event listener
     }
 
 
     // ===============================================================
     // ======= VISUALIZER DRAWING FUNCTIONS =======
     // ===============================================================
-
+    // (Using minified versions from previous step for brevity)
     function getAverageAmplitude(arr, start, end) { let sum=0; start=Math.max(0,Math.floor(start)); end=Math.min(arr.length,Math.ceil(end)); if(start>=end)return 0; for(let i=start;i<end;i++){ sum+=arr[i]; } return sum/(end-start)/255; }
-
-    function renderVisualizer() {
-        if (!isAudioInitialized || !analyser) return; // Don't run if audio isn't ready
-        visualizerAnimationId = requestAnimationFrame(renderVisualizer);
-        analyser.getByteFrequencyData(dataArray);
-        visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
-        const visualizers = [ drawNeonHolographicBars, drawQuantumCirclesX, drawNeuralWaveV2, drawGalacticNebulaeX, drawHyper4DSpectrum ];
-        const index = currentVisualizer - 1; // 0-based index
-        if (index >= 0 && index < visualizers.length) visualizers[index]();
-    }
-
+    function renderVisualizer() { if (!isAudioInitialized || !analyser) return; visualizerAnimationId = requestAnimationFrame(renderVisualizer); analyser.getByteFrequencyData(dataArray); visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height); const visualizers = [ drawNeonHolographicBars, drawQuantumCirclesX, drawNeuralWaveV2, drawGalacticNebulaeX, drawHyper4DSpectrum ]; const index = currentVisualizer - 1; if (index >= 0 && index < visualizers.length) visualizers[index](); }
     function startVisualizer() { if (!visualizerAnimationId && isAudioInitialized) { console.log("Starting visualizer animation."); renderVisualizer(); } }
     function stopVisualizer() { if (visualizerAnimationId) { cancelAnimationFrame(visualizerAnimationId); visualizerAnimationId=null; console.log("Stopping visualizer animation."); visualizerCtx.clearRect(0,0,visualizerCanvas.width,visualizerCanvas.height); } }
-
-    // --- Specific Visualizer Implementations (Minified for brevity, logic unchanged from previous) ---
     function drawNeonHolographicBars(){const barW=(visualizerCanvas.width/bufferLength)*1.5;const space=0.5;const t=performance.now()*0.001;visualizerCtx.save();for(let i=0,x=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*visualizerCanvas.height*0.9);const pulse=0.8+0.2*Math.sin(t*5+i*0.2);const hue=(i/bufferLength)*200+t*20;const grad=visualizerCtx.createLinearGradient(x,visualizerCanvas.height,x,visualizerCanvas.height-h*pulse);grad.addColorStop(0,`hsla(${hue%360},100%,60%,0.8)`);grad.addColorStop(0.5,`hsla(${(hue+30)%360},90%,65%,0.6)`);grad.addColorStop(1,`hsla(${(hue+60)%360},80%,70%,0.3)`);visualizerCtx.shadowColor=`hsla(${hue%360},100%,70%,0.6)`;visualizerCtx.shadowBlur=8*amp;visualizerCtx.fillStyle=grad;const r=barW*0.3;visualizerCtx.beginPath();visualizerCtx.moveTo(x+r,visualizerCanvas.height);visualizerCtx.lineTo(x+barW-r,visualizerCanvas.height);visualizerCtx.arcTo(x+barW,visualizerCanvas.height,x+barW,visualizerCanvas.height-r,r);visualizerCtx.lineTo(x+barW,visualizerCanvas.height-h*pulse+r);visualizerCtx.arcTo(x+barW,visualizerCanvas.height-h*pulse,x+barW-r,visualizerCanvas.height-h*pulse,r);visualizerCtx.lineTo(x+r,visualizerCanvas.height-h*pulse);visualizerCtx.arcTo(x,visualizerCanvas.height-h*pulse,x,visualizerCanvas.height-h*pulse+r,r);visualizerCtx.lineTo(x,visualizerCanvas.height-r);visualizerCtx.arcTo(x,visualizerCanvas.height,x+r,visualizerCanvas.height,r);visualizerCtx.closePath();visualizerCtx.fill();if(amp>0.6&&Math.random()<0.05){visualizerCtx.save();visualizerCtx.globalCompositeOperation='lighter';visualizerCtx.fillStyle=`rgba(255,255,255,${0.4+Math.random()*0.4})`;const gy=visualizerCanvas.height-h*(0.2+Math.random()*0.6);const gh=1+Math.random()*3;visualizerCtx.fillRect(x,gy,barW,gh);visualizerCtx.restore();}x+=barW+space;}visualizerCtx.restore();}
     function drawQuantumCirclesX(){const t=performance.now()*0.0005;const cx=visualizerCanvas.width/2;const cy=visualizerCanvas.height/2;const maxR=Math.min(cx,cy)*0.7;visualizerCtx.save();visualizerCtx.lineWidth=1.5;for(let i=0;i<bufferLength;i+=2){const amp=dataArray[i]/255;const ang=(Math.PI*2*i/bufferLength)+t*(i%5+1)*0.1;const baseR=amp*maxR;const pulse=1+0.2*Math.sin(t*8+i*0.5);const orbitR=baseR*pulse;const x=cx+Math.cos(ang)*orbitR;const y=cy+Math.sin(ang)*orbitR;const pSize=1+amp*5;const hue=((i*360/bufferLength)+t*60)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,pSize*1.5);grad.addColorStop(0,`hsla(${hue},100%,75%,${0.8+amp*0.2})`);grad.addColorStop(0.5,`hsla(${(hue+40)%360},90%,65%,${0.5*amp})`);grad.addColorStop(1,`hsla(${(hue+80)%360},80%,55%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,pSize*1.5,0,Math.PI*2);visualizerCtx.fill();if(amp>0.1){visualizerCtx.strokeStyle=`hsla(${hue},100%,70%,${0.1+amp*0.5})`;visualizerCtx.beginPath();visualizerCtx.moveTo(cx,cy);visualizerCtx.lineTo(x,y);visualizerCtx.stroke();}}visualizerCtx.restore();}
     function drawNeuralWaveV2(){const sliceW=visualizerCanvas.width/(bufferLength-1);const t=performance.now()*0.0015;const waveH=visualizerCanvas.height*0.6;visualizerCtx.save();visualizerCtx.lineWidth=2;visualizerCtx.strokeStyle='rgba(0,255,208,0.7)';visualizerCtx.beginPath();let startX=0,startY=visualizerCanvas.height/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH;const sine=Math.sin(i*0.1+t)*waveH*0.2;const y=visualizerCanvas.height/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;if(i%4===0&&v>0.1){visualizerCtx.fillStyle=`hsla(${(180+v*100)%360},100%,${60+v*30}%,${0.5+v*0.5})`;visualizerCtx.beginPath();visualizerCtx.arc(x,y,1+v*3,0,Math.PI*2);visualizerCtx.fill();}}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.lineWidth=1;visualizerCtx.strokeStyle='rgba(255,75,0,0.4)';visualizerCtx.beginPath();startX=0;startY=visualizerCanvas.height/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH*0.7;const sine=Math.sin(i*0.12+t+Math.PI/2)*waveH*0.15;const y=visualizerCanvas.height/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.restore();}
@@ -620,85 +604,20 @@
     }
 
     // --- Attach Event Listeners ---
-
-    // Play/Pause Button
-    playPauseBtn.addEventListener('click', () => {
-        if (musicPlayer.paused) playTrack(); else pauseTrack();
-    });
-
-    // Previous/Next Track Buttons
+    playPauseBtn.addEventListener('click', () => { if (musicPlayer.paused) playTrack(); else pauseTrack(); });
     $('prevTrack').addEventListener('click', () => { loadTrack(currentTrackIndex - 1); playTrack(); });
     $('nextTrack').addEventListener('click', () => { loadTrack(currentTrackIndex + 1); playTrack(); });
-
-    // Auto-play next track when current one ends
-    musicPlayer.addEventListener('ended', () => {
-        console.log("Track ended, loading next.");
-        loadTrack(currentTrackIndex + 1);
-        playTrack();
-    });
-
-    // Update progress bar as track plays
+    musicPlayer.addEventListener('ended', () => { console.log("Track ended, loading next."); loadTrack(currentTrackIndex + 1); playTrack(); });
     musicPlayer.addEventListener('timeupdate', updateProgress);
+    musicPlayer.addEventListener('loadedmetadata', () => { totalTimeEl.textContent = formatTime(musicPlayer.duration); console.log("Metadata loaded, duration:", formatTime(musicPlayer.duration)); });
+    progressContainer.addEventListener('click', e => { if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; const pos = e.offsetX / progressContainer.offsetWidth; musicPlayer.currentTime = pos * musicPlayer.duration; updateProgress(); });
+    playlistToggleBtn.addEventListener('click', () => { const isHidden = playlistEl.style.display === 'none'; playlistEl.style.display = isHidden ? 'block' : 'none'; playlistToggleBtn.textContent = isHidden ? 'Hide Playlist' : 'Playlist'; if (isHidden) updatePlaylistActiveState(); /* Scroll happens in update function */ });
+    document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => { btn.addEventListener('click', () => { const vizIdx = i + 1; if (currentVisualizer !== vizIdx) { currentVisualizer = vizIdx; updateVisualizerButtons(); console.log("Switched to visualizer:", currentVisualizer); } }); });
 
-    // Update total time display when track metadata loads
-    musicPlayer.addEventListener('loadedmetadata', () => {
-         totalTimeEl.textContent = formatTime(musicPlayer.duration);
-         console.log("Metadata loaded, duration:", formatTime(musicPlayer.duration));
-    });
-
-    // Allow seeking by clicking on the progress bar
-    progressContainer.addEventListener('click', e => {
-      if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return;
-      const clickPosition = e.offsetX / progressContainer.offsetWidth;
-      musicPlayer.currentTime = clickPosition * musicPlayer.duration;
-      updateProgress(); // Update UI immediately after seek
-    });
-
-    // Toggle Playlist Visibility
-    playlistToggleBtn.addEventListener('click', () => {
-      const isHidden = playlistEl.style.display === 'none';
-      playlistEl.style.display = isHidden ? 'block' : 'none';
-      playlistToggleBtn.textContent = isHidden ? 'Hide Playlist' : 'Playlist';
-      if (isHidden) { // Scroll to active item when shown
-           const activeItem = playlistEl.querySelector('.playlist-item.active');
-           if (activeItem) activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-       }
-    });
-
-    // Visualizer Selection Buttons
-    document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
-      btn.addEventListener('click', () => {
-        const vizIndex = i + 1;
-        if (currentVisualizer !== vizIndex) {
-             currentVisualizer = vizIndex;
-             updateVisualizerButtons();
-             console.log("Switched to visualizer:", currentVisualizer);
-        }
-      });
-    });
-
-    // Handle window resizing (debounced)
     let resizeTimeout;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            console.log("Window resized, recalculating canvas sizes.");
-            resizeCanvases(); // Resizes canvases and triggers network re-layout
-        }, 250); // Delay to avoid rapid firing during resize
-    });
+    window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(() => { console.log("Window resized, recalculating canvas sizes."); resizeCanvases(); }, 250); });
 
-    // --- Audio Element Error Handling ---
-    musicPlayer.addEventListener('error', (e) => {
-        console.error('Audio Player Error:', musicPlayer.error);
-        trackTitleEl.textContent = 'Error loading track';
-        switch (musicPlayer.error.code) {
-             case MediaError.MEDIA_ERR_ABORTED: console.error('Load aborted.'); break;
-             case MediaError.MEDIA_ERR_NETWORK: console.error('Network error.'); break;
-             case MediaError.MEDIA_ERR_DECODE: console.error('Decoding error.'); break;
-             case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: console.error('Source not supported / File not found (404?). Check path/URL.'); break;
-             default: console.error('An unknown audio error occurred.'); break;
-           }
-    });
+    musicPlayer.addEventListener('error', (e) => { console.error('Audio Player Error:', musicPlayer.error); trackTitleEl.textContent = 'Error loading track'; if (!musicPlayer.error) return; switch (musicPlayer.error.code) { case MediaError.MEDIA_ERR_ABORTED: console.error('Load aborted.'); break; case MediaError.MEDIA_ERR_NETWORK: console.error('Network error.'); break; case MediaError.MEDIA_ERR_DECODE: console.error('Decoding error.'); break; case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: console.error('Source not supported / File not found (404?). Check path/URL.'); break; default: console.error('An unknown audio error occurred.'); break; } });
 
 
     // --- Initial Setup on Page Load ---
@@ -706,11 +625,11 @@
         console.log("Initializing player...");
         resizeCanvases();           // Set initial canvas sizes
         createPlaylist();           // Build the playlist HTML
-        loadTrack(currentTrackIndex); // Load info for the first track
+        loadTrack(currentTrackIndex); // Load info for the first track (does NOT play)
         updateVisualizerButtons();  // Set initial active visualizer button
         initNeuralNetwork();        // Setup the background network structure
         startBackgroundAnimation(); // Start background animation (waits for audio init)
-        console.log("Player initialization complete.");
+        console.log("Player initialization complete. Ready for user interaction.");
     }
 
     // Run initialization when the DOM is fully loaded
