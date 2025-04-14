@@ -1,1141 +1,1215 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Neuromantic Player</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neuromantic Player</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
-        :root {
-            --primary: #ff4b00; /* Orange */
-            --secondary: #00ffd0; /* Cyan */
-            --tertiary: #ff00ff; /* Magenta */
-            --quaternary: #ffff00; /* Yellow */
-            --bg-dark: #0a0b0c;
-            --bg-light: #121416;
-            --text: #e0e0e0;
-            --text-dim: rgba(224, 224, 224, 0.5);
+    :root {
+      --primary: #ff4b00;
+      --secondary: #00ffd0;
+      --bg-dark: #0a0b0c; /* 10, 11, 12 */
+      --bg-light: #121416;
+      --text: #e0e0e0;
+    }
 
-            /* RGB versions for potential use */
-            --rgb-primary: 255, 75, 0;
-            --rgb-secondary: 0, 255, 208;
-            --rgb-tertiary: 255, 0, 255;
-            --rgb-quaternary: 255, 255, 0;
-        }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden; /* Changed from overflow-x: hidden to prevent scrollbars from background */
+    }
 
-        html {
-            font-size: 16px; /* Base font size */
-        }
+    #background-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1; /* Ensures it's behind everything */
+    }
 
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text);
-            font-family: 'Space Mono', monospace;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-            overflow: hidden; /* Prevent body scroll */
-            /* Subtle animated gradient background */
-            background: linear-gradient(45deg, var(--bg-dark) 0%, #100f18 50%, var(--bg-dark) 100%);
-            background-size: 400% 400%;
-            animation: gradientBG 25s ease infinite;
-        }
+    header {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      position: relative;
+      text-transform: uppercase;
+      color: var(--primary);
+      z-index: 1; /* Keep header above background */
+    }
 
-        @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
+    header::after {
+      content: 'PLAYER';
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--secondary);
+      clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
+    }
 
-        /* Removed #background-canvas styling - No WebGL BG in this version */
+    .player-container {
+      width: 90%;
+      max-width: 800px;
+      background: var(--bg-light);
+      border-radius: 2px;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      z-index: 1; /* Keep player above background */
+    }
 
-        header {
-            font-size: clamp(1.2rem, 5vw, 1.8rem); /* Slightly larger max size */
-            font-weight: 700;
-            margin-bottom: 2rem;
-            position: relative;
-            text-transform: uppercase;
-            color: var(--primary);
-            text-shadow: 0 0 8px var(--primary), 0 0 15px rgba(var(--rgb-primary), 0.5); /* Stronger glow */
-            letter-spacing: 1px;
-        }
+    .player-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+    }
 
-        /* Header glitch effect */
-        header::before, /* Use ::before and ::after for more complex glitch */
-        header::after {
-            content: 'Neuromantic'; /* Match text content */
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--bg-dark); /* Cover original text */
-            overflow: hidden;
-        }
-        header::before { /* Top half, primary color */
-             color: var(--primary);
-             text-shadow: -1px 0 var(--secondary); /* Offset shadow */
-             clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
-             animation: glitchTop 2.5s infinite linear alternate-reverse;
-        }
-        header::after { /* Bottom half, secondary color */
-             color: var(--secondary);
-             text-shadow: 1px 0 var(--primary); /* Offset shadow */
-             clip-path: polygon(0 50%, 100% 50%, 100% 100%, 0 100%);
-             animation: glitchBottom 2.5s infinite linear alternate-reverse;
-        }
+    .track-info {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      padding: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
 
-        @keyframes glitchTop {
-            0%, 100% { transform: translate(0,0); }
-            5% { transform: translate(2px, -1px); }
-            10% { transform: translate(-2px, 1px); }
-            15%, 30% { transform: translate(0,0); }
-            35% { transform: translate(1px, -0.5px); }
-            40% { transform: translate(-1px, 0.5px); }
-            45% { transform: translate(0,0); }
-        }
-        @keyframes glitchBottom {
-             0%, 100% { transform: translate(0,0); }
-             7% { transform: translate(-2px, 1px); }
-             14% { transform: translate(2px, -1px); }
-             21%, 35% { transform: translate(0,0); }
-             42% { transform: translate(-1px, 0.5px); }
-             49% { transform: translate(1px, -0.5px); }
-             56% { transform: translate(0,0); }
-        }
+    .track-title {
+      font-weight: bold;
+      color: var(--primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
+    .track-number { color: var(--secondary); }
 
-        .player-container {
-            width: 90%;
-            max-width: 650px;
-            background: rgba(var(--bg-light), 0.85); /* Slightly transparent */
-            backdrop-filter: blur(5px); /* Frosted glass effect */
-            border-radius: 4px; /* Slightly rounder */
-            position: relative;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5); /* Stronger shadow */
-            border: 1px solid rgba(255, 255, 255, 0.1); /* Brighter border */
-            z-index: 10;
-            overflow: hidden;
-        }
+    .progress-container {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      overflow: hidden; /* Ensure progress bar stays within */
+    }
 
-        /* Top border gradient */
-        .player-container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary), var(--tertiary)); /* Added tertiary */
-            animation: borderShine 4s linear infinite;
-            background-size: 300% 100%;
-        }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      width: 0%;
+      transition: width 0.1s linear; /* Smooth progress updates */
+    }
 
-        @keyframes borderShine {
-            0% { background-position: 200% 0; }
-            100% { background-position: -100% 0; }
-        }
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
 
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 0.5rem 1rem;
+    }
 
-        .visualizer-container {
-            width: 100%;
-            height: 180px; /* Adjusted height */
-            position: relative;
-            background: radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%); /* Darker gradient */
-            overflow: hidden;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
+    .controls button {
+      background: none;
+      border: none;
+      color: var(--text);
+      font-family: inherit;
+      padding: 0.5rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      font-weight: bold;
+      transition: color 0.2s ease;
+    }
 
-        #visualizer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
-            /* mix-blend-mode: lighten; */ /* Optional blend mode */
-        }
+    .controls button:hover { color: var(--primary); }
+
+    /* Visualizer Canvas Styling */
+    #visualizer {
+      width: 100%;
+      height: 150px; /* Adjusted height */
+      display: block;
+      background: rgba(0,0,0,0.1); /* Slight background for definition */
+    }
+
+    /* Container for the visualizer canvas itself */
+    .visualizer-canvas-container {
+       height: 150px; /* Match canvas height */
+       position: relative; /* Needed for potential absolute elements inside */
+       overflow: hidden; /* Clip potential overflows */
+    }
 
 
-        .track-info {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 1rem;
-            padding: 0.8rem 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
+    .visualizer-controls {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      background: rgba(0, 0, 0, 0.2);
+    }
 
-        .track-title {
-            font-weight: bold;
-            color: var(--primary);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 1rem; /* Larger title */
-        }
+    .visualizer-controls button {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.25rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
 
-        .track-number {
-            color: var(--secondary);
-            font-size: 1rem; /* Match title */
-            font-weight: bold;
-         }
-
-        .progress-container {
-            height: 8px; /* Thicker bar */
-            background: rgba(0, 0, 0, 0.3); /* Darker bg */
-            cursor: pointer;
-            width: 100%;
-            border-radius: 0px; /* Sharp edges */
-            overflow: hidden; /* Ensure bar stays within */
-            position: relative; /* For pseudo-element */
-        }
-         /* Add a subtle inset shadow */
-        .progress-container::before {
-            content:'';
-            position: absolute;
-            inset: 0;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
-            z-index: 2;
-        }
+    .visualizer-controls button.active { color: var(--secondary); }
+    .visualizer-controls button:hover:not(.active) { color: var(--primary); }
 
 
-        .progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            width: 0%;
-             transition: width 0.1s linear; /* Smooth progress updates */
-             border-radius: 0px;
-             box-shadow: 0 0 5px var(--secondary), 0 0 10px var(--primary); /* Glow for the bar */
-        }
+    .playlist-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0.75rem;
+      color: var(--text);
+      font-family: inherit;
+      cursor: pointer;
+      text-transform: uppercase;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      transition: background-color 0.2s ease;
+    }
+    .playlist-toggle:hover {
+        background-color: rgba(255, 255, 255, 0.03);
+    }
 
-        .time-display {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.6rem 1rem;
-            font-size: 0.8rem; /* Adjusted size */
-            color: var(--text-dim);
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            padding: 0.5rem 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .controls button {
-            background: none;
-            border: none;
-            color: var(--text);
-            font-family: inherit;
-            padding: 0.8rem 0.5rem; /* Adjusted padding */
-            cursor: pointer;
-            text-transform: uppercase;
-            font-weight: bold;
-            font-size: 0.9rem; /* Larger control text */
-            transition: color 0.2s ease, text-shadow 0.2s ease, transform 0.1s ease;
-        }
-
-        .controls button:hover {
-             color: var(--primary);
-             text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
-        }
-         .controls button:active {
-             transform: scale(0.95);
-             color: var(--secondary);
-             text-shadow: 0 0 5px var(--secondary);
-        }
-
-        .visualizer-controls {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            background: rgba(0, 0, 0, 0.3); /* Darker control bar */
-        }
-
-        .visualizer-controls button {
-            background: none;
-            border: none;
-            color: var(--text-dim);
-            font-family: inherit;
-            font-size: 0.75rem; /* Adjusted size */
-            padding: 0.6rem 0.25rem; /* Adjusted padding */
-            cursor: pointer;
-            text-transform: uppercase;
-             transition: all 0.2s ease;
-             border-bottom: 3px solid transparent; /* Thicker indicator */
-             font-weight: 400;
-        }
-
-        .visualizer-controls button:hover {
-            color: var(--text);
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .visualizer-controls button.active {
-             color: var(--secondary);
-             border-bottom-color: var(--secondary);
-             background: rgba(var(--rgb-secondary), 0.1);
-             font-weight: bold;
-             text-shadow: 0 0 5px var(--secondary);
-        }
-
-        .playlist-toggle {
-            width: 100%;
-            background: var(--bg-light);
-            border: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 0.9rem; /* More padding */
-            color: var(--text);
-            font-family: inherit;
-            cursor: pointer;
-            text-transform: uppercase;
-            font-size: 0.9rem; /* Larger */
-            font-weight: bold;
-            transition: background-color 0.2s ease;
-            letter-spacing: 1px;
-        }
-         .playlist-toggle:hover {
-            background: rgba(var(--rgb-primary), 0.1);
-            color: var(--primary);
-         }
+    .playlist-container {
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      border-top: 1px solid rgba(255, 255, 255, 0.05); /* Add separation */
+    }
+     /* Custom Scrollbar for Playlist */
+    .playlist-container::-webkit-scrollbar {
+        width: 5px;
+    }
+    .playlist-container::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+    }
+    .playlist-container::-webkit-scrollbar-thumb {
+        background: var(--secondary);
+        border-radius: 2px;
+    }
+     .playlist-container::-webkit-scrollbar-thumb:hover {
+        background: var(--primary);
+    }
 
 
-        .playlist-container {
-            max-height: 0; /* Start hidden */
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.4);
-            transition: max-height 0.4s ease-in-out; /* Adjusted transition */
-        }
+    .playlist-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.8rem;
+      transition: background-color 0.2s ease;
+    }
 
-        .playlist-container.visible {
-             max-height: 250px; /* More height */
-             border-top: 1px solid rgba(255, 255, 255, 0.08);
-        }
+    .playlist-item:last-child {
+        border-bottom: none;
+    }
 
-
-        .playlist-item {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 1rem;
-            padding: 0.8rem 1rem; /* Adjusted padding */
-            cursor: pointer;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.85rem; /* Adjusted size */
-            transition: background-color 0.15s ease, color 0.15s ease;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .playlist-item:last-child { border-bottom: none; }
-        .playlist-item span:first-child { color: var(--text-dim); } /* Track number */
-
-        .playlist-item:hover { background: rgba(var(--rgb-secondary), 0.1); }
-        .playlist-item.active { background: rgba(var(--rgb-primary), 0.2); }
-        .playlist-item.active span:last-child { color: var(--primary); font-weight: bold; } /* Track title */
-
-        /* Custom Scrollbar */
-        .playlist-container::-webkit-scrollbar { width: 8px; }
-        .playlist-container::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
-        .playlist-container::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
-        .playlist-container::-webkit-scrollbar-thumb:hover { background: var(--secondary); }
-
-    </style>
+    .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
+    .playlist-item.active { background: rgba(0, 255, 208, 0.1); } /* Use secondary color */
+    .playlist-item.active span:first-child { color: var(--secondary); }
+    .playlist-item.active span:last-child { color: var(--secondary); font-weight: bold;}
+    .playlist-item span:first-child { color: rgba(255, 255, 255, 0.5); }
+  </style>
 </head>
 <body>
-    <header>Neuromantic</header>
+  <canvas id="background-canvas"></canvas>
 
-    <div class="player-container">
-        <div class="visualizer-container">
-            <canvas id="visualizer"></canvas>
-        </div>
-
-        <audio id="musicPlayer"></audio>
-
-        <div class="track-info">
-            <div class="track-title" id="trackTitle">No Track Loaded</div>
-            <div class="track-number"><span id="currentTrackNum">--</span>/<span id="totalTracks">--</span></div>
-        </div>
-
-        <div class="progress-container" id="progressContainer">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-
-        <div class="time-display">
-            <span id="currentTime">0:00</span>
-            <span id="totalTime">0:00</span>
-        </div>
-
-        <div class="controls">
-            <button id="prevTrack" title="Previous Track">PREV</button>
-            <button id="playPause" title="Play/Pause">PLAY</button>
-            <button id="nextTrack" title="Next Track">NEXT</button>
-        </div>
-
-        <div class="visualizer-controls">
-            <button id="viz1" data-viz="1" class="active" title="Enhanced Bars">Bars</button>
-            <button id="viz2" data-viz="2" title="Orbital Decay">Circles</button>
-            <button id="viz3" data-viz="3" title="Plasma Conduit">Wave</button>
-            <button id="viz4" data-viz="4" title="Living Constellation">Nebula</button>
-            <button id="viz5" data-viz="5" title="Data Stream">Spectrum</button>
-        </div>
-
-        <button class="playlist-toggle" id="playlistToggle">Show Playlist</button>
-        <div class="playlist-container" id="playlist">
-            </div>
+  <header>Neuromantic</header>
+  <div class="player-container">
+     <div class="visualizer-canvas-container">
+      <canvas id="visualizer"></canvas>
     </div>
 
-    <script>
-        // === DOM Element References ===
-        const $ = id => document.getElementById(id);
-        const musicPlayer = $('musicPlayer');
-        const playPauseBtn = $('playPause');
-        const visualizerCanvas = $('visualizer');
-        const vizCtx = visualizerCanvas.getContext('2d');
-        const progressBar = $('progressBar');
-        const progressContainer = $('progressContainer');
-        // Removed backgroundCanvas refs - no WebGL BG in this version
-        const playlistContainer = $('playlist');
-        const playlistToggleBtn = $('playlistToggle');
-        const trackTitleEl = $('trackTitle');
-        const currentTrackNumEl = $('currentTrackNum');
-        const totalTracksEl = $('totalTracks');
-        const currentTimeEl = $('currentTime');
-        const totalTimeEl = $('totalTime');
+    <audio id="musicPlayer" src="track1.mp3"></audio>
 
-        // === Track Data ===
-        // ====================================================================
-        // !! CRITICAL !!
-        // REPLACE these src paths with YOUR actual audio file paths/URLs!
-        // Player WILL NOT WORK without valid audio sources.
-        // Using .mp3 is recommended for broad browser compatibility.
-        // ====================================================================
-        const tracks = [
-            { src: 'track1.mp3', title: 'Liquid Dreams v2' },
-            { src: 'track2.mp3', title: 'Neon Flow Remix' },
-            { src: 'track3.mp3', title: 'Cosmic Wave Echo' },
-            { src: 'track4.mp3', title: 'Digital Sunrise Flare' },
-            { src: 'track5.mp3', title: 'Quantum Beat Shift' },
-            { src: 'track6.mp3', title: 'Cyberspace Drive' },
-            { src: 'track7.mp3', title: 'Neural Net Alpha' },
-            { src: 'track8.mp3', title: 'Binary Echoes Lost' },
-            { src: 'track9.mp3', title: 'Virtual Grid' },
-            { src: 'track10.mp3', title: 'Holographic Glitch' },
-            { src: 'track11.mp3', title: 'Singularity Point' },
-            { src: 'track12.mp3', title: 'Electric Dreams Redux' },
-            { src: 'track13.mp3', title: 'Synthwave Terminal' },
-            { src: 'track14.mp3', title: 'Galactic Overdrive' },
-            { src: 'track15.mp3', title: 'Cyber Dawn Protocol' },
-            { src: 'track16.mp3', title: 'Ethereal Datastream' },
-            { src: 'track17.mp3', title: 'Alternate Reality' },
-            { src: 'track18.mp3', title: 'Astral Interface' },
-            { src: 'track19.mp3', title: 'Plasma Core Breach' },
-            { src: 'track20.mp3', title: 'Quantum Entanglement' }
-        ];
-        totalTracksEl.textContent = tracks.length || '--';
+    <div class="track-info">
+      <div class="track-title" id="trackTitle">Liquid Dreams</div>
+      <div class="track-number"><span id="currentTrackNum">1</span>/<span id="totalTracks">20</span></div>
+    </div>
 
-        // === State Variables ===
-        let currentTrackIndex = 0;
-        let currentVisualizer = 1; // 1-based index
-        let visualizerAnimationId = null;
-        // Removed backgroundAnimationId
-        let audioContext = null;
-        let analyser = null;
-        let source = null;
-        let dataArray = null;
-        let bufferLength = 0;
-        let hasAudioLoadError = false;
-        // Removed WebGL Background State Variables
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
 
-        // === Helper Functions ===
-        const formatTime = (seconds) => {
-             if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
-            const minutes = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${minutes}:${secs.toString().padStart(2, '0')}`;
-        };
+    <div class="time-display">
+      <span id="currentTime">0:00</span>
+      <span id="totalTime">0:00</span>
+    </div>
 
-        function showPlayerNotification(message, isError = false) {
-             console.log(`Notification (${isError ? 'ERROR' : 'INFO'}): ${message}`);
-             // Basic alert for now, replace with a nicer UI element if desired
-             if (isError) {
-                 // Avoid spamming alerts, maybe just update title?
-                 // alert(message);
-                 trackTitleEl.textContent = message;
-                 trackTitleEl.style.color = 'red'; // Indicate error in title
-             }
+    <div class="controls">
+      <button id="prevTrack">Prev</button>
+      <button id="playPause">Play</button>
+      <button id="nextTrack">Next</button>
+    </div>
+
+    <div class="visualizer-controls">
+      <button id="viz1" class="active">Bars</button>
+      <button id="viz2">Circles</button>
+      <button id="viz3">Wave</button>
+      <button id="viz4">Nebula</button>
+      <button id="viz5">Spectrum</button>
+    </div>
+
+    <button class="playlist-toggle" id="playlistToggle">Playlist</button>
+    <div class="playlist-container" id="playlist" style="display:none;"></div>
+  </div>
+
+  <script>
+    // DOM elements
+    const $ = id => document.getElementById(id);
+    const musicPlayer = $('musicPlayer');
+    const playPauseBtn = $('playPause');
+    const visualizerCanvas = $('visualizer'); // Renamed for clarity
+    const visualizerCtx = visualizerCanvas.getContext('2d');
+    const progressBar = $('progressBar');
+    const progressContainer = $('progressContainer');
+    const bgCanvas = $('background-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+
+    // Set initial canvas dimensions
+    function resizeCanvases() {
+        // Background Canvas
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
+
+        // Visualizer Canvas (based on its container)
+        visualizerCanvas.width = visualizerCanvas.offsetWidth;
+        visualizerCanvas.height = visualizerCanvas.offsetHeight;
+
+        // Reinitialize background network if dimensions change
+        if (neuralNetwork) {
+             neuralNetwork.canvas = bgCanvas; // Update canvas ref
+             neuralNetwork.initNeurons();
+             neuralNetwork.initConnections();
         }
+    }
+    resizeCanvases(); // Call initially
 
-        // Clamp function
-        function clamp(value, min, max) {
-            return Math.max(min, Math.min(max, value));
+    // Track list
+    const tracks = [
+         { src: 'track1.wav', title: 'Liquid Dreams' },
+         { src: 'track2.wav', title: 'Neon Flow' },
+         { src: 'track3.wav', title: 'Cosmic Wave' },
+         { src: 'track4.wav', title: 'Digital Sunrise' },
+         { src: 'track5.wav', title: 'Quantum Beat' },
+         { src: 'track6.wav', title: 'Cyberspace Odyssey' },
+         { src: 'track7.wav', title: 'Neural Network' },
+         { src: 'track8.wav', title: 'Binary Echoes' },
+         { src: 'track9.wav', title: 'Virtual Reality' },
+         { src: 'track10.wav', title: 'Holographic Memory' },
+         { src: 'track11.wav', title: 'Singularity' },
+         { src: 'track12.wav', title: 'Electric Dreams' },
+         { src: 'track13.wav', title: 'Synthwave Journey' },
+         { src: 'track14.wav', title: 'Galactic Pulse' },
+         { src: 'track15.wav', title: 'Cyber Dawn' },
+         { src: 'track16.wav', title: 'Ethereal Code' },
+         { src: 'track17.mp3', title: 'Alternatives' },
+         { src: 'track18.wav', title: 'Astral Projection' },
+         { src: 'track19.wav', title: 'Plasma Field' },
+         { src: 'track20.wav', title: 'Quantum Resonance' }
+     ];
+     $('totalTracks').textContent = tracks.length; // Update total tracks display
+
+    // State variables
+    let currentTrackIndex = 0;
+    let currentVisualizer = 1;
+    let visualizerAnimationId = null; // Renamed for clarity
+    let bgAnimationId = null;
+    let audioContext, analyser, source, dataArray, bufferLength;
+    let isAudioInitialized = false; // Flag to track audio context initialization
+
+    // --- Background Neural Network State ---
+    const layerCount = 5; // Number of layers in the network
+    const colorSchemes = [
+         { neuron: '#ff4b00', connection: '#00ffd0' }, // Original Primary/Secondary
+         { neuron: '#00ffd0', connection: '#ff4b00' }, // Swapped
+         { neuron: '#ff00ff', connection: '#00ffff' }, // Magenta/Cyan
+         { neuron: '#ffff00', connection: '#0088ff' }, // Yellow/Blue
+         { neuron: '#ffffff', connection: '#cccccc' }  // White/Gray
+     ];
+    let currentColorScheme = 0;
+    let neuralNetwork = null; // Will hold the NeuralNetwork instance
+
+    // Helper functions
+    const formatTime = s => {
+        if (isNaN(s)) return '0:00';
+        const minutes = Math.floor(s / 60);
+        const seconds = Math.floor(s % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
+    // Audio context initialization
+    function initAudio() {
+      if (!isAudioInitialized && !audioContext) {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512; // Power of 2, affects detail vs performance
+            bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+
+            source = audioContext.createMediaElementSource(musicPlayer);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination); // Connect analyser to output
+
+            isAudioInitialized = true;
+            console.log("AudioContext Initialized");
+
+            // Start animations only after successful initialization
+            if (!visualizerAnimationId) startVisualizer();
+            if (!bgAnimationId) startBackgroundAnimation();
+
+        } catch (e) {
+            console.error("Error initializing AudioContext:", e);
+            // Optionally, display a message to the user
         }
+      }
+      // Resume context if it was suspended (e.g., by browser policy)
+      if (audioContext && audioContext.state === 'suspended') {
+          audioContext.resume();
+      }
+    }
 
-        // Simple pseudo-random for visual variety without class instances
-        function visualRand(seed) {
-            let state = Math.floor(seed * 1000 + performance.now() * 0.01); // Add time variance
-            state = (1103515245 * state + 12345) % 2147483648;
-            return state / 2147483648;
-        }
 
-        // === Audio Setup ===
-        function initAudio() {
-            if (!audioContext) {
-                try {
-                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (!window.AudioContext) throw new Error("Web Audio API not supported");
-                    audioContext = new AudioContext();
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 512; // Lower latency, less frequency resolution
-                    analyser.smoothingTimeConstant = 0.75; // Smoother transitions
-                    bufferLength = analyser.frequencyBinCount;
-                    dataArray = new Uint8Array(bufferLength);
-                    console.log("AudioContext Initialized. Buffer length:", bufferLength);
-                } catch (e) {
-                    console.error("Error initializing AudioContext:", e);
-                    showPlayerNotification("Web Audio API not supported or failed.", true);
-                    audioContext = null;
-                }
-            }
-            return audioContext !== null;
-        }
+    // ===============================================================
+    // ======= NEURAL NETWORK BACKGROUND ANIMATION (REVISED) =======
+    // ===============================================================
 
-        // === Track Management ===
-        function loadTrack(index) {
-            hasAudioLoadError = false;
-            trackTitleEl.style.color = 'var(--primary)'; // Reset title color
-            index = (index + tracks.length) % tracks.length;
-            currentTrackIndex = index;
+    // ======= NEURON CLASS =======
+    class Neuron {
+      constructor(x, y, layer, size, speed) {
+        this.x = x;
+        this.y = y;
+        this.layer = layer;
+        this.baseSize = size;
+        this.speed = speed; // For oscillation
+        this.pulse = 0; // Audio reactivity
+        this.oscillation = Math.random() * Math.PI * 2; // Start oscillation randomly
+      }
 
-            if (tracks[index] && tracks[index].src) {
-                 musicPlayer.src = tracks[index].src;
-                 trackTitleEl.textContent = tracks[index].title;
-                 currentTrackNumEl.textContent = index + 1;
-                 document.querySelectorAll('.playlist-item').forEach(item => {
-                     item.classList.toggle('active', parseInt(item.dataset.index) === index);
-                 });
-                 const activeItem = document.querySelector(`.playlist-item[data-index="${index}"]`);
-                 if (activeItem && playlistContainer.classList.contains('visible')) {
-                     activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                 }
-                 progressBar.style.width = '0%';
-                 currentTimeEl.textContent = '0:00';
-                 totalTimeEl.textContent = '0:00';
-                 musicPlayer.load();
-                 console.log(`Loading track ${index + 1}: ${tracks[index].title} (Source: ${musicPlayer.src})`);
-            } else {
-                 console.error(`Invalid track data for index ${index}.`);
-                 trackTitleEl.textContent = "Error: Invalid Track";
-                 hasAudioLoadError = true;
-            }
-        }
+      update(audioValue, reactivityFactor) {
+        // Map the audio value to a pulse effect, scaled by overall reactivity
+        this.pulse = (audioValue / 255) * 4 * reactivityFactor; // Increased pulse effect
+        // Update oscillation phase
+        this.oscillation += this.speed;
+      }
 
-        // === Playlist ===
-        function createPlaylist() {
-             playlistContainer.innerHTML = '';
-             tracks.forEach((track, i) => {
-                 const item = document.createElement('div');
-                 item.className = 'playlist-item' + (i === currentTrackIndex ? ' active' : '');
-                 item.dataset.index = i;
-                 item.innerHTML = `<span>${(i + 1).toString().padStart(2, '0')}</span><span>${track.title}</span>`;
-                 item.addEventListener('click', () => {
-                     loadTrack(i);
-                     playTrack();
-                 });
-                 playlistContainer.appendChild(item);
-             });
-        }
+      render(ctx, color) {
+         const oscillationEffect = Math.sin(this.oscillation) * 0.5; // Subtle size change
+         const finalSize = this.baseSize + this.pulse + oscillationEffect;
 
-        // === Playback ===
-        function playTrack() {
-             if (!initAudio()) {
-                 showPlayerNotification("Audio system failed.", true);
-                 return;
-             }
-             if (hasAudioLoadError) {
-                 showPlayerNotification(`Cannot play: Load failed for '${tracks[currentTrackIndex]?.title || 'track'}'.`, true);
-                 return;
-             }
+         // Create a subtle glow
+         ctx.shadowColor = color;
+         ctx.shadowBlur = 5 + this.pulse * 5; // Glow intensity reacts to pulse
 
-             audioContext.resume().then(() => {
-                 if (!source || source.mediaElement !== musicPlayer) {
-                      try {
-                          if (source) source.disconnect();
-                          source = audioContext.createMediaElementSource(musicPlayer);
-                          source.connect(analyser);
-                          analyser.connect(audioContext.destination);
-                          console.log("Audio source connected.");
-                      } catch (e) {
-                           console.error("Error connecting audio source:", e);
-                           showPlayerNotification("Error setting up audio node.", true);
-                           hasAudioLoadError = true;
-                           pauseTrack();
-                           return;
-                      }
-                 }
+         ctx.fillStyle = color;
+         ctx.beginPath();
+         ctx.arc(this.x, this.y, Math.max(1, finalSize), 0, Math.PI * 2); // Ensure minimum size of 1
+         ctx.fill();
 
-                 musicPlayer.play()
-                     .then(() => {
-                         playPauseBtn.textContent = 'Pause';
-                         hasAudioLoadError = false;
-                         if (!visualizerAnimationId) renderVisualizer(); // Start visualizer loop
-                         // No background shader loop to start
-                     })
-                     .catch(error => {
-                         console.error("Error during musicPlayer.play():", error);
-                         showPlayerNotification(`Playback error: ${error.message}`, true);
-                         hasAudioLoadError = true;
-                         pauseTrack();
-                     });
-             }).catch(resumeError => {
-                  console.error("AudioContext resume failed:", resumeError);
-                  showPlayerNotification("Audio playback failed (context resume).", true);
-             });
-         }
+         // Reset shadow for other elements
+         ctx.shadowBlur = 0;
+      }
+    }
 
-        function pauseTrack() {
-            musicPlayer.pause();
-            playPauseBtn.textContent = 'Play';
-            // Optionally stop visualizer on pause
-             if (visualizerAnimationId) {
-                cancelAnimationFrame(visualizerAnimationId);
-                visualizerAnimationId = null;
-             }
-        }
+    // ======= CONNECTION CLASS =======
+    class Connection {
+      constructor(from, to, weight) {
+        this.from = from;
+        this.to = to;
+        this.weight = weight; // Controls base line visibility
+        this.signal = Math.random(); // Signal position (0 to 1)
+      }
 
-        // === Progress & Time ===
-        function updateProgress() {
-             if (!musicPlayer.duration || !isFinite(musicPlayer.duration) || hasAudioLoadError) return;
-             const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
-             progressBar.style.width = `${progressPercent}%`;
-             currentTimeEl.textContent = formatTime(musicPlayer.currentTime);
-             if (totalTimeEl.textContent === '0:00' && musicPlayer.duration > 0) {
-                 totalTimeEl.textContent = formatTime(musicPlayer.duration);
-             }
-        }
+      update(reactivityFactor) {
+        // Move the signal along the connection based on the reactivity factor
+        // Add a base speed + reactive speed
+        const speed = 0.005 + reactivityFactor * 0.05;
+        this.signal = (this.signal + speed) % 1;
+      }
 
-        function seek(event) {
-             if (!musicPlayer.duration || !isFinite(musicPlayer.duration) || hasAudioLoadError) return;
-             const containerWidth = progressContainer.offsetWidth;
-             if (containerWidth > 0) {
-                 const clickX = event.offsetX;
-                 const seekTime = (clickX / containerWidth) * musicPlayer.duration;
-                 // Limit seekTime to valid range
-                 musicPlayer.currentTime = clamp(seekTime, 0, musicPlayer.duration);
-                 updateProgress();
-             }
-         }
+      render(ctx, color, reactivityFactor) {
+         const dx = this.to.x - this.from.x;
+         const dy = this.to.y - this.from.y;
 
-        // === ENHANCED 2D Canvas Visualizer Functions ===
+         // Draw the base connection line (very faint)
+         ctx.strokeStyle = `rgba(255, 255, 255, ${0.02 + this.weight * 0.05})`; // Fainter lines
+         ctx.lineWidth = 0.5;
+         ctx.beginPath();
+         ctx.moveTo(this.from.x, this.from.y);
+         ctx.lineTo(this.to.x, this.to.y);
+         ctx.stroke();
 
-        // Helper: Get average amplitude for a frequency range
-        function getAverageAmplitude(dataArray, start, end) {
-            let sum = 0;
-            start = Math.max(0, Math.floor(start));
-            end = Math.min(bufferLength, Math.ceil(end));
-            if (start >= end || !dataArray) return 0; // Added check for dataArray
-            for (let i = start; i < end; i++) {
-                sum += dataArray[i];
-            }
-            return sum / (end - start) / 255.0; // Normalize [0, 1]
-        }
+         // Calculate signal position using linear interpolation (lerp)
+         const signalX = this.from.x + dx * this.signal;
+         const signalY = this.from.y + dy * this.signal;
 
-        /* 1. Enhanced Bars: "Liquid Metal" Bars with Energy Sparks & Glitch */
-        function drawEnhancedBars() {
-            const barWidth = Math.max(2, (visualizerCanvas.width / bufferLength) * 1.5);
-            const t = performance.now() * 0.001;
-            const bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1) * 1.2;
+         // Draw the moving signal particle
+         const signalSize = 1 + reactivityFactor * 2.5; // Signal size reacts
+         ctx.fillStyle = color;
+         ctx.beginPath();
+         ctx.arc(signalX, signalY, signalSize, 0, Math.PI * 2);
+         ctx.fill();
+       }
+    }
 
-            for (let i = 0; i < bufferLength; i++) {
-                const amplitude = dataArray[i] / 255.0;
-                const barHeight = Math.max(1, amplitude * visualizerCanvas.height * (0.8 + bass * 0.2));
-                const x = i * (barWidth + 1); // Add 1px spacing
+    // ======= NEURAL NETWORK CLASS =======
+    class NeuralNetwork {
+      constructor(layerCount, canvas) {
+        this.layerCount = layerCount;
+        this.canvas = canvas;
+        this.neurons = [];
+        this.connections = [];
+        this.initNeurons();
+        this.initConnections();
+      }
 
-                const topY = visualizerCanvas.height - barHeight;
-                const liquidOffset = Math.sin(t * 5 + i * 0.3) * amplitude * 10;
-                const controlPointY = topY - amplitude * 30 * Math.cos(t * 3 + i * 0.2);
+      initNeurons() {
+        this.neurons = [];
+        const neuronsPerLayerRatio = [0.6, 0.8, 1.0, 0.8, 0.6]; // Example: Fewer neurons at edges
 
-                const hue = (i / bufferLength) * 180 + 240 + Math.sin(t * 0.5) * 30;
-                const gradient = vizCtx.createLinearGradient(x, visualizerCanvas.height, x, topY);
-                gradient.addColorStop(0, `hsla(${hue % 360}, 100%, 30%, 0.8)`);
-                gradient.addColorStop(0.5, `hsla(${(hue + 20) % 360}, 95%, 55%, 0.9)`);
-                gradient.addColorStop(1, `hsla(${(hue + 50) % 360}, 90%, 75%, 1.0)`);
+        for (let layer = 0; layer < this.layerCount; layer++) {
+            const layerRatio = neuronsPerLayerRatio[layer] || 1.0;
+            // Base neuron count, adjusted by layer ratio and screen width
+            const baseNeuronCount = Math.floor(20 * (this.canvas.width / 1200)); // Scale with width
+            const neuronsInLayer = Math.max(5, Math.floor(baseNeuronCount * layerRatio)); // Ensure at least 5
 
-                vizCtx.save();
-                vizCtx.fillStyle = gradient;
-                vizCtx.shadowColor = `hsla(${(hue + 50) % 360}, 100%, 70%, 0.7)`;
-                vizCtx.shadowBlur = clamp(10 * amplitude + 5 * bass, 0, 25);
+            // Spread layers across the width, with padding
+            const paddingX = this.canvas.width * 0.1;
+            const availableWidth = this.canvas.width - 2 * paddingX;
+            const layerX = paddingX + (availableWidth / (this.layerCount - 1)) * layer;
 
-                vizCtx.beginPath();
-                vizCtx.moveTo(x, visualizerCanvas.height);
-                vizCtx.lineTo(x, topY + liquidOffset);
-                vizCtx.bezierCurveTo(
-                    x + barWidth * 0.3, controlPointY,
-                    x + barWidth * 0.7, controlPointY,
-                    x + barWidth, topY - liquidOffset
-                );
-                vizCtx.lineTo(x + barWidth, visualizerCanvas.height);
-                vizCtx.closePath();
-                vizCtx.fill();
-                vizCtx.restore();
+            for (let i = 0; i < neuronsInLayer; i++) {
+                // Spread neurons vertically, with padding
+                const paddingY = this.canvas.height * 0.15;
+                const availableHeight = this.canvas.height - 2 * paddingY;
+                // Add slight randomness to y position
+                const randomOffsetY = (Math.random() - 0.5) * availableHeight * 0.1;
+                const y = paddingY + availableHeight * (i / (neuronsInLayer -1 )) + randomOffsetY;
 
-                if (amplitude > 0.8 && Math.random() < 0.1) {
-                    const sparkX = x + barWidth * 0.5;
-                    const sparkY = topY;
-                    const sparkCount = Math.floor(1 + Math.random() * 3);
-                    for (let j = 0; j < sparkCount; j++) {
-                         vizCtx.fillStyle = `hsla(${hue + Math.random() * 60 - 30}, 100%, 85%, ${0.5 + Math.random() * 0.5})`;
-                         vizCtx.fillRect(
-                             sparkX + (Math.random() - 0.5) * 10,
-                             sparkY - Math.random() * 15,
-                             1 + Math.random(), 1 + Math.random() * 2
-                         );
-                    }
-                }
 
-                if (Math.random() < 0.01 + bass * 0.05) {
-                    const glitchHeight = 5 + Math.random() * 15;
-                    const glitchY = Math.random() * (visualizerCanvas.height - glitchHeight);
-                    const glitchOffset = (Math.random() - 0.5) * 10;
-                    try {
-                        const imageData = vizCtx.getImageData(clamp(x + glitchOffset, 0, visualizerCanvas.width-barWidth), clamp(glitchY, 0, visualizerCanvas.height-glitchHeight), Math.max(1,barWidth), Math.max(1,glitchHeight));
-                        if (imageData) vizCtx.putImageData(imageData, clamp(x - glitchOffset, 0, visualizerCanvas.width-barWidth), clamp(glitchY, 0, visualizerCanvas.height-glitchHeight));
-                    } catch(e) { /* Ignore */ }
-                }
+                const size = Math.random() * 1.5 + 1; // Smaller base size
+                const speed = (Math.random() * 0.01 + 0.005) * (0.5 + Math.random()); // Random oscillation speed
+                this.neurons.push(new Neuron(layerX, y, layer, size, speed));
             }
         }
+      }
 
-        /* 2. Enhanced Circles: "Orbital Decay" with Trails and Connections */
-        function drawEnhancedCircles() {
-            const t = performance.now() * 0.0005;
-            const centerX = visualizerCanvas.width / 2;
-            const centerY = visualizerCanvas.height / 2;
-            const maxRadius = Math.min(centerX, centerY) * 0.9;
-            const bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
-            const mid = getAverageAmplitude(dataArray, bufferLength * 0.3, bufferLength * 0.6);
+      initConnections() {
+         this.connections = [];
+         this.neurons.forEach(fromNeuron => {
+             if (fromNeuron.layer < this.layerCount - 1) {
+                 const nextLayerNeurons = this.neurons.filter(n => n.layer === fromNeuron.layer + 1);
+                 // Connect to a subset of neurons in the next layer randomly
+                 const connectionsToMake = Math.max(1, Math.floor(nextLayerNeurons.length * (0.3 + Math.random() * 0.3))); // Connect to 30-60%
 
-            vizCtx.save();
-            vizCtx.translate(centerX, centerY);
-            vizCtx.rotate(t * 0.1 + bass * 0.5);
-            vizCtx.translate(-centerX, -centerY);
+                 // Shuffle next layer neurons for random connections
+                 const shuffledTargets = nextLayerNeurons.sort(() => 0.5 - Math.random());
 
-            if (!window.circleParticles_Enh) window.circleParticles_Enh = [];
-            const currentParticles = [];
-
-            for (let i = 0; i < bufferLength; i += 3) {
-                const amplitude = dataArray[i] / 255.0;
-                if (amplitude < 0.05) continue; // Increased threshold
-
-                const angle = (i / bufferLength) * Math.PI * 4 + t * 0.5;
-                const baseRadius = amplitude * maxRadius * (0.5 + mid * 0.5);
-                const pulsate = 1 + 0.15 * Math.sin(t * 10 + i * 0.1);
-                const orbitRadius = Math.max(10, baseRadius * pulsate);
-                const particleSize = clamp(1.0 + amplitude * 5.0, 1.0, 8.0); // Clamped size
-
-                const x = centerX + Math.cos(angle) * orbitRadius;
-                const y = centerY + Math.sin(angle) * orbitRadius;
-
-                currentParticles.push({ x, y, size: particleSize, intensity: amplitude, id: i });
-
-                const hue = (i * 360 / bufferLength + 180 + t * 30) % 360;
-                const gradient = vizCtx.createRadialGradient(x, y, 0, x, y, particleSize * 1.5);
-                gradient.addColorStop(0, `hsla(${hue}, 100%, 80%, 0.95)`);
-                gradient.addColorStop(0.5, `hsla(${(hue + 30) % 360}, 90%, 60%, 0.5)`);
-                gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 80%, 50%, 0)`);
-
-                vizCtx.fillStyle = gradient;
-                vizCtx.beginPath();
-                vizCtx.arc(x, y, particleSize, 0, Math.PI * 2);
-                vizCtx.fill();
-            }
-
-             window.circleParticles_Enh.push(currentParticles);
-             if (window.circleParticles_Enh.length > 12) { // Shorter trails
-                 window.circleParticles_Enh.shift();
-             }
-
-             vizCtx.globalCompositeOperation = 'lighter';
-             for (let frame = 0; frame < window.circleParticles_Enh.length - 1; frame++) {
-                 const alpha = (frame / window.circleParticles_Enh.length) * 0.25; // Dimmer trails
-                 const frameParticles = window.circleParticles_Enh[frame];
-                 for (const p of frameParticles) {
-                     const trailSize = p.size * (frame / window.circleParticles_Enh.length);
-                     if (trailSize < 0.5) continue;
-                     const hue = (p.id * 360 / bufferLength + 180 + t * 30) % 360;
-                     vizCtx.fillStyle = `hsla(${hue}, 100%, 70%, ${alpha})`;
-                     vizCtx.beginPath();
-                     vizCtx.arc(p.x, p.y, trailSize, 0, Math.PI * 2);
-                     vizCtx.fill();
+                 for (let i = 0; i < connectionsToMake && i < shuffledTargets.length; i++) {
+                    const toNeuron = shuffledTargets[i];
+                    const weight = Math.random(); // Random weight for visual variation
+                    // Check distance to avoid excessively long connections if needed (optional)
+                    // const dist = Math.hypot(toNeuron.x - fromNeuron.x, toNeuron.y - fromNeuron.y);
+                    // if (dist < this.canvas.width * 0.4) { // Example distance check
+                         this.connections.push(new Connection(fromNeuron, toNeuron, weight));
+                    // }
                  }
              }
-             vizCtx.globalCompositeOperation = 'source-over';
-
-             const connectDistance = visualizerCanvas.width * 0.12 * (1 + mid); // Slightly shorter connect distance
-             vizCtx.strokeStyle = `rgba(200, 220, 255, 0.08)`; // Dimmer connection
-             vizCtx.lineWidth = 0.5;
-             for (let i = 0; i < currentParticles.length; i++) {
-                 for (let j = i + 1; j < currentParticles.length; j++) {
-                     const p1 = currentParticles[i];
-                     const p2 = currentParticles[j];
-                     const dx = p1.x - p2.x;
-                     const dy = p1.y - p2.y;
-                     const distSq = dx * dx + dy * dy; // Use squared distance
-                     if (distSq < connectDistance * connectDistance) {
-                         vizCtx.globalAlpha = (1.0 - Math.sqrt(distSq) / connectDistance) * 0.4 * (p1.intensity + p2.intensity);
-                         vizCtx.beginPath();
-                         vizCtx.moveTo(p1.x, p1.y);
-                         vizCtx.lineTo(p2.x, p2.y);
-                         vizCtx.stroke();
-                     }
-                 }
-             }
-             vizCtx.globalAlpha = 1.0;
-
-            vizCtx.restore();
-        }
-
-
-        /* 3. Enhanced Wave: "Plasma Conduit" with Layered Waves and Particles */
-        function drawEnhancedWave() {
-            const t = performance.now() * 0.001; // Consistent time
-            const sliceWidth = visualizerCanvas.width / (bufferLength - 1);
-            const midY = visualizerCanvas.height / 2;
-
-            // Layer 1: Bass Wave (Thick, slow, glow)
-            const bassAvg = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
-            vizCtx.save();
-            vizCtx.lineWidth = clamp(4 + bassAvg * 12, 2, 10); // Clamped thickness
-            const bassHue = 190 + Math.sin(t * 0.5) * 20; // Subtle hue shift
-            vizCtx.strokeStyle = `hsla(${bassHue}, 100%, 60%, ${clamp(0.3 + bassAvg * 0.6, 0.2, 0.7)})`;
-            vizCtx.shadowColor = `hsla(${bassHue}, 100%, 70%, 0.8)`;
-            vizCtx.shadowBlur = clamp(20 * bassAvg, 5, 25);
-            vizCtx.beginPath();
-            let lastX = 0, lastY = midY;
-            vizCtx.moveTo(0, midY);
-            for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] / 255.0;
-                const x = i * sliceWidth;
-                const y = midY + (v - 0.5) * visualizerCanvas.height * 0.4 * Math.sin(i * 0.02 + t * 1.5);
-                 // Smooth curve using quadratic Bézier
-                 const xc = (lastX + x) / 2;
-                 const yc = (lastY + y) / 2;
-                 vizCtx.quadraticCurveTo(lastX, lastY, xc, yc);
-                 lastX = x; lastY = y;
-            }
-             vizCtx.lineTo(visualizerCanvas.width, midY); // End smoothly
-            vizCtx.stroke();
-            vizCtx.restore();
-
-            // Layer 2: Mid Freq Wave (Thinner, faster, primary color)
-            const midAvg = getAverageAmplitude(dataArray, bufferLength * 0.2, bufferLength * 0.7);
-            vizCtx.lineWidth = clamp(1.5 + midAvg * 3, 1, 4);
-            const midHue = 37 + Math.cos(t * 1.2) * 15; // Orange hue shift
-            vizCtx.strokeStyle = `hsla(${midHue}, 100%, 55%, ${clamp(0.5 + midAvg * 0.4, 0.4, 0.9)})`;
-            vizCtx.beginPath();
-            lastX = 0; lastY = midY;
-            vizCtx.moveTo(0, midY);
-            for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] / 255.0;
-                const x = i * sliceWidth;
-                const y = midY + (v - 0.5) * visualizerCanvas.height * 0.6 * Math.sin(i * 0.04 + t * 3);
-                 const xc = (lastX + x) / 2;
-                 const yc = (lastY + y) / 2;
-                 vizCtx.quadraticCurveTo(lastX, lastY, xc, yc);
-                 lastX = x; lastY = y;
-            }
-             vizCtx.lineTo(visualizerCanvas.width, midY);
-            vizCtx.stroke();
-
-            // Layer 3: High Freq Particles/Sparks (Improved look)
-            vizCtx.save();
-            vizCtx.shadowColor = '#FFF';
-            vizCtx.shadowBlur = 6;
-            for (let i = Math.floor(bufferLength * 0.6); i < bufferLength; i++) {
-                const v = dataArray[i] / 255.0;
-                if (v > 0.75 && Math.random() < 0.15) { // More sparks on louder highs
-                    const x = i * sliceWidth;
-                    const yMidWave = midY + (v - 0.5) * visualizerCanvas.height * 0.6 * Math.sin(i * 0.04 + t * 3); // Position near mid wave
-                    const sparkSize = 0.5 + Math.random() * 1.5;
-                    const sparkHue = 60 + Math.random() * 60; // Yellow/Green sparks
-                    vizCtx.fillStyle = `hsla(${sparkHue}, 100%, 80%, ${0.6 + Math.random() * 0.4})`;
-                    vizCtx.beginPath();
-                    vizCtx.arc(x, yMidWave + (Math.random() - 0.5) * 25, sparkSize, 0, Math.PI * 2);
-                    vizCtx.fill();
-                }
-            }
-            vizCtx.restore();
-        }
-
-
-        /* 4. Enhanced Nebula: "Living Constellation" with Physics Particles */
-        function drawEnhancedNebula() {
-            const t = performance.now() * 0.0005; // Slower time
-            const centerX = visualizerCanvas.width / 2;
-            const centerY = visualizerCanvas.height / 2;
-            const particleCount = 70; // Adjusted count
-
-            // Initialize particles if needed
-            if (!window.nebulaParticles_Enh || window.nebulaParticles_Enh.length !== particleCount) {
-                window.nebulaParticles_Enh = [];
-                for (let i = 0; i < particleCount; i++) {
-                    window.nebulaParticles_Enh.push({
-                        x: centerX + (Math.random() - 0.5) * visualizerCanvas.width * 0.9, // Start more spread out
-                        y: centerY + (Math.random() - 0.5) * visualizerCanvas.height * 0.9,
-                        vx: (Math.random() - 0.5) * 0.5, // Initial velocity
-                        vy: (Math.random() - 0.5) * 0.5,
-                        seed: Math.random() * 100,
-                        hue: Math.random() * 60 + 180, // Blue/Cyan/Purple range initially
-                        life: 0.5 + Math.random() * 0.5 // Random start life
-                    });
-                }
-            }
-
-            vizCtx.globalCompositeOperation = 'lighter';
-            const overallIntensity = getAverageAmplitude(dataArray, 0, bufferLength);
-            const bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
-
-            window.nebulaParticles_Enh.forEach((p, i) => {
-                // --- Physics Update ---
-                const dx = centerX - p.x;
-                const dy = centerY - p.y;
-                const distSq = dx * dx + dy * dy;
-                const gravityForce = 30 / Math.max(100, distSq); // Adjusted gravity
-                p.vx += dx * gravityForce * 0.015;
-                p.vy += dy * gravityForce * 0.015;
-
-                const swirlAngle = t * 1.8 + p.seed * 2.0; // Faster swirl
-                const swirlStrength = 0.04 + bass * 0.03; // Swirl strength reacts to bass
-                p.vx += Math.cos(swirlAngle) * swirlStrength;
-                p.vy += Math.sin(swirlAngle) * swirlStrength;
-
-                const impulseStrength = bass * bass * 1.8; // Stronger impulse
-                if (impulseStrength > 0.15) {
-                     const impulseAngle = Math.atan2(dy, dx);
-                     p.vx -= Math.cos(impulseAngle) * impulseStrength * 0.15;
-                     p.vy -= Math.sin(impulseAngle) * impulseStrength * 0.15;
-                }
-
-                p.vx *= 0.95; // Stronger damping
-                p.vy *= 0.95;
-                p.x += p.vx;
-                p.y += p.vy;
-                p.life -= 0.0015; // Slower fade
-
-                if (p.life <= 0 || Math.abs(dx) > centerX * 1.5 || Math.abs(dy) > centerY * 1.5) { // Reset further out
-                    p.x = centerX + (Math.random() - 0.5) * 80;
-                    p.y = centerY + (Math.random() - 0.5) * 80;
-                    p.vx = (Math.random() - 0.5) * 0.6;
-                    p.vy = (Math.random() - 0.5) * 0.6;
-                    p.life = 1.0;
-                    p.hue = Math.random() * 60 + 180; // Reset hue in range
-                }
-
-                // --- Drawing ---
-                const dataIndex = Math.min(bufferLength - 1, Math.floor((i / particleCount) * bufferLength));
-                const amplitude = dataArray[dataIndex] / 255.0;
-                const particleSize = clamp((1.0 + amplitude * 12 + bass * 6) * p.life, 0.5, 15.0); // Adjusted size reactivity
-                if (particleSize < 0.5) return;
-
-                const alpha = clamp(amplitude * 0.4 + p.life * 0.5, 0.1, 0.8); // Adjusted alpha
-                const currentHue = (p.hue + t * 20 + amplitude * 30) % 360; // Hue shifts with time and amplitude
-
-                try {
-                    const gradient = vizCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, particleSize);
-                    gradient.addColorStop(0, `hsla(${currentHue}, 95%, 85%, ${alpha})`);
-                    gradient.addColorStop(0.3, `hsla(${(currentHue + 30) % 360}, 85%, 70%, ${alpha * 0.7})`);
-                    gradient.addColorStop(1, `hsla(${(currentHue + 60) % 360}, 75%, 50%, 0)`);
-                    vizCtx.fillStyle = gradient;
-                    vizCtx.beginPath();
-                    vizCtx.arc(p.x, p.y, particleSize, 0, Math.PI * 2);
-                    vizCtx.fill();
-                } catch (e) { /* Ignore gradient errors */ }
-            });
-
-            vizCtx.globalCompositeOperation = 'source-over';
-        }
-
-
-        /* 5. Enhanced Spectrum: "Data Stream" with Perspective & Peaks */
-        function drawEnhancedSpectrum() {
-            const t = performance.now() * 0.001;
-            const perspectiveFactor = 0.5; // Less extreme perspective
-            const floorY = visualizerCanvas.height * 0.98; // Closer to bottom
-            const ceilingY = visualizerCanvas.height * 0.05; // Top margin
-
-            if (!window.spectrumPeaks_Enh) window.spectrumPeaks_Enh = new Array(bufferLength).fill(0);
-            const peakFalloff = 0.985; // Slower falloff
-
-            for (let i = 0; i < bufferLength; i++) {
-                const amplitude = dataArray[i] / 255.0;
-                // Smooth amplitude slightly over time
-                const smoothAmplitude = window.spectrumPeaks_Enh[i] * 0.2 + amplitude * 0.8; // Simple smoothing
-                const barHeightRaw = smoothAmplitude * (floorY - ceilingY); // Height relative to floor/ceiling
-
-                window.spectrumPeaks_Enh[i] = Math.max(window.spectrumPeaks_Enh[i] * peakFalloff, barHeightRaw);
-                const peakHeight = window.spectrumPeaks_Enh[i];
-
-                const perspectiveX = (i / (bufferLength - 1)) * 2.0 - 1.0;
-                const perspectiveScale = 1.0 - perspectiveFactor * Math.abs(perspectiveX);
-                const barWidth = Math.max(1, (visualizerCanvas.width / bufferLength) * 1.8 * perspectiveScale); // Wider base bars
-                const x = visualizerCanvas.width * 0.5 + perspectiveX * (visualizerCanvas.width * 0.5 * (1.0 - perspectiveFactor * 0.4)) - barWidth * 0.5; // Adjusted perspective spacing
-
-                // --- Main Bar ---
-                const barHeight = clamp(barHeightRaw * perspectiveScale, 1, floorY - ceilingY); // Clamp height
-                const hue = 120 + (1.0 - smoothAmplitude) * 180 + Math.sin(t + i * 0.1) * 15; // Color shifts from green (low) to magenta (high) + time shift
-
-                const gradient = vizCtx.createLinearGradient(x, floorY, x, floorY - barHeight);
-                gradient.addColorStop(0, `hsla(${hue}, 85%, 50%, 0.7)`);
-                gradient.addColorStop(0.8, `hsla(${(hue + 40) % 360}, 95%, 65%, 0.8)`);
-                gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 100%, 80%, 0.9)`); // Bright top edge
-
-                vizCtx.fillStyle = gradient;
-                vizCtx.fillRect(x, floorY - barHeight, barWidth, barHeight);
-
-                // --- Peak Line ---
-                if (peakHeight > barHeight + 1) {
-                     const peakY = floorY - clamp(peakHeight * perspectiveScale, 1, floorY - ceilingY);
-                     vizCtx.fillStyle = `hsla(${(hue + 80) % 360}, 100%, 90%, 0.9)`; // Very bright peak
-                     vizCtx.fillRect(x, peakY - 1, barWidth, 2);
-                }
-
-                 // --- Subtle Underglow ---
-                 const underGlowHeight = barHeight * 0.2;
-                 const underGlowGradient = vizCtx.createLinearGradient(x, floorY, x, floorY + underGlowHeight);
-                 underGlowGradient.addColorStop(0, `hsla(${hue}, 85%, 50%, 0.3)`);
-                 underGlowGradient.addColorStop(1, `hsla(${hue}, 85%, 50%, 0.0)`);
-                 vizCtx.fillStyle = underGlowGradient;
-                 vizCtx.fillRect(x, floorY, barWidth, underGlowHeight);
-
-
-                 // --- Data Glitch Blocks (more subtle) ---
-                 if (amplitude > 0.85 && Math.random() < 0.03) {
-                     vizCtx.fillStyle = `rgba(255, 255, 255, ${0.1 + Math.random() * 0.2})`;
-                     const glitchHeight = Math.random() * barHeight * 0.1 + 1;
-                     const glitchY = floorY - barHeight + Math.random() * (barHeight - glitchHeight);
-                     vizCtx.fillRect(x, glitchY, barWidth, glitchHeight);
-                 }
-            }
-        }
-
-        // === Visualizer Render Loop === (Identical to previous version, calls enhanced functions)
-        function renderVisualizer() {
-            if (!audioContext || !dataArray || !analyser || !visualizerCanvas) {
-                visualizerAnimationId = requestAnimationFrame(renderVisualizer); return;
-            }
-            visualizerAnimationId = requestAnimationFrame(renderVisualizer);
-            analyser.getByteFrequencyData(dataArray);
-
-            const fadeAlpha = 0.25; // Keep the fade effect
-            vizCtx.fillStyle = `rgba(10, 11, 12, ${fadeAlpha})`;
-            vizCtx.fillRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
-            vizCtx.globalCompositeOperation = 'source-over';
-            vizCtx.globalAlpha = 1.0;
-
-            const visualizers = [ drawEnhancedBars, drawEnhancedCircles, drawEnhancedWave, drawEnhancedNebula, drawEnhancedSpectrum ];
-            const index = (currentVisualizer - 1);
-            if (index >= 0 && index < visualizers.length) {
-                 try { visualizers[index](); } catch (e) { console.error(`Error rendering visualizer ${currentVisualizer}:`, e); }
-            } else {
-                try { drawEnhancedBars(); } catch(e) { console.error("Error rendering fallback viz:", e); }
-            }
-        }
-
-        // === Visualizer Button Handling ===
-        function updateVisualizerButtons() {
-            document.querySelectorAll('.visualizer-controls button').forEach(btn => {
-                 const vizIndex = parseInt(btn.dataset.viz);
-                 btn.classList.toggle('active', vizIndex === currentVisualizer);
-             });
-         }
-
-        // === Resize Handling === (Only Visualizer Canvas needed now)
-        function handleResize() {
-            if (visualizerCanvas && visualizerCanvas.parentElement) {
-                 const containerWidth = visualizerCanvas.parentElement.offsetWidth;
-                 visualizerCanvas.width = containerWidth;
-                 visualizerCanvas.height = 180; // Keep fixed height
-                 console.log("Resized visualizer canvas to:", visualizerCanvas.width, "x", visualizerCanvas.height);
-            }
-            // No background canvas resize needed
-        }
-
-        // === Audio Error Handling ===
-         function handleAudioError(e) {
-             console.error("Audio Element Error:", e);
-             const trackInfo = tracks[currentTrackIndex];
-             let errorMsg = `Error loading: ${trackInfo?.title || 'track'}.`;
-             if (musicPlayer.error) {
-                 switch (musicPlayer.error.code) {
-                     case MediaError.MEDIA_ERR_NETWORK: errorMsg += ' Network error.'; break;
-                     case MediaError.MEDIA_ERR_DECODE: errorMsg += ' Decode error.'; break;
-                     case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMsg += ' Format not supported or file not found (404).'; break; // Combine 404 here
-                     default: errorMsg += ' Unknown media error.';
-                 }
-             } else { errorMsg += ' Check file path/URL.' }
-             showPlayerNotification(errorMsg, true);
-             hasAudioLoadError = true;
-             pauseTrack();
-         }
-
-
-        // === Event Listeners (Setup remains largely the same) ===
-        playPauseBtn.addEventListener('click', () => {
-             if (!audioContext) initAudio();
-             if (!audioContext) return;
-             if (musicPlayer.paused) { playTrack(); } else { pauseTrack(); }
          });
-        $('prevTrack').addEventListener('click', () => { loadTrack(currentTrackIndex - 1); playTrack(); });
-        $('nextTrack').addEventListener('click', () => { loadTrack(currentTrackIndex + 1); playTrack(); });
-        musicPlayer.addEventListener('ended', () => { loadTrack(currentTrackIndex + 1); playTrack(); });
-        musicPlayer.addEventListener('timeupdate', updateProgress);
-        musicPlayer.addEventListener('loadedmetadata', () => {
-             if (musicPlayer.duration && isFinite(musicPlayer.duration)) {
-                 totalTimeEl.textContent = formatTime(musicPlayer.duration);
-                 updateProgress();
+     }
+
+
+      update(audioData, bufferLength, reactivityFactor) {
+        // Update neurons based on specific frequency bands
+        this.neurons.forEach((neuron, index) => {
+            // Map neuron index to a frequency bin, potentially non-linearly for more bass impact
+            const freqIndex = Math.floor(Math.pow(index / this.neurons.length, 1.5) * (bufferLength * 0.8)); // Focus more on lower/mid frequencies
+            neuron.update(audioData[freqIndex] || 0, reactivityFactor); // Use 0 if index is out of bounds
+        });
+
+        // Update connection signal positions
+        this.connections.forEach(conn => conn.update(reactivityFactor));
+      }
+
+      render(ctx, colors, reactivityFactor) {
+         // Draw connections first (behind neurons)
+         this.connections.forEach(conn => {
+            conn.render(ctx, colors.connection, reactivityFactor);
+         });
+
+         // Draw neurons on top
+         this.neurons.forEach(neuron => {
+            neuron.render(ctx, colors.neuron);
+         });
+       }
+    }
+
+    // ======= Initialize Neural Network =======
+    function initNeuralNetwork() {
+        if (!neuralNetwork) {
+            neuralNetwork = new NeuralNetwork(layerCount, bgCanvas);
+        } else {
+            // If network exists (e.g., on resize), reinitialize its components
+            neuralNetwork.canvas = bgCanvas; // Ensure it knows the current canvas
+            neuralNetwork.initNeurons();
+            neuralNetwork.initConnections();
+        }
+        console.log(`Neural Network Initialized/Reinitialized with ${neuralNetwork.neurons.length} neurons and ${neuralNetwork.connections.length} connections.`);
+    }
+
+
+    // ======= Background Render Loop =======
+    function renderNeuralBackground() {
+      if (!isAudioInitialized || !neuralNetwork) {
+          // If audio isn't ready or network not built, request next frame and exit
+          bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+          return;
+       }
+
+      analyser.getByteFrequencyData(dataArray); // Get current audio data
+
+      // --- Calculate Reactivity ---
+      let sum = 0;
+      // Focus reactivity on lower-mid frequencies (more impactful usually)
+      const relevantBufferLength = Math.floor(bufferLength * 0.7);
+      for (let i = 0; i < relevantBufferLength; i++) {
+        sum += dataArray[i];
+      }
+      // Normalize reactivity: average value / max possible average value
+      const average = sum / relevantBufferLength;
+      const reactivityFactor = Math.min(1, Math.pow(average / 128, 1.5)); // Use 128 as a midpoint, pow for non-linear response
+
+      // --- Draw Background with Trails ---
+      // Use the CSS variable color, make alpha react slightly
+      const trailAlpha = 0.08 + reactivityFactor * 0.07; // More reactive trails
+      bgCtx.fillStyle = `rgba(10, 11, 12, ${trailAlpha})`; // Use RGB from --bg-dark
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+      // --- Update and Render Network ---
+      const currentColors = colorSchemes[currentColorScheme];
+      neuralNetwork.update(dataArray, bufferLength, reactivityFactor);
+      neuralNetwork.render(bgCtx, currentColors, reactivityFactor);
+
+      // --- Change Color Scheme Periodically ---
+      // Change faster with higher reactivity
+      if (Math.random() < 0.0005 + reactivityFactor * 0.005) {
+        currentColorScheme = (currentColorScheme + 1) % colorSchemes.length;
+      }
+
+      // --- Request Next Frame ---
+      bgAnimationId = requestAnimationFrame(renderNeuralBackground);
+    }
+
+    function startBackgroundAnimation() {
+        if (!bgAnimationId) {
+            console.log("Starting background animation loop.");
+            renderNeuralBackground();
+        }
+    }
+
+    function stopBackgroundAnimation() {
+        if (bgAnimationId) {
+            cancelAnimationFrame(bgAnimationId);
+            bgAnimationId = null;
+            console.log("Stopping background animation loop.");
+            // Optionally clear the canvas when stopped
+            // bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+        }
+    }
+
+    // ===============================================================
+    // ======= MUSIC PLAYER & VISUALIZER LOGIC (Mostly Unchanged) =======
+    // ===============================================================
+
+    // Track management
+    function loadTrack(index) {
+      index = (index + tracks.length) % tracks.length; // Wrap around playlist
+      currentTrackIndex = index;
+      musicPlayer.src = tracks[index].src;
+      $('trackTitle').textContent = tracks[index].title;
+      $('currentTrackNum').textContent = index + 1;
+
+      // Update active state in playlist
+      document.querySelectorAll('.playlist-item').forEach(item => {
+        item.classList.toggle('active', parseInt(item.dataset.index) === index);
+      });
+
+      // Scroll playlist to active item if visible
+      const activeItem = document.querySelector(`.playlist-item[data-index="${index}"]`);
+      if (activeItem && $('playlist').style.display !== 'none') {
+          activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // Reset progress and time display before loading
+       progressBar.style.width = '0%';
+       $('currentTime').textContent = '0:00';
+       $('totalTime').textContent = '0:00'; // Placeholder until loaded
+
+       musicPlayer.load(); // Important to actually load the new source
+       console.log("Loading track:", tracks[index].title);
+    }
+
+
+    function createPlaylist() {
+      const playlistEl = $('playlist'); // Renamed for clarity
+      playlistEl.innerHTML = ''; // Clear existing items
+
+      tracks.forEach((track, i) => {
+        const item = document.createElement('div');
+        item.className = 'playlist-item';
+        item.dataset.index = i; // Store index on the element
+
+        item.innerHTML = `
+          <span>${(i + 1).toString().padStart(2, '0')}</span>
+          <span>${track.title}</span>
+        `;
+
+        item.addEventListener('click', () => {
+          if (currentTrackIndex !== i) { // Only load if it's a different track
+              loadTrack(i);
+          }
+          // Always try to play when a playlist item is clicked
+          playTrack();
+          // Optional: Hide playlist after selection
+          // playlistEl.style.display = 'none';
+          // $('playlistToggle').textContent = 'Playlist';
+        });
+
+        playlistEl.appendChild(item);
+      });
+      // Mark the initially loaded track as active
+      const initialActiveItem = playlistEl.querySelector(`.playlist-item[data-index="${currentTrackIndex}"]`);
+       if(initialActiveItem) initialActiveItem.classList.add('active');
+    }
+
+    // Playback controls
+    function playTrack() {
+      if (!isAudioInitialized) {
+        initAudio(); // Initialize audio context on first play attempt
+      }
+      // Ensure context is running before playing
+      if (audioContext && audioContext.state === 'resumed') {
+         musicPlayer.play()
+           .then(() => {
+             playPauseBtn.textContent = 'Pause';
+             if (!visualizerAnimationId) startVisualizer(); // Start visualizer if not running
+             if (!bgAnimationId) startBackgroundAnimation(); // Start background if not running
+             console.log("Playing track");
+           })
+           .catch(error => console.error("Error playing audio:", error)); // Catch potential play errors
+       } else if (audioContext && audioContext.state === 'suspended') {
+           audioContext.resume().then(playTrack); // Resume and try playing again
+       } else {
+           // Handle cases where audio context failed to initialize or is closed
+           console.warn("Cannot play track - AudioContext not ready.");
+           // Maybe show a message to the user
+       }
+    }
+
+
+    function pauseTrack() {
+      musicPlayer.pause();
+      playPauseBtn.textContent = 'Play';
+      // Don't stop animations on pause, let them idle or react to silence
+      // stopVisualizer();
+      // stopBackgroundAnimation();
+      console.log("Paused track");
+    }
+
+    // Progress bar update
+    function updateProgress() {
+       // Prevent updates if duration isn't valid yet
+       if (!musicPlayer.duration || isNaN(musicPlayer.duration) || !isFinite(musicPlayer.duration)) {
+           return;
+       }
+
+       const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
+       progressBar.style.width = `${progressPercent}%`;
+       $('currentTime').textContent = formatTime(musicPlayer.currentTime);
+
+       // Update total time only once when it's available
+       const totalTimeEl = $('totalTime');
+       if (totalTimeEl.textContent === '0:00' || totalTimeEl.textContent === 'NaN:NaN') {
+            totalTimeEl.textContent = formatTime(musicPlayer.duration);
+       }
+    }
+
+
+    // ===============================================================
+    // ======= VISUALIZER DRAWING FUNCTIONS (Added Complexity) =======
+    // ===============================================================
+
+    // Helper: Calculate average amplitude from a slice of the data array
+    function getAverageAmplitude(dataArray, start, end) {
+        let sum = 0;
+        start = Math.max(0, Math.floor(start));
+        end = Math.min(dataArray.length, Math.ceil(end));
+        if (start >= end) return 0;
+        for (let i = start; i < end; i++) {
+            sum += dataArray[i];
+        }
+        return sum / (end - start) / 255; // Normalize to 0-1 range
+    }
+
+
+    // Main render loop for the TOP visualizer
+    function renderVisualizer() {
+        if (!isAudioInitialized) {
+            // Don't start rendering if audio isn't ready
+            return;
+        }
+
+        visualizerAnimationId = requestAnimationFrame(renderVisualizer); // Loop
+        analyser.getByteFrequencyData(dataArray); // Get data
+
+        // Clear the visualizer canvas ONLY
+        visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+
+        // --- Choose the visualizer function ---
+        const visualizers = [
+            drawNeonHolographicBars,
+            drawQuantumCirclesX,
+            drawNeuralWaveV2,
+            drawGalacticNebulaeX,
+            drawHyper4DSpectrum
+        ];
+
+        const index = (currentVisualizer - 1); // 0-based index
+        if (index >= 0 && index < visualizers.length) {
+            visualizers[index](); // Call the selected drawing function
+        }
+    }
+
+    function startVisualizer() {
+        if (!visualizerAnimationId && isAudioInitialized) {
+            console.log("Starting visualizer animation loop.");
+            renderVisualizer();
+        }
+    }
+    function stopVisualizer() {
+        if (visualizerAnimationId) {
+            cancelAnimationFrame(visualizerAnimationId);
+            visualizerAnimationId = null;
+            console.log("Stopping visualizer animation loop.");
+            // Clear the visualizer canvas when stopped
+            visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+        }
+    }
+
+
+    /* 1. Neon Holographic Bars – With Particle Glitch Overlays */
+    function drawNeonHolographicBars() {
+      const barWidth = (visualizerCanvas.width / bufferLength) * 1.5; // Slightly wider bars
+      const spacing = 0.5; // Spacing between bars
+      const t = performance.now() * 0.001; // Time for animation
+
+      visualizerCtx.save(); // Save context state
+
+      for (let i = 0, x = 0; i < bufferLength; i++) {
+        const amplitude = dataArray[i] / 255.0;
+        const barHeight = Math.max(1, amplitude * visualizerCanvas.height * 0.9); // Ensure min height
+        const pulse = 0.8 + 0.2 * Math.sin(t * 5 + i * 0.2); // Subtle pulse
+
+        const hue = (i / bufferLength) * 200 + t * 20; // Shift hue range towards cyan/green/blue
+        const gradient = visualizerCtx.createLinearGradient(
+            x, visualizerCanvas.height,
+            x, visualizerCanvas.height - barHeight * pulse
+        );
+        gradient.addColorStop(0, `hsla(${hue % 360}, 100%, 60%, 0.8)`);
+        gradient.addColorStop(0.5, `hsla(${(hue + 30) % 360}, 90%, 65%, 0.6)`);
+        gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 80%, 70%, 0.3)`);
+
+        visualizerCtx.shadowColor = `hsla(${hue % 360}, 100%, 70%, 0.6)`;
+        visualizerCtx.shadowBlur = 8 * amplitude; // Dynamic shadow blur
+
+        visualizerCtx.fillStyle = gradient;
+        // Rounded top effect
+        const radius = barWidth * 0.3;
+        visualizerCtx.beginPath();
+        visualizerCtx.moveTo(x + radius, visualizerCanvas.height);
+        visualizerCtx.lineTo(x + barWidth - radius, visualizerCanvas.height);
+        visualizerCtx.arcTo(x + barWidth, visualizerCanvas.height, x + barWidth, visualizerCanvas.height - radius, radius); // bottom right corner (flat)
+        visualizerCtx.lineTo(x + barWidth, visualizerCanvas.height - barHeight * pulse + radius);
+        visualizerCtx.arcTo(x + barWidth, visualizerCanvas.height - barHeight*pulse, x + barWidth - radius, visualizerCanvas.height - barHeight*pulse, radius); // top right corner
+        visualizerCtx.lineTo(x + radius, visualizerCanvas.height - barHeight * pulse);
+        visualizerCtx.arcTo(x, visualizerCanvas.height - barHeight*pulse, x, visualizerCanvas.height - barHeight*pulse + radius, radius); // top left corner
+        visualizerCtx.lineTo(x, visualizerCanvas.height - radius);
+        visualizerCtx.arcTo(x, visualizerCanvas.height, x + radius, visualizerCanvas.height, radius); // bottom left corner (flat)
+
+
+        visualizerCtx.closePath();
+        visualizerCtx.fill();
+
+         // Glitch effect - more controlled
+         if (amplitude > 0.6 && Math.random() < 0.05) {
+             visualizerCtx.save();
+             visualizerCtx.globalCompositeOperation = 'lighter'; // Brighter glitch
+             visualizerCtx.fillStyle = `rgba(255, 255, 255, ${0.4 + Math.random() * 0.4})`;
+             const glitchY = visualizerCanvas.height - barHeight * (0.2 + Math.random() * 0.6);
+             const glitchHeight = 1 + Math.random() * 3;
+             visualizerCtx.fillRect(x, glitchY, barWidth, glitchHeight);
+             visualizerCtx.restore();
+         }
+
+         x += barWidth + spacing; // Move to next bar position
+      }
+      visualizerCtx.restore(); // Restore context state (clears shadow)
+    }
+
+
+    /* 2. Quantum Circles X – Orbiting Pulses and Laser Lines */
+    function drawQuantumCirclesX() {
+      const t = performance.now() * 0.0005; // Slower time evolution
+      const centerX = visualizerCanvas.width / 2;
+      const centerY = visualizerCanvas.height / 2;
+      const maxRadius = Math.min(centerX, centerY) * 0.7; // Max orbit radius
+
+      visualizerCtx.save();
+      visualizerCtx.lineWidth = 1.5;
+
+      for (let i = 0; i < bufferLength; i += 2) { // Step by 2 for fewer elements
+        const amplitude = dataArray[i] / 255.0;
+        const angle = (Math.PI * 2 * i / bufferLength) + t * (i % 5 + 1) * 0.1; // Complex rotation
+        const baseOrbitRadius = amplitude * maxRadius;
+        const pulsate = 1 + 0.2 * Math.sin(t * 8 + i * 0.5); // Pulsation effect
+        const orbitRadius = baseOrbitRadius * pulsate;
+
+        const x = centerX + Math.cos(angle) * orbitRadius;
+        const y = centerY + Math.sin(angle) * orbitRadius;
+
+        const particleSize = 1 + amplitude * 5; // Size based on amplitude
+        const hue = ((i * 360 / bufferLength) + t * 60) % 360;
+
+        // Particle Gradient
+        const gradient = visualizerCtx.createRadialGradient(x, y, 0, x, y, particleSize * 1.5);
+        gradient.addColorStop(0, `hsla(${hue}, 100%, 75%, ${0.8 + amplitude * 0.2})`);
+        gradient.addColorStop(0.5, `hsla(${(hue + 40) % 360}, 90%, 65%, ${0.5 * amplitude})`);
+        gradient.addColorStop(1, `hsla(${(hue + 80) % 360}, 80%, 55%, 0)`);
+
+        visualizerCtx.fillStyle = gradient;
+        visualizerCtx.beginPath();
+        visualizerCtx.arc(x, y, particleSize * 1.5, 0, Math.PI * 2);
+        visualizerCtx.fill();
+
+        // Connecting Line (laser) - with fading opacity
+        if (amplitude > 0.1) {
+            visualizerCtx.strokeStyle = `hsla(${hue}, 100%, 70%, ${0.1 + amplitude * 0.5})`;
+            visualizerCtx.beginPath();
+            visualizerCtx.moveTo(centerX, centerY);
+            visualizerCtx.lineTo(x, y);
+            visualizerCtx.stroke();
+        }
+      }
+      visualizerCtx.restore();
+    }
+
+
+    /* 3. Neural Wave V2 – Futuristic, Fluid Audio Oscillations */
+    function drawNeuralWaveV2() {
+      const sliceWidth = visualizerCanvas.width / (bufferLength - 1);
+      const t = performance.now() * 0.0015; // Time for wave motion
+      const waveHeight = visualizerCanvas.height * 0.6; // Max height variation
+
+      visualizerCtx.save();
+      visualizerCtx.lineWidth = 2;
+      visualizerCtx.strokeStyle = 'rgba(0, 255, 208, 0.7)'; // --secondary color emphasis
+
+      // Main Wave Path
+      visualizerCtx.beginPath();
+      let startX = 0, startY = visualizerCanvas.height / 2;
+      visualizerCtx.moveTo(startX, startY);
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 255.0; // Normalize amplitude 0-1
+        const x = i * sliceWidth;
+        // Combine audio amplitude with a sine wave for fluid motion
+        const yOffset = (v - 0.5) * waveHeight;
+        const sineMotion = Math.sin(i * 0.1 + t) * waveHeight * 0.2; // Gentle underlying sine wave
+        const y = visualizerCanvas.height / 2 + yOffset + sineMotion;
+
+        // Use quadratic curve for smoother line
+        const xc = (x + startX) / 2;
+        const yc = (y + startY) / 2;
+        visualizerCtx.quadraticCurveTo(startX, startY, xc, yc);
+
+        // Store current point as start for next segment
+        startX = x;
+        startY = y;
+
+         // Draw reactive particles along the wave
+         if (i % 4 === 0 && v > 0.1) { // Draw fewer particles, only if there's some amplitude
+             visualizerCtx.fillStyle = `hsla(${(180 + v * 100) % 360}, 100%, ${60 + v * 30}%, ${0.5 + v * 0.5})`; // Hue shifts with amplitude
+             visualizerCtx.beginPath();
+             visualizerCtx.arc(x, y, 1 + v * 3, 0, Math.PI * 2); // Size reacts
+             visualizerCtx.fill();
+         }
+
+      }
+      // Finish the line to the last point
+      visualizerCtx.lineTo(startX, startY);
+      visualizerCtx.stroke();
+
+      // Optional: Add a second, fainter wave with offset phase/color
+      visualizerCtx.lineWidth = 1;
+      visualizerCtx.strokeStyle = 'rgba(255, 75, 0, 0.4)'; // --primary color emphasis (faint)
+      visualizerCtx.beginPath();
+      startX = 0; startY = visualizerCanvas.height / 2;
+      visualizerCtx.moveTo(startX, startY);
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 255.0;
+        const x = i * sliceWidth;
+        const yOffset = (v - 0.5) * waveHeight * 0.7; // Slightly different amplitude effect
+        const sineMotion = Math.sin(i * 0.12 + t + Math.PI/2) * waveHeight * 0.15; // Offset phase and frequency
+        const y = visualizerCanvas.height / 2 + yOffset + sineMotion;
+        const xc = (x + startX) / 2;
+        const yc = (y + startY) / 2;
+        visualizerCtx.quadraticCurveTo(startX, startY, xc, yc);
+        startX = x; startY = y;
+      }
+      visualizerCtx.lineTo(startX, startY);
+      visualizerCtx.stroke();
+
+
+      visualizerCtx.restore();
+    }
+
+    /* 4. Galactic Nebulae X – Swirling, Interactive Cosmic Clouds */
+    function drawGalacticNebulaeX() {
+      const centerX = visualizerCanvas.width / 2;
+      const centerY = visualizerCanvas.height / 2;
+      const t = performance.now() / 5000; // Slower time for nebula swirl
+
+      visualizerCtx.save();
+      // Subtle fade effect within the visualizer canvas
+      visualizerCtx.fillStyle = 'rgba(10, 11, 12, 0.1)'; // Match background dark
+      visualizerCtx.fillRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+      visualizerCtx.globalCompositeOperation = 'lighter'; // Additive blending for glow
+
+      const numParticles = 60; // Fewer, larger particles
+      for (let i = 0; i < numParticles; i++) {
+        const angle = (i / numParticles) * Math.PI * 5 + t; // Spiral pattern
+        const distFraction = Math.pow(i / numParticles, 0.8); // Particles denser towards center
+        const distance = distFraction * (visualizerCanvas.width / 2.5);
+
+        const x = centerX + Math.cos(angle) * distance * (1 + Math.sin(t*2 + i*0.2)*0.1); // Add wobble
+        const y = centerY + Math.sin(angle) * distance * (1 + Math.cos(t*2 + i*0.2)*0.1);
+
+        // Map particle index to frequency band (more emphasis on lower/mid)
+        const dataIndex = Math.floor(Math.pow(i / numParticles, 1.2) * (bufferLength * 0.6));
+        const intensity = (dataArray[dataIndex] || 0) / 255.0; // Intensity from audio data
+
+        const baseRadius = 5 + distFraction * 20; // Larger particles outwards
+        const radius = Math.max(2, baseRadius * (0.5 + intensity * 1.5)); // Radius reacts strongly
+
+        const hue = (distFraction * 100 + t * 30 + 180) % 360; // Color varies with distance and time (cyan/purple range)
+
+        // Soft radial gradient for each particle
+        const gradient = visualizerCtx.createRadialGradient(x, y, 0, x, y, radius);
+        gradient.addColorStop(0, `hsla(${hue}, 90%, 70%, ${intensity * 0.8})`); // Brighter center
+        gradient.addColorStop(0.4, `hsla(${(hue + 30) % 360}, 80%, 60%, ${intensity * 0.4})`);
+        gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 70%, 50%, 0)`); // Fade out
+
+        visualizerCtx.fillStyle = gradient;
+        visualizerCtx.beginPath();
+        visualizerCtx.arc(x, y, radius, 0, Math.PI * 2);
+        visualizerCtx.fill();
+      }
+
+      // Central "Core" reacting to Bass
+      const bassAvg = getAverageAmplitude(dataArray, 0, bufferLength * 0.1); // Avg of lowest 10% frequencies
+      const coreRadius = Math.max(10, bassAvg * visualizerCanvas.height * 0.5); // Core size reacts to bass
+      const coreHue = (10 + t * 20) % 360; // Orange/Red core
+      const coreGradient = visualizerCtx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
+      coreGradient.addColorStop(0, `hsla(${coreHue}, 100%, 65%, ${bassAvg * 0.7})`);
+      coreGradient.addColorStop(0.7, `hsla(${(coreHue + 20) % 360}, 90%, 55%, ${bassAvg * 0.3})`);
+      coreGradient.addColorStop(1, `hsla(${(coreHue + 40) % 360}, 80%, 50%, 0)`);
+
+      visualizerCtx.fillStyle = coreGradient;
+      visualizerCtx.beginPath();
+      visualizerCtx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
+      visualizerCtx.fill();
+
+      visualizerCtx.restore(); // Restore composite operation and other states
+    }
+
+
+    /* 5. Hyper 4D Spectrum – Multilayer Frequency Bars with Depth & Glitch FX */
+    function drawHyper4DSpectrum() {
+        const barWidth = visualizerCanvas.width / bufferLength;
+        const t = performance.now() / 1000; // Time for effects
+
+        visualizerCtx.save();
+
+        for (let i = 0; i < bufferLength; i++) {
+            const amplitude = dataArray[i] / 255.0;
+            const barHeight = Math.max(1, amplitude * visualizerCanvas.height); // Ensure min height
+            const x = i * barWidth;
+            const hue = (i / bufferLength) * 300; // Color spectrum (Red -> Blue)
+
+            // --- Layer 1: Base Bar ---
+            const gradient1 = visualizerCtx.createLinearGradient(x, visualizerCanvas.height, x, visualizerCanvas.height - barHeight);
+            gradient1.addColorStop(0, `hsla(${hue}, 100%, 40%, 0.7)`); // Darker base
+            gradient1.addColorStop(0.8, `hsla(${hue}, 100%, 60%, 0.9)`);
+            gradient1.addColorStop(1, `hsla(${hue}, 100%, 75%, 1.0)`); // Bright top
+            visualizerCtx.fillStyle = gradient1;
+            visualizerCtx.fillRect(x, visualizerCanvas.height - barHeight, barWidth, barHeight);
+
+            // --- Layer 2: Inner Glow/Highlight (slightly offset) ---
+            const highlightHeight = barHeight * (0.4 + Math.sin(t * 3 + i * 0.1) * 0.1); // Pulsating height
+            const highlightOffset = barWidth * 0.1;
+            visualizerCtx.fillStyle = `hsla(${(hue + 30) % 360}, 100%, 85%, ${0.3 + amplitude * 0.4})`; // Brighter, slightly offset color
+            visualizerCtx.fillRect(
+                x + highlightOffset,
+                visualizerCanvas.height - highlightHeight,
+                barWidth - 2 * highlightOffset, // Narrower
+                highlightHeight
+            );
+
+
+             // --- Layer 3: Top Sparkle ---
+             if (amplitude > 0.7) { // Only on loud peaks
+                 visualizerCtx.fillStyle = `hsla(${(hue + 60) % 360}, 100%, 95%, ${0.5 + Math.random() * 0.5})`;
+                 visualizerCtx.fillRect(x, visualizerCanvas.height - barHeight - 2, barWidth, 2 + Math.random() * 2); // Small rectangle at the top
              }
-        });
-         musicPlayer.addEventListener('error', handleAudioError);
-        progressContainer.addEventListener('click', seek);
 
-        playlistToggleBtn.addEventListener('click', () => {
-            playlistContainer.classList.toggle('visible');
-            const isVisible = playlistContainer.classList.contains('visible');
-            playlistToggleBtn.textContent = isVisible ? 'Hide Playlist' : 'Show Playlist';
-             if (isVisible) {
-                 const activeItem = document.querySelector(`.playlist-item.active`);
-                 if (activeItem) activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+             // --- Glitch Effect ---
+             if (Math.random() < 0.008) { // Less frequent glitch
+                 visualizerCtx.save();
+                 const glitchAmount = (Math.random() - 0.5) * barWidth * 1.5; // Horizontal offset
+                 const glitchY = visualizerCanvas.height - Math.random() * barHeight;
+                 const glitchHeight = 1 + Math.random() * 4;
+                 visualizerCtx.globalCompositeOperation = Math.random() < 0.5 ? 'lighter' : 'difference'; // Random blend mode
+                 visualizerCtx.fillStyle = `rgba(255, ${Math.random()*150}, ${Math.random()*150}, 0.7)`; // Random color glitch
+                 visualizerCtx.fillRect(x + glitchAmount, glitchY, barWidth, glitchHeight);
+                 visualizerCtx.restore();
              }
-        });
+        }
+        visualizerCtx.restore();
+    }
 
-        document.querySelectorAll('.visualizer-controls button').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const vizIndex = parseInt(e.target.dataset.viz);
-                 if (!isNaN(vizIndex)) {
-                     currentVisualizer = vizIndex;
-                     updateVisualizerButtons();
-                     console.log("Switched to visualizer:", currentVisualizer);
-                 }
-            });
-        });
+    // ===============================================================
+    // ======= EVENT LISTENERS & INITIALIZATION =======
+    // ===============================================================
 
-        window.addEventListener('resize', handleResize);
+    // --- Update Visualizer Buttons ---
+    function updateVisualizerButtons() {
+      document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+        btn.classList.toggle('active', i + 1 === currentVisualizer);
+      });
+    }
 
-        // === Initialization ===
-        document.addEventListener('DOMContentLoaded', () => {
-             createPlaylist();
-             loadTrack(currentTrackIndex);
+    // --- Attach Event Listeners ---
+    playPauseBtn.addEventListener('click', () => {
+        // Make sure audio is initialized before toggling
+        if (!isAudioInitialized) {
+            initAudio();
+        }
+        if (musicPlayer.paused) {
+            playTrack();
+        } else {
+            pauseTrack();
+        }
+    });
+
+    $('prevTrack').addEventListener('click', () => { loadTrack(currentTrackIndex - 1); playTrack(); });
+    $('nextTrack').addEventListener('click', () => { loadTrack(currentTrackIndex + 1); playTrack(); });
+
+    // Auto-play next track
+    musicPlayer.addEventListener('ended', () => {
+        console.log("Track ended, loading next.");
+        loadTrack(currentTrackIndex + 1);
+        playTrack();
+    });
+
+    // Update progress bar and time displays
+    musicPlayer.addEventListener('timeupdate', updateProgress);
+
+    // Update total time when metadata loads (more reliable than durationchange)
+    musicPlayer.addEventListener('loadedmetadata', () => {
+         $('totalTime').textContent = formatTime(musicPlayer.duration);
+         console.log("Metadata loaded, duration:", musicPlayer.duration);
+    });
+
+    // Handle seeking via progress bar click
+    progressContainer.addEventListener('click', e => {
+      if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; // Don't seek if duration isn't valid
+      const clickPosition = e.offsetX / progressContainer.offsetWidth;
+      musicPlayer.currentTime = clickPosition * musicPlayer.duration;
+      updateProgress(); // Update immediately after seek
+    });
+
+    // Toggle playlist visibility
+    $('playlistToggle').addEventListener('click', () => {
+      const playlistEl = $('playlist');
+      const isHidden = playlistEl.style.display === 'none';
+      playlistEl.style.display = isHidden ? 'block' : 'none';
+      $('playlistToggle').textContent = isHidden ? 'Hide Playlist' : 'Playlist';
+       // Scroll to active item when shown
+       if (isHidden) {
+           const activeItem = playlistEl.querySelector('.playlist-item.active');
+           if (activeItem) {
+               activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+           }
+       }
+    });
+
+    // Visualizer selection buttons
+    document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+      btn.addEventListener('click', () => {
+        if (currentVisualizer !== i + 1) {
+             currentVisualizer = i + 1;
              updateVisualizerButtons();
-             handleResize(); // Initial visualizer canvas size
-             // No background shader init needed
-             console.log("Neuromantic Player Initialized (Enhanced 2D Viz).");
-        });
+             console.log("Switched to visualizer:", currentVisualizer);
+             // No need to restart renderVisualizer, it checks the currentVisualizer variable each frame
+        }
+      });
+    });
 
-    </script>
+    // Handle window resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        // Debounce resize event to avoid excessive recalcs
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            console.log("Window resized, recalculating canvas sizes and network layout.");
+            resizeCanvases();
+            // Visualizer doesn't usually need reinitialization, just new dimensions
+            // Background network needs reinitialization due to position calculations
+            initNeuralNetwork();
+        }, 250); // Adjust debounce delay as needed
+    });
+
+    // --- Initial Setup ---
+    loadTrack(currentTrackIndex); // Load the first track's info
+    createPlaylist();            // Build the playlist HTML
+    initNeuralNetwork();         // Set up the initial neural network structure
+    startBackgroundAnimation();  // Start the background animation loop immediately (it will wait for audio init)
+    // Note: Visualizer and audio context start on the first play action.
+
+  </script>
 </body>
 </html>
