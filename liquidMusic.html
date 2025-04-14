@@ -1,738 +1,1088 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neuromantic Player (20 Visualizers)</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neuromantic Player (20 Viz + BG Switch)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
-    /* CSS Variables for Theming */
-    :root {
-      --primary: #ff4b00;    /* Bright Orange */
-      --secondary: #00ffd0; /* Bright Cyan */
-      --bg-dark: #0a0b0c;    /* Very Dark Blue/Black (RGB: 10, 11, 12) */
-      --bg-light: #121416;   /* Slightly Lighter Dark */
-      --text: #e0e0e0;      /* Light Gray Text */
-      --glass-bg: rgba(18, 20, 22, 0.65); /* Slightly less transparent glass */
-      --glass-border: rgba(255, 255, 255, 0.1);
-    }
+        /* CSS Variables for Theming */
+        :root {
+            --primary: #ff4b00;   /* Bright Orange */
+            --secondary: #00ffd0; /* Bright Cyan */
+            --bg-dark: #0a0b0c;    /* Very Dark Blue/Black (RGB: 10, 11, 12) */
+            --bg-light: #121416;   /* Slightly Lighter Dark */
+            --text: #e0e0e0;      /* Light Gray Text */
+            --glass-bg: rgba(18, 20, 22, 0.65); /* Slightly less transparent glass */
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
 
-    /* Global Reset and Box Sizing */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* Global Reset and Box Sizing */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    /* Body Styling */
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text);
-      font-family: 'Space Mono', monospace;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-      overflow: hidden;
-    }
+        /* Body Styling */
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Space Mono', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            overflow: hidden; /* Prevent scrollbars from background potentially */
+        }
 
-    /* Background Canvas Styling */
-    #background-canvas {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
-    }
+        /* Background Canvas Styling */
+        #background-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+        }
 
-    /* Header Styling */
-    header {
-      font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; position: relative;
-      text-transform: uppercase; color: var(--primary); z-index: 1;
-    }
-    header::after {
-      content: 'PLAYER'; position: absolute; left: 0; top: 0; color: var(--secondary);
-      clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
-    }
+        /* Header Styling */
+        header {
+            font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; position: relative;
+            text-transform: uppercase; color: var(--primary); z-index: 1;
+        }
+        header::after {
+            content: 'PLAYER'; position: absolute; left: 0; top: 0; color: var(--secondary);
+            clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%);
+        }
 
-    /* Player Container Styling */
-    .player-container {
-      width: 90%; max-width: 800px; border-radius: 4px; position: relative; z-index: 1;
-      overflow: hidden; background: var(--glass-bg); backdrop-filter: blur(12px);
-      border: 1px solid var(--glass-border); box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
-      display: grid;
-      grid-template-areas:
-        "visualizer visualizer"
-        "info info"
-        "progress progress"
-        "time time"
-        "controls controls"
-        "viz-controls viz-controls"
-        "playlist-toggle playlist-toggle"
-        "playlist playlist";
-      grid-template-columns: 1fr;
-      grid-template-rows: auto;
-    }
+        /* Player Container Styling */
+        .player-container {
+            width: 90%; max-width: 800px; border-radius: 4px; position: relative; z-index: 1;
+            overflow: hidden; background: var(--glass-bg); backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px); /* Safari */
+            border: 1px solid var(--glass-border); box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+            display: grid;
+            grid-template-areas:
+                "visualizer visualizer"
+                "info info"
+                "progress progress"
+                "time time"
+                "controls controls"
+                "viz-controls viz-controls"
+                "playlist-toggle playlist-toggle"
+                "playlist playlist";
+            grid-template-columns: 1fr;
+            grid-template-rows: auto;
+        }
 
-    /* Top Border Gradient - Animated */
-    .player-container::before {
-      content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
-      background: linear-gradient(90deg, var(--primary), var(--secondary), var(--primary));
-      background-size: 200% 100%; animation: borderFlow 4s linear infinite;
-    }
-    @keyframes borderFlow { 0% { background-position: 200% 50%; } 100% { background-position: 0% 50%; } }
+        /* Top Border Gradient - Animated */
+        .player-container::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary), var(--primary));
+            background-size: 200% 100%; animation: borderFlow 4s linear infinite;
+        }
+        @keyframes borderFlow { 0% { background-position: 200% 50%; } 100% { background-position: 0% 50%; } }
 
-     /* Grid Area Assignments */
-    .visualizer-canvas-container { grid-area: visualizer; }
-    .track-info-wrapper { grid-area: info; }
-    .progress-container { grid-area: progress; }
-    .time-display { grid-area: time; }
-    .controls { grid-area: controls; }
-    .visualizer-controls { grid-area: viz-controls; }
-    .playlist-toggle { grid-area: playlist-toggle; }
-    .playlist-container { grid-area: playlist; }
+        /* Grid Area Assignments */
+        .visualizer-canvas-container { grid-area: visualizer; }
+        .track-info-wrapper { grid-area: info; }
+        .progress-container { grid-area: progress; }
+        .time-display { grid-area: time; }
+        .controls { grid-area: controls; }
+        .visualizer-controls { grid-area: viz-controls; }
+        .playlist-toggle { grid-area: playlist-toggle; }
+        .playlist-container { grid-area: playlist; }
 
-     /* Visualizer Canvas Container */
-     .visualizer-canvas-container { height: 150px; position: relative; overflow: hidden; }
-    #visualizer { width: 100%; height: 100%; display: block; }
+        /* Visualizer Canvas Container */
+        .visualizer-canvas-container { height: 150px; position: relative; overflow: hidden; }
+        #visualizer { width: 100%; height: 100%; display: block; }
 
-    /* Track Info Wrapper */
-    .track-info-wrapper {
-        padding: 1rem; border-bottom: 1px solid var(--glass-border); display: grid;
-        grid-template-columns: 1fr auto; gap: 1rem; align-items: center;
-    }
-    .track-title { font-weight: bold; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .track-number { color: var(--secondary); }
+        /* Track Info Wrapper */
+        .track-info-wrapper {
+            padding: 1rem; border-bottom: 1px solid var(--glass-border); display: grid;
+            grid-template-columns: 1fr auto; gap: 1rem; align-items: center;
+        }
+        .track-title { font-weight: bold; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .track-number { color: var(--secondary); }
 
-    /* Progress Bar Area */
-    .progress-container { height: 5px; background: rgba(255, 255, 255, 0.1); cursor: pointer; overflow: hidden; margin: 0 1rem; border-radius: 3px; }
-    .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.1s linear; border-radius: 3px; }
+        /* Progress Bar Area */
+        .progress-container { height: 5px; background: rgba(255, 255, 255, 0.1); cursor: pointer; overflow: hidden; margin: 0 1rem; border-radius: 3px; position: relative; top: -1px; /* Align better */ }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.1s linear; border-radius: 3px; }
 
-    /* Time Display Area */
-    .time-display { display: flex; justify-content: space-between; padding: 0.5rem 1rem; font-size: 0.7rem; color: rgba(255, 255, 255, 0.6); }
+        /* Time Display Area */
+        .time-display { display: flex; justify-content: space-between; padding: 0.5rem 1rem; font-size: 0.7rem; color: rgba(255, 255, 255, 0.6); }
 
-    /* Controls Area (Prev/Play/Next) */
-    .controls { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.5rem 1rem; border-top: 1px solid var(--glass-border); border-bottom: 1px solid var(--glass-border); }
-    .controls button { background: none; border: none; color: var(--text); font-family: inherit; padding: 0.75rem 0.5rem; cursor: pointer; text-transform: uppercase; font-weight: bold; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-    .controls button:hover { color: var(--primary); transform: translateY(-2px) scale(1.05); text-shadow: 0 0 8px var(--primary); }
-    .controls button:active { transform: translateY(0px) scale(1.0); }
+        /* Controls Area (Prev/Play/Next) */
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.5rem 1rem; border-top: 1px solid var(--glass-border); border-bottom: 1px solid var(--glass-border); }
+        .controls button { background: none; border: none; color: var(--text); font-family: inherit; padding: 0.75rem 0.5rem; cursor: pointer; text-transform: uppercase; font-weight: bold; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .controls button:hover { color: var(--primary); transform: translateY(-2px) scale(1.05); text-shadow: 0 0 8px var(--primary); }
+        .controls button:active { transform: translateY(0px) scale(1.0); }
 
-    /* Visualizer Controls Area - Updated for 20 buttons */
-    .visualizer-controls {
-      display: grid;
-      grid-template-columns: repeat(10, 1fr); /* 10 columns */
-      grid-template-rows: auto auto; /* 2 rows */
-      background: rgba(0, 0, 0, 0.2);
-      border-bottom: 1px solid var(--glass-border);
-    }
-    .visualizer-controls button {
-      background: none; border: none; color: rgba(255, 255, 255, 0.5); font-family: inherit;
-      font-size: 0.55rem; /* Slightly smaller text */
-      padding: 0.4rem 0.1rem; /* Adjust padding */
-      cursor: pointer; text-transform: uppercase; transition: color 0.2s ease, background-color 0.2s ease;
-      text-align: center; /* Ensure text is centered */
-      overflow: hidden; /* Hide overflow if text is too long */
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .visualizer-controls button.active { color: var(--secondary); font-weight: bold; background-color: rgba(0, 255, 208, 0.1); }
-    .visualizer-controls button:hover:not(.active) { color: var(--primary); background-color: rgba(255, 75, 0, 0.1); }
+        /* Visualizer Controls Area - Updated for 20 buttons */
+        .visualizer-controls {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr); /* 10 columns */
+            grid-template-rows: auto auto; /* 2 rows */
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .visualizer-controls button {
+            background: none; border: none; color: rgba(255, 255, 255, 0.5); font-family: inherit;
+            font-size: 0.55rem; /* Slightly smaller text */
+            padding: 0.4rem 0.1rem; /* Adjust padding */
+            cursor: pointer; text-transform: uppercase; transition: color 0.2s ease, background-color 0.2s ease;
+            text-align: center; /* Ensure text is centered */
+            overflow: hidden; /* Hide overflow if text is too long */
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .visualizer-controls button.active { color: var(--secondary); font-weight: bold; background-color: rgba(0, 255, 208, 0.1); }
+        .visualizer-controls button:hover:not(.active) { color: var(--primary); background-color: rgba(255, 75, 0, 0.1); }
 
-    /* Playlist Toggle Button */
-    .playlist-toggle { width: 100%; background: none; border: none; padding: 0.85rem; color: var(--text); font-family: inherit; cursor: pointer; text-transform: uppercase; transition: background-color 0.2s ease, color 0.2s ease; }
-    .playlist-toggle:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--secondary); }
+        /* Playlist Toggle Button */
+        .playlist-toggle { width: 100%; background: none; border: none; padding: 0.85rem; color: var(--text); font-family: inherit; cursor: pointer; text-transform: uppercase; transition: background-color 0.2s ease, color 0.2s ease; }
+        .playlist-toggle:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--secondary); }
 
-    /* Playlist Container */
-    .playlist-container { max-height: 200px; overflow-y: auto; background: rgba(0, 0, 0, 0.1); }
-    .playlist-container::-webkit-scrollbar { width: 6px; }
-    .playlist-container::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
-    .playlist-container::-webkit-scrollbar-thumb { background: var(--secondary); border-radius: 3px; }
-    .playlist-container::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+        /* Playlist Container */
+        .playlist-container { max-height: 200px; overflow-y: auto; background: rgba(0, 0, 0, 0.1); }
+        .playlist-container::-webkit-scrollbar { width: 6px; }
+        .playlist-container::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+        .playlist-container::-webkit-scrollbar-thumb { background: var(--secondary); border-radius: 3px; }
+        .playlist-container::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
-    /* Individual Playlist Item */
-    .playlist-item { display: grid; grid-template-columns: auto auto 1fr; gap: 0.8rem; align-items: center; padding: 0.75rem 1rem; cursor: pointer; border-bottom: 1px solid var(--glass-border); font-size: 0.8rem; transition: background-color 0.2s ease; }
-    .playlist-item:last-child { border-bottom: none; }
-    .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
-    .playlist-item.active { background: rgba(0, 255, 208, 0.1); }
-    .playlist-item span:first-child { color: rgba(255, 255, 255, 0.5); width: 2em; text-align: right;}
-    .playlist-item span:last-child { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .playlist-item.active span { color: var(--secondary); font-weight: bold; }
-    .playlist-item-indicator { display: flex; align-items: flex-end; justify-content: center; gap: 1px; width: 15px; height: 15px; opacity: 0; transition: opacity 0.3s ease; }
-    .playlist-item.active .playlist-item-indicator { opacity: 1; }
-    .wave-bar { width: 2px; height: 100%; background-color: var(--secondary); animation: soundwave 0.8s ease-in-out infinite alternate; }
-    .wave-bar:nth-child(1) { animation-delay: 0s; }
-    .wave-bar:nth-child(2) { animation-delay: 0.2s; }
-    .wave-bar:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes soundwave { 0% { transform: scaleY(0.2); } 100% { transform: scaleY(1.0); } }
+        /* Individual Playlist Item */
+        .playlist-item { display: grid; grid-template-columns: auto auto 1fr; gap: 0.8rem; align-items: center; padding: 0.75rem 1rem; cursor: pointer; border-bottom: 1px solid var(--glass-border); font-size: 0.8rem; transition: background-color 0.2s ease; }
+        .playlist-item:last-child { border-bottom: none; }
+        .playlist-item:hover { background: rgba(255, 255, 255, 0.05); }
+        .playlist-item.active { background: rgba(0, 255, 208, 0.1); }
+        .playlist-item span:first-child { color: rgba(255, 255, 255, 0.5); width: 2em; text-align: right;}
+        .playlist-item span:last-child { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playlist-item.active span { color: var(--secondary); font-weight: bold; }
+        .playlist-item-indicator { display: flex; align-items: flex-end; justify-content: center; gap: 1px; width: 15px; height: 15px; opacity: 0; transition: opacity 0.3s ease; }
+        .playlist-item.active .playlist-item-indicator { opacity: 1; }
+        .wave-bar { width: 2px; height: 100%; background-color: var(--secondary); animation: soundwave 0.8s ease-in-out infinite alternate; }
+        .wave-bar:nth-child(1) { animation-delay: 0s; }
+        .wave-bar:nth-child(2) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes soundwave { 0% { transform: scaleY(0.2); } 100% { transform: scaleY(1.0); } }
 
-    /* Responsive Adjustments */
-    @media (max-width: 600px) {
-      body { padding: 0.5rem; }
-      header { font-size: 1.2rem; margin-bottom: 1rem; }
-      .player-container { width: 100%; }
-      .track-info-wrapper { padding: 0.75rem; }
-      .progress-container { margin: 0 0.75rem; }
-      .controls button { padding: 0.6rem 0.4rem; }
-      /* Adjust viz controls for mobile - maybe fewer columns or allow wrap */
-       .visualizer-controls { grid-template-columns: repeat(5, 1fr); } /* 5 columns on small screens */
-       .visualizer-controls button { font-size: 0.5rem; padding: 0.3rem 0.1rem; }
-      .playlist-toggle { padding: 0.75rem; }
-      .playlist-item { padding: 0.6rem 0.75rem; gap: 0.6rem; font-size: 0.75rem;}
-      .playlist-item span:first-child { width: 1.8em; }
-      .playlist-item-indicator { width: 12px; height: 12px;}
-      .wave-bar { width: 1.5px; }
-    }
+        /* Responsive Adjustments */
+        @media (max-width: 600px) {
+            body { padding: 0.5rem; }
+            header { font-size: 1.2rem; margin-bottom: 1rem; }
+            .player-container { width: 100%; }
+            .track-info-wrapper { padding: 0.75rem; }
+            .progress-container { margin: 0 0.75rem; }
+            .controls button { padding: 0.6rem 0.4rem; }
+            /* Adjust viz controls for mobile */
+             .visualizer-controls { grid-template-columns: repeat(5, 1fr); } /* 5 columns on small screens */
+             .visualizer-controls button { font-size: 0.5rem; padding: 0.3rem 0.1rem; }
+            .playlist-toggle { padding: 0.75rem; }
+            .playlist-item { padding: 0.6rem 0.75rem; gap: 0.6rem; font-size: 0.75rem;}
+            .playlist-item span:first-child { width: 1.8em; }
+            .playlist-item-indicator { width: 12px; height: 12px;}
+            .wave-bar { width: 1.5px; }
+        }
 
-  </style>
+    </style>
 </head>
 <body>
-  <canvas id="background-canvas"></canvas>
+    <canvas id="background-canvas"></canvas>
 
-  <header>Neuromantic</header>
+    <header>Neuromantic</header>
 
-  <div class="player-container">
+    <div class="player-container">
 
-     <div class="visualizer-canvas-container">
-      <canvas id="visualizer"></canvas>
-    </div>
-
-    <audio id="musicPlayer"></audio>
-
-     <div class="track-info-wrapper">
-        <div class="track-title" id="trackTitle">--</div>
-        <div class="track-number">
-            <span id="currentTrackNum">--</span>/<span id="totalTracks">--</span>
-        </div>
-     </div>
-
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar"></div>
-    </div>
-
-    <div class="time-display">
-      <span id="currentTime">0:00</span>
-      <span id="totalTime">0:00</span>
-    </div>
-
-    <div class="controls">
-      <button id="prevTrack" title="Previous Track (Left Arrow)">Prev</button>
-      <button id="playPause" title="Play/Pause (Spacebar)">Play</button>
-      <button id="nextTrack" title="Next Track (Right Arrow)">Next</button>
-    </div>
-
-    <div class="visualizer-controls">
-      <button id="viz1" class="active">Viz 1</button>
-      <button id="viz2">Viz 2</button>
-      <button id="viz3">Viz 3</button>
-      <button id="viz4">Viz 4</button>
-      <button id="viz5">Viz 5</button>
-      <button id="viz6">Viz 6</button>
-      <button id="viz7">Viz 7</button>
-      <button id="viz8">Viz 8</button>
-      <button id="viz9">Viz 9</button>
-      <button id="viz10">Viz 10</button>
-      <button id="viz11">Viz 11</button>
-      <button id="viz12">Viz 12</button>
-      <button id="viz13">Viz 13</button>
-      <button id="viz14">Viz 14</button>
-      <button id="viz15">Viz 15</button>
-      <button id="viz16">Viz 16</button>
-      <button id="viz17">Viz 17</button>
-      <button id="viz18">Viz 18</button>
-      <button id="viz19">Viz 19</button>
-      <button id="viz20">Viz 20</button>
-    </div>
-
-    <button class="playlist-toggle" id="playlistToggle">Playlist</button>
-
-    <div class="playlist-container" id="playlist" style="display:none;">
+        <div class="visualizer-canvas-container">
+            <canvas id="visualizer"></canvas>
         </div>
 
-  </div> <script>
-    // --- DOM Element Selection Helper ---
-    const $ = id => document.getElementById(id);
+        <audio id="musicPlayer" crossorigin="anonymous"></audio> <div class="track-info-wrapper">
+            <div class="track-title" id="trackTitle">--</div>
+            <div class="track-number">
+                <span id="currentTrackNum">--</span>/<span id="totalTracks">--</span>
+            </div>
+        </div>
 
-    // --- Get DOM Elements ---
-    const musicPlayer = $('musicPlayer');
-    const playPauseBtn = $('playPause');
-    const visualizerCanvas = $('visualizer');
-    const visualizerCtx = visualizerCanvas.getContext('2d');
-    const progressBar = $('progressBar');
-    const progressContainer = $('progressContainer');
-    const bgCanvas = $('background-canvas');
-    const bgCtx = bgCanvas.getContext('2d');
-    const trackTitleEl = $('trackTitle');
-    const currentTrackNumEl = $('currentTrackNum');
-    const totalTracksEl = $('totalTracks');
-    const currentTimeEl = $('currentTime');
-    const totalTimeEl = $('totalTime');
-    const playlistEl = $('playlist');
-    const playlistToggleBtn = $('playlistToggle');
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
 
-    // --- State variables ---
-    let currentTrackIndex = 0;
-    let currentVisualizer = 1; // 1-based index
-    let visualizerAnimationId = null;
-    let bgAnimationId = null;
-    let audioContext, analyser, source, dataArray, bufferLength;
-    let isAudioInitialized = false;
-    let neuralNetwork = null;
+        <div class="time-display">
+            <span id="currentTime">0:00</span>
+            <span id="totalTime">0:00</span>
+        </div>
 
-    // --- Background Neural Network Configuration ---
-    const layerCount = 5;
-    const colorSchemes = [ { neuron: '#ff4b00', connection: '#00ffd0' }, { neuron: '#00ffd0', connection: '#ff4b00' }, { neuron: '#ff00ff', connection: '#00ffff' }, { neuron: '#ffff00', connection: '#0088ff' }, { neuron: '#ffffff', connection: '#cccccc' } ];
-    let currentColorScheme = 0;
+        <div class="controls">
+            <button id="prevTrack" title="Previous Track (Left Arrow)">Prev</button>
+            <button id="playPause" title="Play/Pause (Spacebar)">Play</button>
+            <button id="nextTrack" title="Next Track (Right Arrow)">Next</button>
+        </div>
 
-    // --- Track List ---
-    const tracks = [ /* Keep your existing track list here */ { src: 'track1.wav', title: 'Liquid Dreams' }, { src: 'track2.wav', title: 'Neon Flow' }, { src: 'track3.wav', title: 'Cosmic Wave' }, { src: 'track4.wav', title: 'Digital Sunrise' }, { src: 'track5.wav', title: 'Quantum Beat' }, { src: 'track6.wav', title: 'Cyberspace Odyssey' }, { src: 'track7.wav', title: 'Neural Network' }, { src: 'track8.wav', title: 'Binary Echoes' }, { src: 'track9.wav', title: 'Virtual Reality' }, { src: 'track10.wav', title: 'Holographic Memory' }, { src: 'track11.wav', title: 'Singularity' }, { src: 'track12.wav', title: 'Electric Dreams' }, { src: 'track13.wav', title: 'Synthwave Journey' }, { src: 'track14.wav', title: 'Galactic Pulse' }, { src: 'track15.wav', title: 'Cyber Dawn' }, { src: 'track16.wav', title: 'Ethereal Code' }, { src: 'track17.mp3', title: 'Alternatives' }, { src: 'track18.wav', title: 'Astral Projection' }, { src: 'track19.wav', title: 'Plasma Field' }, { src: 'track20.wav', title: 'Quantum Resonance' } ];
-    totalTracksEl.textContent = tracks.length;
+        <div class="visualizer-controls">
+             <button id="viz1" class="active">Viz 1</button>
+             <button id="viz2">Viz 2</button>
+             <button id="viz3">Viz 3</button>
+             <button id="viz4">Viz 4</button>
+             <button id="viz5">Viz 5</button>
+             <button id="viz6">Viz 6</button>
+             <button id="viz7">Viz 7</button>
+             <button id="viz8">Viz 8</button>
+             <button id="viz9">Viz 9</button>
+             <button id="viz10">Viz 10</button>
+             <button id="viz11">Viz 11</button>
+             <button id="viz12">Viz 12</button>
+             <button id="viz13">Viz 13</button>
+             <button id="viz14">Viz 14</button>
+             <button id="viz15">Viz 15</button>
+             <button id="viz16">Viz 16</button>
+             <button id="viz17">Viz 17</button>
+             <button id="viz18">Viz 18</button>
+             <button id="viz19">Viz 19</button>
+             <button id="viz20">Viz 20</button>
+        </div>
 
-    // --- Canvas Resizing Function ---
-    function resizeCanvases() { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; visualizerCanvas.width = visualizerCanvas.offsetWidth; visualizerCanvas.height = visualizerCanvas.offsetHeight; if (neuralNetwork) { neuralNetwork.canvas = bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); } }
+        <button class="playlist-toggle" id="playlistToggle">Playlist</button>
 
-    // --- Helper Function: Format Time ---
-    const formatTime = s => { if (isNaN(s) || !isFinite(s)) return '0:00'; const m = Math.floor(s / 60); const sec = Math.floor(s % 60).toString().padStart(2, '0'); return `${m}:${sec}`; }
+        <div class="playlist-container" id="playlist" style="display:none;">
+        </div>
 
-    // --- Audio Context Initialization ---
-    function initAudio() { if (!isAudioInitialized && !audioContext) { try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); analyser = audioContext.createAnalyser(); analyser.fftSize = 512; bufferLength = analyser.frequencyBinCount; dataArray = new Uint8Array(bufferLength); source = audioContext.createMediaElementSource(musicPlayer); source.connect(analyser); analyser.connect(audioContext.destination); isAudioInitialized = true; console.log("AudioContext Initialized, state:", audioContext.state); startVisualizer(); startBackgroundAnimation(); } catch (e) { console.error("Error initializing AudioContext:", e); alert("Could not initialize audio playback."); } } else if (isAudioInitialized) { console.log("initAudio called but already initialized. Context state:", audioContext.state); } }
+    </div>
 
-    // ===============================================================
-    // ======= NEURAL NETWORK BACKGROUND (Minified for brevity) =======
-    // ===============================================================
-    class Neuron { constructor(x, y, layer, size, speed) { this.x=x; this.y=y; this.layer=layer; this.baseSize=size; this.speed=speed; this.pulse=0; this.oscillation=Math.random()*Math.PI*2; } update(audioValue, reactivity) { this.pulse=(audioValue/255)*4*reactivity; this.oscillation+=this.speed; } render(ctx, color) { const osc=Math.sin(this.oscillation)*0.5; const size=this.baseSize+this.pulse+osc; ctx.shadowColor=color; ctx.shadowBlur=5+this.pulse*5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(this.x,this.y,Math.max(1,size),0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; } }
-    class Connection { constructor(from, to, weight) { this.from=from; this.to=to; this.weight=weight; this.signal=Math.random(); } update(reactivity) { const speed=0.005+reactivity*0.05; this.signal=(this.signal+speed)%1; } render(ctx, color, reactivity) { const dx=this.to.x-this.from.x; const dy=this.to.y-this.from.y; ctx.strokeStyle=`rgba(255,255,255,${0.02+this.weight*0.05})`; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(this.from.x,this.from.y); ctx.lineTo(this.to.x,this.to.y); ctx.stroke(); const sigX=this.from.x+dx*this.signal; const sigY=this.from.y+dy*this.signal; const size=1+reactivity*2.5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(sigX,sigY,size,0,Math.PI*2); ctx.fill(); } }
-    class NeuralNetwork { constructor(layers, canvas) { this.lCount=layers; this.canvas=canvas; this.neurons=[]; this.connections=[]; this.initNeurons(); this.initConnections(); } initNeurons() { this.neurons=[]; const ratios=[0.6,0.8,1,0.8,0.6]; for(let l=0;l<this.lCount;l++){ const ratio=ratios[l]||1; const baseCount=Math.floor(20*(this.canvas.width/1200)); const num=Math.max(5,Math.floor(baseCount*ratio)); const padX=this.canvas.width*0.1; const availW=this.canvas.width-2*padX; const lx=padX+(this.lCount>1?availW/(this.lCount-1)*l:availW/2); for(let i=0;i<num;i++){ const padY=this.canvas.height*0.15; const availH=this.canvas.height-2*padY; const randY=(Math.random()-0.5)*availH*0.1; const y=padY+(num>1?availH*i/(num-1):availH/2)+randY; const size=Math.random()*1.5+1; const speed=(Math.random()*0.01+0.005)*(0.5+Math.random()); this.neurons.push(new Neuron(lx,y,l,size,speed)); } } } initConnections() { this.connections=[]; this.neurons.forEach(fromN=>{ if(fromN.layer<this.lCount-1){ const nextLayerNs=this.neurons.filter(n=>n.layer===fromN.layer+1); const count=Math.max(1,Math.floor(nextLayerNs.length*(0.3+Math.random()*0.3))); const targets=nextLayerNs.sort(()=>0.5-Math.random()); for(let i=0;i<count&&i<targets.length;i++){ this.connections.push(new Connection(fromN,targets[i],Math.random())); } } }); } update(audioData, bufLen, reactivity) { this.neurons.forEach((neuron,idx)=>{ const freqIdx=Math.floor(Math.pow(idx/this.neurons.length,1.5)*(bufLen*0.8)); neuron.update(audioData[freqIdx]||0,reactivity); }); this.connections.forEach(conn=>conn.update(reactivity)); } render(ctx, colors, reactivity) { this.connections.forEach(conn=>conn.render(ctx,colors.connection,reactivity)); this.neurons.forEach(neuron=>neuron.render(ctx,colors.neuron)); } }
-    function initNeuralNetwork() { if (!neuralNetwork) { neuralNetwork = new NeuralNetwork(layerCount, bgCanvas); } else { neuralNetwork.canvas=bgCanvas; neuralNetwork.initNeurons(); neuralNetwork.initConnections(); } console.log(`NN Init/Reinit: ${neuralNetwork?.neurons?.length} neurons, ${neuralNetwork?.connections?.length} connections.`); }
-    function renderNeuralBackground() { if (!isAudioInitialized || !neuralNetwork || !analyser) { bgAnimationId = requestAnimationFrame(renderNeuralBackground); return; } analyser.getByteFrequencyData(dataArray); let sum=0; const relBufLen=Math.floor(bufferLength*0.7); for(let i=0;i<relBufLen;i++){ sum+=dataArray[i]; } const avg=sum/relBufLen||0; const reactivity=Math.min(1,Math.pow(avg/128,1.5)); const trailAlpha=0.08+reactivity*0.07; bgCtx.fillStyle=`rgba(10,11,12,${trailAlpha})`; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height); const colors=colorSchemes[currentColorScheme]; neuralNetwork.update(dataArray,bufferLength,reactivity); neuralNetwork.render(bgCtx,colors,reactivity); if(Math.random()<0.0005+reactivity*0.005){ currentColorScheme=(currentColorScheme+1)%colorSchemes.length; } bgAnimationId = requestAnimationFrame(renderNeuralBackground); }
-    function startBackgroundAnimation() { if (!bgAnimationId) { console.log("Starting background animation."); renderNeuralBackground(); } }
-    function stopBackgroundAnimation() { if (bgAnimationId) { cancelAnimationFrame(bgAnimationId); bgAnimationId=null; console.log("Stopping background animation."); } }
+    <script>
+        // --- DOM Element Selection Helper ---
+        const $ = id => document.getElementById(id);
 
-    // ===============================================================
-    // ======= MUSIC PLAYER CORE FUNCTIONS =======
-    // ===============================================================
-    function loadTrack(index) { index = (index + tracks.length) % tracks.length; currentTrackIndex = index; const track = tracks[index]; musicPlayer.src = track.src; trackTitleEl.textContent = track.title; currentTrackNumEl.textContent = index + 1; updatePlaylistActiveState(); progressBar.style.width = '0%'; currentTimeEl.textContent = '0:00'; totalTimeEl.textContent = '0:00'; musicPlayer.load(); console.log("Loading track:", track.title, "| Source:", musicPlayer.src); }
-    function createPlaylist() { playlistEl.innerHTML = ''; tracks.forEach((track, i) => { const item = document.createElement('div'); item.className = 'playlist-item'; item.dataset.index = i; item.innerHTML = `<span>${(i + 1).toString().padStart(2, '0')}</span><div class="playlist-item-indicator"><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div></div><span>${track.title}</span>`; item.addEventListener('click', () => { if (currentTrackIndex !== i) loadTrack(i); playTrack(); }); playlistEl.appendChild(item); }); updatePlaylistActiveState(); }
-    function updatePlaylistActiveState() { document.querySelectorAll('.playlist-item').forEach(item => { const isActive = parseInt(item.dataset.index) === currentTrackIndex; item.classList.toggle('active', isActive); }); const activeItem = playlistEl.querySelector('.playlist-item.active'); if (activeItem && playlistEl.style.display !== 'none') { activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }
-    function playTrack() { if (!isAudioInitialized) { console.log("Audio not initialized. Initializing..."); initAudio(); return; } if (audioContext) { console.log(`Attempting play. Context: ${audioContext.state}`); audioContext.resume().then(() => { console.log("Context resumed/running. Trying .play()"); if (musicPlayer.paused) { const playP = musicPlayer.play(); if (playP !== undefined) { playP.then(_ => { playPauseBtn.textContent = 'Pause'; startVisualizer(); startBackgroundAnimation(); console.log("Playback started (promise)."); }).catch(e => { console.error(`Play error: ${e.name} - ${e.message}`); playPauseBtn.textContent = 'Play'; }); } else { console.warn(".play() no promise. Assume started."); playPauseBtn.textContent = 'Pause'; startVisualizer(); startBackgroundAnimation(); } } else { console.log("Already playing."); playPauseBtn.textContent = 'Pause'; } }).catch(e => { console.error("Resume error:", e); playPauseBtn.textContent = 'Play'; }); } else { console.error("Cannot play: No AudioContext."); playPauseBtn.textContent = 'Play'; } }
-    function pauseTrack() { musicPlayer.pause(); playPauseBtn.textContent = 'Play'; console.log("Playback paused."); }
-    function updateProgress() { if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100; progressBar.style.width = `${progressPercent}%`; currentTimeEl.textContent = formatTime(musicPlayer.currentTime); }
+        // --- Get DOM Elements ---
+        const musicPlayer = $('musicPlayer');
+        const playPauseBtn = $('playPause');
+        const visualizerCanvas = $('visualizer');
+        const visualizerCtx = visualizerCanvas.getContext('2d');
+        const progressBar = $('progressBar');
+        const progressContainer = $('progressContainer');
+        const bgCanvas = $('background-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const trackTitleEl = $('trackTitle');
+        const currentTrackNumEl = $('currentTrackNum');
+        const totalTracksEl = $('totalTracks');
+        const currentTimeEl = $('currentTime');
+        const totalTimeEl = $('totalTime');
+        const playlistEl = $('playlist');
+        const playlistToggleBtn = $('playlistToggle');
 
-    // ===============================================================
-    // ======= VISUALIZER DRAWING FUNCTIONS (NOW 20!) =======
-    // ===============================================================
-    function getAverageAmplitude(arr, start, end) { let sum=0; start=Math.max(0,Math.floor(start)); end=Math.min(arr.length,Math.ceil(end)); if(start>=end)return 0; for(let i=start;i<end;i++){ sum+=arr[i]; } return sum/(end-start)/255; }
+        // --- State variables ---
+        let currentTrackIndex = 0;
+        let currentVisualizer = 1; // 1-based index for foreground
+        let visualizerAnimationId = null;
+        let bgAnimationId = null;
+        let audioContext, analyser, source, dataArray, bufferLength;
+        let isAudioInitialized = false;
 
-    const W = () => visualizerCanvas.width;
-    const H = () => visualizerCanvas.height;
-    const CX = () => W() / 2;
-    const CY = () => H() / 2;
-    const t = () => performance.now() / 1000; // Time in seconds
+        // --- Background State ---
+        let neuralNetwork = null; // Holds the NN instance
+        let currentBackgroundIndex = 0; // 0-based index for background
+        let backgroundSwitchIntervalId = null;
+        const BACKGROUND_SWITCH_INTERVAL = 30000; // Switch background every 30 seconds (in ms)
+        let bgParticles = []; // State for particle background
 
-    // --- Original 5 Visualizers ---
-    function drawViz1() { /* NeonHolographicBars */ const barW=(W()/bufferLength)*1.5;const space=0.5;const time=t();visualizerCtx.save();for(let i=0,x=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*H()*0.9);const pulse=0.8+0.2*Math.sin(time*5+i*0.2);const hue=(i/bufferLength)*200+time*20;const grad=visualizerCtx.createLinearGradient(x,H(),x,H()-h*pulse);grad.addColorStop(0,`hsla(${hue%360},100%,60%,0.8)`);grad.addColorStop(0.5,`hsla(${(hue+30)%360},90%,65%,0.6)`);grad.addColorStop(1,`hsla(${(hue+60)%360},80%,70%,0.3)`);visualizerCtx.shadowColor=`hsla(${hue%360},100%,70%,0.6)`;visualizerCtx.shadowBlur=8*amp;visualizerCtx.fillStyle=grad;const r=barW*0.3;visualizerCtx.beginPath();visualizerCtx.moveTo(x+r,H());visualizerCtx.lineTo(x+barW-r,H());visualizerCtx.arcTo(x+barW,H(),x+barW,H()-r,r);visualizerCtx.lineTo(x+barW,H()-h*pulse+r);visualizerCtx.arcTo(x+barW,H()-h*pulse,x+barW-r,H()-h*pulse,r);visualizerCtx.lineTo(x+r,H()-h*pulse);visualizerCtx.arcTo(x,H()-h*pulse,x,H()-h*pulse+r,r);visualizerCtx.lineTo(x,H()-r);visualizerCtx.arcTo(x,H(),x+r,H(),r);visualizerCtx.closePath();visualizerCtx.fill();if(amp>0.6&&Math.random()<0.05){visualizerCtx.save();visualizerCtx.globalCompositeOperation='lighter';visualizerCtx.fillStyle=`rgba(255,255,255,${0.4+Math.random()*0.4})`;const gy=H()-h*(0.2+Math.random()*0.6);const gh=1+Math.random()*3;visualizerCtx.fillRect(x,gy,barW,gh);visualizerCtx.restore();}x+=barW+space;}visualizerCtx.restore();}
-    function drawViz2() { /* QuantumCirclesX */ const time=t()*0.5;const cx=CX();const cy=CY();const maxR=Math.min(cx,cy)*0.7;visualizerCtx.save();visualizerCtx.lineWidth=1.5;for(let i=0;i<bufferLength;i+=2){const amp=dataArray[i]/255;const ang=(Math.PI*2*i/bufferLength)+time*(i%5+1)*0.1;const baseR=amp*maxR;const pulse=1+0.2*Math.sin(time*8+i*0.5);const orbitR=baseR*pulse;const x=cx+Math.cos(ang)*orbitR;const y=cy+Math.sin(ang)*orbitR;const pSize=1+amp*5;const hue=((i*360/bufferLength)+time*60)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,pSize*1.5);grad.addColorStop(0,`hsla(${hue},100%,75%,${0.8+amp*0.2})`);grad.addColorStop(0.5,`hsla(${(hue+40)%360},90%,65%,${0.5*amp})`);grad.addColorStop(1,`hsla(${(hue+80)%360},80%,55%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,pSize*1.5,0,Math.PI*2);visualizerCtx.fill();if(amp>0.1){visualizerCtx.strokeStyle=`hsla(${hue},100%,70%,${0.1+amp*0.5})`;visualizerCtx.beginPath();visualizerCtx.moveTo(cx,cy);visualizerCtx.lineTo(x,y);visualizerCtx.stroke();}}visualizerCtx.restore();}
-    function drawViz3() { /* NeuralWaveV2 */ const sliceW=W()/(bufferLength-1);const time=t()*1.5;const waveH=H()*0.6;visualizerCtx.save();visualizerCtx.lineWidth=2;visualizerCtx.strokeStyle='rgba(0,255,208,0.7)';visualizerCtx.beginPath();let startX=0,startY=H()/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH;const sine=Math.sin(i*0.1+time)*waveH*0.2;const y=H()/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;if(i%4===0&&v>0.1){visualizerCtx.fillStyle=`hsla(${(180+v*100)%360},100%,${60+v*30}%,${0.5+v*0.5})`;visualizerCtx.beginPath();visualizerCtx.arc(x,y,1+v*3,0,Math.PI*2);visualizerCtx.fill();}}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.lineWidth=1;visualizerCtx.strokeStyle='rgba(255,75,0,0.4)';visualizerCtx.beginPath();startX=0;startY=H()/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH*0.7;const sine=Math.sin(i*0.12+time+Math.PI/2)*waveH*0.15;const y=H()/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.restore();}
-    function drawViz4() { /* GalacticNebulaeX */ const cx=CX();const cy=CY();const time=t()/5;visualizerCtx.save();visualizerCtx.fillStyle='rgba(10,11,12,0.1)';visualizerCtx.fillRect(0,0,W(),H());visualizerCtx.globalCompositeOperation='lighter';const numP=60;for(let i=0;i<numP;i++){const ang=(i/numP)*Math.PI*5+time;const frac=Math.pow(i/numP,0.8);const dist=frac*(W()/2.5);const x=cx+Math.cos(ang)*dist*(1+Math.sin(time*2+i*0.2)*0.1);const y=cy+Math.sin(ang)*dist*(1+Math.cos(time*2+i*0.2)*0.1);const dataIdx=Math.floor(Math.pow(i/numP,1.2)*(bufferLength*0.6));const inten=(dataArray[dataIdx]||0)/255;const baseR=5+frac*20;const r=Math.max(2,baseR*(0.5+inten*1.5));const hue=(frac*100+time*30+180)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,`hsla(${hue},90%,70%,${inten*0.8})`);grad.addColorStop(0.4,`hsla(${(hue+30)%360},80%,60%,${inten*0.4})`);grad.addColorStop(1,`hsla(${(hue+60)%360},70%,50%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,r,0,Math.PI*2);visualizerCtx.fill();}const bassAvg=getAverageAmplitude(dataArray,0,bufferLength*0.1);const coreR=Math.max(10,bassAvg*H()*0.5);const coreHue=(10+time*20)%360;const coreGrad=visualizerCtx.createRadialGradient(cx,cy,0,cx,cy,coreR);coreGrad.addColorStop(0,`hsla(${coreHue},100%,65%,${bassAvg*0.7})`);coreGrad.addColorStop(0.7,`hsla(${(coreHue+20)%360},90%,55%,${bassAvg*0.3})`);coreGrad.addColorStop(1,`hsla(${(coreHue+40)%360},80%,50%,0)`);visualizerCtx.fillStyle=coreGrad;visualizerCtx.beginPath();visualizerCtx.arc(cx,cy,coreR,0,Math.PI*2);visualizerCtx.fill();visualizerCtx.restore();}
-    function drawViz5() { /* Hyper4DSpectrum */ const barW=W()/bufferLength;const time=t();visualizerCtx.save();for(let i=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*H());const x=i*barW;const hue=(i/bufferLength)*300;const grad1=visualizerCtx.createLinearGradient(x,H(),x,H()-h);grad1.addColorStop(0,`hsla(${hue},100%,40%,0.7)`);grad1.addColorStop(0.8,`hsla(${hue},100%,60%,0.9)`);grad1.addColorStop(1,`hsla(${hue},100%,75%,1.0)`);visualizerCtx.fillStyle=grad1;visualizerCtx.fillRect(x,H()-h,barW,h);const hlH=h*(0.4+Math.sin(time*3+i*0.1)*0.1);const hlO=barW*0.1;visualizerCtx.fillStyle=`hsla(${(hue+30)%360},100%,85%,${0.3+amp*0.4})`;visualizerCtx.fillRect(x+hlO,H()-hlH,barW-2*hlO,hlH);if(amp>0.7){visualizerCtx.fillStyle=`hsla(${(hue+60)%360},100%,95%,${0.5+Math.random()*0.5})`;visualizerCtx.fillRect(x,H()-h-2,barW,2+Math.random()*2);}if(Math.random()<0.008){visualizerCtx.save();const gA=(Math.random()-0.5)*barW*1.5;const gY=H()-Math.random()*h;const gH=1+Math.random()*4;visualizerCtx.globalCompositeOperation=Math.random()<0.5?'lighter':'difference';visualizerCtx.fillStyle=`rgba(255,${Math.random()*150},${Math.random()*150},0.7)`;visualizerCtx.fillRect(x+gA,gY,barW,gH);visualizerCtx.restore();}}visualizerCtx.restore();}
+        // --- Background Neural Network Configuration ---
+        const layerCount = 5;
+        const nnColorSchemes = [
+            { neuron: '#ff4b00', connection: '#00ffd0' }, // Primary/Secondary
+            { neuron: '#00ffd0', connection: '#ff4b00' }, // Swapped
+            { neuron: '#ff00ff', connection: '#00ffff' }, // Magenta/Cyan
+            { neuron: '#ffff00', connection: '#0088ff' }, // Yellow/Blue
+            { neuron: '#ffffff', connection: '#cccccc' }  // White/Gray
+        ];
+        let nnCurrentColorScheme = 0; // Separate color scheme tracking for NN
 
-    // --- New Visualizers (Viz 6-20) ---
-    function drawViz6() { // Vertical Bars Mirrored
-        const barWidth = W() / bufferLength;
-        const cx = CX();
-        visualizerCtx.save();
-        for (let i = 0; i < bufferLength / 2; i++) {
-            const amp = dataArray[i] / 255;
-            const h = Math.max(1, amp * H());
-            const hue = (i / (bufferLength / 2)) * 180; // Half spectrum
-            visualizerCtx.fillStyle = `hsl(${hue}, 100%, ${50 + amp * 30}%)`;
-            // Draw bar right of center
-            const x1 = cx + i * barWidth;
-            visualizerCtx.fillRect(x1, H() - h, barWidth - 1, h);
-            // Draw mirrored bar left of center
-            const x2 = cx - (i + 1) * barWidth;
-            visualizerCtx.fillRect(x2, H() - h, barWidth - 1, h);
-        }
-        visualizerCtx.restore();
-    }
-    function drawViz7() { // Radial Bars (Sunburst)
-        const maxR = Math.min(CX(), CY()) * 0.8;
-        const sliceAngle = (Math.PI * 2) / bufferLength;
-        visualizerCtx.save();
-        visualizerCtx.translate(CX(), CY());
-        for (let i = 0; i < bufferLength; i++) {
-            const amp = dataArray[i] / 255;
-            const barLength = amp * maxR * 0.8;
-            const hue = (i / bufferLength) * 360 + t()*30;
-            visualizerCtx.rotate(sliceAngle);
-            visualizerCtx.fillStyle = `hsl(${hue % 360}, 100%, 60%)`;
-            visualizerCtx.fillRect(maxR * 0.1, -1, barLength, 2); // Draw bar radially
-        }
-        visualizerCtx.restore();
-    }
-    function drawViz8() { // Expanding Circles
-        const maxRadius = Math.min(CX(), CY());
-        visualizerCtx.save();
-        visualizerCtx.lineWidth = 2;
-        for (let i = 0; i < bufferLength; i += 5) { // Fewer circles
-            const amp = dataArray[i] / 255;
-            const radius = amp * maxRadius;
-            const hue = (i / bufferLength) * 360 + t()*20;
-            visualizerCtx.strokeStyle = `hsla(${hue % 360}, 100%, ${60 + amp*20}%, ${0.1 + amp * 0.7})`;
-            visualizerCtx.beginPath();
-            visualizerCtx.arc(CX(), CY(), radius, 0, Math.PI * 2);
-            visualizerCtx.stroke();
-        }
-        visualizerCtx.restore();
-    }
-    function drawViz9() { // Particle Shower
-        visualizerCtx.fillStyle = 'rgba(10, 11, 12, 0.1)'; // Fade effect
-        visualizerCtx.fillRect(0, 0, W(), H());
-        visualizerCtx.save();
-        const bassAvg = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
-        const numParticles = Math.floor(bassAvg * 50) + 10; // More particles with bass
+        // --- Track List ---
+        const tracks = [
+            { src: 'track1.wav', title: 'Liquid Dreams' },
+            { src: 'track2.wav', title: 'Neon Flow' },
+            { src: 'track3.wav', title: 'Cosmic Wave' },
+            { src: 'track4.wav', title: 'Digital Sunrise' },
+            { src: 'track5.wav', title: 'Quantum Beat' },
+            { src: 'track6.wav', title: 'Cyberspace Odyssey' },
+            { src: 'track7.wav', title: 'Neural Network' },
+            { src: 'track8.wav', title: 'Binary Echoes' },
+            { src: 'track9.wav', title: 'Virtual Reality' },
+            { src: 'track10.wav', title: 'Holographic Memory' },
+            { src: 'track11.wav', title: 'Singularity' },
+            { src: 'track12.wav', title: 'Electric Dreams' },
+            { src: 'track13.wav', title: 'Synthwave Journey' },
+            { src: 'track14.wav', title: 'Galactic Pulse' },
+            { src: 'track15.wav', title: 'Cyber Dawn' },
+            { src: 'track16.wav', title: 'Ethereal Code' },
+            // NOTE: MP3 might have issues with precise analysis compared to WAV
+            { src: 'track17.mp3', title: 'Alternatives' },
+            { src: 'track18.wav', title: 'Astral Projection' },
+            { src: 'track19.wav', title: 'Plasma Field' },
+            { src: 'track20.wav', title: 'Quantum Resonance' }
+        ];
+        totalTracksEl.textContent = tracks.length;
 
-        for (let i = 0; i < numParticles; i++) {
-            const amp = dataArray[Math.floor(Math.random() * bufferLength)] / 255;
-            const x = Math.random() * W();
-            const y = Math.random() * H() * 0.1; // Start near top
-            const size = 1 + amp * 4;
-            const speed = 1 + amp * 5;
-            const hue = Math.random() * 60 + 180; // Cyan/Blue/Purple range
-
-            visualizerCtx.fillStyle = `hsla(${hue}, 100%, 70%, 0.8)`;
-            visualizerCtx.beginPath();
-            visualizerCtx.arc(x, y + t() * speed % H(), size, 0, Math.PI * 2); // Simple downward motion
-            visualizerCtx.fill();
-        }
-        visualizerCtx.restore();
-    }
-    function drawViz10() { // Lissajous Curves
-        visualizerCtx.save();
-        visualizerCtx.lineWidth = 1;
-        visualizerCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        visualizerCtx.translate(CX(), CY());
-
-        const lowAvg = getAverageAmplitude(dataArray, 0, bufferLength * 0.2);
-        const midAvg = getAverageAmplitude(dataArray, bufferLength * 0.2, bufferLength * 0.6);
-        const highAvg = getAverageAmplitude(dataArray, bufferLength * 0.6, bufferLength);
-
-        const freqX = 1 + lowAvg * 4;
-        const freqY = 1 + midAvg * 4;
-        const mod = 1 + highAvg * 2;
-        const scale = Math.min(CX(), CY()) * 0.8;
-
-        visualizerCtx.beginPath();
-        for (let angle = 0; angle < Math.PI * 2; angle += 0.01) {
-            const x = Math.sin(angle * freqX + t()) * scale;
-            const y = Math.sin(angle * freqY + t()*mod) * scale;
-            if (angle === 0) visualizerCtx.moveTo(x, y); else visualizerCtx.lineTo(x, y);
-        }
-        visualizerCtx.stroke();
-        visualizerCtx.restore();
-    }
-    function drawViz11() { // Horizontal Spectrum Mirrored
-        const barHeight = H() / bufferLength;
-        const cy = CY();
-        visualizerCtx.save();
-        for (let i = 0; i < bufferLength / 2; i++) {
-            const amp = dataArray[i] / 255;
-            const w = Math.max(1, amp * W() * 0.45); // Max width up to nearly half screen
-            const hue = (i / (bufferLength/2)) * 180 + 180; // Cyan to Magenta range
-            visualizerCtx.fillStyle = `hsl(${hue}, 100%, ${55 + amp * 25}%)`;
-            // Bar growing right from center
-            visualizerCtx.fillRect(CX(), cy + i * barHeight, w, barHeight -1);
-            // Bar growing left from center
-            visualizerCtx.fillRect(CX() - w, cy + i * barHeight, w, barHeight -1);
-        }
-        visualizerCtx.restore();
-    }
-    function drawViz12() { // Rotating Polygon
-        const sides = 3 + Math.floor(getAverageAmplitude(dataArray, 0, bufferLength * 0.3) * 6); // 3-9 sides based on bass
-        const radius = Math.min(CX(), CY()) * (0.3 + getAverageAmplitude(dataArray, bufferLength * 0.3, bufferLength) * 0.6); // Size based on treble
-        const angleStep = (Math.PI * 2) / sides;
-        visualizerCtx.save();
-        visualizerCtx.translate(CX(), CY());
-        visualizerCtx.rotate(t() * 0.5); // Slow rotation
-        visualizerCtx.strokeStyle = `hsl(${t()*20 % 360}, 100%, 60%)`;
-        visualizerCtx.lineWidth = 2 + getAverageAmplitude(dataArray, 0, bufferLength) * 4; // Line width based on overall volume
-        visualizerCtx.beginPath();
-        for (let i = 0; i <= sides; i++) {
-            const angle = i * angleStep;
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
-            if (i === 0) visualizerCtx.moveTo(x, y); else visualizerCtx.lineTo(x, y);
-        }
-        visualizerCtx.stroke();
-        visualizerCtx.restore();
-    }
-    function drawViz13() { // Blocky Spectrum Grid
-        const cols = 16;
-        const rows = 8;
-        const cellW = W() / cols;
-        const cellH = H() / rows;
-        const dataPerCell = Math.floor(bufferLength / (cols * rows));
-        visualizerCtx.save();
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const dataStart = (r * cols + c) * dataPerCell;
-                const avgAmp = getAverageAmplitude(dataArray, dataStart, dataStart + dataPerCell);
-                const hue = (r / rows) * 120 + (c / cols) * 120; // Color grid
-                const brightness = 30 + avgAmp * 70;
-                 const alpha = 0.2 + avgAmp * 0.8;
-                visualizerCtx.fillStyle = `hsla(${hue % 360}, 100%, ${brightness}%, ${alpha})`;
-                visualizerCtx.fillRect(c * cellW, r * cellH, cellW - 1, cellH - 1);
+        // --- Canvas Resizing Function ---
+        function resizeCanvases() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            visualizerCanvas.width = visualizerCanvas.offsetWidth;
+            visualizerCanvas.height = visualizerCanvas.offsetHeight;
+            // Re-initialize neural network if it exists and is the current background
+            if (neuralNetwork) {
+                neuralNetwork.canvas = bgCanvas;
+                neuralNetwork.initNeurons();
+                neuralNetwork.initConnections();
             }
+            // Re-initialize particles if that background is active (or just clear them)
+            bgParticles = []; // Simple reset on resize for particle demo
+            console.log("Canvases resized");
         }
-        visualizerCtx.restore();
-    }
-    function drawViz14() { // Circular Waveform
-        const radius = Math.min(CX(), CY()) * 0.5;
-        const angleStep = (Math.PI * 2) / bufferLength;
-        visualizerCtx.save();
-        visualizerCtx.translate(CX(), CY());
-        visualizerCtx.strokeStyle = `hsl(${t()*15 % 360}, 90%, 65%)`;
-        visualizerCtx.lineWidth = 2;
-        visualizerCtx.beginPath();
-        for (let i = 0; i <= bufferLength; i++) {
-            const index = i % bufferLength;
-            const amp = dataArray[index] / 255;
-            const r = radius + amp * (radius * 0.8); // Modulate radius
-            const angle = i * angleStep + t() * 0.1; // Rotate slowly
-            const x = Math.cos(angle) * r;
-            const y = Math.sin(angle) * r;
-             if (i === 0) visualizerCtx.moveTo(x, y); else visualizerCtx.lineTo(x, y);
-        }
-        visualizerCtx.closePath();
-        visualizerCtx.stroke();
-        visualizerCtx.restore();
-    }
-     function drawViz15() { // Oscillating Frequency Lines
-        const lines = 10;
-        visualizerCtx.save();
-        visualizerCtx.lineWidth = 1.5;
-         for (let i = 0; i < lines; i++) {
-            const y = (H() / (lines + 1)) * (i + 1);
-            const dataIndex = Math.floor((i / lines) * bufferLength);
-            const amp = (dataArray[dataIndex] || 0) / 255;
-            const freq = 5 + amp * 20; // Oscillation frequency based on amp
-            const magnitude = amp * 30; // Oscillation magnitude
-            const hue = (i / lines) * 300 + 60; // Yellow to Magenta
 
-             visualizerCtx.strokeStyle = `hsla(${hue % 360}, 100%, 60%, ${0.5 + amp*0.5})`;
-             visualizerCtx.beginPath();
-             visualizerCtx.moveTo(0, y);
-             for (let x = 0; x < W(); x += 5) {
-                 const yOffset = Math.sin(x * 0.01 * freq + t() * 3) * magnitude;
-                 visualizerCtx.lineTo(x, y + yOffset);
-             }
-             visualizerCtx.stroke();
-         }
-         visualizerCtx.restore();
-    }
-     function drawViz16() { // Corner Reflect Bars
-         const barW = W() / (bufferLength * 0.5); // Wider bars for corners
-         const maxH = H() * 0.45;
-         visualizerCtx.save();
-         for (let i = 0; i < bufferLength / 2; i++) {
-             const amp = dataArray[i] / 255.0;
-             const h = Math.max(1, amp * maxH);
-             const x = i * barW;
-             const hue = (i / (bufferLength / 2)) * 360;
-             visualizerCtx.fillStyle = `hsl(${hue}, 100%, ${50 + amp * 25}%)`;
-             // Top-left corner
-             visualizerCtx.fillRect(x, 0, barW - 1, h);
-             // Bottom-right corner (mirrored)
-             visualizerCtx.fillRect(W() - x - barW, H() - h, barW - 1, h);
-             // Top-right corner (mirrored x)
-              visualizerCtx.fillStyle = `hsl(${(hue+90)%360}, 80%, ${50 + amp * 25}%)`;
-              visualizerCtx.fillRect(W() - x - barW, 0, barW - 1, h);
-             // Bottom-left corner (mirrored y)
-              visualizerCtx.fillRect(x, H() - h, barW - 1, h);
-         }
-         visualizerCtx.restore();
-     }
-     function drawViz17() { // Center Pulse Circle
-         const bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
-         const mid = getAverageAmplitude(dataArray, bufferLength * 0.1, bufferLength * 0.6);
-         const high = getAverageAmplitude(dataArray, bufferLength * 0.6, bufferLength);
-         const baseRadius = Math.min(CX(), CY()) * 0.1;
-         const pulseRadius = baseRadius + bass * Math.min(CX(), CY()) * 0.6;
-         const rings = 3 + Math.floor(mid * 5);
-         visualizerCtx.save();
-         visualizerCtx.lineWidth = 1 + high * 3; // Treble affects line width
-         for (let i = 0; i < rings; i++) {
-             const radius = pulseRadius * (i / rings);
-             const hue = (i * 40 + t() * 30) % 360;
-             const alpha = 0.1 + (1 - i / rings) * 0.7;
-             visualizerCtx.strokeStyle = `hsla(${hue}, 100%, 60%, ${alpha})`;
-             visualizerCtx.beginPath();
-             visualizerCtx.arc(CX(), CY(), radius, 0, Math.PI * 2);
-             visualizerCtx.stroke();
-         }
-         visualizerCtx.restore();
-     }
-    function drawViz18() { // Dot Matrix
-        const cols = 24;
-        const rows = 16;
-        const cellW = W() / cols;
-        const cellH = H() / rows;
-        const maxDotSize = Math.min(cellW, cellH) * 0.4;
-        visualizerCtx.save();
-         for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const dataIndex = Math.floor(((r * cols + c) / (rows * cols)) * bufferLength);
-                const amp = dataArray[dataIndex] / 255;
-                const dotSize = amp * maxDotSize;
-                 if (dotSize < 0.5) continue; // Don't draw tiny dots
-                const hue = (c / cols) * 360;
-                const lightness = 40 + amp * 50;
-                visualizerCtx.fillStyle = `hsl(${hue}, 100%, ${lightness}%)`;
-                visualizerCtx.beginPath();
-                visualizerCtx.arc(c * cellW + cellW / 2, r * cellH + cellH / 2, dotSize, 0, Math.PI * 2);
-                visualizerCtx.fill();
-            }
+        // --- Helper Function: Format Time ---
+        const formatTime = s => {
+            if (isNaN(s) || !isFinite(s)) return '0:00';
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60).toString().padStart(2, '0');
+            return `${m}:${sec}`;
         }
-        visualizerCtx.restore();
-    }
-    function drawViz19() { // Starfield Zoom
-        visualizerCtx.fillStyle = 'rgba(10, 11, 12, 0.15)'; // Slower fade
-        visualizerCtx.fillRect(0, 0, W(), H());
-        visualizerCtx.save();
-        const numStars = 100;
-        const overallAmp = getAverageAmplitude(dataArray, 0, bufferLength);
-        const speed = 0.5 + overallAmp * 10; // Speed increases with volume
 
-        if (!this.stars) { // Initialize stars if they don't exist
-            this.stars = [];
-            for (let i = 0; i < numStars; i++) {
-                this.stars.push({
-                    x: (Math.random() - 0.5) * W(),
-                    y: (Math.random() - 0.5) * H(),
-                    z: Math.random() * W() // Depth
-                });
+        // --- Audio Context Initialization ---
+        function initAudio() {
+            if (!isAudioInitialized && !audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    // More frequency bins for potentially better background analysis detail
+                    analyser.fftSize = 1024; // Increased from 512
+                    analyser.smoothingTimeConstant = 0.8; // Slightly smoother
+                    bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+                    source = audioContext.createMediaElementSource(musicPlayer);
+                    source.connect(analyser);
+                    analyser.connect(audioContext.destination);
+                    isAudioInitialized = true;
+                    console.log("AudioContext Initialized, state:", audioContext.state, "FFT:", analyser.fftSize);
+                    startVisualizer(); // Start foreground viz
+                    startBackgroundAnimation(); // Start background viz loop
+                } catch (e) {
+                    console.error("Error initializing AudioContext:", e);
+                    alert("Could not initialize audio playback. Please allow autoplay or interact with the page.");
+                    playPauseBtn.textContent = 'Error';
+                    playPauseBtn.disabled = true;
+                }
+            } else if (isAudioInitialized) {
+                console.log("initAudio called but already initialized. Context state:", audioContext.state);
+                // Ensure context is running if previously suspended
+                 if (audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        console.log("AudioContext resumed on re-init check.");
+                    });
+                }
             }
         }
 
-        visualizerCtx.translate(CX(), CY());
-        this.stars.forEach(star => {
-            star.z -= speed; // Move star closer
-             if (star.z <= 0) { // Reset star when it passes camera
-                 star.z = W();
-                 star.x = (Math.random() - 0.5) * W();
-                 star.y = (Math.random() - 0.5) * H();
-             }
+        // ===============================================================
+        // ======= NEURAL NETWORK BACKGROUND CLASS (Unchanged) ===========
+        // ===============================================================
+        class Neuron { constructor(x, y, layer, size, speed) { this.x=x; this.y=y; this.layer=layer; this.baseSize=size; this.speed=speed; this.pulse=0; this.oscillation=Math.random()*Math.PI*2; } update(audioValue, reactivity) { this.pulse=(audioValue/255)*4*reactivity; this.oscillation+=this.speed; } render(ctx, color) { const osc=Math.sin(this.oscillation)*0.5; const size=this.baseSize+this.pulse+osc; ctx.shadowColor=color; ctx.shadowBlur=5+this.pulse*5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(this.x,this.y,Math.max(1,size),0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; } }
+        class Connection { constructor(from, to, weight) { this.from=from; this.to=to; this.weight=weight; this.signal=Math.random(); } update(reactivity) { const speed=0.005+reactivity*0.05; this.signal=(this.signal+speed)%1; } render(ctx, color, reactivity) { const dx=this.to.x-this.from.x; const dy=this.to.y-this.from.y; ctx.strokeStyle=`rgba(255,255,255,${0.02+this.weight*0.05})`; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(this.from.x,this.from.y); ctx.lineTo(this.to.x,this.to.y); ctx.stroke(); const sigX=this.from.x+dx*this.signal; const sigY=this.from.y+dy*this.signal; const size=1+reactivity*2.5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(sigX,sigY,size,0,Math.PI*2); ctx.fill(); } }
+        class NeuralNetwork { constructor(layers, canvas) { this.lCount=layers; this.canvas=canvas; this.neurons=[]; this.connections=[]; this.initNeurons(); this.initConnections(); } initNeurons() { this.neurons=[]; const ratios=[0.6,0.8,1,0.8,0.6]; for(let l=0;l<this.lCount;l++){ const ratio=ratios[l]||1; const baseCount=Math.floor(20*(this.canvas.width/1200)); const num=Math.max(5,Math.floor(baseCount*ratio)); const padX=this.canvas.width*0.1; const availW=this.canvas.width-2*padX; const lx=padX+(this.lCount>1?availW/(this.lCount-1)*l:availW/2); for(let i=0;i<num;i++){ const padY=this.canvas.height*0.15; const availH=this.canvas.height-2*padY; const randY=(Math.random()-0.5)*availH*0.1; const y=padY+(num>1?availH*i/(num-1):availH/2)+randY; const size=Math.random()*1.5+1; const speed=(Math.random()*0.01+0.005)*(0.5+Math.random()); this.neurons.push(new Neuron(lx,y,l,size,speed)); } } } initConnections() { this.connections=[]; this.neurons.forEach(fromN=>{ if(fromN.layer<this.lCount-1){ const nextLayerNs=this.neurons.filter(n=>n.layer===fromN.layer+1); const count=Math.max(1,Math.floor(nextLayerNs.length*(0.3+Math.random()*0.3))); const targets=nextLayerNs.sort(()=>0.5-Math.random()); for(let i=0;i<count&&i<targets.length;i++){ this.connections.push(new Connection(fromN,targets[i],Math.random())); } } }); } update(audioData, bufLen, reactivity) { this.neurons.forEach((neuron,idx)=>{ const freqIdx=Math.floor(Math.pow(idx/this.neurons.length,1.5)*(bufLen*0.8)); neuron.update(audioData[freqIdx]||0,reactivity); }); this.connections.forEach(conn=>conn.update(reactivity)); } render(ctx, colors, reactivity) { this.connections.forEach(conn=>conn.render(ctx,colors.connection,reactivity)); this.neurons.forEach(neuron=>neuron.render(ctx,colors.neuron)); } }
 
-             const k = 128 / star.z; // Perspective projection factor
-             const px = star.x * k;
-             const py = star.y * k;
-             const size = (1 - star.z / W()) * 2.5 + 0.5; // Size increases as it gets closer
+        // --- Initialize NN ---
+        function initNeuralNetwork() {
+             if (!neuralNetwork) {
+                neuralNetwork = new NeuralNetwork(layerCount, bgCanvas);
+                console.log(`NN Initialized: ${neuralNetwork?.neurons?.length} neurons, ${neuralNetwork?.connections?.length} connections.`);
+            } else {
+                // Already exists, maybe just update canvas reference if needed
+                 neuralNetwork.canvas = bgCanvas;
+                 // Optionally re-init neurons/connections if needed for resizing logic
+                 // neuralNetwork.initNeurons();
+                 // neuralNetwork.initConnections();
+            }
+        }
 
-             visualizerCtx.fillStyle = `rgba(255, 255, 255, ${1 - star.z / W()})`; // Fade further stars
-             visualizerCtx.beginPath();
-             visualizerCtx.arc(px, py, size, 0, Math.PI * 2);
-             visualizerCtx.fill();
-        });
-        visualizerCtx.restore();
-    }
-    function drawViz20() { // DNA Helix Wave
-         const amplitude = H() * 0.3; // Max height of the wave
-         const frequency = 5; // How many twists
-         const points = 100; // Number of points per strand
-         const rotationSpeed = t() * 0.5;
-         const bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
-         const mid = getAverageAmplitude(dataArray, bufferLength * 0.1, bufferLength * 0.6);
+        // ===============================================================
+        // ======= BACKGROUND VISUALIZER FUNCTIONS =======================
+        // ===============================================================
 
-         visualizerCtx.save();
-         visualizerCtx.lineWidth = 1 + bass * 3;
+        // --- Background 1: Neural Network (Modified Render Call) ---
+        function renderNeuralBackground(ctx, canvas, audioData, bufLen, reactivity) {
+            if (!neuralNetwork) return; // Should be initialized
 
-         function drawStrand(offset) {
-             visualizerCtx.beginPath();
-             for (let i = 0; i <= points; i++) {
-                 const progress = i / points;
-                 const x = W() * progress;
-                 const angle = progress * Math.PI * frequency + rotationSpeed + offset;
-                 const dataIndex = Math.floor(progress * bufferLength);
-                 const ampMod = (dataArray[dataIndex] || 0) / 255 * 0.5 + 0.5; // Use audio to modulate amplitude slightly
-                 const y = CY() + Math.sin(angle) * amplitude * ampMod;
+            // Select color scheme for NN
+            const colors = nnColorSchemes[nnCurrentColorScheme];
 
-                 if (i === 0) visualizerCtx.moveTo(x, y); else visualizerCtx.lineTo(x, y);
-             }
-             const hue = (offset === 0) ? (t()*20)%360 : (t()*20 + 180)%360; // Primary/secondary colors
-             visualizerCtx.strokeStyle = `hsla(${hue}, 100%, 60%, 0.8)`;
-             visualizerCtx.stroke();
+            // Fading effect
+            const trailAlpha = 0.08 + reactivity * 0.07;
+            ctx.fillStyle = `rgba(10, 11, 12, ${trailAlpha})`; // Use root bg color
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-             // Draw connecting lines (rungs) reacting to mid-range frequencies
-             if (offset === 0) { // Only draw rungs once
-                 visualizerCtx.lineWidth = 0.5 + mid * 1.5;
-                 visualizerCtx.strokeStyle = 'rgba(200, 200, 200, 0.4)';
-                 for (let i = 0; i <= points; i += 5) {
-                      const progress = i / points;
-                     const x = W() * progress;
-                     const angle1 = progress * Math.PI * frequency + rotationSpeed;
-                     const angle2 = progress * Math.PI * frequency + rotationSpeed + Math.PI;
-                      const dataIndex = Math.floor(progress * bufferLength);
-                     const ampMod = (dataArray[dataIndex] || 0) / 255 * 0.5 + 0.5;
-                     const y1 = CY() + Math.sin(angle1) * amplitude * ampMod;
-                     const y2 = CY() + Math.sin(angle2) * amplitude * ampMod;
-                     visualizerCtx.beginPath();
-                     visualizerCtx.moveTo(x, y1);
-                     visualizerCtx.lineTo(x, y2);
-                     visualizerCtx.stroke();
-                 }
-             }
-         }
+            neuralNetwork.update(audioData, bufLen, reactivity);
+            neuralNetwork.render(ctx, colors, reactivity);
 
-         drawStrand(0); // First strand
-         drawStrand(Math.PI); // Second strand (offset by 180 degrees)
+             // Slowly cycle NN color scheme independently
+             if (Math.random() < 0.001) {
+                nnCurrentColorScheme = (nnCurrentColorScheme + 1) % nnColorSchemes.length;
+            }
+        }
 
-         visualizerCtx.restore();
-     }
+        // --- Background 2: Simple Shader Lines ---
+        function drawShaderBackground1(ctx, canvas, audioData, bufLen, reactivity) {
+            const time = performance.now() / 1000;
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Gentle fade
+            ctx.fillStyle = 'rgba(10, 11, 12, 0.08)';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.lineWidth = 1 + reactivity * 2;
+            const lines = 50;
+            for (let i = 0; i < lines; i++) {
+                const progress = i / lines;
+                const x = progress * w;
+                const freqIndex = Math.floor(progress * bufLen * 0.8); // Sample across frequency range
+                const amp = (audioData[freqIndex] || 0) / 255;
+
+                const hue = (progress * 120 + time * 15 + 180) % 360; // Cyan/Blue/Purple/Pink range
+                const saturation = 70 + reactivity * 30;
+                const lightness = 40 + amp * 30;
+                const alpha = 0.1 + amp * 0.6 + reactivity * 0.2;
+
+                ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                const yOffset = Math.sin(progress * 10 + time * 2 + amp * 5) * h * 0.4 * reactivity;
+                ctx.lineTo(x + yOffset * 0.2, h); // Slightly skewed line
+                ctx.stroke();
+            }
+        }
+
+        // --- Background 3: Flowing Gradient Waves ---
+        function drawShaderBackground2(ctx, canvas, audioData, bufLen, reactivity) {
+            const time = performance.now() / 2000; // Slower time
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Very slow fade for smoother trails
+             ctx.fillStyle = 'rgba(10, 11, 12, 0.03)';
+             ctx.fillRect(0, 0, w, h);
+
+            const avgLow = getAverageAmplitude(audioData, 0, bufLen * 0.1);
+            const avgMid = getAverageAmplitude(audioData, bufLen * 0.2, bufLen * 0.6);
+
+            const numWaves = 3;
+            ctx.globalCompositeOperation = 'lighter'; // Additive blending
+
+            for(let i = 0; i < numWaves; i++) {
+                const grad = ctx.createLinearGradient(0, 0, w, h);
+                const hue1 = (time * 10 + i * 120) % 360;
+                const hue2 = (hue1 + 60 + avgMid * 60) % 360;
+
+                grad.addColorStop(0, `hsla(${hue1}, 90%, 50%, ${0.01 + avgLow * 0.05})`);
+                grad.addColorStop(0.5, `hsla(${hue2}, 90%, 50%, ${0.02 + reactivity * 0.1})`);
+                grad.addColorStop(1, `hsla(${hue1}, 90%, 50%, ${0.01 + avgLow * 0.05})`);
+
+                ctx.fillStyle = grad;
+
+                const waveAmp = h * 0.2 * (1 + avgMid);
+                const waveFreq = 2 + i * 2;
+                const yOffset = Math.sin(time * 0.5 + i) * h * 0.1; // Slow vertical drift
+
+                ctx.beginPath();
+                ctx.moveTo(0, h / 2 + yOffset);
+                for(let x = 0; x < w; x += 10) {
+                    const waveY = Math.sin(x / w * Math.PI * waveFreq + time + i) * waveAmp;
+                    ctx.lineTo(x, h / 2 + waveY + yOffset);
+                }
+                 ctx.lineTo(w, h/2 + yOffset); // Connect end smoothly-ish
+                 ctx.lineTo(w, h);
+                 ctx.lineTo(0, h);
+                 ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.globalCompositeOperation = 'source-over'; // Reset blend mode
+        }
 
 
-    // --- Render Loop for Visualizer ---
-    function renderVisualizer() {
-        if (!isAudioInitialized || !analyser) return; // Guard clause
-        visualizerAnimationId = requestAnimationFrame(renderVisualizer);
-        analyser.getByteFrequencyData(dataArray); // Get data
-        visualizerCtx.clearRect(0, 0, W(), H()); // Clear canvas
+        // --- Background 4: Reactive Particle Field ---
+        function drawParticleBackground(ctx, canvas, audioData, bufLen, reactivity) {
+            const w = canvas.width;
+            const h = canvas.height;
+            const time = performance.now() / 1000;
 
-        // Array mapping index to function - ADD NEW FUNCTIONS HERE
-        const visualizers = [
-            drawViz1, drawViz2, drawViz3, drawViz4, drawViz5,
-            drawViz6, drawViz7, drawViz8, drawViz9, drawViz10,
-            drawViz11, drawViz12, drawViz13, drawViz14, drawViz15,
-            drawViz16, drawViz17, drawViz18, drawViz19, drawViz20
+            // Fade
+            ctx.fillStyle = 'rgba(10, 11, 12, 0.1)';
+            ctx.fillRect(0, 0, w, h);
+
+            const maxParticles = 150;
+            const bass = getAverageAmplitude(audioData, 0, bufLen * 0.05); // More sensitive bass
+            const high = getAverageAmplitude(audioData, bufLen * 0.7, bufLen);
+
+             // Add new particles based on bass hits
+            if (bass > 0.5 && bgParticles.length < maxParticles && Math.random() < 0.5) {
+                for(let i = 0; i < 5; i++) {
+                    bgParticles.push({
+                        x: Math.random() * w,
+                        y: Math.random() * h,
+                        vx: (Math.random() - 0.5) * 2 * (1 + reactivity),
+                        vy: (Math.random() - 0.5) * 2 * (1 + reactivity),
+                        size: 1 + Math.random() * 2,
+                        hue: (Math.random() * 60 + (bass > 0.7 ? 0 : 200)) % 360, // Red/Orange for strong bass, Blue/Purple otherwise
+                        life: 1.0
+                    });
+                }
+            }
+
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = bgParticles.length - 1; i >= 0; i--) {
+                const p = bgParticles[i];
+
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.005 + high * 0.01; // Fade faster with high frequencies
+
+                // Wrap around edges
+                if (p.x < 0) p.x = w;
+                if (p.x > w) p.x = 0;
+                if (p.y < 0) p.y = h;
+                if (p.y > h) p.y = 0;
+
+                if (p.life <= 0) {
+                    bgParticles.splice(i, 1);
+                    continue;
+                }
+
+                const size = p.size * (1 + reactivity * 2) * p.life;
+                ctx.fillStyle = `hsla(${p.hue}, 90%, ${60 + reactivity * 20}%, ${p.life * 0.7})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, Math.max(0.5, size), 0, Math.PI * 2);
+                ctx.fill();
+            }
+             ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // ===============================================================
+        // ======= BACKGROUND CONTROL ====================================
+        // ===============================================================
+
+        const backgroundVisualizers = [
+            renderNeuralBackground,
+            drawShaderBackground1,
+            drawParticleBackground,
+            drawShaderBackground2
+            // Add more background rendering functions here
         ];
 
-        // Call the function based on currentVisualizer state (adjust for 0-based index)
-        const index = currentVisualizer - 1;
-        if (index >= 0 && index < visualizers.length) {
-            visualizers[index]();
-        } else {
-            // Fallback or draw nothing if index is out of bounds
-            drawViz1(); // Default to first one if something goes wrong
+        function switchBackgroundRandomly() {
+            if (backgroundVisualizers.length <= 1) return; // No point switching if only one
+
+            let newIndex;
+            do {
+                newIndex = Math.floor(Math.random() * backgroundVisualizers.length);
+            } while (newIndex === currentBackgroundIndex); // Ensure it's a different one
+
+            currentBackgroundIndex = newIndex;
+            console.log(`Switched background to index: ${currentBackgroundIndex} (${backgroundVisualizers[currentBackgroundIndex].name})`);
+
+            // Optional: Call init/cleanup functions if specific backgrounds need them
+             if (backgroundVisualizers[currentBackgroundIndex] === renderNeuralBackground) {
+                 initNeuralNetwork(); // Ensure NN is ready if switching back to it
+             } else if (backgroundVisualizers[currentBackgroundIndex] === drawParticleBackground) {
+                bgParticles = []; // Clear particles when switching to particle viz
+             }
         }
-    }
-    function startVisualizer() { if (!visualizerAnimationId && isAudioInitialized) { console.log("Starting visualizer animation."); renderVisualizer(); } }
-    function stopVisualizer() { if (visualizerAnimationId) { cancelAnimationFrame(visualizerAnimationId); visualizerAnimationId=null; console.log("Stopping visualizer animation."); visualizerCtx.clearRect(0,0,W(),H()); } }
 
-    // ===============================================================
-    // ======= EVENT LISTENERS & INITIALIZATION =======
-    // ===============================================================
-    function updateVisualizerButtons() { document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => { btn.classList.toggle('active', i + 1 === currentVisualizer); }); }
-    playPauseBtn.addEventListener('click', () => { if (musicPlayer.paused) playTrack(); else pauseTrack(); });
-    $('prevTrack').addEventListener('click', () => { loadTrack(currentTrackIndex - 1); playTrack(); });
-    $('nextTrack').addEventListener('click', () => { loadTrack(currentTrackIndex + 1); playTrack(); });
-    musicPlayer.addEventListener('ended', () => { console.log("Track ended, loading next."); loadTrack(currentTrackIndex + 1); playTrack(); });
-    musicPlayer.addEventListener('timeupdate', updateProgress);
-    musicPlayer.addEventListener('loadedmetadata', () => { totalTimeEl.textContent = formatTime(musicPlayer.duration); console.log("Metadata loaded, duration:", formatTime(musicPlayer.duration)); });
-    progressContainer.addEventListener('click', e => { if (!musicPlayer.duration || !isFinite(musicPlayer.duration)) return; const pos = e.offsetX / progressContainer.offsetWidth; musicPlayer.currentTime = pos * musicPlayer.duration; updateProgress(); });
-    playlistToggleBtn.addEventListener('click', () => { const isHidden = playlistEl.style.display === 'none'; playlistEl.style.display = isHidden ? 'block' : 'none'; playlistToggleBtn.textContent = isHidden ? 'Hide Playlist' : 'Playlist'; if (isHidden) updatePlaylistActiveState(); });
+        // --- MAIN Background Render Loop ---
+        function renderCurrentBackground() {
+            if (!isAudioInitialized || !analyser) {
+                 // If audio not ready, maybe draw a static or very slow default background?
+                 bgCtx.fillStyle = 'rgb(10, 11, 12)';
+                 bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+                 bgAnimationId = requestAnimationFrame(renderCurrentBackground);
+                 return;
+            }
 
-    // Update Visualizer Button Listeners for 20 buttons
-    document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => { btn.addEventListener('click', () => { const vizIdx = i + 1; if (currentVisualizer !== vizIdx) { currentVisualizer = vizIdx; updateVisualizerButtons(); console.log("Switched to visualizer:", currentVisualizer); } }); });
+            analyser.getByteFrequencyData(dataArray);
 
-    let resizeTimeout;
-    window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(() => { console.log("Window resized."); resizeCanvases(); }, 250); });
-    musicPlayer.addEventListener('error', (e) => { console.error('Audio Player Error:', musicPlayer.error); trackTitleEl.textContent = 'Error loading track'; if (!musicPlayer.error) return; switch (musicPlayer.error.code) { case MediaError.MEDIA_ERR_ABORTED: console.error('Load aborted.'); break; case MediaError.MEDIA_ERR_NETWORK: console.error('Network error.'); break; case MediaError.MEDIA_ERR_DECODE: console.error('Decoding error.'); break; case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: console.error('Source not supported / File not found (404?).'); break; default: console.error('Unknown audio error.'); break; } });
+            // Calculate overall reactivity (can be adjusted)
+            let sum = 0;
+            const relevantBufferLength = Math.floor(bufferLength * 0.8); // Focus on lower/mid frequencies for general reactivity
+            for (let i = 0; i < relevantBufferLength; i++) {
+                sum += dataArray[i];
+            }
+            const avg = sum / relevantBufferLength || 0;
+            // Non-linear response - more sensitive to quieter sounds, less extreme for loud sounds
+            const reactivity = Math.min(1, Math.pow(avg / 128, 1.2));
 
-    function initializePlayer() { console.log("Initializing player..."); resizeCanvases(); createPlaylist(); loadTrack(currentTrackIndex); updateVisualizerButtons(); initNeuralNetwork(); startBackgroundAnimation(); console.log("Player initialization complete."); }
-    document.addEventListener('DOMContentLoaded', initializePlayer);
-  </script>
+            // Get the current background rendering function
+            const currentRenderer = backgroundVisualizers[currentBackgroundIndex];
+
+            // Call the function
+            if (typeof currentRenderer === 'function') {
+                currentRenderer(bgCtx, bgCanvas, dataArray, bufferLength, reactivity);
+            } else {
+                // Fallback if something is wrong
+                 bgCtx.fillStyle = 'red'; // Error indicator
+                 bgCtx.fillRect(0,0,100,100);
+                 console.error("Invalid background renderer at index:", currentBackgroundIndex);
+            }
+
+            bgAnimationId = requestAnimationFrame(renderCurrentBackground);
+        }
+
+        function startBackgroundAnimation() {
+            if (!bgAnimationId) {
+                console.log("Starting background animation loop.");
+                renderCurrentBackground(); // Start the unified loop
+            }
+             // Start the random switcher if not already running
+             if (!backgroundSwitchIntervalId && backgroundVisualizers.length > 1) {
+                 backgroundSwitchIntervalId = setInterval(switchBackgroundRandomly, BACKGROUND_SWITCH_INTERVAL);
+                 console.log(`Started background switching interval (${BACKGROUND_SWITCH_INTERVAL / 1000}s).`);
+             }
+        }
+
+        function stopBackgroundAnimation() {
+            if (bgAnimationId) {
+                cancelAnimationFrame(bgAnimationId);
+                bgAnimationId = null;
+                console.log("Stopping background animation loop.");
+            }
+             if (backgroundSwitchIntervalId) {
+                 clearInterval(backgroundSwitchIntervalId);
+                 backgroundSwitchIntervalId = null;
+                 console.log("Stopped background switching interval.");
+            }
+        }
+
+
+        // ===============================================================
+        // ======= MUSIC PLAYER CORE FUNCTIONS (Mostly Unchanged) ========
+        // ===============================================================
+        function loadTrack(index) {
+            index = (index + tracks.length) % tracks.length; // Wrap around
+            currentTrackIndex = index;
+            const track = tracks[index];
+            musicPlayer.src = track.src;
+            trackTitleEl.textContent = track.title;
+            currentTrackNumEl.textContent = index + 1;
+            updatePlaylistActiveState();
+            progressBar.style.width = '0%';
+            currentTimeEl.textContent = '0:00';
+            totalTimeEl.textContent = '0:00';
+             // No need to call musicPlayer.load() explicitly usually, setting src does it.
+             // musicPlayer.load();
+            console.log("Loading track:", track.title, "| Source:", track.src);
+             // If playing, start the new track automatically
+             if (!musicPlayer.paused) {
+                // Small delay to allow loading before trying to play
+                 setTimeout(playTrack, 50);
+             }
+        }
+
+        function createPlaylist() {
+            playlistEl.innerHTML = ''; // Clear existing items
+            tracks.forEach((track, i) => {
+                const item = document.createElement('div');
+                item.className = 'playlist-item';
+                item.dataset.index = i;
+                item.innerHTML = `<span>${(i + 1).toString().padStart(2, '0')}</span><div class="playlist-item-indicator"><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div></div><span>${track.title}</span>`;
+                item.addEventListener('click', () => {
+                    if (currentTrackIndex !== i) {
+                        loadTrack(i);
+                        // Attempt to play immediately after click selection
+                        playTrack();
+                    } else {
+                         // If clicking the currently playing track, toggle play/pause
+                         if (musicPlayer.paused) playTrack(); else pauseTrack();
+                    }
+                     // Optionally close playlist after selection
+                     // playlistEl.style.display = 'none';
+                     // playlistToggleBtn.textContent = 'Playlist';
+                });
+                playlistEl.appendChild(item);
+            });
+            updatePlaylistActiveState();
+        }
+
+        function updatePlaylistActiveState() {
+            document.querySelectorAll('.playlist-item').forEach(item => {
+                const isActive = parseInt(item.dataset.index) === currentTrackIndex;
+                item.classList.toggle('active', isActive);
+            });
+            const activeItem = playlistEl.querySelector('.playlist-item.active');
+            if (activeItem && playlistEl.style.display !== 'none') {
+                 // Scroll into view if playlist is open
+                activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+         function playTrack() {
+            // 1. Initialize AudioContext if needed (often requires user interaction first)
+            if (!isAudioInitialized) {
+                console.log("Audio not initialized. Initializing on play attempt...");
+                // IMPORTANT: This might fail if called without prior user gesture (click, etc.)
+                initAudio();
+                // We might need to wait for init, so return and let the user click again
+                 // or rely on the initAudio success path to start things
+                 // A better approach is to initAudio on the first user click anywhere.
+                 // For now, let's assume initAudio will either succeed or alert the user.
+                 // If it succeeds, the subsequent play call should work.
+                 // Let's try playing *after* potential init
+                 setTimeout(() => {
+                    if (isAudioInitialized) playTrackInternal();
+                 }, 50); // Small delay for context to potentially start
+                return;
+            }
+            // 2. Resume context if suspended (common browser behavior)
+             if (audioContext.state === 'suspended') {
+                console.log("AudioContext suspended, attempting to resume...");
+                audioContext.resume().then(() => {
+                    console.log("AudioContext resumed successfully.");
+                    playTrackInternal(); // Play after resuming
+                }).catch(e => {
+                    console.error("Failed to resume AudioContext:", e);
+                    alert("Could not start audio playback. Please interact with the page again.");
+                     playPauseBtn.textContent = 'Play'; // Reset button
+                });
+            } else if (audioContext.state === 'running') {
+                playTrackInternal(); // Context is running, proceed to play
+            } else {
+                 console.error("AudioContext is in an unexpected state:", audioContext.state);
+                 playPauseBtn.textContent = 'Play'; // Reset button
+             }
+        }
+
+        // Internal play function, called when context is ready and running
+        function playTrackInternal() {
+            if (!musicPlayer.src) {
+                console.warn("Play called but no source loaded.");
+                loadTrack(currentTrackIndex); // Load the first/current track
+                // Need to wait for loading, so return here. Next play call will work.
+                 setTimeout(() => {
+                    if (musicPlayer.readyState >= 2) playTrackInternal(); // Check if ready
+                 }, 100);
+                 return;
+            }
+
+            const playPromise = musicPlayer.play();
+
+            if (playPromise !== undefined) {
+                playPromise.then(_ => {
+                    // Playback started successfully
+                    playPauseBtn.textContent = 'Pause';
+                    startVisualizer(); // Ensure foreground viz is running
+                    startBackgroundAnimation(); // Ensure background viz is running
+                    console.log("Playback started.");
+                }).catch(error => {
+                     // Autoplay was prevented or other error occurred
+                     console.error(`Playback failed: ${error.name} - ${error.message}`);
+                     if (error.name === 'NotAllowedError') {
+                         alert('Autoplay was blocked by the browser. Please click Play again.');
+                     } else if (error.name === 'NotSupportedError') {
+                        alert('The audio format might not be supported or the file is corrupt.');
+                        trackTitleEl.textContent = 'Error: Unsupported Format?';
+                     }
+                     pauseTrack(); // Ensure state is paused visually
+                });
+            } else {
+                // Older browsers might not return a promise
+                console.warn(".play() did not return a promise.");
+                 // Assume playback started, though less reliable error handling
+                 playPauseBtn.textContent = 'Pause';
+                 startVisualizer();
+                 startBackgroundAnimation();
+            }
+        }
+
+        function pauseTrack() {
+            musicPlayer.pause();
+            playPauseBtn.textContent = 'Play';
+             // Optionally stop visualizers when paused to save resources,
+             // but often looks better to leave them running softly or freeze frame.
+             // stopVisualizer();
+             // stopBackgroundAnimation(); // Keep background running maybe? Personal preference.
+            console.log("Playback paused.");
+        }
+
+        function updateProgress() {
+             // Guard against NaN/Infinity during initial load or errors
+            if (!musicPlayer.duration || !isFinite(musicPlayer.duration) || musicPlayer.duration <= 0) {
+                 progressBar.style.width = '0%';
+                 currentTimeEl.textContent = formatTime(0);
+                 totalTimeEl.textContent = formatTime(0);
+                return;
+            }
+            const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+            currentTimeEl.textContent = formatTime(musicPlayer.currentTime);
+             // Update total time here too, in case it wasn't ready on loadedmetadata
+             totalTimeEl.textContent = formatTime(musicPlayer.duration);
+        }
+
+        // ===============================================================
+        // ======= FOREGROUND VISUALIZER DRAWING FUNCTIONS (Viz 1-20) ====
+        // ===============================================================
+        // --- Helper: Get Average Amplitude ---
+        function getAverageAmplitude(arr, start, end) { let sum=0; start=Math.max(0,Math.floor(start)); end=Math.min(arr.length,Math.ceil(end)); if(start>=end)return 0; for(let i=start;i<end;i++){ sum+=arr[i]; } return sum/(end-start)/255; }
+
+        // --- Canvas Dimension Getters ---
+        const W = () => visualizerCanvas.width;
+        const H = () => visualizerCanvas.height;
+        const CX = () => W() / 2;
+        const CY = () => H() / 2;
+        const t = () => performance.now() / 1000; // Time in seconds
+
+        // --- Visualizer Functions (Keep all 20 drawVizX functions here) ---
+        function drawViz1() { /* NeonHolographicBars */ const barW=(W()/bufferLength)*1.5;const space=0.5;const time=t();visualizerCtx.save();for(let i=0,x=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*H()*0.9);const pulse=0.8+0.2*Math.sin(time*5+i*0.2);const hue=(i/bufferLength)*200+time*20;const grad=visualizerCtx.createLinearGradient(x,H(),x,H()-h*pulse);grad.addColorStop(0,`hsla(${hue%360},100%,60%,0.8)`);grad.addColorStop(0.5,`hsla(${(hue+30)%360},90%,65%,0.6)`);grad.addColorStop(1,`hsla(${(hue+60)%360},80%,70%,0.3)`);visualizerCtx.shadowColor=`hsla(${hue%360},100%,70%,0.6)`;visualizerCtx.shadowBlur=8*amp;visualizerCtx.fillStyle=grad;const r=barW*0.3;visualizerCtx.beginPath();visualizerCtx.moveTo(x+r,H());visualizerCtx.lineTo(x+barW-r,H());visualizerCtx.arcTo(x+barW,H(),x+barW,H()-r,r);visualizerCtx.lineTo(x+barW,H()-h*pulse+r);visualizerCtx.arcTo(x+barW,H()-h*pulse,x+barW-r,H()-h*pulse,r);visualizerCtx.lineTo(x+r,H()-h*pulse);visualizerCtx.arcTo(x,H()-h*pulse,x,H()-h*pulse+r,r);visualizerCtx.lineTo(x,H()-r);visualizerCtx.arcTo(x,H(),x+r,H(),r);visualizerCtx.closePath();visualizerCtx.fill();if(amp>0.6&&Math.random()<0.05){visualizerCtx.save();visualizerCtx.globalCompositeOperation='lighter';visualizerCtx.fillStyle=`rgba(255,255,255,${0.4+Math.random()*0.4})`;const gy=H()-h*(0.2+Math.random()*0.6);const gh=1+Math.random()*3;visualizerCtx.fillRect(x,gy,barW,gh);visualizerCtx.restore();}x+=barW+space;}visualizerCtx.restore();}
+        function drawViz2() { /* QuantumCirclesX */ const time=t()*0.5;const cx=CX();const cy=CY();const maxR=Math.min(cx,cy)*0.7;visualizerCtx.save();visualizerCtx.lineWidth=1.5;for(let i=0;i<bufferLength;i+=2){const amp=dataArray[i]/255;const ang=(Math.PI*2*i/bufferLength)+time*(i%5+1)*0.1;const baseR=amp*maxR;const pulse=1+0.2*Math.sin(time*8+i*0.5);const orbitR=baseR*pulse;const x=cx+Math.cos(ang)*orbitR;const y=cy+Math.sin(ang)*orbitR;const pSize=1+amp*5;const hue=((i*360/bufferLength)+time*60)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,pSize*1.5);grad.addColorStop(0,`hsla(${hue},100%,75%,${0.8+amp*0.2})`);grad.addColorStop(0.5,`hsla(${(hue+40)%360},90%,65%,${0.5*amp})`);grad.addColorStop(1,`hsla(${(hue+80)%360},80%,55%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,pSize*1.5,0,Math.PI*2);visualizerCtx.fill();if(amp>0.1){visualizerCtx.strokeStyle=`hsla(${hue},100%,70%,${0.1+amp*0.5})`;visualizerCtx.beginPath();visualizerCtx.moveTo(cx,cy);visualizerCtx.lineTo(x,y);visualizerCtx.stroke();}}visualizerCtx.restore();}
+        function drawViz3() { /* NeuralWaveV2 */ const sliceW=W()/(bufferLength-1);const time=t()*1.5;const waveH=H()*0.6;visualizerCtx.save();visualizerCtx.lineWidth=2;visualizerCtx.strokeStyle='rgba(0,255,208,0.7)';visualizerCtx.beginPath();let startX=0,startY=H()/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH;const sine=Math.sin(i*0.1+time)*waveH*0.2;const y=H()/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;if(i%4===0&&v>0.1){visualizerCtx.fillStyle=`hsla(${(180+v*100)%360},100%,${60+v*30}%,${0.5+v*0.5})`;visualizerCtx.beginPath();visualizerCtx.arc(x,y,1+v*3,0,Math.PI*2);visualizerCtx.fill();}}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.lineWidth=1;visualizerCtx.strokeStyle='rgba(255,75,0,0.4)';visualizerCtx.beginPath();startX=0;startY=H()/2;visualizerCtx.moveTo(startX,startY);for(let i=0;i<bufferLength;i++){const v=dataArray[i]/255;const x=i*sliceW;const yOff=(v-0.5)*waveH*0.7;const sine=Math.sin(i*0.12+time+Math.PI/2)*waveH*0.15;const y=H()/2+yOff+sine;const xc=(x+startX)/2;const yc=(y+startY)/2;visualizerCtx.quadraticCurveTo(startX,startY,xc,yc);startX=x;startY=y;}visualizerCtx.lineTo(startX,startY);visualizerCtx.stroke();visualizerCtx.restore();}
+        function drawViz4() { /* GalacticNebulaeX */ const cx=CX();const cy=CY();const time=t()/5;visualizerCtx.save();visualizerCtx.fillStyle='rgba(10,11,12,0.1)';visualizerCtx.fillRect(0,0,W(),H());visualizerCtx.globalCompositeOperation='lighter';const numP=60;for(let i=0;i<numP;i++){const ang=(i/numP)*Math.PI*5+time;const frac=Math.pow(i/numP,0.8);const dist=frac*(W()/2.5);const x=cx+Math.cos(ang)*dist*(1+Math.sin(time*2+i*0.2)*0.1);const y=cy+Math.sin(ang)*dist*(1+Math.cos(time*2+i*0.2)*0.1);const dataIdx=Math.floor(Math.pow(i/numP,1.2)*(bufferLength*0.6));const inten=(dataArray[dataIdx]||0)/255;const baseR=5+frac*20;const r=Math.max(2,baseR*(0.5+inten*1.5));const hue=(frac*100+time*30+180)%360;const grad=visualizerCtx.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,`hsla(${hue},90%,70%,${inten*0.8})`);grad.addColorStop(0.4,`hsla(${(hue+30)%360},80%,60%,${inten*0.4})`);grad.addColorStop(1,`hsla(${(hue+60)%360},70%,50%,0)`);visualizerCtx.fillStyle=grad;visualizerCtx.beginPath();visualizerCtx.arc(x,y,r,0,Math.PI*2);visualizerCtx.fill();}const bassAvg=getAverageAmplitude(dataArray,0,bufferLength*0.1);const coreR=Math.max(10,bassAvg*H()*0.5);const coreHue=(10+time*20)%360;const coreGrad=visualizerCtx.createRadialGradient(cx,cy,0,cx,cy,coreR);coreGrad.addColorStop(0,`hsla(${coreHue},100%,65%,${bassAvg*0.7})`);coreGrad.addColorStop(0.7,`hsla(${(coreHue+20)%360},90%,55%,${bassAvg*0.3})`);coreGrad.addColorStop(1,`hsla(${(coreHue+40)%360},80%,50%,0)`);visualizerCtx.fillStyle=coreGrad;visualizerCtx.beginPath();visualizerCtx.arc(cx,cy,coreR,0,Math.PI*2);visualizerCtx.fill();visualizerCtx.restore();}
+        function drawViz5() { /* Hyper4DSpectrum */ const barW=W()/bufferLength;const time=t();visualizerCtx.save();for(let i=0;i<bufferLength;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*H());const x=i*barW;const hue=(i/bufferLength)*300;const grad1=visualizerCtx.createLinearGradient(x,H(),x,H()-h);grad1.addColorStop(0,`hsla(${hue},100%,40%,0.7)`);grad1.addColorStop(0.8,`hsla(${hue},100%,60%,0.9)`);grad1.addColorStop(1,`hsla(${hue},100%,75%,1.0)`);visualizerCtx.fillStyle=grad1;visualizerCtx.fillRect(x,H()-h,barW,h);const hlH=h*(0.4+Math.sin(time*3+i*0.1)*0.1);const hlO=barW*0.1;visualizerCtx.fillStyle=`hsla(${(hue+30)%360},100%,85%,${0.3+amp*0.4})`;visualizerCtx.fillRect(x+hlO,H()-hlH,barW-2*hlO,hlH);if(amp>0.7){visualizerCtx.fillStyle=`hsla(${(hue+60)%360},100%,95%,${0.5+Math.random()*0.5})`;visualizerCtx.fillRect(x,H()-h-2,barW,2+Math.random()*2);}if(Math.random()<0.008){visualizerCtx.save();const gA=(Math.random()-0.5)*barW*1.5;const gY=H()-Math.random()*h;const gH=1+Math.random()*4;visualizerCtx.globalCompositeOperation=Math.random()<0.5?'lighter':'difference';visualizerCtx.fillStyle=`rgba(255,${Math.random()*150},${Math.random()*150},0.7)`;visualizerCtx.fillRect(x+gA,gY,barW,gH);visualizerCtx.restore();}}visualizerCtx.restore();}
+        function drawViz6() { /* Vertical Bars Mirrored */ const barWidth=W()/bufferLength;const cx=CX();visualizerCtx.save();for(let i=0;i<bufferLength/2;i++){const amp=dataArray[i]/255;const h=Math.max(1,amp*H());const hue=(i/(bufferLength/2))*180;visualizerCtx.fillStyle=`hsl(${hue},100%,${50+amp*30}%)`;const x1=cx+i*barWidth;visualizerCtx.fillRect(x1,H()-h,barWidth-1,h);const x2=cx-(i+1)*barWidth;visualizerCtx.fillRect(x2,H()-h,barWidth-1,h);}visualizerCtx.restore();}
+        function drawViz7() { /* Radial Bars (Sunburst) */ const maxR=Math.min(CX(),CY())*0.8;const sliceAngle=(Math.PI*2)/bufferLength;visualizerCtx.save();visualizerCtx.translate(CX(),CY());for(let i=0;i<bufferLength;i++){const amp=dataArray[i]/255;const barLength=amp*maxR*0.8;const hue=(i/bufferLength)*360+t()*30;visualizerCtx.rotate(sliceAngle);visualizerCtx.fillStyle=`hsl(${hue%360},100%,60%)`;visualizerCtx.fillRect(maxR*0.1,-1,barLength,2);}visualizerCtx.restore();}
+        function drawViz8() { /* Expanding Circles */ const maxRadius=Math.min(CX(),CY());visualizerCtx.save();visualizerCtx.lineWidth=2;for(let i=0;i<bufferLength;i+=5){const amp=dataArray[i]/255;const radius=amp*maxRadius;const hue=(i/bufferLength)*360+t()*20;visualizerCtx.strokeStyle=`hsla(${hue%360},100%,${60+amp*20}%,${0.1+amp*0.7})`;visualizerCtx.beginPath();visualizerCtx.arc(CX(),CY(),radius,0,Math.PI*2);visualizerCtx.stroke();}visualizerCtx.restore();}
+        function drawViz9() { /* Particle Shower */ visualizerCtx.fillStyle='rgba(10,11,12,0.1)';visualizerCtx.fillRect(0,0,W(),H());visualizerCtx.save();const bassAvg=getAverageAmplitude(dataArray,0,bufferLength*0.1);const numParticles=Math.floor(bassAvg*50)+10;for(let i=0;i<numParticles;i++){const amp=dataArray[Math.floor(Math.random()*bufferLength)]/255;const x=Math.random()*W();const y=Math.random()*H()*0.1;const size=1+amp*4;const speed=1+amp*5;const hue=Math.random()*60+180;visualizerCtx.fillStyle=`hsla(${hue},100%,70%,0.8)`;visualizerCtx.beginPath();visualizerCtx.arc(x,(y+t()*speed)%H(),size,0,Math.PI*2);visualizerCtx.fill();}visualizerCtx.restore();}
+        function drawViz10() { /* Lissajous Curves */ visualizerCtx.save();visualizerCtx.lineWidth=1;visualizerCtx.strokeStyle='rgba(255,255,255,0.3)';visualizerCtx.translate(CX(),CY());const lowAvg=getAverageAmplitude(dataArray,0,bufferLength*0.2);const midAvg=getAverageAmplitude(dataArray,bufferLength*0.2,bufferLength*0.6);const highAvg=getAverageAmplitude(dataArray,bufferLength*0.6,bufferLength);const freqX=1+lowAvg*4;const freqY=1+midAvg*4;const mod=1+highAvg*2;const scale=Math.min(CX(),CY())*0.8;visualizerCtx.beginPath();for(let angle=0;angle<Math.PI*2;angle+=0.01){const x=Math.sin(angle*freqX+t())*scale;const y=Math.sin(angle*freqY+t()*mod)*scale;if(angle===0)visualizerCtx.moveTo(x,y);else visualizerCtx.lineTo(x,y);}visualizerCtx.stroke();visualizerCtx.restore();}
+        function drawViz11() { /* Horizontal Spectrum Mirrored */ const barHeight=H()/bufferLength;const cy=CY();visualizerCtx.save();for(let i=0;i<bufferLength/2;i++){const amp=dataArray[i]/255;const w=Math.max(1,amp*W()*0.45);const hue=(i/(bufferLength/2))*180+180;visualizerCtx.fillStyle=`hsl(${hue},100%,${55+amp*25}%)`;visualizerCtx.fillRect(CX(),cy+i*barHeight,w,barHeight-1);visualizerCtx.fillRect(CX()-w,cy+i*barHeight,w,barHeight-1);}visualizerCtx.restore();}
+        function drawViz12() { /* Rotating Polygon */ const sides=3+Math.floor(getAverageAmplitude(dataArray,0,bufferLength*0.3)*6);const radius=Math.min(CX(),CY())*(0.3+getAverageAmplitude(dataArray,bufferLength*0.3,bufferLength)*0.6);const angleStep=(Math.PI*2)/sides;visualizerCtx.save();visualizerCtx.translate(CX(),CY());visualizerCtx.rotate(t()*0.5);visualizerCtx.strokeStyle=`hsl(${t()*20%360},100%,60%)`;visualizerCtx.lineWidth=2+getAverageAmplitude(dataArray,0,bufferLength)*4;visualizerCtx.beginPath();for(let i=0;i<=sides;i++){const angle=i*angleStep;const x=Math.cos(angle)*radius;const y=Math.sin(angle)*radius;if(i===0)visualizerCtx.moveTo(x,y);else visualizerCtx.lineTo(x,y);}visualizerCtx.stroke();visualizerCtx.restore();}
+        function drawViz13() { /* Blocky Spectrum Grid */ const cols=16;const rows=8;const cellW=W()/cols;const cellH=H()/rows;const dataPerCell=Math.floor(bufferLength/(cols*rows));visualizerCtx.save();for(let r=0;r<rows;r++){for(let c=0;c<cols;c++){const dataStart=(r*cols+c)*dataPerCell;const avgAmp=getAverageAmplitude(dataArray,dataStart,dataStart+dataPerCell);const hue=(r/rows)*120+(c/cols)*120;const brightness=30+avgAmp*70;const alpha=0.2+avgAmp*0.8;visualizerCtx.fillStyle=`hsla(${hue%360},100%,${brightness}%,${alpha})`;visualizerCtx.fillRect(c*cellW,r*cellH,cellW-1,cellH-1);}}visualizerCtx.restore();}
+        function drawViz14() { /* Circular Waveform */ const radius=Math.min(CX(),CY())*0.5;const angleStep=(Math.PI*2)/bufferLength;visualizerCtx.save();visualizerCtx.translate(CX(),CY());visualizerCtx.strokeStyle=`hsl(${t()*15%360},90%,65%)`;visualizerCtx.lineWidth=2;visualizerCtx.beginPath();for(let i=0;i<=bufferLength;i++){const index=i%bufferLength;const amp=dataArray[index]/255;const r=radius+amp*(radius*0.8);const angle=i*angleStep+t()*0.1;const x=Math.cos(angle)*r;const y=Math.sin(angle)*r;if(i===0)visualizerCtx.moveTo(x,y);else visualizerCtx.lineTo(x,y);}visualizerCtx.closePath();visualizerCtx.stroke();visualizerCtx.restore();}
+        function drawViz15() { /* Oscillating Frequency Lines */ const lines=10;visualizerCtx.save();visualizerCtx.lineWidth=1.5;for(let i=0;i<lines;i++){const y=(H()/(lines+1))*(i+1);const dataIndex=Math.floor((i/lines)*bufferLength);const amp=(dataArray[dataIndex]||0)/255;const freq=5+amp*20;const magnitude=amp*30;const hue=(i/lines)*300+60;visualizerCtx.strokeStyle=`hsla(${hue%360},100%,60%,${0.5+amp*0.5})`;visualizerCtx.beginPath();visualizerCtx.moveTo(0,y);for(let x=0;x<W();x+=5){const yOffset=Math.sin(x*0.01*freq+t()*3)*magnitude;visualizerCtx.lineTo(x,y+yOffset);}visualizerCtx.stroke();}visualizerCtx.restore();}
+        function drawViz16() { /* Corner Reflect Bars */ const barW=W()/(bufferLength*0.5);const maxH=H()*0.45;visualizerCtx.save();for(let i=0;i<bufferLength/2;i++){const amp=dataArray[i]/255.0;const h=Math.max(1,amp*maxH);const x=i*barW;const hue=(i/(bufferLength/2))*360;visualizerCtx.fillStyle=`hsl(${hue},100%,${50+amp*25}%)`;visualizerCtx.fillRect(x,0,barW-1,h);visualizerCtx.fillRect(W()-x-barW,H()-h,barW-1,h);visualizerCtx.fillStyle=`hsl(${(hue+90)%360},80%,${50+amp*25}%)`;visualizerCtx.fillRect(W()-x-barW,0,barW-1,h);visualizerCtx.fillRect(x,H()-h,barW-1,h);}visualizerCtx.restore();}
+        function drawViz17() { /* Center Pulse Circle */ const bass=getAverageAmplitude(dataArray,0,bufferLength*0.1);const mid=getAverageAmplitude(dataArray,bufferLength*0.1,bufferLength*0.6);const high=getAverageAmplitude(dataArray,bufferLength*0.6,bufferLength);const baseRadius=Math.min(CX(),CY())*0.1;const pulseRadius=baseRadius+bass*Math.min(CX(),CY())*0.6;const rings=3+Math.floor(mid*5);visualizerCtx.save();visualizerCtx.lineWidth=1+high*3;for(let i=0;i<rings;i++){const radius=pulseRadius*(i/rings);const hue=(i*40+t()*30)%360;const alpha=0.1+(1-i/rings)*0.7;visualizerCtx.strokeStyle=`hsla(${hue},100%,60%,${alpha})`;visualizerCtx.beginPath();visualizerCtx.arc(CX(),CY(),radius,0,Math.PI*2);visualizerCtx.stroke();}visualizerCtx.restore();}
+        function drawViz18() { /* Dot Matrix */ const cols=24;const rows=16;const cellW=W()/cols;const cellH=H()/rows;const maxDotSize=Math.min(cellW,cellH)*0.4;visualizerCtx.save();for(let r=0;r<rows;r++){for(let c=0;c<cols;c++){const dataIndex=Math.floor(((r*cols+c)/(rows*cols))*bufferLength);const amp=dataArray[dataIndex]/255;const dotSize=amp*maxDotSize;if(dotSize<0.5)continue;const hue=(c/cols)*360;const lightness=40+amp*50;visualizerCtx.fillStyle=`hsl(${hue},100%,${lightness}%)`;visualizerCtx.beginPath();visualizerCtx.arc(c*cellW+cellW/2,r*cellH+cellH/2,dotSize,0,Math.PI*2);visualizerCtx.fill();}}visualizerCtx.restore();}
+        // Add a property to store stars for Viz 19
+        drawViz19.stars = [];
+        function drawViz19() { /* Starfield Zoom */ visualizerCtx.fillStyle='rgba(10,11,12,0.15)';visualizerCtx.fillRect(0,0,W(),H());visualizerCtx.save();const numStars=100;const overallAmp=getAverageAmplitude(dataArray,0,bufferLength);const speed=0.5+overallAmp*10;if(drawViz19.stars.length === 0){for(let i=0;i<numStars;i++){drawViz19.stars.push({x:(Math.random()-0.5)*W(),y:(Math.random()-0.5)*H(),z:Math.random()*W()});}}visualizerCtx.translate(CX(),CY());drawViz19.stars.forEach(star=>{star.z-=speed;if(star.z<=0){star.z=W();star.x=(Math.random()-0.5)*W();star.y=(Math.random()-0.5)*H();}const k=128/star.z;const px=star.x*k;const py=star.y*k;const size=(1-star.z/W())*2.5+0.5;visualizerCtx.fillStyle=`rgba(255,255,255,${1-star.z/W()})`;visualizerCtx.beginPath();visualizerCtx.arc(px,py,size,0,Math.PI*2);visualizerCtx.fill();});visualizerCtx.restore();}
+        function drawViz20() { /* DNA Helix Wave */ const amplitude=H()*0.3;const frequency=5;const points=100;const rotationSpeed=t()*0.5;const bass=getAverageAmplitude(dataArray,0,bufferLength*0.1);const mid=getAverageAmplitude(dataArray,bufferLength*0.1,bufferLength*0.6);visualizerCtx.save();visualizerCtx.lineWidth=1+bass*3;function drawStrand(offset){visualizerCtx.beginPath();for(let i=0;i<=points;i++){const progress=i/points;const x=W()*progress;const angle=progress*Math.PI*frequency+rotationSpeed+offset;const dataIndex=Math.floor(progress*bufferLength);const ampMod=(dataArray[dataIndex]||0)/255*0.5+0.5;const y=CY()+Math.sin(angle)*amplitude*ampMod;if(i===0)visualizerCtx.moveTo(x,y);else visualizerCtx.lineTo(x,y);}const hue=(offset===0)?(t()*20)%360:(t()*20+180)%360;visualizerCtx.strokeStyle=`hsla(${hue},100%,60%,0.8)`;visualizerCtx.stroke();if(offset===0){visualizerCtx.lineWidth=0.5+mid*1.5;visualizerCtx.strokeStyle='rgba(200,200,200,0.4)';for(let i=0;i<=points;i+=5){const progress=i/points;const x=W()*progress;const angle1=progress*Math.PI*frequency+rotationSpeed;const angle2=progress*Math.PI*frequency+rotationSpeed+Math.PI;const dataIndex=Math.floor(progress*bufferLength);const ampMod=(dataArray[dataIndex]||0)/255*0.5+0.5;const y1=CY()+Math.sin(angle1)*amplitude*ampMod;const y2=CY()+Math.sin(angle2)*amplitude*ampMod;visualizerCtx.beginPath();visualizerCtx.moveTo(x,y1);visualizerCtx.lineTo(x,y2);visualizerCtx.stroke();}}}drawStrand(0);drawStrand(Math.PI);visualizerCtx.restore();}
+
+        // --- Render Loop for FOREGROUND Visualizer ---
+        function renderVisualizer() {
+             // Use the correct (foreground) data array and buffer length if they differ later
+             // For now, they use the same analyser source.
+            if (!isAudioInitialized || !analyser || !dataArray) {
+                 // Don't start drawing if audio isn't ready
+                 visualizerAnimationId = requestAnimationFrame(renderVisualizer);
+                 return;
+             }
+
+             // Get frequency data *once* per frame if possible, but background needs it too.
+             // analyser.getByteFrequencyData(dataArray); // Data already fetched in background loop
+
+            visualizerCtx.clearRect(0, 0, W(), H()); // Clear foreground canvas
+
+            // Array mapping index to function - Corrected for 20 visualizers
+            const visualizers = [
+                drawViz1, drawViz2, drawViz3, drawViz4, drawViz5,
+                drawViz6, drawViz7, drawViz8, drawViz9, drawViz10,
+                drawViz11, drawViz12, drawViz13, drawViz14, drawViz15,
+                drawViz16, drawViz17, drawViz18, drawViz19, drawViz20
+            ];
+
+            // Call the function based on currentVisualizer state (1-based index)
+            const index = currentVisualizer - 1; // Convert to 0-based
+            if (index >= 0 && index < visualizers.length && typeof visualizers[index] === 'function') {
+                visualizers[index]();
+            } else {
+                // Fallback or draw nothing if index is out of bounds or function invalid
+                console.warn("Invalid foreground visualizer index or function:", currentVisualizer);
+                if (typeof drawViz1 === 'function') drawViz1(); // Default to first one
+            }
+
+            visualizerAnimationId = requestAnimationFrame(renderVisualizer);
+        }
+
+        function startVisualizer() {
+             // Start only if audio is ready and not already running
+            if (!visualizerAnimationId && isAudioInitialized) {
+                console.log("Starting foreground visualizer animation.");
+                renderVisualizer();
+            }
+        }
+
+        function stopVisualizer() {
+            if (visualizerAnimationId) {
+                cancelAnimationFrame(visualizerAnimationId);
+                visualizerAnimationId = null;
+                console.log("Stopping foreground visualizer animation.");
+                visualizerCtx.clearRect(0, 0, W(), H()); // Clear on stop
+            }
+        }
+
+        // ===============================================================
+        // ======= EVENT LISTENERS & INITIALIZATION ======================
+        // ===============================================================
+        function updateVisualizerButtons() {
+            document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+                btn.classList.toggle('active', (i + 1) === currentVisualizer);
+            });
+        }
+
+        // --- Interaction Listeners ---
+        playPauseBtn.addEventListener('click', () => {
+            // CRITICAL: Call initAudio on first *user interaction* if not already done
+             if (!isAudioInitialized) {
+                 initAudio(); // Try to initialize audio context now
+             }
+             // Then toggle play/pause
+             if (musicPlayer.paused) {
+                 playTrack();
+             } else {
+                 pauseTrack();
+             }
+        });
+
+        $('prevTrack').addEventListener('click', () => {
+             // Ensure audio context is running before changing track if needed
+            if (isAudioInitialized && audioContext.state === 'suspended') {
+                 audioContext.resume().then(() => loadTrack(currentTrackIndex - 1));
+            } else {
+                loadTrack(currentTrackIndex - 1);
+            }
+        });
+
+        $('nextTrack').addEventListener('click', () => {
+             if (isAudioInitialized && audioContext.state === 'suspended') {
+                 audioContext.resume().then(() => loadTrack(currentTrackIndex + 1));
+             } else {
+                loadTrack(currentTrackIndex + 1);
+            }
+        });
+
+        musicPlayer.addEventListener('ended', () => {
+            console.log("Track ended, loading next.");
+            loadTrack(currentTrackIndex + 1);
+             // Automatically play next track
+             // Note: Needs playTrack() because loadTrack only loads, doesn't auto-play unless already playing.
+             playTrack();
+        });
+
+        musicPlayer.addEventListener('timeupdate', updateProgress);
+
+        musicPlayer.addEventListener('loadedmetadata', () => {
+             // Update total time display when metadata (like duration) is loaded
+             totalTimeEl.textContent = formatTime(musicPlayer.duration);
+             console.log("Metadata loaded, duration:", formatTime(musicPlayer.duration));
+             // Update progress bar immediately in case the track is short
+             updateProgress();
+        });
+
+        musicPlayer.addEventListener('error', (e) => {
+            console.error('Audio Player Error:', musicPlayer.error);
+            trackTitleEl.textContent = 'Error Loading Track';
+            totalTimeEl.textContent = '0:00';
+            currentTimeEl.textContent = '0:00';
+            progressBar.style.width = '0%';
+            pauseTrack(); // Set state to paused visually
+
+            if (!musicPlayer.error) return; // Sometimes error object is null
+
+            let message = 'An unknown audio error occurred.';
+            switch (musicPlayer.error.code) {
+                case MediaError.MEDIA_ERR_ABORTED: message = 'Playback aborted by user or script.'; break;
+                case MediaError.MEDIA_ERR_NETWORK: message = 'Network error loading audio.'; break;
+                case MediaError.MEDIA_ERR_DECODE: message = 'Error decoding audio file (corrupt?).'; break;
+                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: message = 'Audio format not supported or file not found.'; break;
+            }
+            console.error(`Specific Error: ${message} (Code: ${musicPlayer.error.code})`);
+            // Optional: display a user-friendly message
+            // trackTitleEl.textContent = message; // Can be too long
+        });
+
+
+        progressContainer.addEventListener('click', e => {
+            if (!musicPlayer.duration || !isFinite(musicPlayer.duration) || !isAudioInitialized) return; // Need duration and audio ready
+             // Calculate click position as a fraction of the container width
+            const rect = progressContainer.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const pos = Math.max(0, Math.min(1, clickX / progressContainer.offsetWidth)); // Clamp between 0 and 1
+
+            musicPlayer.currentTime = pos * musicPlayer.duration;
+            updateProgress(); // Update display immediately
+        });
+
+        playlistToggleBtn.addEventListener('click', () => {
+            const isHidden = playlistEl.style.display === 'none';
+            playlistEl.style.display = isHidden ? 'block' : 'none';
+            playlistToggleBtn.textContent = isHidden ? 'Hide Playlist' : 'Playlist';
+            if (isHidden) {
+                 updatePlaylistActiveState(); // Scroll active item into view when opening
+             }
+        });
+
+        // Update Visualizer Button Listeners for 20 buttons
+        document.querySelectorAll('.visualizer-controls button').forEach((btn, i) => {
+            btn.addEventListener('click', () => {
+                const vizIdx = i + 1; // 1-based index
+                if (currentVisualizer !== vizIdx) {
+                    currentVisualizer = vizIdx;
+                    updateVisualizerButtons();
+                    console.log("Switched foreground visualizer to:", currentVisualizer);
+                     // Reset specific visualizer states if needed
+                     if (currentVisualizer === 19) { // If switching to starfield
+                         drawViz19.stars = []; // Reset stars when explicitly selected
+                     }
+                }
+            });
+        });
+
+        // --- Keyboard Shortcuts ---
+        document.addEventListener('keydown', (e) => {
+             // Ignore if typing in an input field (none here, but good practice)
+             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+             switch (e.code) {
+                 case 'Space':
+                     e.preventDefault(); // Prevent page scroll
+                     playPauseBtn.click(); // Trigger the button's click handler
+                     break;
+                 case 'ArrowLeft':
+                     e.preventDefault();
+                     $('prevTrack').click();
+                     break;
+                 case 'ArrowRight':
+                      e.preventDefault();
+                     $('nextTrack').click();
+                     break;
+                 // Add number keys to switch visualizers maybe? (e.g., Digit1 for Viz 1)
+                 // Example:
+                 // case 'Digit1': currentVisualizer = 1; updateVisualizerButtons(); break;
+                 // case 'Digit2': currentVisualizer = 2; updateVisualizerButtons(); break;
+                 // ...etc up to Digit0 for Viz 10, then maybe shift+Digit for 11-20?
+             }
+         });
+
+
+        // --- Window Resize ---
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                console.log("Window resized.");
+                resizeCanvases();
+                 // Restarting visualizers might be needed if resize logic is complex
+                 // but often redrawing on the next frame is sufficient.
+            }, 250); // Debounce resize event
+        });
+
+        // --- Initial Player Setup ---
+        function initializePlayer() {
+            console.log("Initializing player...");
+            resizeCanvases(); // Set initial canvas sizes
+            createPlaylist(); // Build the playlist HTML
+            loadTrack(currentTrackIndex); // Load the first track data (doesn't play yet)
+            updateVisualizerButtons(); // Set the initial active viz button
+            initNeuralNetwork(); // Prepare the neural network background
+            // Don't start audio/visualizers here - wait for user interaction
+             startBackgroundAnimation(); // Start the background animation loop (can run statically)
+            console.log("Player interface initialized. Waiting for user interaction to start audio.");
+             // Hint to user if interaction is needed
+             playPauseBtn.textContent = 'Play'; // Ensure it says Play initially
+        }
+
+        // --- Start Everything ---
+        document.addEventListener('DOMContentLoaded', initializePlayer);
+
+    </script>
 </body>
 </html>
