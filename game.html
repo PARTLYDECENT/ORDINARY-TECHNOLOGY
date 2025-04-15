@@ -92,7 +92,8 @@
             color: var(--terminal-text);
             font-family: 'Share Tech Mono', monospace;
             min-height: 100vh;
-            overflow: hidden;
+            overflow-x: hidden;
+            /* Allow vertical scrolling so users can reach the games grid below the shader */
             position: relative;
             display: flex;
             align-items: center;
@@ -454,54 +455,165 @@
                 font-size: 0.55rem;
             }
         }
+
+        /* --- Animated Orb Tooltip --- */
+        .orb-tooltip {
+            position: absolute;
+            left: 50%;
+            top: -18px;
+            transform: translate(-50%, -100%) scale(0.95);
+            min-width: 170px;
+            background: linear-gradient(135deg, hsla(var(--hue1),90%,18%,0.98), hsla(var(--hue2),80%,12%,0.98));
+            color: #bff;
+            border: 1px solid hsla(var(--hue1),80%,70%,0.18);
+            border-radius: 8px;
+            box-shadow: 0 0 18px var(--glow-primary), 0 0 2px #000;
+            padding: 13px 18px 13px 15px;
+            font-size: 0.92rem;
+            font-family: 'Share Tech Mono', monospace;
+            z-index: 30;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s cubic-bezier(.4,1.6,.6,1), transform 0.22s cubic-bezier(.4,1.6,.6,1);
+            animation: flickerText 7s infinite;
+        }
+        .orb-tooltip.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -120%) scale(1.04);
+        }
+        .orb-tooltip .tooltip-title {
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 4px;
+            font-size: 1.05em;
+        }
+        .orb-tooltip .tooltip-desc {
+            margin-bottom: 8px;
+            color: #bff;
+            font-size: 0.97em;
+        }
+        .orb-tooltip .dig-btn {
+            background: linear-gradient(90deg, hsla(var(--hue1),90%,40%,0.7), hsla(var(--hue2),80%,30%,0.7));
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 4px 13px;
+            font-size: 0.93em;
+            cursor: pointer;
+            box-shadow: 0 0 6px var(--glow-primary);
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .orb-tooltip .dig-btn:hover {
+            background: linear-gradient(90deg, hsla(var(--hue1),100%,60%,0.9), hsla(var(--hue2),100%,50%,0.9));
+            box-shadow: 0 0 12px var(--glow-primary);
+        }
+        /* --- Dig Modal --- */
+        .dig-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(10,18,40,0.93);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: terminalBoot 0.5s;
+        }
+        .dig-modal-content {
+            background: linear-gradient(120deg, hsla(var(--hue1),90%,12%,0.98), hsla(var(--hue2),80%,10%,0.98));
+            border-radius: 12px;
+            box-shadow: 0 0 30px var(--glow-primary), 0 0 2px #000;
+            padding: 32px 28px 22px 28px;
+            min-width: 320px;
+            max-width: 95vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .dig-modal-close {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #bff;
+            font-size: 1.3em;
+            cursor: pointer;
+            filter: drop-shadow(0 0 4px var(--glow-primary));
+            transition: color 0.2s;
+        }
+        .dig-modal-close:hover {
+            color: #fff;
+        }
+        #dig-modal-body {
+            font-family: 'Share Tech Mono', monospace;
+            color: #bff;
+            font-size: 1.05em;
+        }
     </style>
 </head>
-<body>
+<body style="overflow-x:hidden;">
+    <!-- Main Shader Scene -->
+    <canvas id="shader-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2;display:block;"></canvas>
+    <div class="shader-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3;pointer-events:none;"></div>
+
     <div class="background-layer"></div>
 
-    <div class="terminal-frame">
-        <div class="terminal-header"></div>
-
-        <div class="game-launchers">
-            <button class="game-orb" data-url="./ordinary-recycling/index.html" aria-label="Launch Containment Scenario">
-                <span>☣️</span>
-                <div class="orb-label" data-core-id="CTN-6382">Contain</div>
-            </button>
-
-            <button class="game-orb" data-url="https://upit.com/up/OrdinaryDefense1" aria-label="Launch Defense Grid Scenario">
-                <span>🛡️</span>
-                <div class="orb-label" data-core-id="DEF-9104">Defense</div>
-            </button>
-
-            <button class="game-orb" data-url="./game/index.html" aria-label="Launch Hive Prediction Scenario">
-                <span>🐝</span>
-                <div class="orb-label" data-core-id="HIV-3571">Predict</div>
-            </button>
-
-            <button class="game-orb" data-url="./game2/index.html" aria-label="Launch Void Navigation Scenario">
-                <span>🌌</span>
-                <div class="orb-label" data-core-id="VID-7294">Navigate</div>
-            </button>
-
-            <button class="game-orb" data-url="./new_game_1/index.html" aria-label="Launch Hydro Flux Scenario">
-                <span>💧</span>
-                <div class="orb-label" data-core-id="HYD-1853">HydroFlux</div>
-            </button>
-
-            <button class="game-orb" data-url="./new_game_2/index.html" aria-label="Launch Crystal Rift Scenario">
-                <span>💎</span>
-                <div class="orb-label" data-core-id="RFT-4276">RiftRun</div>
-            </button>
+    <!-- Boot/Loading Overlay -->
+    <div id="boot-overlay" style="position:fixed;inset:0;z-index:100;background:rgba(10,10,30,0.98);display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:'Share Tech Mono',monospace;color:#8ff;letter-spacing:2px;font-size:1.2rem;transition:opacity 0.7s;opacity:1;pointer-events:auto;">
+        <div style="margin-bottom:18px;">
+            <span style="font-size:2.2rem;filter:drop-shadow(0 0 12px #0ff8);">⏳</span>
         </div>
+        <div id="boot-message">Initializing Quantum Terminal...</div>
+    </div>
 
-        <div class="terminal-status">
-            <div class="status-left">
-                <div class="status-indicator">
-                    <div class="status-dot pulse"></div>
-                    <span>QUANTUM LINK</span>
+    <!-- Main Content Below Shader -->
+    <main id="main-content" style="position:relative;z-index:10;max-width:900px;margin:0 auto;padding-top:100vh;">
+        <div class="terminal-frame" style="background:rgba(10,18,40,0.85);box-shadow:0 0 40px #0ff2,0 0 2px #000;">
+            <div class="terminal-header"></div>
+
+            <div class="game-launchers">
+                <button class="game-orb" data-url="./ordinary-recycling/index.html" aria-label="Launch Containment Scenario" data-orb="contain">
+                    <span>☣️</span>
+                    <div class="orb-label" data-core-id="CTN-6382">Contain</div>
+                </button>
+
+                <button class="game-orb" data-url="https://upit.com/up/OrdinaryDefense1" aria-label="Launch Defense Grid Scenario" data-orb="defense">
+                    <span>🛡️</span>
+                    <div class="orb-label" data-core-id="DEF-9104">Defense</div>
+                </button>
+
+                <button class="game-orb" data-url="./game/index.html" aria-label="Launch Hive Prediction Scenario" data-orb="predict">
+                    <span>🐝</span>
+                    <div class="orb-label" data-core-id="HIV-3571">Predict</div>
+                </button>
+
+                <button class="game-orb" data-url="./game2/index.html" aria-label="Launch Void Navigation Scenario" data-orb="navigate">
+                    <span>🌌</span>
+                    <div class="orb-label" data-core-id="VID-7294">Navigate</div>
+                </button>
+
+                <button class="game-orb" data-url="./new_game_1/index.html" aria-label="Launch Hydro Flux Scenario" data-orb="hydro">
+                    <span>💧</span>
+                    <div class="orb-label" data-core-id="HYD-1853">HydroFlux</div>
+                </button>
+
+                <button class="game-orb" data-url="./new_game_2/index.html" aria-label="Launch Crystal Rift Scenario" data-orb="rift">
+                    <span>💎</span>
+                    <div class="orb-label" data-core-id="RFT-4276">RiftRun</div>
+                </button>
+            </div>
+
+            <!-- Dig Deeper Modal -->
+            <div id="dig-modal" class="dig-modal" tabindex="-1" aria-modal="true" style="display:none;">
+                <div class="dig-modal-content">
+                    <button class="dig-modal-close" aria-label="Close">✖</button>
+                    <div id="dig-modal-body"></div>
                 </div>
-                <div class="status-indicator scanner-status">
-                    <span>SCAN ACTIVE</span>
+            </div>
+
+            <div class="terminal-status">
+                <div class="status-left">
                 </div>
             </div>
             <div class="status-right">
@@ -516,41 +628,267 @@
     </div>
 
     <script>
+        // --- Audio asset URLs (replace with your own if needed) ---
+        const BOOT_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/10/16/audio_12b6b7e2e2.mp3'; // Example boot sound
+        const CLICK_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/10/16/audio_12b6b7e2e2.mp3'; // Example click sound
+        const ERROR_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/10/16/audio_12b6b7e2e2.mp3'; // Example error sound
+
+        // --- Utility: Play a sound with fallback ---
+        function playSound(url, volume = 0.3) {
+            try {
+                const audio = new Audio(url);
+                audio.volume = volume;
+                audio.play();
+            } catch (e) {
+                // Fallback: do nothing
+            }
+        }
+
+        // --- Boot/Loading Overlay Animation ---
+        function hideBootOverlay() {
+            const overlay = document.getElementById('boot-overlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                overlay.style.pointerEvents = 'none';
+                setTimeout(() => overlay.style.display = 'none', 800);
+            }
+        }
+
+        // --- Placeholder for future modals (settings, help, etc.) ---
+        function showModal(id) {
+            // To be implemented in next steps
+        }
+
+        // --- Placeholder for dynamic status/tooltips ---
+        function updateStatus() {
+            // To be implemented in next steps
+        }
+
+        // --- Orb Descriptions and Deep Info ---
+        const orbData = {
+            contain: {
+                title: 'Containment Protocol',
+                desc: 'Engage hazardous anomaly containment. Secure, isolate, and neutralize threats to the station.',
+                deep: `<b>Containment Scenario</b><br><br>Deploy advanced quantum fields and AI drones to contain unpredictable anomalies. Only the most vigilant operators succeed.<br><br><i>Core ID: CTN-6382</i>`
+            },
+            defense: {
+                title: 'Defense Grid',
+                desc: 'Activate defense systems. Repel incoming threats and maintain shield integrity.',
+                deep: `<b>Defense Grid Scenario</b><br><br>Coordinate automated turrets, energy barriers, and tactical AI to defend the void station.<br><br><i>Core ID: DEF-9104</i>`
+            },
+            predict: {
+                title: 'Hive Prediction',
+                desc: 'Analyze swarm patterns. Predict and preempt hive movements in the sector.',
+                deep: `<b>Hive Prediction Scenario</b><br><br>Utilize neural analytics to forecast hive activity and prevent incursions.<br><br><i>Core ID: HIV-3571</i>`
+            },
+            navigate: {
+                title: 'Void Navigation',
+                desc: 'Chart a safe course through the void. Avoid hazards and optimize travel time.',
+                deep: `<b>Void Navigation Scenario</b><br><br>Plot hyperspace jumps, dodge anomalies, and reach your destination unscathed.<br><br><i>Core ID: VID-7294</i>`
+            },
+            hydro: {
+                title: 'HydroFlux',
+                desc: 'Manage hydro resources. Balance extraction, purification, and distribution.',
+                deep: `<b>HydroFlux Scenario</b><br><br>Oversee water cycles, prevent contamination, and ensure station survival.<br><br><i>Core ID: HYD-1853</i>`
+            },
+            rift: {
+                title: 'Crystal Rift',
+                desc: 'Explore the rift. Harvest rare crystals and avoid unstable zones.',
+                deep: `<b>Crystal Rift Scenario</b><br><br>Navigate shifting terrain, extract resources, and escape before the rift collapses.<br><br><i>Core ID: RFT-4276</i>`
+            }
+        };
+
+        // --- Tooltip Logic ---
+        let tooltipEl = null;
+        let tooltipTimeout = null;
+        function showOrbTooltip(orbBtn) {
+            const orbKey = orbBtn.getAttribute('data-orb');
+            const data = orbData[orbKey];
+            if (!data) return;
+            if (!tooltipEl) {
+                tooltipEl = document.createElement('div');
+                tooltipEl.className = 'orb-tooltip';
+                document.body.appendChild(tooltipEl);
+            }
+            tooltipEl.innerHTML = `
+                <div class="tooltip-title">${data.title}</div>
+                <div class="tooltip-desc">${data.desc}</div>
+                <button class="dig-btn" tabindex="0">Dig Deeper</button>
+            `;
+            // Position tooltip above orb
+            const rect = orbBtn.getBoundingClientRect();
+            tooltipEl.style.left = `${rect.left + rect.width/2}px`;
+            tooltipEl.style.top = `${rect.top - 8}px`;
+            tooltipEl.classList.add('visible');
+            // Dig Deeper button logic
+            tooltipEl.querySelector('.dig-btn').onclick = (e) => {
+                e.stopPropagation();
+                openDigModal(orbKey);
+                hideOrbTooltip();
+            };
+        }
+        function hideOrbTooltip() {
+            if (tooltipEl) {
+                tooltipEl.classList.remove('visible');
+            }
+        }
+
+        // --- Dig Modal Logic ---
+        function openDigModal(orbKey) {
+            const data = orbData[orbKey];
+            if (!data) return;
+            const modal = document.getElementById('dig-modal');
+            const body = document.getElementById('dig-modal-body');
+            body.innerHTML = data.deep;
+            modal.style.display = 'flex';
+            setTimeout(() => modal.focus(), 10);
+            // Trap focus
+            modal.onkeydown = (e) => {
+                if (e.key === 'Escape') closeDigModal();
+            };
+        }
+        function closeDigModal() {
+            const modal = document.getElementById('dig-modal');
+            modal.style.display = 'none';
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            // Add terminal boot sounds
-            const bootSound = new Audio();
-            bootSound.volume = 0.3;
-            
-            // Set core IDs randomly for visual effect (these are purely decorative)
-            const orbLabels = document.querySelectorAll('.orb-label');
-            
+            // Play boot sound and show overlay
+            playSound(BOOT_SOUND_URL, 0.25);
+            setTimeout(() => {
+                hideBootOverlay();
+            }, 1800);
+
             // Add click event listener to the container using event delegation
             const terminalFrame = document.querySelector('.terminal-frame');
-            
             if (terminalFrame) {
                 terminalFrame.addEventListener('click', (e) => {
-                    // Find the button element that was clicked, or its parent if clicked on child
                     const targetOrb = e.target.closest('.game-orb');
-                    
                     if (targetOrb) {
-                        // Create a short UI feedback sound
-                        const clickSound = new Audio();
-                        clickSound.volume = 0.2;
-                        
-                        // Get the URL and launch the game
+                        playSound(CLICK_SOUND_URL, 0.18);
                         const url = targetOrb.getAttribute('data-url');
                         if (url) {
-                            console.log(`TERMINAL: Launching scenario at ${url}`);
                             window.open(url, '_blank', 'noopener,noreferrer');
                         } else {
-                            console.warn('TERMINAL ERROR: No launch coordinates found for this module.');
+                            playSound(ERROR_SOUND_URL, 0.22);
                         }
                     }
                 });
-            } else {
-                console.error('CRITICAL ERROR: Terminal interface not initialized!');
             }
+
+            // Tooltip event listeners
+            document.querySelectorAll('.game-orb').forEach(orbBtn => {
+                orbBtn.addEventListener('mouseenter', () => {
+                    clearTimeout(tooltipTimeout);
+                    showOrbTooltip(orbBtn);
+                });
+                orbBtn.addEventListener('mouseleave', () => {
+                    tooltipTimeout = setTimeout(hideOrbTooltip, 80);
+                });
+                orbBtn.addEventListener('focus', () => {
+                    clearTimeout(tooltipTimeout);
+                    showOrbTooltip(orbBtn);
+                });
+                orbBtn.addEventListener('blur', () => {
+                    tooltipTimeout = setTimeout(hideOrbTooltip, 80);
+                });
+            });
+            // Modal close logic
+            document.querySelector('.dig-modal-close').onclick = closeDigModal;
+            document.getElementById('dig-modal').addEventListener('mousedown', (e) => {
+                if (e.target === e.currentTarget) closeDigModal();
+            });
         });
+
+        // --- Custom Shader Scene ---
+        // Simple animated GLSL fragment shader (quantum nebula/void)
+        const fragShader = `
+        precision mediump float;
+        uniform float u_time;
+        uniform vec2 u_res;
+        
+        float random(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453);
+        }
+        float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float a = random(i);
+            float b = random(i + vec2(1.0, 0.0));
+            float c = random(i + vec2(0.0, 1.0));
+            float d = random(i + vec2(1.0, 1.0));
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+        }
+        void main() {
+            vec2 uv = gl_FragCoord.xy / u_res.xy;
+            uv = uv * 2.0 - 1.0;
+            uv.x *= u_res.x / u_res.y;
+            float t = u_time * 0.18;
+            float n = 0.0;
+            float scale = 1.0;
+            for(int i=0;i<5;i++) {
+                n += (0.5/scale) * noise(uv * scale + t);
+                scale *= 2.0;
+            }
+            float nebula = smoothstep(0.2, 0.7, n);
+            vec3 col = mix(vec3(0.05,0.12,0.18), vec3(0.1,0.7,1.0), nebula);
+            col = mix(col, vec3(0.5,0.2,0.7), pow(nebula,2.0));
+            col += 0.08 * sin(uv.y * 12.0 + t * 2.0);
+            gl_FragColor = vec4(col, 1.0);
+        }
+        `;
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            return shader;
+        }
+        function startShaderScene() {
+            const canvas = document.getElementById('shader-canvas');
+            const gl = canvas.getContext('webgl');
+            if (!gl) return;
+            const vs = createShader(gl, gl.VERTEX_SHADER, `
+                attribute vec2 a_position;
+                void main() { gl_Position = vec4(a_position, 0, 1); }
+            `);
+            const fs = createShader(gl, gl.FRAGMENT_SHADER, fragShader);
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vs);
+            gl.attachShader(prog, fs);
+            gl.linkProgram(prog);
+            gl.useProgram(prog);
+            // Fullscreen quad
+            const pos = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, pos);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1, -1, 1, -1, -1, 1, 1, 1
+            ]), gl.STATIC_DRAW);
+            const loc = gl.getAttribLocation(prog, 'a_position');
+            gl.enableVertexAttribArray(loc);
+            gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+            // Uniforms
+            const u_time = gl.getUniformLocation(prog, 'u_time');
+            const u_res = gl.getUniformLocation(prog, 'u_res');
+            function resize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+            }
+            window.addEventListener('resize', resize);
+            resize();
+            let start = null;
+            function render(ts) {
+                if (!start) start = ts;
+                let t = (ts - start) * 0.001;
+                gl.uniform1f(u_time, t);
+                gl.uniform2f(u_res, canvas.width, canvas.height);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                requestAnimationFrame(render);
+            }
+            requestAnimationFrame(render);
+        }
+        document.addEventListener('DOMContentLoaded', startShaderScene);
     </script>
 </body>
 </html>
