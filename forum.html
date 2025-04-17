@@ -1,766 +1,1105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>ADVANCED WEAPONS LAB - Prototype Viewer</title>
-  <style>
-    :root {
-      --lab-primary: #0af7d9;
-      --lab-secondary: #ff8a00;
-      --lab-accent: #ff003c;
-      --lab-dark: #0a1a2a;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Shader Wallpapers (MP4/WEBM Download)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            padding: 20px 0;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #12c2e9, #c471ed, #f64f59);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .description {
+            max-width: 800px;
+            margin: 0 auto 30px;
+            text-align: center;
+            opacity: 0.8;
+        }
+        .wallpaper-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .wallpaper-item {
+            background-color: #1e1e1e;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+        .wallpaper-item:hover {
+            transform: translateY(-5px);
+        }
+        .preview-container {
+            position: relative;
+            width: 100%;
+            /* Maintain aspect ratio (e.g., 16:9) */
+            padding-top: 56.25%; /* height = 9/16 * width */
+            overflow: hidden;
+            background-color: #000; /* Fallback background */
+        }
+        .preview-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .wallpaper-info {
+            padding: 15px;
+        }
+        .wallpaper-title {
+            font-size: 1.2rem;
+            margin: 0 0 10px 0;
+        }
+        .wallpaper-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* Align items vertically */
+            margin-top: 15px;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            gap: 10px;
+        }
+        button {
+            background: #3a3a3a;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            font-size: 0.9rem;
+        }
+        button:hover {
+            background: #4a4a4a;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .download-btn-img { /* Renamed for clarity */
+            background: linear-gradient(to right, #6dd5ed, #2193b0); /* Adjusted gradient */
+        }
+        .download-btn-img:hover {
+             background: linear-gradient(to right, #5abfdb, #1c7e9a);
+        }
+        .download-btn-video { /* Specific style for video download button */
+             background: linear-gradient(to right, #12c2e9, #c471ed);
+        }
+        .download-btn-video:hover {
+             background: linear-gradient(to right, #0fabcf, #b55dd8);
+        }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: var(--lab-dark);
-      font-family: 'Rajdhani', sans-serif;
-      color: white;
-    }
-
-    #renderCanvas {
-      width: 100%;
-      height: 100%;
-      touch-action: none;
-      position: absolute;
-      z-index: 1;
-    }
-
-    .lab-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-      pointer-events: none;
-      background: radial-gradient(circle at center, transparent 30%, rgba(10, 26, 42, 0.6) 100%);
-    }
-
-    /* Grid effect for lab environment */
-    .grid-effect {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-image: 
-        linear-gradient(rgba(10, 247, 217, 0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(10, 247, 217, 0.1) 1px, transparent 1px);
-      background-size: 40px 40px;
-      z-index: 2;
-      pointer-events: none;
-      opacity: 0.3;
-    }
-
-    /* HUD Elements */
-    .hud {
-      position: absolute;
-      z-index: 3;
-      pointer-events: none;
-    }
-
-    .header {
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 1.8rem;
-      font-weight: 600;
-      text-align: center;
-      text-shadow: 0 0 8px var(--lab-primary);
-      letter-spacing: 3px;
-    }
-
-    .header::before, .header::after {
-      content: "//";
-      color: var(--lab-secondary);
-      margin: 0 10px;
-      font-size: 1.5rem;
-      opacity: 0.8;
-    }
-
-    .status-bar {
-      bottom: 30px;
-      left: 30px;
-      width: auto;
-      min-width: 280px;
-      height: auto;
-      border: 1px solid var(--lab-primary);
-      border-radius: 3px;
-      background: rgba(10, 26, 42, 0.8);
-      padding: 12px;
-      box-shadow: 0 0 15px rgba(10, 247, 217, 0.3);
-    }
-
-    .status-container {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .weapon-name {
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--lab-primary);
-      letter-spacing: 1px;
-    }
-
-    .tech-readout {
-      font-size: 0.8rem;
-      opacity: 0.8;
-      border-top: 1px solid rgba(10, 247, 217, 0.3);
-      padding-top: 5px;
-      margin-top: 5px;
-      font-family: 'Courier Prime', monospace;
-    }
-
-    /* Lab decorations */
-    .corner-indicator {
-      position: absolute;
-      width: 50px;
-      height: 50px;
-      z-index: 3;
-      opacity: 0.8;
-    }
-
-    .top-left {
-      top: 15px;
-      left: 15px;
-      border-top: 2px solid var(--lab-primary);
-      border-left: 2px solid var(--lab-primary);
-    }
-
-    .top-right {
-      top: 15px;
-      right: 15px;
-      border-top: 2px solid var(--lab-primary);
-      border-right: 2px solid var(--lab-primary);
-    }
-
-    .bottom-left {
-      bottom: 15px;
-      left: 15px;
-      border-bottom: 2px solid var(--lab-secondary);
-      border-left: 2px solid var(--lab-secondary);
-    }
-
-    .bottom-right {
-      bottom: 15px;
-      right: 15px;
-      border-bottom: 2px solid var(--lab-secondary);
-      border-right: 2px solid var(--lab-secondary);
-    }
-
-    /* Lab monitor effects */
-    .scan-line {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(10, 247, 217, 0.03) 50%, rgba(255,255,255,0) 100%);
-      animation: scanline 6s linear infinite;
-      pointer-events: none;
-      z-index: 4;
-      opacity: 0.5;
-    }
-
-    @keyframes scanline {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100%); }
-    }
-
-    /* Control panel */
-    .lab-control-panel {
-      position: absolute;
-      top: 30px;
-      right: 30px;
-      width: 160px;
-      background: rgba(10, 26, 42, 0.85);
-      border: 1px solid var(--lab-secondary);
-      border-radius: 3px;
-      padding: 12px;
-      z-index: 10;
-      box-shadow: 0 0 15px rgba(255, 138, 0, 0.3);
-    }
-
-    .panel-title {
-      font-size: 0.9rem;
-      margin-bottom: 10px;
-      color: var(--lab-secondary);
-      text-align: center;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-
-    .panel-title::before, .panel-title::after {
-      content: "—";
-      margin: 0 5px;
-      opacity: 0.7;
-    }
-
-    .control-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
-    }
-
-    .lab-btn {
-      background: rgba(10, 26, 42, 0.9);
-      border: 1px solid var(--lab-primary);
-      color: white;
-      padding: 8px;
-      border-radius: 2px;
-      font-family: 'Rajdhani', sans-serif;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      pointer-events: auto;
-      text-align: center;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-
-    .lab-btn:hover {
-      background: rgba(10, 247, 217, 0.2);
-      box-shadow: 0 0 10px rgba(10, 247, 217, 0.4);
-    }
-
-    /* Weapon Selection Panel */
-    .weapon-selection {
-      position: absolute;
-      bottom: 30px;
-      right: 30px;
-      width: 240px;
-      background: rgba(10, 26, 42, 0.85);
-      border: 1px solid var(--lab-primary);
-      border-radius: 3px;
-      padding: 12px;
-      z-index: 10;
-      box-shadow: 0 0 15px rgba(10, 247, 217, 0.3);
-    }
-
-    .weapon-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    /* Loading screen */
-    .lab-loading {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: var(--lab-dark);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 100;
-      transition: opacity 0.8s;
-    }
-
-    .loading-title {
-      font-size: 2rem;
-      color: var(--lab-primary);
-      margin-bottom: 25px;
-      text-shadow: 0 0 10px var(--lab-primary);
-    }
-
-    .loading-bar-container {
-      width: 300px;
-      height: 8px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 15px;
-      border: 1px solid rgba(10, 247, 217, 0.3);
-    }
-
-    .loading-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, var(--lab-primary), var(--lab-secondary));
-      box-shadow: 0 0 8px var(--lab-primary);
-      transition: width 0.3s;
-    }
-
-    .loading-text {
-      color: white;
-      font-size: 0.9rem;
-      font-family: 'Courier Prime', monospace;
-    }
-
-    /* Environment indicators */
-    .lab-indicator {
-      position: absolute;
-      z-index: 3;
-      font-size: 0.7rem;
-      font-family: 'Courier Prime', monospace;
-      color: var(--lab-primary);
-      opacity: 0.7;
-    }
-
-    .top-indicator {
-      top: 15px;
-      left: 80px;
-    }
-
-    .side-indicator {
-      top: 50%;
-      left: 15px;
-      transform: translateY(-50%) rotate(-90deg);
-      transform-origin: left;
-    }
-    
-    /* Audio controls */
-    .audio-control {
-      position: absolute;
-      bottom: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(10, 26, 42, 0.7);
-      padding: 5px 10px;
-      border-radius: 3px;
-      border: 1px solid var(--lab-primary);
-    }
-    
-    .audio-control button {
-      background: none;
-      border: none;
-      color: var(--lab-primary);
-      cursor: pointer;
-      font-size: 0.8rem;
-      font-family: 'Rajdhani', sans-serif;
-      padding: 2px 5px;
-      font-weight: 600;
-    }
-    
-    .audio-control button:hover {
-      text-shadow: 0 0 8px var(--lab-primary);
-    }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Courier+Prime&display=swap" rel="stylesheet">
-  <script src="https://cdn.babylonjs.com/babylon.js"></script>
-  <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
+        .fullscreen-preview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95); /* Darker background */
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .fullscreen-canvas-container {
+             position: relative;
+             width: 90%;
+             max-width: 1600px; /* Limit max width */
+             height: 80vh; /* Use viewport height */
+             max-height: 900px; /* Limit max height */
+             display: flex;
+             justify-content: center;
+             align-items: center;
+             margin-bottom: 20px; /* Space before controls */
+        }
+        .fullscreen-canvas {
+             max-width: 100%;
+             max-height: 100%;
+             display: block; /* Remove extra space below canvas */
+        }
+        .close-preview {
+            position: absolute;
+            top: 15px;
+            right: 25px;
+            font-size: 35px;
+            color: white;
+            cursor: pointer;
+            line-height: 1;
+            z-index: 1010; /* Above canvas */
+            transition: color 0.2s ease;
+        }
+         .close-preview:hover {
+             color: #ff4d4d;
+         }
+        .preview-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap; /* Allow wrapping */
+            justify-content: center; /* Center buttons */
+        }
+        .recording-indicator {
+            color: #f64f59;
+            margin-left: 5px; /* Reduced margin */
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body>
-  <canvas id="renderCanvas"></canvas>
+    <div class="container">
+        <header>
+            <h1>Dynamic Shader Wallpapers</h1>
+            <p class="description">Explore beautiful shader-based live wallpapers. Preview in real-time, download as PNG images, or record short MP4/WEBM videos!</p>
+        </header>
 
-  <div class="lab-overlay"></div>
-  <div class="grid-effect"></div>
-  <div class="scan-line"></div>
-  
-  <div class="hud header">ADVANCED WEAPONS LAB</div>
-  <div class="hud status-bar">
-    <div class="status-container">
-      <div class="weapon-name" id="weapon-name">O.T.S.F.M.B.R.C.A. XXXKENJOXXX</div>
-      <div class="tech-readout" id="tech-readout">PROTOTYPE STATUS: ACTIVE // POWER: 100% // CLEARANCE: ALPHA</div>
+        <div class="wallpaper-grid" id="wallpaperGrid">
+            </div>
     </div>
-  </div>
 
-  <div class="corner-indicator top-left"></div>
-  <div class="corner-indicator top-right"></div>
-  <div class="corner-indicator bottom-left"></div>
-  <div class="corner-indicator bottom-right"></div>
-
-  <div class="lab-indicator top-indicator">SEC.LEVEL: CLASSIFIED</div>
-  <div class="lab-indicator side-indicator">LAB.PROTOTYPE.VIEWER.V2.5</div>
-
-  <div class="lab-control-panel">
-    <div class="panel-title">LAB CONTROLS</div>
-    <div class="control-grid">
-      <button class="lab-btn" id="rotate-btn">ROTATION</button>
-      <button class="lab-btn" id="zoom-in-btn">ZOOM IN</button>
-      <button class="lab-btn" id="zoom-out-btn">ZOOM OUT</button>
-      <button class="lab-btn" id="lights-btn">LAB LIGHTS</button>
-      <button class="lab-btn" id="env-btn">ENVIRONMENT</button>
+    <div class="fullscreen-preview" id="fullscreenPreview">
+        <span class="close-preview" id="closePreview" title="Close Preview">&times;</span>
+        <div class="fullscreen-canvas-container">
+            <canvas id="fullscreenCanvas" class="fullscreen-canvas"></canvas>
+        </div>
+        <div class="preview-controls">
+            <button id="downloadImageBtnFs" class="download-btn-img">Download Image (PNG)</button>
+            <button id="recordBtn">Record Video (10s)</button>
+            <button id="downloadVideoBtn" class="download-btn-video" style="display: none;">Download Video</button> <span id="recordingIndicator" class="recording-indicator">Recording...</span>
+        </div>
     </div>
-  </div>
 
-  <div class="weapon-selection">
-    <div class="panel-title">PROTOTYPE SELECT</div>
-    <div class="weapon-grid">
-      <button class="lab-btn" id="weapon1-btn">KENJO</button>
-      <button class="lab-btn" id="weapon2-btn">DISRUPTOR</button>
-      <button class="lab-btn" id="weapon3-btn">PHASE BLAST</button>
-      <button class="lab-btn" id="weapon4-btn">VOID SHARD</button>
-      <button class="lab-btn" id="weapon5-btn">QUANTUM</button>
-    </div>
-  </div>
+    <footer>
+        <p>© 2025 Dynamic Shader Wallpapers. Shaders adapted from various open-source examples.</p>
+    </footer>
 
-  <div class="audio-control">
-    <button id="toggle-audio">AUDIO: ON</button>
-  </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Configuration (Same shaders as before)
+        const wallpapers = [
+             {
+                 id: 'waves',
+                 title: 'Ocean Waves',
+                 description: 'Calming blue ocean waves with dynamic movement',
+                 fragmentShader: `
+                     uniform float time;
+                     uniform vec2 resolution;
 
-  <div class="lab-loading" id="loading-screen">
-    <div class="loading-title">INITIALIZING VIEWER</div>
-    <div class="loading-bar-container">
-      <div class="loading-bar" id="loading-bar"></div>
-    </div>
-    <div class="loading-text" id="loading-text">ACCESSING CLASSIFIED DATABASE...</div>
-  </div>
+                     void main() {
+                         vec2 uv = gl_FragCoord.xy / resolution.xy;
 
-  <!-- Add an audio element -->
-  <audio id="background-music" loop>
-    <source src="background3.mp3" type="audio/mpeg">
-    Your browser does not support the audio element.
-  </audio>
+                         // Wave animation
+                         float wave1 = sin(uv.x * 10.0 + time * 0.8) * 0.05; // Slower waves
+                         float wave2 = sin(uv.x * 8.0 - time * 0.6 + uv.y * 4.0) * 0.03; // Added y influence and slower
 
-  <script>
-    // Initialize the loading sequence
-    const loadingBar = document.getElementById("loading-bar");
-    const loadingText = document.getElementById("loading-text");
-    const loadingScreen = document.getElementById("loading-screen");
-    const weaponNameElement = document.getElementById("weapon-name");
-    const techReadoutElement = document.getElementById("tech-readout");
-    
-    // Audio control
-    const backgroundMusic = document.getElementById("background-music");
-    const toggleAudioBtn = document.getElementById("toggle-audio");
-    let audioPlaying = false;
-    
-    // Start audio when page is loaded
-    document.addEventListener('DOMContentLoaded', function() {
-      // Play background music after a short delay for better user experience
-      setTimeout(() => {
-        playBackgroundMusic();
-      }, 1000);
-    });
-    
-    // Play background music function
-    function playBackgroundMusic() {
-      backgroundMusic.volume = 0.5; // Set initial volume to 50%
-      backgroundMusic.play()
-        .then(() => {
-          audioPlaying = true;
-          toggleAudioBtn.textContent = "AUDIO: ON";
-        })
-        .catch(error => {
-          console.log("Audio playback prevented: ", error);
-          toggleAudioBtn.textContent = "AUDIO: OFF";
-        });
-    }
-    
-    // Toggle audio on/off
-    toggleAudioBtn.addEventListener('click', function() {
-      if (audioPlaying) {
-        backgroundMusic.pause();
-        audioPlaying = false;
-        toggleAudioBtn.textContent = "AUDIO: OFF";
-      } else {
-        backgroundMusic.play();
-        audioPlaying = true;
-        toggleAudioBtn.textContent = "AUDIO: ON";
-      }
-    });
+                         // Calculate position with wave displacement
+                         float y = uv.y + wave1 + wave2;
 
-    // Weapon data with enhanced descriptions
-    const weaponData = [
-      { filename: "weapon1.glb", name: "O.T.S.F.M.B.R.C.A. XXXKENJOXXX", tech: "PROTOTYPE STATUS: ACTIVE // POWER: 100% // CLEARANCE: ALPHA" },
-      { filename: "weapon2.glb", name: "ZERO-POINT DISRUPTOR", tech: "PROTOTYPE STATUS: UNSTABLE // POWER: 187% // CLEARANCE: OMEGA" },
-      { filename: "weapon3.glb", name: "PHASE BLAST REPEATER", tech: "PROTOTYPE STATUS: READY // POWER: 92% // CLEARANCE: BETA" },
-      { filename: "weapon4.glb", name: "VOID SHARD LAUNCHER", tech: "PROTOTYPE STATUS: TESTING // POWER: 65% // CLEARANCE: DELTA" },
-      { filename: "weapon5.glb", name: "QUANTUM PULSE RIFLE", tech: "PROTOTYPE STATUS: CLASSIFIED // POWER: UNKNOWN // CLEARANCE: PRIME" }
-    ];
+                         // Ocean blue gradient
+                         vec3 color = mix(
+                             vec3(0.0, 0.1, 0.2), // Darker deep blue
+                             vec3(0.1, 0.6, 0.9), // Brighter surface blue
+                             smoothstep(0.3, 0.7, y) // Adjusted gradient range
+                         );
 
-    // Initialize Babylon.js scene
-    const canvas = document.getElementById("renderCanvas");
-    const engine = new BABYLON.Engine(canvas, true);
-    const scene = new BABYLON.Scene(engine);
+                         // Add wave highlights using noise pattern
+                         float highlightNoise = sin(uv.x * 20.0 + time * 1.5) * 0.5 + 0.5;
+                         float highlight = smoothstep(0.45 + highlightNoise * 0.05, 0.55 + highlightNoise * 0.05, y); // Dynamic highlight threshold
+                         color = mix(color, vec3(0.9, 1.0, 1.0), highlight * 0.6); // Slightly less intense highlight
 
-    // Set scene background and properties
-    scene.clearColor = new BABYLON.Color4(0.04, 0.1, 0.16, 1); // Lab dark blue
+                         // Add subtle variation/foam near peaks
+                         float foamNoise = sin(uv.x * 40.0 + time * 2.5 + uv.y * 10.0);
+                         foamNoise = smoothstep(0.7, 0.9, foamNoise);
+                         color = mix(color, vec3(0.8, 0.9, 1.0), foamNoise * smoothstep(0.5, 0.6, y) * 0.3);
 
-    // Create a camera - ArcRotateCamera is good for model viewing
-    const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
-    camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 1;
-    camera.upperRadiusLimit = 15;
-    camera.wheelDeltaPercentage = 0.02;
-    
-    // Simulated loading sequence
-    let loadProgress = 0;
-    const loadingInterval = setInterval(() => {
-      loadProgress += Math.random() * 15;
-      if (loadProgress >= 100) {
-        loadProgress = 100;
-        loadingBar.style.width = loadProgress + "%";
-        loadingText.textContent = "ACCESS GRANTED - LAUNCHING VIEWER";
-        
-        // Fade out loading screen after a short delay
-        setTimeout(() => {
-          loadingScreen.style.opacity = "0";
-          setTimeout(() => {
-            loadingScreen.style.display = "none";
-          }, 800);
-        }, 500);
-        
-        clearInterval(loadingInterval);
-      } else {
-        loadingBar.style.width = loadProgress + "%";
-        
-        // Change loading text periodically for effect
-        if (loadProgress < 30) {
-          loadingText.textContent = "ACCESSING CLASSIFIED DATABASE...";
-        } else if (loadProgress < 60) {
-          loadingText.textContent = "DECRYPTING SECURITY PROTOCOLS...";
-        } else if (loadProgress < 90) {
-          loadingText.textContent = "VERIFYING BIOMETRIC SIGNATURE...";
-        } else {
-          loadingText.textContent = "INITIALIZING LAB ENVIRONMENT...";
-        }
-      }
-    }, 200);
+                         gl_FragColor = vec4(color, 1.0);
+                     }
+                 `
+             },
+             {
+                 id: 'nebula',
+                 title: 'Cosmic Nebula',
+                 description: 'Colorful space nebula with stars and cosmic dust',
+                 fragmentShader: `
+                    uniform float time;
+                    uniform vec2 resolution;
 
+                    // Hash function for pseudo-random values
+                    float hash(vec2 p) {
+                        p = fract(p * vec2(123.34, 456.21));
+                        p += dot(p, p + 45.32);
+                        return fract(p.x * p.y);
+                    }
 
+                    // Noise function (Value Noise)
+                    float noise(vec2 p) {
+                        vec2 i = floor(p);
+                        vec2 f = fract(p);
+                        f = f * f * (3.0 - 2.0 * f); // Smoothstep interpolation
 
+                        float a = hash(i + vec2(0.0, 0.0));
+                        float b = hash(i + vec2(1.0, 0.0));
+                        float c = hash(i + vec2(0.0, 1.0));
+                        float d = hash(i + vec2(1.0, 1.0));
 
+                        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+                    }
 
+                    // Fractional Brownian Motion (fBm)
+                    float fbm(vec2 p) {
+                        float total = 0.0;
+                        float amplitude = 0.5;
+                        float frequency = 2.0;
+                        int octaves = 6;
 
+                        for (int i = 0; i < octaves; i++) {
+                            total += noise(p * frequency) * amplitude;
+                            frequency *= 2.0;
+                            amplitude *= 0.5;
+                        }
+                        return total;
+                    }
 
+                    void main() {
+                        vec2 uv = (gl_FragCoord.xy * 2.0 - resolution.xy) / min(resolution.x, resolution.y); // Centered, aspect-corrected
 
+                        // Animated coordinates for nebula noise
+                        vec2 p = uv * 1.5; // Zoom level
+                        vec2 motion = vec2(time * 0.05, time * 0.03);
+                        float n = fbm(p + motion);
+                        float n2 = fbm(p * 1.8 + motion * 0.5 + 5.0); // Second layer of noise
 
-    // Add lights
-    const mainLight = new BABYLON.HemisphericLight("mainLight", new BABYLON.Vector3(0, 1, 0), scene);
-    mainLight.intensity = 0.7;
-    mainLight.diffuse = new BABYLON.Color3(0.4, 0.7, 0.9); // Blue-tinted light
+                        // Color palette for nebula
+                        vec3 col1 = vec3(0.1, 0.0, 0.3); // Deep Purple/Blue
+                        vec3 col2 = vec3(0.8, 0.1, 0.4); // Magenta/Pink
+                        vec3 col3 = vec3(0.0, 0.4, 0.7); // Cyan/Blue
+                        vec3 col4 = vec3(0.9, 0.7, 0.2); // Yellow/Orange hints
 
-    // Add directed spotlights for lab effect
-    const spotLight1 = new BABYLON.SpotLight("spotLight1", new BABYLON.Vector3(5, 5, 0), new BABYLON.Vector3(-1, -1, 0), Math.PI/4, 2, scene);
-    spotLight1.diffuse = new BABYLON.Color3(0.04, 0.97, 0.86); // Primary lab color
-    spotLight1.intensity = 0.8;
+                        // Mix colors based on noise values
+                        vec3 color = mix(col1, col2, smoothstep(0.3, 0.6, n));
+                        color = mix(color, col3, smoothstep(0.4, 0.7, n2));
+                        color = mix(color, col4, smoothstep(0.7, 0.8, n * n2)); // Brighter areas get yellowish hints
 
-    const spotLight2 = new BABYLON.SpotLight("spotLight2", new BABYLON.Vector3(-5, 3, -5), new BABYLON.Vector3(1, -0.5, 1), Math.PI/4, 2, scene);
-    spotLight2.diffuse = new BABYLON.Color3(1, 0.54, 0); // Secondary lab color
-    spotLight2.intensity = 0.6;
+                        // Darken edges
+                        color *= smoothstep(1.5, 0.8, length(uv));
 
-    // Add a glow layer for emissive parts
-    const gl = new BABYLON.GlowLayer("glow", scene);
-    gl.intensity = 0.7;
+                        // Add stars
+                        float starDensity = 200.0;
+                        vec2 gridUV = fract(uv * starDensity);
+                        vec2 id = floor(uv * starDensity);
+                        float starHash = hash(id + sin(time * 0.1 + id.y * 0.1)); // Add slight twinkle/movement
 
-    // Create environment for reflections
-    const hdrTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("https://assets.babylonjs.com/environments/environmentSpecular.env", scene);
-    scene.environmentTexture = hdrTexture;
-    
-    // Create a subtle fog effect
-    scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
-    scene.fogDensity = 0.01;
-    scene.fogColor = new BABYLON.Color3(0.04, 0.1, 0.16);
+                        float star = 0.0;
+                        if (starHash > 0.99) { // Adjust threshold for density
+                             float size = fract(starHash * 100.0) * 0.01 + 0.002; // Vary star size
+                             float falloff = smoothstep(size, 0.0, length(gridUV - 0.5));
+                             star = falloff * (fract(starHash * 10.0) * 0.5 + 0.5); // Vary brightness
+                        }
 
-    // Variable to store loaded weapon and states
-    let weapon;
-    let isRotating = true;
-    let currentWeaponIndex = 0;
-    let environmentMode = 0; // 0: normal, 1: hologram, 2: xray
+                        // Add stars to the final color, respecting nebula opacity
+                        color = mix(color, color + vec3(star), star);
 
-    // Function to load weapon
-    function loadWeapon(weaponIndex) {
-      // Show loading screen
-      loadingScreen.style.display = "flex";
-      loadingScreen.style.opacity = "1";
-      loadingBar.style.width = "0%";
-      loadingText.textContent = "ACCESSING CLASSIFIED DATABASE...";
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                 `
+             },
+             {
+                 id: 'plasma',
+                 title: 'Electric Plasma',
+                 description: 'Energetic electric plasma field with dynamic movement',
+                 fragmentShader: `
+                    uniform float time;
+                    uniform vec2 resolution;
 
-      // Get weapon data
-      const weaponInfo = weaponData[weaponIndex];
-      currentWeaponIndex = weaponIndex;
+                    float plasmaFunc(vec2 uv, float offset) {
+                        float v = 0.0;
+                        v += sin((uv.x * 10.0) + time * 1.1 + cos(time * 0.3 + offset));
+                        v += sin((uv.y * 12.0) - time * 0.9 + sin(time * 0.5 + offset * 1.5));
+                        v += sin((uv.x + uv.y * 0.8) * 8.0 + time * 1.2 + offset * 2.0);
+                        vec2 center = vec2(0.5, 0.5);
+                        float dist = length(uv - center);
+                        v += sin(dist * 14.0 - time * 0.7 + offset * 0.5);
+                        return v;
+                    }
 
-      // Update weapon info in the UI
-      weaponNameElement.textContent = weaponInfo.name;
-      techReadoutElement.textContent = weaponInfo.tech;
+                    void main() {
+                        vec2 uv = gl_FragCoord.xy / resolution.xy;
 
-      // Simulate loading progress
-      let loadProgress = 0;
-      const loadingInterval = setInterval(() => {
-        loadProgress += Math.random() * 15;
-        if (loadProgress >= 100) {
-          loadProgress = 100;
-          clearInterval(loadingInterval);
-          loadingBar.style.width = "100%";
-          loadingText.textContent = "PROTOTYPE LOADED";
-          setTimeout(() => {
-            loadingScreen.style.opacity = "0";
-            setTimeout(() => {
-              loadingScreen.style.display = "none";
-            }, 800);
-          }, 600);
-        } else {
-          loadingBar.style.width = loadProgress + "%";
-          if (loadProgress > 30 && loadProgress < 60) {
-            loadingText.textContent = "DECRYPTING PROTOTYPE DATA...";
-          } else if (loadProgress >= 60 && loadProgress < 90) {
-            loadingText.textContent = "RENDERING PROTOTYPE...";
-          }
-        }
-      }, 100);
+                        // Create plasma effect by combining sine waves
+                        float plasma = plasmaFunc(uv, 0.0);
 
-      // Remove previous weapon if exists
-      if (weapon) {
-        const animGroup = scene.getAnimationGroupByName("rotationGroup");
-        if (animGroup) {
-          animGroup.stop();
-        }
-        weapon.dispose();
-      }
+                        // Normalize plasma value to [0, 1] range
+                        // The division factor depends on the number of sin calls added
+                        float normalizedPlasma = (plasma / 4.0) * 0.5 + 0.5;
 
-      // Load the new weapon
-      BABYLON.SceneLoader.ImportMesh("", "assets/weapons/", weaponInfo.filename, scene, (meshes) => {
-        if (meshes.length > 0) {
-          weapon = meshes[0];
-          weapon.position = new BABYLON.Vector3(0, 0, 0);
+                        // Create color based on plasma value using HSL-like rotation
+                        float hue = normalizedPlasma + time * 0.1; // Rotate hue over time
+                        vec3 color = vec3(
+                            0.5 + 0.5 * cos(hue * 6.28318 + 0.0), // Red
+                            0.5 + 0.5 * cos(hue * 6.28318 + 2.09439), // Green (pi * 2/3)
+                            0.5 + 0.5 * cos(hue * 6.28318 + 4.18879)  // Blue (pi * 4/3)
+                        );
 
-          // Apply materials based on environment mode
-          updateEnvironmentMode();
+                        // Add electric tendrils/noise for more detail
+                        float tendrilNoise = sin(uv.x * 40.0 + time * 3.0 + sin(uv.y * 60.0 + time * 1.5)) *
+                                             cos(uv.y * 35.0 - time * 2.5 + sin(uv.x * 55.0 - time * 2.0));
+                        float tendrils = smoothstep(0.7, 0.9, tendrilNoise); // Sharpen the tendrils
 
-          // Apply glow to emissive materials
-          meshes.forEach(mesh => {
-            if (mesh.material && mesh.material.emissiveColor && 
-               (mesh.material.emissiveColor.r > 0 || 
-                mesh.material.emissiveColor.g > 0 || 
-                mesh.material.emissiveColor.b > 0)) {
-              gl.addIncludedOnlyMesh(mesh);
+                        // Bright cyan/white color for tendrils
+                        vec3 tendrilColor = vec3(0.5, 0.9, 1.0);
+                        color = mix(color, tendrilColor, tendrils * 0.5); // Blend tendrils softly
+
+                        // Enhance contrast slightly
+                        color = pow(color, vec3(1.1));
+
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                 `
+             },
+             {
+                 id: 'fire',
+                 title: 'Dancing Flames',
+                 description: 'Abstract flowing fire simulation',
+                 fragmentShader: `
+                    uniform float time;
+                    uniform vec2 resolution;
+
+                    // Pseudo-random number generator
+                    float random(vec2 st) {
+                        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+                    }
+
+                    // 2D Value Noise function
+                    float noise(vec2 st) {
+                        vec2 i = floor(st);
+                        vec2 f = fract(st);
+
+                        // Smooth interpolation (smoothstep)
+                        vec2 u = f * f * (3.0 - 2.0 * f);
+
+                        float a = random(i + vec2(0.0, 0.0));
+                        float b = random(i + vec2(1.0, 0.0));
+                        float c = random(i + vec2(0.0, 1.0));
+                        float d = random(i + vec2(1.0, 1.0));
+
+                        return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+                    }
+
+                    // Fractional Brownian Motion (fBm) - sums layers of noise
+                    #define OCTAVES 6
+                    float fbm(vec2 st) {
+                        float value = 0.0;
+                        float amplitude = 0.5;
+                        float frequency = 2.0; // Start with base frequency
+                        for (int i = 0; i < OCTAVES; i++) {
+                            value += amplitude * noise(st * frequency);
+                            st *= 2.0; // Double frequency (can also use frequency *= 2.0;)
+                            amplitude *= 0.5; // Halve amplitude
+                        }
+                        return value;
+                    }
+
+                    void main() {
+                        vec2 uv = gl_FragCoord.xy / resolution.xy;
+
+                        // Distort UVs upwards over time for flame effect
+                        vec2 q = uv;
+                        q.x *= 1.2; // Make flames a bit wider base
+                        q.y *= 1.5; // Stretch vertically
+
+                        // Add time-based vertical motion + horizontal wobble using noise
+                        float timeScaled = time * 0.6;
+                        float noiseOffset = noise(vec2(q.x * 2.0, timeScaled * 0.5));
+                        q.y += timeScaled;
+                        q.x += (noise(vec2(q.y * 0.5, timeScaled * 0.8)) - 0.5) * 0.2; // Horizontal wobble
+
+                        // Calculate fbm noise based on distorted coords
+                        // Adding noise to the input coords creates swirling patterns
+                        float fbmVal = fbm(q + noiseOffset * 0.5);
+
+                        // Shape the fire - stronger towards bottom, fades upwards
+                        float fireShape = smoothstep(0.0, 1.0, 1.0 - uv.y * 1.2); // Sharper fade at top
+
+                        // Combine noise and shape
+                        float fireIntensity = fbmVal * fireShape;
+                        fireIntensity = pow(max(0.0, fireIntensity), 1.5); // Increase contrast
+
+                        // Color Mapping - Black -> Red -> Orange -> Yellow -> White
+                        vec3 black = vec3(0.0, 0.0, 0.0);
+                        vec3 red = vec3(0.7, 0.1, 0.0);
+                        vec3 orange = vec3(1.0, 0.4, 0.0);
+                        vec3 yellow = vec3(1.0, 0.9, 0.2);
+
+                        vec3 color = black;
+                        color = mix(color, red, smoothstep(0.0, 0.3, fireIntensity));
+                        color = mix(color, orange, smoothstep(0.3, 0.6, fireIntensity));
+                        color = mix(color, yellow, smoothstep(0.6, 0.8, fireIntensity));
+
+                        // Add subtle dark smoke/soot based on another noise layer
+                        float smokeNoise = fbm(q * 0.8 + vec2(0.0, -time * 0.2)); // Slower moving smoke
+                        smokeNoise = smoothstep(0.5, 0.7, smokeNoise);
+                        color = mix(color, black, smokeNoise * fireShape * 0.3); // Mix in dark smoke
+
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                 `
+             },
+             {
+                 id: 'aurora',
+                 title: 'Northern Lights',
+                 description: 'Mesmerizing aurora borealis against night sky',
+                 fragmentShader: `
+                    uniform float time;
+                    uniform vec2 resolution;
+
+                    // Simplex noise functions (credit: Stefan Gustavson/Ashima Arts)
+                    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+                    float snoise(vec3 v) {
+                        const vec2 C = vec2(1.0/6.0, 1.0/3.0) ;
+                        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+                        vec3 i  = floor(v + dot(v, C.yyy) );
+                        vec3 x0 = v - i + dot(i, C.xxx) ;
+
+                        vec3 g = step(x0.yzx, x0.xyz);
+                        vec3 l = 1.0 - g;
+                        vec3 i1 = min( g.xyz, l.zxy );
+                        vec3 i2 = max( g.xyz, l.zxy );
+
+                        vec3 x1 = x0 - i1 + C.xxx;
+                        vec3 x2 = x0 - i2 + C.yyy;
+                        vec3 x3 = x0 - D.yyy;
+
+                        i = mod289(i);
+                        vec4 p = permute( permute( permute(
+                                    i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+                                + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+                                + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+                        float n_ = 0.142857142857; // 1.0/7.0
+                        vec3  ns = n_ * D.wyz - D.xzx;
+
+                        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+                        vec4 x_ = floor(j * ns.z);
+                        vec4 y_ = floor(j - 7.0 * x_ );
+
+                        vec4 x = x_ *ns.x + ns.yyyy;
+                        vec4 y = y_ *ns.x + ns.yyyy;
+                        vec4 h = 1.0 - abs(x) - abs(y);
+
+                        vec4 b0 = vec4( x.xy, y.xy );
+                        vec4 b1 = vec4( x.zw, y.zw );
+
+                        vec4 s0 = floor(b0)*2.0 + 1.0;
+                        vec4 s1 = floor(b1)*2.0 + 1.0;
+                        vec4 sh = -step(h, vec4(0.0));
+
+                        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+                        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+                        vec3 p0 = vec3(a0.xy,h.x);
+                        vec3 p1 = vec3(a0.zw,h.y);
+                        vec3 p2 = vec3(a1.xy,h.z);
+                        vec3 p3 = vec3(a1.zw,h.w);
+
+                        vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+                        p0 *= norm.x;
+                        p1 *= norm.y;
+                        p2 *= norm.z;
+                        p3 *= norm.w;
+
+                        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                        m = m * m;
+                        return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+                    }
+
+                     // Fractional Brownian Motion for Aurora shapes
+                     float fbm_aurora(vec3 p) {
+                         float value = 0.0;
+                         float amplitude = 0.5;
+                         float frequency = 0.8; // Base frequency lower for broader shapes
+                         int octaves = 5;
+
+                         for (int i = 0; i < octaves; i++) {
+                             value += amplitude * snoise(p * frequency);
+                             frequency *= 2.1; // Increase frequency
+                             amplitude *= 0.45; // Decrease amplitude faster
+                         }
+                         return value;
+                     }
+
+                     void main() {
+                         vec2 uv = gl_FragCoord.xy / resolution.xy;
+
+                         // --- Star Field ---
+                         vec3 skyColor = vec3(0.02, 0.03, 0.08); // Dark blue night sky
+                         float t = time * 0.05;
+
+                         // Use noise for stars, vary brightness and add twinkle
+                         float starNoise = snoise(vec3(uv * 200.0, t)); // Scale up UVs for density
+                         float stars = smoothstep(0.8, 0.9, starNoise); // Threshold for stars
+                         stars *= pow(fract(starNoise * 100.0), 2.0); // Vary brightness
+
+                         // Twinkling effect
+                         stars *= 0.5 + 0.5 * sin(time * 2.0 + uv.x * 100.0 + uv.y * 50.0);
+
+                         vec3 finalColor = skyColor + vec3(stars * 0.8); // Add stars to sky
+
+                         // --- Aurora ---
+                         vec3 auroraCoord = vec3(uv.x * 2.0, uv.y * 1.0 - 0.2, time * 0.1); // Adjusted coordinates for aurora shape and movement
+
+                         // Multiple layers of fbm noise for aurora complexity
+                         float noise1 = fbm_aurora(auroraCoord + vec3(0.0, 0.0, time * 0.05));
+                         float noise2 = fbm_aurora(auroraCoord * 1.5 + vec3(0.0, 0.1, -time * 0.08 + 5.0));
+
+                         // Combine noise patterns to create streaks
+                         float combinedNoise = noise1 + noise2 * 0.5;
+
+                         // Shape the aurora vertically - stronger near center/top, fade at bottom
+                         float verticalShape = smoothstep(0.1, 0.8, uv.y) * (1.0 - smoothstep(0.7, 1.0, uv.y));
+                         // Add subtle horizontal shaping/banding
+                         float horizontalShape = 0.5 + 0.5 * sin(uv.x * 5.0 + time * 0.3 + noise1 * 2.0);
+
+                         // Final aurora intensity
+                         float auroraIntensity = pow(max(0.0, combinedNoise), 2.5) * verticalShape * horizontalShape;
+                         auroraIntensity = smoothstep(0.05, 0.5, auroraIntensity) * 0.8; // Clip and scale intensity
+
+                         // Aurora Color Gradient (Green dominant with hints of Pink/Purple)
+                         vec3 green = vec3(0.1, 0.9, 0.3);
+                         vec3 pink = vec3(0.8, 0.2, 0.6);
+                         vec3 cyan = vec3(0.2, 0.7, 0.8);
+
+                         vec3 auroraColor = mix(green, cyan, smoothstep(0.2, 0.7, noise1)); // Base green/cyan mix
+                         auroraColor = mix(auroraColor, pink, smoothstep(0.4, 0.8, noise2) * 0.5); // Add pink highlights
+
+                         // Blend aurora onto the sky
+                         finalColor = mix(finalColor, auroraColor, auroraIntensity);
+
+                         gl_FragColor = vec4(finalColor, 1.0);
+                     }
+                 `
+             }
+        ];
+
+        // Shader renderer class
+        class ShaderRenderer {
+            constructor(canvas, fragmentShader) {
+                this.canvas = canvas;
+                this.fragmentShader = fragmentShader;
+                this.time = Math.random() * 100; // Start at random time for variety
+                this.isActive = false;
+                this.animationFrameId = null;
+                this.mediaRecorder = null;
+                this.recordedChunks = [];
+                this.recordingMimeType = ''; // Store the actual mime type used
+
+                // Debounce resize handling
+                this.resizeTimeout = null;
+                this.handleResize = this.handleResize.bind(this);
+                this.render = this.render.bind(this); // Bind render once
+
+                this.init();
             }
-          });
 
-          // Setup rotation animation
-          const rotationAnimation = new BABYLON.Animation(
-            "rotationAnimation", "rotation.y", 30,
-            BABYLON.Animation.ANIMATIONTYPE_FLOAT,
-            BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
-          );
-          rotationAnimation.setKeys([
-            { frame: 0, value: 0 }, 
-            { frame: 300, value: 2 * Math.PI }
-          ]);
-          weapon.animations.push(rotationAnimation);
+            init() {
+                try {
+                    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, preserveDrawingBuffer: true, antialias: true }); // Enable preserveDrawingBuffer
+                    this.renderer.setPixelRatio(window.devicePixelRatio * 0.75); // Adjust pixel ratio for performance if needed
+                } catch (error) {
+                    console.error("Error creating WebGL Renderer:", error);
+                    this.canvas.getContext('2d').fillText('WebGL not supported or failed to initialize.', 10, 20);
+                    return; // Stop initialization if WebGL fails
+                }
 
-          // Start rotation if enabled
-          if (isRotating) {
-            scene.beginAnimation(weapon, 0, 300, true, 0.5, null, "rotationGroup");
-          }
-        } else {
-          console.error("Failed to load weapon model");
-          loadingText.textContent = "ERROR: PROTOTYPE DATA CORRUPTED";
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+                this.material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: this.time },
+                        resolution: { value: new THREE.Vector2(this.canvas.width, this.canvas.height) }
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = vec4(position, 1.0);
+                        }
+                    `, // Simple pass-through vertex shader
+                    fragmentShader: this.fragmentShader,
+                    depthWrite: false,
+                    depthTest: false
+                });
+
+                const geometry = new THREE.PlaneGeometry(2, 2);
+                const mesh = new THREE.Mesh(geometry, this.material);
+                this.scene.add(mesh);
+
+                this.resize(); // Set initial size correctly
+            }
+
+            resize() {
+                // Use parent container's dimensions for sizing if available and canvas is absolutely positioned
+                const parent = this.canvas.parentElement;
+                const useParentSize = window.getComputedStyle(this.canvas).position === 'absolute' && parent;
+
+                const width = useParentSize ? parent.clientWidth : this.canvas.clientWidth;
+                const height = useParentSize ? parent.clientHeight : this.canvas.clientHeight;
+                const devicePixelRatio = window.devicePixelRatio * 0.75; // Match renderer setting
+
+                const displayWidth = Math.floor(width * devicePixelRatio);
+                const displayHeight = Math.floor(height * devicePixelRatio);
+
+                // Check if resize is really needed
+                if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+                    this.renderer.setSize(displayWidth, displayHeight, false); // Update renderer size
+                    this.canvas.style.width = `${width}px`;   // Keep CSS size consistent
+                    this.canvas.style.height = `${height}px`; // Keep CSS size consistent
+                    if (this.material) {
+                       this.material.uniforms.resolution.value.set(displayWidth, displayHeight);
+                    }
+                }
+            }
+
+             // Debounced resize handler
+            handleResize() {
+                clearTimeout(this.resizeTimeout);
+                this.resizeTimeout = setTimeout(() => {
+                    this.resize();
+                }, 100); // Adjust debounce delay as needed
+            }
+
+
+            render() {
+                if (!this.isActive || !this.renderer) return; // Check if renderer exists
+
+                this.animationFrameId = requestAnimationFrame(this.render);
+
+                this.time += 0.016; // Increment time (approx 60fps)
+                if (this.material) {
+                    this.material.uniforms.time.value = this.time;
+                }
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            start() {
+                if (this.isActive || !this.renderer) return;
+                this.isActive = true;
+                this.resize(); // Ensure size is correct before starting
+                this.render();
+                window.addEventListener('resize', this.handleResize);
+            }
+
+            stop() {
+                this.isActive = false;
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+                 window.removeEventListener('resize', this.handleResize);
+
+                 // Clean up THREE.js resources (optional but good practice)
+                 /*
+                 if (this.material) this.material.dispose();
+                 if (this.scene) {
+                     const mesh = this.scene.children.find(c => c instanceof THREE.Mesh);
+                     if (mesh && mesh.geometry) mesh.geometry.dispose();
+                 }
+                 if (this.renderer) this.renderer.dispose();
+                 this.renderer = null;
+                 this.material = null;
+                 this.scene = null;
+                 */
+            }
+
+            // --- MP4/WEBM Recording Logic ---
+            startRecording(duration = 10) {
+                return new Promise((resolve, reject) => {
+                    if (!this.canvas || !this.isActive || !this.renderer) {
+                        console.error("Cannot record: Renderer not active or canvas not found.");
+                        return reject("Renderer not active");
+                    }
+                    if (!this.canvas.captureStream) {
+                         console.error("canvas.captureStream() not supported.");
+                         alert("Video recording is not supported in your browser (canvas.captureStream missing).");
+                         return reject("captureStream not supported");
+                    }
+                     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                         console.warn("Recording already in progress.");
+                         return reject("Recording in progress");
+                     }
+
+
+                    // --- MIME Type Check ---
+                    const supportedTypes = [
+                        { mime: 'video/mp4', extension: 'mp4' },
+                        { mime: 'video/webm;codecs=vp9', extension: 'webm' }, // Prefer VP9 for WEBM
+                        { mime: 'video/webm;codecs=vp8', extension: 'webm' },
+                        { mime: 'video/webm', extension: 'webm' } // Generic WEBM fallback
+                    ];
+
+                    let selectedType = null;
+                    for (const typeInfo of supportedTypes) {
+                        if (MediaRecorder.isTypeSupported(typeInfo.mime)) {
+                            selectedType = typeInfo;
+                            console.log(`Using MIME type: ${selectedType.mime}`);
+                            break;
+                        }
+                    }
+
+                    if (!selectedType) {
+                        console.error("No supported MIME type found for MediaRecorder (MP4 or WEBM).");
+                        alert("Video recording failed: No supported video format (MP4/WEBM) found in your browser.");
+                         return reject("No supported MIME type");
+                    }
+                    this.recordingMimeType = selectedType.mime; // Store the selected type
+                    this.recordingFileExtension = selectedType.extension; // Store the extension
+                    // --- End MIME Type Check ---
+
+
+                    try {
+                        // Use a frame rate that matches animation or is reasonable (e.g., 30fps)
+                        const stream = this.canvas.captureStream(30);
+                        this.mediaRecorder = new MediaRecorder(stream, {
+                             mimeType: this.recordingMimeType,
+                             videoBitsPerSecond: 5000000 // 5 Mbps (adjust as needed)
+                        });
+                    } catch (error) {
+                         console.error("Failed to create MediaRecorder:", error);
+                         alert(`Video recording failed: Could not create recorder. Error: ${error.message}`);
+                         return reject(`MediaRecorder creation failed: ${error.message}`);
+                    }
+
+                    this.recordedChunks = [];
+
+                    this.mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            this.recordedChunks.push(e.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        console.log("Recording stopped.");
+                        // Don't save automatically here, wait for button click
+                        resolve({ mimeType: this.recordingMimeType, extension: this.recordingFileExtension }); // Resolve the promise when stopped
+                    };
+
+                    this.mediaRecorder.onerror = (e) => {
+                         console.error("MediaRecorder error:", e.error);
+                         alert(`Video recording error: ${e.error.name} - ${e.error.message}`);
+                         reject(`MediaRecorder error: ${e.error.name}`);
+                     };
+
+                    this.mediaRecorder.start();
+                    console.log(`Recording started for ${duration} seconds (${this.recordingMimeType})...`);
+
+                    // Stop recording after specified duration
+                    setTimeout(() => {
+                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                            this.mediaRecorder.stop();
+                        }
+                    }, duration * 1000);
+                });
+            }
+
+            saveRecordedVideo(filename = 'wallpaper') {
+                 if (!this.recordedChunks || this.recordedChunks.length === 0) {
+                     console.error("No recorded data to save.");
+                     alert("Could not save video: No recording data found.");
+                     return;
+                 }
+                 if (!this.recordingMimeType || !this.recordingFileExtension) {
+                     console.error("Missing recording format information.");
+                      alert("Could not save video: Recording format unknown.");
+                     return;
+                 }
+
+
+                const blob = new Blob(this.recordedChunks, { type: this.recordingMimeType });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                // Use the stored file extension
+                a.download = `${filename}.${this.recordingFileExtension}`;
+                document.body.appendChild(a);
+                a.click();
+
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    // Clear chunks after download
+                    this.recordedChunks = [];
+                    this.recordingMimeType = '';
+                    this.recordingFileExtension = '';
+                }, 100);
+            }
+             // --- End Recording Logic ---
+
+
+            downloadImage(filename = 'wallpaper.png') {
+                if (!this.renderer || !this.canvas) {
+                    console.error("Cannot download image: Renderer or canvas not available.");
+                    return;
+                }
+                 // Ensure the latest frame is drawn before capturing
+                 this.renderer.render(this.scene, this.camera);
+
+                try {
+                    const dataURL = this.canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.download = filename;
+                    link.href = dataURL;
+                    link.click();
+                } catch (e) {
+                    console.error("Error generating image data URL:", e);
+                    alert("Failed to download image. This might be due to browser security restrictions (tainted canvas) if using cross-origin resources, though unlikely with shaders.");
+                }
+            }
         }
-      }, null, (scene, message, exception) => {
-        console.error("Error during model loading:", message, exception);
-        loadingText.textContent = "ERROR: PROTOTYPE DATA CORRUPTED";
-      });
-    }
 
-    // Function to update environment display mode
-    function updateEnvironmentMode() {
-      if (!weapon) return;
-      
-      // Apply different material effects based on mode
-      weapon.getChildMeshes().forEach(mesh => {
-        if (mesh.material) {
-          switch(environmentMode) {
-            case 0: // Normal
-              mesh.material.emissiveColor = mesh.material._originalEmissive || mesh.material.emissiveColor;
-              mesh.material.wireframe = false;
-              mesh.visibility = 1.0;
-              break;
-            case 1: // Hologram
-              mesh.material._originalEmissive = mesh.material._originalEmissive || mesh.material.emissiveColor.clone();
-              mesh.material.emissiveColor = new BABYLON.Color3(0.04, 0.97, 0.86);
-              mesh.material.wireframe = true;
-              mesh.visibility = 0.7;
-              break;
-            case 2: // X-Ray
-              mesh.material._originalEmissive = mesh.material._originalEmissive || mesh.material.emissiveColor.clone();
-              mesh.material.emissiveColor = new BABYLON.Color3(1, 0.54, 0);
-              mesh.material.wireframe = false;
-              mesh.material.alpha = 0.5;
-              mesh.visibility = 0.7;
-              break;
-          }
-        }
-      });
-    }
+        // Application logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const wallpaperGrid = document.getElementById('wallpaperGrid');
+            const fullscreenPreview = document.getElementById('fullscreenPreview');
+            const fullscreenCanvas = document.getElementById('fullscreenCanvas');
+            const closePreview = document.getElementById('closePreview');
+            const downloadImageBtnFs = document.getElementById('downloadImageBtnFs'); // Fullscreen Image Download
+            const recordBtn = document.getElementById('recordBtn');
+            const downloadVideoBtn = document.getElementById('downloadVideoBtn'); // Video Download Button
+            const recordingIndicator = document.getElementById('recordingIndicator');
 
-    // Load the initial weapon
-    loadWeapon(0);
+            let previewRenderers = {}; // Store preview renderers to manage them
+            let activeFullscreenRenderer = null;
+            let currentWallpaperId = '';
+            let isRecording = false;
+            let lastRecordingInfo = null; // Store info about the last recording
 
-    // Weapon selection buttons
-    document.getElementById("weapon1-btn").addEventListener("click", () => loadWeapon(0));
-    document.getElementById("weapon2-btn").addEventListener("click", () => loadWeapon(1));
-    document.getElementById("weapon3-btn").addEventListener("click", () => loadWeapon(2));
-    document.getElementById("weapon4-btn").addEventListener("click", () => loadWeapon(3));
-    document.getElementById("weapon5-btn").addEventListener("click", () => loadWeapon(4));
+            // Create wallpaper items
+            wallpapers.forEach(wallpaper => {
+                const wallpaperItem = document.createElement('div');
+                wallpaperItem.className = 'wallpaper-item';
+                wallpaperItem.innerHTML = `
+                    <div class="preview-container">
+                        <canvas id="canvas-${wallpaper.id}"></canvas> </div>
+                    <div class="wallpaper-info">
+                        <h3 class="wallpaper-title">${wallpaper.title}</h3>
+                        <p>${wallpaper.description}</p>
+                        <div class="wallpaper-controls">
+                            <button class="preview-btn" data-id="${wallpaper.id}" title="Open Fullscreen Preview">Preview</button>
+                            <button class="download-img-btn-grid download-btn-img" data-id="${wallpaper.id}" title="Download Still Image (PNG)">Download PNG</button>
+                        </div>
+                    </div>
+                `;
+                wallpaperGrid.appendChild(wallpaperItem);
 
-    // Control panel functionality
-    document.getElementById("rotate-btn").addEventListener("click", function() {
-      if (weapon) {
-        isRotating = !isRotating;
-        const animGroup = scene.getAnimationGroupByName("rotationGroup");
-        if (isRotating) {
-          if (animGroup && animGroup.isStarted && !animGroup.isPlaying) {
-            animGroup.play(true);
-          } else if (!animGroup || !animGroup.isStarted) {
-            scene.beginAnimation(weapon, 0, 300, true, 0.5, null, "rotationGroup");
-          }
-        } else {
-          if (animGroup && animGroup.isPlaying) {
-            animGroup.pause();
-          }
-        }
-      }
-    });
+                // Initialize preview renderer
+                const canvas = document.getElementById(`canvas-${wallpaper.id}`);
+                 try {
+                    const renderer = new ShaderRenderer(canvas, wallpaper.fragmentShader);
+                    previewRenderers[wallpaper.id] = renderer; // Store renderer
+                    renderer.start(); // Start preview animation
+                } catch (error) {
+                     console.error(`Failed to initialize preview for ${wallpaper.id}:`, error);
+                     // Optionally display an error message on the preview canvas
+                     const ctx = canvas.getContext('2d');
+                     if (ctx) {
+                         ctx.fillStyle = 'red';
+                         ctx.font = '12px Arial';
+                         ctx.fillText('Error loading preview', 5, 15);
+                     }
+                 }
+            });
 
-    document.getElementById("zoom-in-btn").addEventListener("click", function() {
-      BABYLON.Animation.CreateAndStartAnimation('zoomIn', camera, 'radius', 30, 15, 
-        camera.radius, Math.max(camera.lowerRadiusLimit, camera.radius * 0.7), 
-        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
-    });
-    
-    document.getElementById("zoom-out-btn").addEventListener("click", function() {
-      BABYLON.Animation.CreateAndStartAnimation('zoomOut', camera, 'radius', 30, 15, 
-        camera.radius, Math.min(camera.upperRadiusLimit, camera.radius * 1.3), 
-        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
-    });
+            // Handle grid buttons
+            wallpaperGrid.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList.contains('preview-btn')) {
+                    const wallpaperId = target.dataset.id;
+                    openFullscreenPreview(wallpaperId);
+                } else if (target.classList.contains('download-img-btn-grid')) {
+                    const wallpaperId = target.dataset.id;
+                    const renderer = previewRenderers[wallpaperId];
+                     if (renderer) {
+                          // Use a temporary renderer instance on the specific canvas for download if needed,
+                          // or ensure the existing preview renderer is properly configured.
+                          // For simplicity, let's re-render once on the preview canvas and grab it.
+                          // Note: This might capture a frame different from the *exact* moment of click.
+                         renderer.downloadImage(`${wallpaperId}_preview.png`);
+                     } else {
+                         console.error("Preview renderer not found for download:", wallpaperId);
+                     }
+                }
+            });
 
-    // Toggle lab lights
-    let lightsOn = true;
-    document.getElementById("lights-btn").addEventListener("click", function() {
-      lightsOn = !lightsOn;
-      mainLight.intensity = lightsOn ? 0.7 : 0.2;
-      spotLight1.intensity = lightsOn ? 0.8 : 0.1;
-      spotLight2.intensity = lightsOn ? 0.6 : 0.1;
-      gl.intensity = lightsOn ? 0.7 : 1.0; // Increase glow in dark
-    });
+            // Open fullscreen preview
+            function openFullscreenPreview(wallpaperId) {
+                currentWallpaperId = wallpaperId;
+                const wallpaper = getWallpaperById(wallpaperId);
+                if (!wallpaper) return;
 
-    // Toggle environment mode
-    document.getElementById("env-btn").addEventListener("click", function() {
-      environmentMode = (environmentMode + 1) % 3; // Cycle through modes
-      updateEnvironmentMode();
-    });
+                 // Stop all preview renderers to save resources
+                 Object.values(previewRenderers).forEach(r => r.stop());
 
-    // Resize the engine on window resize
-    window.addEventListener("resize", function() {
-      engine.resize();
-    });
+                // Stop existing fullscreen renderer if any
+                if (activeFullscreenRenderer) {
+                    activeFullscreenRenderer.stop();
+                    activeFullscreenRenderer = null;
+                }
 
-    // Run the render loop
-    engine.runRenderLoop(function() {
-      scene.render();
-    });
-  </script>
+
+                 try {
+                    // Start new fullscreen renderer
+                    activeFullscreenRenderer = new ShaderRenderer(fullscreenCanvas, wallpaper.fragmentShader);
+                    activeFullscreenRenderer.start();
+                    fullscreenPreview.style.display = 'flex';
+
+                    // Reset recording state for the new preview
+                    isRecording = false;
+                    recordBtn.disabled = false;
+                    recordingIndicator.style.display = 'none';
+                    downloadVideoBtn.style.display = 'none'; // Hide video download button
+                    lastRecordingInfo = null;
+
+
+                    // Adjust fullscreen canvas size after it's displayed
+                    // Use requestAnimationFrame to ensure layout is calculated
+                    requestAnimationFrame(() => {
+                        if(activeFullscreenRenderer) {
+                            activeFullscreenRenderer.resize();
+                        }
+                    });
+
+                 } catch (error) {
+                     console.error(`Failed to initialize fullscreen preview for ${wallpaperId}:`, error);
+                     alert("Failed to open preview. Check console for details.");
+                     closeFullscreenPreview(); // Close if failed
+                 }
+            }
+
+             // Close fullscreen preview
+            function closeFullscreenPreview() {
+                fullscreenPreview.style.display = 'none';
+                if (activeFullscreenRenderer) {
+                    activeFullscreenRenderer.stop();
+                    activeFullscreenRenderer = null;
+                }
+                 // Restart preview renderers
+                 Object.values(previewRenderers).forEach(r => r.start());
+
+                 // Clear recording state
+                 isRecording = false;
+                 lastRecordingInfo = null;
+             }
+
+
+            closePreview.addEventListener('click', closeFullscreenPreview);
+
+            // Fullscreen - Download Image button
+            downloadImageBtnFs.addEventListener('click', () => {
+                if (activeFullscreenRenderer && currentWallpaperId) {
+                    activeFullscreenRenderer.downloadImage(`${currentWallpaperId}_fullscreen.png`);
+                }
+            });
+
+            // Fullscreen - Record button
+            recordBtn.addEventListener('click', async () => {
+                if (activeFullscreenRenderer && !isRecording) {
+                     isRecording = true; // Prevent multiple clicks
+                     recordBtn.disabled = true;
+                     downloadVideoBtn.style.display = 'none'; // Hide download button during recording
+                     recordingIndicator.style.display = 'inline';
+                     lastRecordingInfo = null; // Reset previous recording info
+
+                    try {
+                        // Start recording (returns a promise)
+                        const recordingResult = await activeFullscreenRenderer.startRecording(10); // Record for 10 seconds
+                        console.log("Recording finished successfully:", recordingResult);
+                        lastRecordingInfo = recordingResult; // Store format info
+                        // Update and show the download button
+                        downloadVideoBtn.textContent = `Download Video (.${recordingResult.extension})`;
+                        downloadVideoBtn.style.display = 'inline-block';
+
+                     } catch (error) {
+                         console.error("Recording failed:", error);
+                         // No alert here, errors handled within startRecording usually
+                     } finally {
+                         // Re-enable record button and hide indicator regardless of success/failure after timeout
+                         recordingIndicator.style.display = 'none';
+                         recordBtn.disabled = false;
+                         isRecording = false;
+                     }
+                }
+            });
+
+             // Fullscreen - Download Video button
+             downloadVideoBtn.addEventListener('click', () => {
+                 if (activeFullscreenRenderer && lastRecordingInfo) {
+                     activeFullscreenRenderer.saveRecordedVideo(`${currentWallpaperId}_video`);
+                     // Optionally hide the button again after download starts
+                     downloadVideoBtn.style.display = 'none';
+                     lastRecordingInfo = null;
+                 } else {
+                     console.warn("No video recording available to download or renderer inactive.");
+                     alert("Please record a video first.");
+                 }
+             });
+
+
+            // Helper function to get wallpaper by ID
+            function getWallpaperById(id) {
+                return wallpapers.find(w => w.id === id);
+            }
+
+            // Handle window resize for fullscreen preview
+             window.addEventListener('resize', () => {
+                 // Only resize the active fullscreen renderer if it's visible
+                 if (activeFullscreenRenderer && fullscreenPreview.style.display === 'flex') {
+                     activeFullscreenRenderer.handleResize(); // Use the debounced handler
+                 }
+                 // Previews handle their own resize via their renderer instance if needed,
+                 // but since they are stopped when fullscreen is active, it's less critical.
+             });
+        });
+    </script>
 </body>
 </html>
