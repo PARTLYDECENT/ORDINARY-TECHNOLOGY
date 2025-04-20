@@ -3,401 +3,718 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solar Plasma Time-lapse Simulation</title>
+    <title>WebGL Shader Showcase | Time-lapse Simulation</title>
     <style>
+        /* Basic page styling */
         body {
             margin: 0;
-            overflow: hidden;
+            overflow: hidden; /* Prevent scrollbars */
             background-color: #000;
             color: white;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Slightly modern font */
+            display: flex; /* Use flexbox for easy centering if needed */
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
+
+        /* Canvas takes full screen */
         canvas {
             display: block;
             width: 100vw;
             height: 100vh;
+            position: absolute; /* Ensure it's behind overlays */
+            top: 0;
+            left: 0;
+            z-index: 1;
         }
-        .overlay {
+
+        /* Container for all overlay UI elements */
+        .ui-container {
             position: fixed;
-            top: 20px;
-            left: 20px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 15px;
+            top: 15px;
+            left: 15px;
+            background-color: rgba(10, 10, 20, 0.75); /* Dark semi-transparent background */
+            padding: 15px 20px;
             border-radius: 8px;
-            z-index: 100;
+            border: 1px solid rgba(100, 100, 150, 0.5);
+            z-index: 100; /* Ensure UI is on top */
+            display: flex;
+            flex-direction: column; /* Stack elements vertically */
+            gap: 15px; /* Space between UI groups */
+            max-width: 300px;
         }
+
+        /* Styling for groups within the UI container */
+        .ui-group {
+            border-bottom: 1px solid rgba(100, 100, 150, 0.3);
+            padding-bottom: 15px;
+        }
+        .ui-group:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .ui-group h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #ffaa00; /* Accent color for headings */
+            font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Timer display */
         .timer {
-            font-size: 24px;
-            margin-bottom: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #00ffcc; /* Cyan timer color */
+            text-align: center;
+            margin-bottom: 10px;
+            text-shadow: 0 0 5px #00ffcc, 0 0 10px #00ffcc;
         }
+
+        /* Container for buttons */
+        .button-container {
+            display: flex;
+            flex-wrap: wrap; /* Allow buttons to wrap */
+            gap: 8px; /* Space between buttons */
+        }
+
+        /* General button styling ("2206 style") */
         button {
-            background-color: #ff6600;
-            border: none;
+            background: linear-gradient(145deg, #ff8800, #cc5500); /* Orange gradient */
+            border: 1px solid #ffaa00;
             color: white;
-            padding: 10px 15px;
+            padding: 8px 15px; /* Adjusted padding */
             text-align: center;
             text-decoration: none;
             display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
+            font-size: 0.9em; /* Slightly smaller font */
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 5px; /* Rounded corners */
+            transition: all 0.2s ease-in-out; /* Smooth transitions */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            flex-grow: 1; /* Allow buttons to grow */
         }
+
         button:hover {
-            background-color: #ff8c00;
+            background: linear-gradient(145deg, #ffaa00, #dd7700); /* Lighter orange on hover */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            transform: translateY(-1px); /* Slight lift effect */
         }
-        .completed {
-            background-color: #cc0000;
+
+        button:active {
+            background: linear-gradient(145deg, #cc5500, #aa4400); /* Darker orange when pressed */
+            transform: translateY(0px);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
-        .completed:hover {
-            background-color: #ff0000;
+
+        /* Style for the active shader button */
+        button.active-shader {
+            background: linear-gradient(145deg, #00ccaa, #009977); /* Teal gradient for active */
+            border-color: #00ffcc;
         }
+        button.active-shader:hover {
+             background: linear-gradient(145deg, #00ddbb, #00aa88);
+        }
+
+        /* Style for the download button when complete ("2206 style") */
+        #downloadBtn.completed {
+            background: linear-gradient(145deg, #cc0000, #990000); /* Red gradient */
+            border-color: #ff3333;
+            animation: pulse 1.5s infinite; /* Add pulsing effect */
+        }
+        #downloadBtn.completed:hover {
+             background: linear-gradient(145deg, #ff3333, #bb0000);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 3px #ff3333; }
+            50% { box-shadow: 0 0 10px #ff3333, 0 0 15px #ff3333; }
+            100% { box-shadow: 0 0 3px #ff3333; }
+        }
+
+        /* Info box at the bottom */
         .info {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background-color: rgba(0, 0, 0, 0.7);
+            bottom: 15px;
+            left: 15px;
+            background-color: rgba(10, 10, 20, 0.75);
             padding: 15px;
             border-radius: 8px;
+            border: 1px solid rgba(100, 100, 150, 0.5);
             max-width: 400px;
+            z-index: 100;
+        }
+        .info h3 {
+            margin-top: 0;
+            color: #ffaa00;
         }
     </style>
 </head>
 <body>
     <canvas id="glCanvas"></canvas>
-    <div class="overlay">
-        <div class="timer" id="timer">60</div>
-        <button id="downloadBtn">Download Shader</button>
+
+    <div class="ui-container">
+        <div class="ui-group">
+             <h4>Time-lapse Progress</h4>
+             <div class="timer" id="timer">60</div>
+        </div>
+
+        <div class="ui-group" id="playerControls">
+             <h4>Controls</h4>
+             <div class="button-container">
+                 <button id="playBtn">Play</button>
+                 <button id="pauseBtn">Pause</button>
+                 <button id="restartBtn">Restart</button>
+             </div>
+        </div>
+
+        <div class="ui-group" id="shaderSelection">
+            <h4>Select Shader</h4>
+            <div class="button-container">
+                </div>
+        </div>
+
+         <div class="ui-group">
+            <h4>Download</h4>
+             <button id="downloadBtn">Download Current Shader</button>
+         </div>
     </div>
+
     <div class="info">
-        <h3>Solar Plasma Time-lapse Simulation</h3>
-        <p>Visualizing the complex dynamics of plasma on the solar surface. This simulation accelerates time to show plasma convection, solar flares, and magnetic field interactions.</p>
+        <h3 id="shaderTitle">Shader Showcase</h3>
+        <p id="shaderDescription">Select a shader visualization above. The simulation runs for 60 seconds, showing accelerated effects. Use player controls to manage the animation.</p>
     </div>
 
     <script>
-        // Vertex shader program
+        //======================================================================
+        // Shaders Definition
+        //======================================================================
+
+        // --- Vertex Shader (Common for all fragment shaders) ---
+        // This shader simply passes the vertex position through.
         const vsSource = `
+            // Attribute receiving vertex positions from the buffer
             attribute vec4 aVertexPosition;
+
+            // The main function executed for each vertex
             void main() {
+                // gl_Position is a special variable that holds the final position
                 gl_Position = aVertexPosition;
             }
         `;
 
-        // Fragment shader program - Solar Plasma Simulation
-        const fsSource = `
+        // --- Fragment Shader 1: Solar Plasma (Original) ---
+        const fsSource1 = `
+            // Set precision to high for more accurate calculations
             precision highp float;
-            uniform float uTime;
-            uniform vec2 uResolution;
-            
-            // Noise functions based on Classic Perlin Noise
-            vec3 mod289(vec3 x) {
-                return x - floor(x * (1.0 / 289.0)) * 289.0;
-            }
-            
-            vec4 mod289(vec4 x) {
-                return x - floor(x * (1.0 / 289.0)) * 289.0;
-            }
-            
-            vec4 permute(vec4 x) {
-                return mod289(((x*34.0)+1.0)*x);
-            }
-            
-            vec4 taylorInvSqrt(vec4 r) {
-                return 1.79284291400159 - 0.85373472095314 * r;
-            }
-            
+
+            // Uniforms: values passed from JavaScript
+            uniform float uTime; // Current time in seconds
+            uniform vec2 uResolution; // Canvas resolution (width, height)
+
+            // --- Noise Functions (Classic Perlin Noise derivative) ---
+            // These functions generate pseudo-random noise patterns used for textures.
+
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+            // Simplex noise function for 3D input
             float snoise(vec3 v) {
                 const vec2 C = vec2(1.0/6.0, 1.0/3.0);
                 const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-                
-                // First corner
                 vec3 i  = floor(v + dot(v, C.yyy));
                 vec3 x0 = v - i + dot(i, C.xxx);
-                
-                // Other corners
                 vec3 g = step(x0.yzx, x0.xyz);
                 vec3 l = 1.0 - g;
                 vec3 i1 = min(g.xyz, l.zxy);
                 vec3 i2 = max(g.xyz, l.zxy);
-                
                 vec3 x1 = x0 - i1 + C.xxx;
                 vec3 x2 = x0 - i2 + C.yyy;
                 vec3 x3 = x0 - D.yyy;
-                
-                // Permutations
                 i = mod289(i);
                 vec4 p = permute(permute(permute(
-                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
-                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-                        
-                // Gradients
+                           i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                         + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                         + i.x + vec4(0.0, i1.x, i2.x, 1.0));
                 float n_ = 0.142857142857; // 1.0/7.0
                 vec3 ns = n_ * D.wyz - D.xzx;
-                
                 vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-                
                 vec4 x_ = floor(j * ns.z);
                 vec4 y_ = floor(j - 7.0 * x_);
-                
                 vec4 x = x_ *ns.x + ns.yyyy;
                 vec4 y = y_ *ns.x + ns.yyyy;
                 vec4 h = 1.0 - abs(x) - abs(y);
-                
                 vec4 b0 = vec4(x.xy, y.xy);
                 vec4 b1 = vec4(x.zw, y.zw);
-                
                 vec4 s0 = floor(b0)*2.0 + 1.0;
                 vec4 s1 = floor(b1)*2.0 + 1.0;
                 vec4 sh = -step(h, vec4(0.0));
-                
                 vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
                 vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-                
                 vec3 p0 = vec3(a0.xy, h.x);
                 vec3 p1 = vec3(a0.zw, h.y);
                 vec3 p2 = vec3(a1.xy, h.z);
                 vec3 p3 = vec3(a1.zw, h.w);
-                
-                // Normalise gradients
                 vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-                p0 *= norm.x;
-                p1 *= norm.y;
-                p2 *= norm.z;
-                p3 *= norm.w;
-                
-                // Mix final noise value
+                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
                 vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
                 m = m * m;
                 return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
             }
-            
-            // Fractional Brownian Motion function
+
+            // --- Fractional Brownian Motion (fBm) ---
+            // Combines multiple layers (octaves) of noise for more detailed textures.
             float fbm(vec3 p) {
                 float sum = 0.0;
-                float amp = 1.0;
-                float freq = 1.0;
-                // More octaves for more detail
-                for(int i = 0; i < 6; i++) {
+                float amp = 1.0;  // Amplitude of the noise layer
+                float freq = 1.0; // Frequency of the noise layer
+                for(int i = 0; i < 6; i++) { // 6 octaves for detail
                     sum += amp * snoise(p * freq);
-                    amp *= 0.5;
-                    freq *= 2.0;
+                    amp *= 0.5; // Decrease amplitude for higher frequencies
+                    freq *= 2.0; // Increase frequency for finer details
                 }
                 return sum;
             }
-            
-            // Solar flare function
+
+            // --- Solar Flare Simulation ---
+            // Creates bright, localized bursts of energy.
             float solarFlare(vec2 uv, float time) {
                 float flareIntensity = 0.0;
-                
-                // Create multiple flare events over time
-                for (int i = 0; i < 5; i++) {
-                    float t = time * 0.2 + float(i) * 2.57;
-                    float flareTime = mod(t, 10.0);
-                    
-                    // Flare location
+                for (int i = 0; i < 5; i++) { // Simulate 5 potential flare events
+                    float t = time * 0.2 + float(i) * 2.57; // Time offset for each flare
+                    float flareTime = mod(t, 10.0); // Flare lifecycle duration
+
+                    // Flare position moves over time
                     float angle = sin(t * 0.37) * 3.14;
-                    vec2 flarePos = vec2(cos(angle), sin(angle)) * 0.8;
-                    
-                    // Flare shape and timing
+                    vec2 flarePos = vec2(cos(angle), sin(angle)) * 0.8; // Position on the disk
+
+                    // Flare shape (circular, fading) and timing (fade in/out)
                     float flareShape = max(0.0, 1.0 - length(uv - flarePos) * 5.0);
                     float timeShape = smoothstep(0.0, 1.0, flareTime) * smoothstep(10.0, 8.0, flareTime);
-                    
-                    flareIntensity += flareShape * timeShape * 2.0;
+
+                    flareIntensity += flareShape * timeShape * 2.0; // Accumulate intensity
                 }
-                
-                return flareIntensity;
+                return clamp(flareIntensity, 0.0, 1.0); // Clamp for stability
             }
-            
-            // Magnetic field lines
+
+            // --- Magnetic Field Lines Simulation ---
+            // Creates swirling line patterns.
             float magneticField(vec2 uv, float time) {
-                vec2 p = uv;
                 float field = 0.0;
-                
-                // Create swirling magnetic field lines
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < 3; i++) { // Simulate 3 layers of field lines
                     float t = time * 0.1 + float(i) * 1.5;
-                    float angle = t + uv.x * 2.0 + uv.y * 2.0;
-                    
-                    // Field lines based on sine waves
+                    float angle = t + uv.x * 2.0 + uv.y * 2.0; // Base angle for swirling
+
+                    // Create lines using sine waves, modulated by time
                     float line = sin(angle * 10.0 + time * 0.5) * 0.5 + 0.5;
-                    line = smoothstep(0.4, 0.6, line) * 0.3;
-                    
+                    line = smoothstep(0.4, 0.6, line) * 0.3; // Sharpen the lines
+
                     field += line;
                 }
-                
                 return field;
             }
-            
+
+            // --- Main Shader Execution ---
             void main() {
-                // Normalized coordinates
-                vec2 uv = gl_FragCoord.xy / uResolution.xy;
-                uv = uv * 2.0 - 1.0;
-                uv.x *= uResolution.x / uResolution.y;
-                
-                // Time variables
-                float time = uTime * 2.0; // Speed up time for time-lapse effect
-                float slowTime = uTime * 0.2;
-                
-                // Distance from center for sun disk
+                // Normalize fragment coordinates to [-1, 1], adjusting for aspect ratio
+                vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+
+                // Time variables for different effects
+                float time = uTime * 2.0;      // Faster time for main effects
+                float slowTime = uTime * 0.2; // Slower time for background evolution
+
+                // Calculate distance from center, used for masking and effects
                 float d = length(uv);
-                float sunDisk = smoothstep(1.0, 0.8, d);
-                
-                // Create base plasma using noise
-                vec3 p = vec3(uv * 1.5, slowTime * 0.1);
-                float plasma = fbm(p * 3.0);
-                
-                // Detailed surface features
-                float surfaceDetail = fbm(vec3(uv * 5.0, time * 0.2));
-                
-                // Create convection cells
-                float cells = fbm(vec3(uv * 2.0, time * 0.15));
-                cells = smoothstep(0.0, 1.0, cells);
-                
-                // Simulate solar flares
+
+                // Sun disk mask (smooth edge)
+                float sunDisk = smoothstep(1.0, 0.95, d); // Slightly sharper edge
+
+                // --- Calculate Different Visual Components ---
+                // Base plasma texture using fbm
+                vec3 p_plasma = vec3(uv * 1.5, slowTime * 0.1);
+                float plasma = fbm(p_plasma);
+
+                // Detailed surface features using fbm at higher frequency
+                vec3 p_detail = vec3(uv * 5.0, time * 0.2);
+                float surfaceDetail = fbm(p_detail);
+
+                // Convection cell simulation
+                vec3 p_cells = vec3(uv * 2.0, time * 0.15);
+                float cells = fbm(p_cells);
+                cells = smoothstep(-0.2, 0.8, cells); // Adjust range
+
+                // Solar flares calculation
                 float flares = solarFlare(uv, time);
-                
-                // Magnetic field visualization
-                float magField = magneticField(uv, time) * (1.0 - d);
-                
-                // Chromosphere and corona (outer atmosphere)
-                float corona = smoothstep(0.8, 1.8, d) * smoothstep(2.5, 1.0, d);
-                corona *= (0.5 + 0.5 * fbm(vec3(uv.x * 0.5, uv.y * 0.5, time * 0.05)));
-                
-                // Time-lapse effect: enhanced movement and evolution
-                float timeLapse = fbm(vec3(uv * 3.0, time * 0.5));
-                
-                // Base sun color
+
+                // Magnetic field lines calculation (intensity decreases further from center)
+                float magField = magneticField(uv, time) * (1.0 - smoothstep(0.7, 1.0, d));
+
+                // Corona (outer atmosphere) simulation
+                float corona = smoothstep(0.9, 1.8, d) * smoothstep(2.5, 1.0, d); // Shape of corona
+                vec3 p_corona = vec3(uv.x * 0.5, uv.y * 0.5, time * 0.05);
+                corona *= (0.5 + 0.5 * fbm(p_corona)); // Add noisy texture to corona
+
+                // Time-lapse effect enhancement (subtle brightness variation)
+                vec3 p_timelapse = vec3(uv * 3.0, time * 0.5);
+                float timeLapse = fbm(p_timelapse);
+
+                // --- Combine Components for Final Color ---
+                // Base sun color, blending deep core and surface based on noise patterns
                 vec3 sunColor = mix(
-                    vec3(1.0, 0.3, 0.0),  // Deep core
-                    vec3(1.0, 0.6, 0.1),  // Surface
-                    plasma * 0.5 + cells * 0.5
+                    vec3(1.0, 0.3, 0.0), // Deep core orange/red
+                    vec3(1.0, 0.6, 0.1), // Brighter surface orange/yellow
+                    plasma * 0.5 + cells * 0.5 // Mix based on plasma and cell noise
                 );
-                
-                // Apply surface details
+
+                // Apply surface details (adds brighter spots)
                 sunColor = mix(
                     sunColor,
-                    vec3(1.0, 0.8, 0.2),  // Bright areas
-                    surfaceDetail * 0.5
+                    vec3(1.0, 0.8, 0.2), // Bright yellow highlights
+                    surfaceDetail * 0.3  // Modulated by detail noise
                 );
-                
-                // Add flares
-                sunColor += vec3(1.0, 0.6, 0.3) * flares;
-                
-                // Add magnetic field lines
-                sunColor += vec3(0.6, 0.4, 0.1) * magField;
-                
-                // Add corona
-                vec3 coronaColor = mix(
-                    vec3(1.0, 0.5, 0.1),  // Inner corona
-                    vec3(0.6, 0.3, 0.1),  // Outer corona
-                    smoothstep(0.8, 2.0, d)
+
+                // Add solar flare brightness (bright orange/white)
+                sunColor += vec3(1.0, 0.7, 0.5) * flares * 1.5;
+
+                // Add magnetic field lines (darker, subtle lines)
+                sunColor += vec3(0.6, 0.4, 0.1) * magField * 0.5; // More subtle effect
+
+                // Define corona color (fades from bright to dimmer orange)
+                 vec3 coronaColor = mix(
+                    vec3(1.0, 0.5, 0.1) * (1.0 + fbm(p_corona * 2.0) * 0.5), // Inner corona (brighter, textured)
+                    vec3(0.6, 0.3, 0.1) * (0.5 + fbm(p_corona * 5.0) * 0.5), // Outer corona (dimmer, finer texture)
+                    smoothstep(0.9, 2.0, d) // Blend based on distance
                 );
-                
+
+
                 // Combine sun disk and corona
-                vec3 finalColor = mix(
-                    sunColor * sunDisk,
-                    coronaColor * corona,
-                    corona
-                );
-                
-                // Add time-lapse induced variation
-                finalColor += vec3(1.0, 0.7, 0.3) * timeLapse * 0.2;
-                
-                // Add glow
-                finalColor += vec3(1.0, 0.4, 0.0) * (1.0 - smoothstep(0.8, 2.5, d)) * 0.5;
-                
-                // Adjust brightness and apply vignette
-                finalColor *= 1.5;
-                finalColor *= 1.0 - smoothstep(0.0, 2.0, d) * 0.5;
-                
+                // Start with black background
+                vec3 finalColor = vec3(0.0);
+                 // Add corona first (background layer)
+                finalColor = mix(finalColor, coronaColor * corona, corona);
+                // Add sun disk on top
+                finalColor = mix(finalColor, sunColor, sunDisk); // Use sunDisk as the mix factor
+
+
+                // Add subtle time-lapse variation flicker
+                finalColor += vec3(1.0, 0.7, 0.3) * timeLapse * 0.05; // Very subtle flicker
+
+                // Add general glow around the sun
+                finalColor += vec3(1.0, 0.4, 0.0) * (1.0 - smoothstep(0.8, 2.5, d)) * 0.3; // Softer glow
+
+                // --- Final Adjustments ---
+                finalColor *= 1.3; // Overall brightness adjustment
+                // Vignette effect (darken edges)
+                finalColor *= 1.0 - smoothstep(1.0, 2.5, d) * 0.6; // More gradual vignette
+
+                // Output the final color (RGB) and alpha (A=1.0, fully opaque)
                 gl_FragColor = vec4(finalColor, 1.0);
             }
         `;
 
-        // Global variables
-        let gl;
-        let programInfo;
-        let buffers;
-        let then = 0;
-        let startTime = Date.now() / 1000;
-        let timeRemaining = 60;
-        let animationFrameId;
-        let timerDisplay = document.getElementById('timer');
-        let downloadBtn = document.getElementById('downloadBtn');
+        // --- Fragment Shader 2: Cosmic Nebula ---
+        // Creates a swirling, colorful nebula effect.
+        const fsSource2 = `
+            precision highp float;
+            uniform float uTime;
+            uniform vec2 uResolution;
 
-        // Initialize WebGL
-        function initWebGL() {
-            const canvas = document.getElementById('glCanvas');
-            gl = canvas.getContext('webgl');
-
-            // Only continue if WebGL is available and working
-            if (!gl) {
-                alert('Unable to initialize WebGL. Your browser may not support it.');
-                return;
+            // Noise functions (copied from Shader 1 for convenience)
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+            float snoise(vec3 v) {
+                const vec2 C = vec2(1.0/6.0, 1.0/3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                vec3 i  = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+                vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g; vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+                vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + C.yyy; vec3 x3 = x0 - D.yyy;
+                i = mod289(i);
+                vec4 p = permute(permute(permute( i.z + vec4(0.0, i1.z, i2.z, 1.0 )) + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+                float n_ = 0.142857142857; vec3 ns = n_ * D.wyz - D.xzx;
+                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);
+                vec4 x = x_ *ns.x + ns.yyyy; vec4 y = y_ *ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);
+                vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+                vec4 s0 = floor(b0)*2.0 + 1.0; vec4 s1 = floor(b1)*2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+                vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);
+                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                m = m * m; return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+            }
+            float fbm(vec3 p) {
+                float sum = 0.0; float amp = 1.0; float freq = 1.0;
+                for(int i = 0; i < 5; i++) { // 5 octaves
+                    sum += amp * snoise(p * freq);
+                    amp *= 0.5; freq *= 2.0;
+                }
+                return sum;
             }
 
-            // Set canvas size
+            // Rotation matrix
+            mat2 rotate(float angle) {
+                float s = sin(angle);
+                float c = cos(angle);
+                return mat2(c, -s, s, c);
+            }
+
+            void main() {
+                // Normalized coordinates [-1, 1], aspect corrected
+                vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+                vec2 uv_orig = uv; // Store original uv
+
+                float time = uTime * 0.3; // Slower time for nebula evolution
+
+                // Apply rotation and distortion for swirling effect
+                uv *= rotate(time * 0.2); // Slow overall rotation
+                vec2 offset = vec2(fbm(vec3(uv * 1.5, time * 0.5)), fbm(vec3(uv * 1.5 + 5.0, time * 0.5)));
+                uv += offset * 0.2; // Distort UV coordinates based on noise
+
+                // --- Calculate Noise Layers ---
+                float noise1 = fbm(vec3(uv * 1.0, time));          // Large structures
+                float noise2 = fbm(vec3(uv * 3.0, time * 1.2));    // Medium details
+                float noise3 = fbm(vec3(uv * 8.0, time * 1.5));    // Fine details
+
+                // Combine noise layers, using smoothstep for contrast
+                float combinedNoise = smoothstep(-0.2, 0.8, noise1 * 0.6 + noise2 * 0.3 + noise3 * 0.1);
+
+                // --- Determine Color based on Noise ---
+                // Define color palette (Blues, Purples, Pinks)
+                vec3 color1 = vec3(0.1, 0.0, 0.3); // Deep Blue/Purple
+                vec3 color2 = vec3(0.4, 0.1, 0.6); // Purple
+                vec3 color3 = vec3(0.8, 0.2, 0.5); // Pink/Magenta
+                vec3 color4 = vec3(1.0, 0.7, 0.8); // Light Pink/White highlights
+
+                // Interpolate colors based on combined noise value
+                vec3 finalColor = mix(color1, color2, smoothstep(0.0, 0.4, combinedNoise));
+                finalColor = mix(finalColor, color3, smoothstep(0.3, 0.7, combinedNoise));
+                finalColor = mix(finalColor, color4, smoothstep(0.6, 0.9, combinedNoise));
+
+                // Add fine bright details (stars/gas highlights) based on high-frequency noise
+                float stars = smoothstep(0.6, 0.8, fbm(vec3(uv_orig * 20.0, time * 2.0))); // Use original UV for static stars
+                finalColor += vec3(1.0, 1.0, 0.9) * stars * 0.5;
+
+                // --- Final Adjustments ---
+                // Vignette to darken edges
+                float vignette = 1.0 - smoothstep(0.6, 1.5, length(uv_orig)) * 0.7;
+                finalColor *= vignette;
+
+                // Brightness adjustment
+                finalColor *= 1.2;
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+
+        // --- Fragment Shader 3: Electric Storm ---
+        // Creates a dark background with sharp, bright electric arcs.
+        const fsSource3 = `
+            precision highp float;
+            uniform float uTime;
+            uniform vec2 uResolution;
+
+            // Noise functions (copied again)
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+            float snoise(vec3 v) {
+                const vec2 C = vec2(1.0/6.0, 1.0/3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                vec3 i  = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+                vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g; vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+                vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + C.yyy; vec3 x3 = x0 - D.yyy;
+                i = mod289(i);
+                vec4 p = permute(permute(permute( i.z + vec4(0.0, i1.z, i2.z, 1.0 )) + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+                float n_ = 0.142857142857; vec3 ns = n_ * D.wyz - D.xzx;
+                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);
+                vec4 x = x_ *ns.x + ns.yyyy; vec4 y = y_ *ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);
+                vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+                vec4 s0 = floor(b0)*2.0 + 1.0; vec4 s1 = floor(b1)*2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+                vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);
+                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                m = m * m; return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+            }
+            float fbm(vec3 p) {
+                float sum = 0.0; float amp = 1.0; float freq = 1.0;
+                for(int i = 0; i < 4; i++) { // 4 octaves is enough for sharp lines
+                    sum += amp * abs(snoise(p * freq)); // Use abs() for sharper ridges
+                    amp *= 0.5; freq *= 2.5; // Increase frequency faster
+                }
+                return sum;
+            }
+
+             // Random function
+            float rand(vec2 co){
+                return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+            }
+
+
+            void main() {
+                vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+                float time = uTime * 0.8; // Faster time for electric effect
+
+                vec3 finalColor = vec3(0.0); // Start with black background
+
+                // --- Generate Electric Arcs ---
+                float intensity = 0.0;
+                for (int i = 0; i < 5; ++i) { // Generate 5 main arcs
+                    float seed = float(i) * 12.345;
+                    float speed = 0.5 + rand(vec2(seed, seed * 0.5)) * 0.8;
+                    float freq = 2.0 + rand(vec2(seed * 0.2, seed)) * 4.0;
+                    float amp = 0.5 + rand(vec2(seed, seed * 0.8)) * 0.5;
+
+                    // Add time-based offset and rotation to each arc's coordinate system
+                    vec2 arc_uv = uv;
+                    arc_uv *= mat2(cos(time*0.1 + seed), -sin(time*0.1 + seed), sin(time*0.1 + seed), cos(time*0.1 + seed)); // Rotate
+                    arc_uv += vec2(sin(time * speed + seed * 2.0), cos(time * speed * 0.7 + seed * 3.0)) * 0.5; // Translate
+
+
+                    // Calculate noise, emphasizing sharp lines using abs() and pow()
+                    float noise = fbm(vec3(arc_uv * freq, time * speed));
+                    noise = pow(noise, 3.0) * amp; // Increase contrast
+
+                    // Use smoothstep to create sharp, thin lines
+                    float lineThickness = 0.01 + rand(vec2(seed * 0.5, seed * 0.1)) * 0.02; // Vary thickness slightly
+                    intensity += smoothstep(0.5 - lineThickness, 0.5 + lineThickness, noise);
+
+                }
+
+                 // Modulate intensity over time for flashing effect
+                intensity *= 0.5 + 0.5 * sin(time * 5.0 + length(uv) * 2.0); // Flashing based on time and position
+                intensity = clamp(intensity, 0.0, 1.0); // Clamp the final intensity
+
+
+                // --- Define Color ---
+                vec3 electricColor = vec3(0.2, 0.5, 1.0); // Base Blue
+                vec3 brightColor = vec3(0.8, 0.9, 1.0);   // Bright Cyan/White core
+
+                // Mix colors based on intensity
+                finalColor = mix(vec3(0.0, 0.0, 0.05), electricColor, intensity * 0.8); // Dark blue background glow
+                finalColor = mix(finalColor, brightColor, intensity * intensity * 0.7); // Brighter core for high intensity
+
+                // Add subtle background noise/atmosphere
+                float bgNoise = fbm(vec3(uv * 1.0, time * 0.1));
+                finalColor += vec3(0.0, 0.05, 0.1) * smoothstep(0.2, 0.6, bgNoise) * 0.3;
+
+
+                // --- Final Adjustments ---
+                 // Vignette
+                finalColor *= 1.0 - smoothstep(0.8, 1.8, length(uv)) * 0.5;
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // Store shaders in an array for easy access
+        const shaders = [
+            { name: "Solar_Plasma", fsSource: fsSource1, title: "Solar Plasma Simulation", description: "Visualizing the complex dynamics of plasma on the solar surface. Shows plasma convection, solar flares, and magnetic field interactions in accelerated time." },
+            { name: "Cosmic_Nebula", fsSource: fsSource2, title: "Cosmic Nebula", description: "A swirling cosmic gas cloud simulation using multiple layers of noise for color and distortion. Features a blue, purple, and pink color palette."},
+            { name: "Electric_Storm", fsSource: fsSource3, title: "Electric Storm", description: "Simulates bright, flashing electric arcs against a dark, noisy background. Uses noise functions manipulated to create sharp, high-contrast lines." }
+        ];
+
+        //======================================================================
+        // Global Variables
+        //======================================================================
+        let gl;                     // WebGL rendering context
+        let programInfo;            // Holds shader program, attribute/uniform locations
+        let buffers;                // Holds vertex buffer object
+        let animationFrameId = null; // ID returned by requestAnimationFrame
+        let startTime = 0;          // Simulation start time (in seconds)
+        let lastRenderTime = 0;     // Time of the last rendered frame (for pause)
+        let pausedElapsedTime = 0;  // How much time elapsed while paused
+        let isPlaying = true;       // Animation loop state flag
+        let timeLimit = 60;         // Duration of the time-lapse in seconds
+        let currentShaderIndex = 0; // Index of the currently selected shader
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('glCanvas');
+        const timerDisplay = document.getElementById('timer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const shaderSelectionDiv = document.getElementById('shaderSelection').querySelector('.button-container');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const shaderTitleEl = document.getElementById('shaderTitle');
+        const shaderDescriptionEl = document.getElementById('shaderDescription');
+
+        //======================================================================
+        // WebGL Initialization and Setup
+        //======================================================================
+
+        /**
+         * Initializes the WebGL context, shaders, buffers, and starts the render loop.
+         */
+        function initWebGL() {
+            gl = canvas.getContext('webgl');
+            if (!gl) {
+                alert('Unable to initialize WebGL. Your browser may not support it.');
+                return false;
+            }
+
+            // Set initial canvas size and add resize listener
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
 
-            // Initialize shader program
-            const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-
-            programInfo = {
-                program: shaderProgram,
-                attribLocations: {
-                    vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-                },
-                uniformLocations: {
-                    time: gl.getUniformLocation(shaderProgram, 'uTime'),
-                    resolution: gl.getUniformLocation(shaderProgram, 'uResolution'),
-                },
-            };
-
+            // Initialize buffers (only needs to happen once)
             buffers = initBuffers(gl);
 
-            // Start animation loop
-            requestAnimationFrame(render);
+            // Load the default shader (index 0)
+            if (!loadShaderByIndex(currentShaderIndex)) {
+                 return false; // Stop if shader loading fails
+            }
+
+            // Populate shader selection buttons
+            createShaderButtons();
+
+             // Add event listeners for controls
+            setupEventListeners();
+
+            // Reset and start the simulation
+            restartSimulation();
+
+            return true;
         }
 
-        // Resize canvas to fill window
+        /**
+         * Resizes the canvas to match the window size and sets the WebGL viewport.
+         */
         function resizeCanvas() {
-            const canvas = gl.canvas;
             const displayWidth = window.innerWidth;
             const displayHeight = window.innerHeight;
 
             if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
                 canvas.width = displayWidth;
                 canvas.height = displayHeight;
-                gl.viewport(0, 0, canvas.width, canvas.height);
+                // Update viewport only if gl context exists
+                if (gl) {
+                     gl.viewport(0, 0, canvas.width, canvas.height);
+                }
             }
         }
 
-        // Initialize buffers
-        function initBuffers(gl) {
-            const positionBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        /**
+         * Compiles and links the vertex and fragment shaders into a WebGL program.
+         * @param {WebGLRenderingContext} gl - The WebGL context.
+         * @param {string} vsSrc - The vertex shader source code.
+         * @param {string} fsSrc - The fragment shader source code.
+         * @returns {WebGLProgram|null} The linked shader program or null on failure.
+         */
+        function initShaderProgram(gl, vsSrc, fsSrc) {
+            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSrc);
+            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSrc);
 
-            // Create a square covering the entire canvas
-            const positions = [
-                -1.0, -1.0,
-                1.0, -1.0,
-                -1.0, 1.0,
-                1.0, 1.0,
-            ];
-
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-            return {
-                position: positionBuffer,
-            };
-        }
-
-        // Initialize shader program
-        function initShaderProgram(gl, vsSource, fsSource) {
-            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            if (!vertexShader || !fragmentShader) return null;
 
             const shaderProgram = gl.createProgram();
             gl.attachShader(shaderProgram, vertexShader);
@@ -406,107 +723,364 @@
 
             if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
                 alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+                // Clean up shaders if linking failed
+                gl.deleteShader(vertexShader);
+                gl.deleteShader(fragmentShader);
+                gl.deleteProgram(shaderProgram);
                 return null;
             }
+
+             // No need to keep shaders after linking
+            gl.deleteShader(vertexShader);
+            gl.deleteShader(fragmentShader);
+
 
             return shaderProgram;
         }
 
-        // Load and compile shader
+        /**
+         * Compiles a single shader.
+         * @param {WebGLRenderingContext} gl - The WebGL context.
+         * @param {number} type - gl.VERTEX_SHADER or gl.FRAGMENT_SHADER.
+         * @param {string} source - The shader source code.
+         * @returns {WebGLShader|null} The compiled shader or null on failure.
+         */
         function loadShader(gl, type, source) {
             const shader = gl.createShader(type);
             gl.shaderSource(shader, source);
             gl.compileShader(shader);
 
             if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+                alert(`An error occurred compiling the ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader: ${gl.getShaderInfoLog(shader)}`);
                 gl.deleteShader(shader);
                 return null;
             }
-
             return shader;
         }
 
-        // Render function
-        function render(now) {
-            now *= 0.001;  // Convert to seconds
-            const deltaTime = now - then;
-            then = now;
+        /**
+         * Creates and populates the vertex buffer for a fullscreen quad.
+         * @param {WebGLRenderingContext} gl - The WebGL context.
+         * @returns {object} An object containing the position buffer.
+         */
+        function initBuffers(gl) {
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
-            const currentTime = Date.now() / 1000 - startTime;
-            timeRemaining = Math.max(0, 60 - Math.floor(currentTime));
+            // A simple quad covering the entire clip space
+            const positions = [
+                -1.0, -1.0, // bottom left
+                 1.0, -1.0, // bottom right
+                -1.0,  1.0, // top left
+                 1.0,  1.0, // top right
+            ];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+            return {
+                position: positionBuffer,
+            };
+        }
+
+         /**
+         * Loads, compiles, and sets up the shader program for the specified index.
+         * @param {number} index - The index of the shader in the `shaders` array.
+         * @returns {boolean} True if successful, false otherwise.
+         */
+         function loadShaderByIndex(index) {
+            if (index < 0 || index >= shaders.length) {
+                console.error("Invalid shader index:", index);
+                return false;
+            }
+
+            const selectedShader = shaders[index];
+
+            // Compile and link the new shader program
+            const newShaderProgram = initShaderProgram(gl, vsSource, selectedShader.fsSource);
+            if (!newShaderProgram) {
+                console.error("Failed to compile shader:", selectedShader.name);
+                // Optionally revert to a default or previous shader?
+                // For now, just return false.
+                return false;
+            }
+
+            // If a previous program exists, delete it to free resources
+             if (programInfo && programInfo.program) {
+                gl.deleteProgram(programInfo.program);
+             }
+
+
+            // Store information about the new program
+            programInfo = {
+                program: newShaderProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(newShaderProgram, 'aVertexPosition'),
+                },
+                uniformLocations: {
+                    time: gl.getUniformLocation(newShaderProgram, 'uTime'),
+                    resolution: gl.getUniformLocation(newShaderProgram, 'uResolution'),
+                    // Add other common uniforms here if needed
+                },
+            };
+
+            currentShaderIndex = index;
+
+             // Update UI elements
+             updateShaderInfo(selectedShader);
+             updateActiveShaderButton();
+
+             console.log(`Shader "${selectedShader.name}" loaded.`);
+             return true;
+         }
+
+        //======================================================================
+        // Rendering Loop
+        //======================================================================
+
+        /**
+         * The main rendering function, called repeatedly by requestAnimationFrame.
+         * @param {DOMHighResTimeStamp} now - The current time provided by requestAnimationFrame.
+         */
+        function render(now) {
+            if (!isPlaying) {
+                // If paused, store the current time to calculate paused duration later
+                lastRenderTime = now;
+                return; // Don't request another frame
+            }
+
+             // If resuming from pause, calculate the time spent paused
+            if (lastRenderTime > 0) {
+                pausedElapsedTime += (now - lastRenderTime) / 1000.0; // Convert ms to seconds
+                lastRenderTime = 0; // Reset last render time
+            }
+
+
+            now *= 0.001; // Convert time to seconds
+
+            // Calculate current simulation time, accounting for pauses
+            const currentTime = now - startTime - pausedElapsedTime;
+
+             // Calculate time remaining and update display
+            const timeRemaining = Math.max(0, timeLimit - Math.floor(currentTime));
             timerDisplay.textContent = timeRemaining;
 
-            // Draw the scene
+            // Draw the scene with the current time
             drawScene(gl, programInfo, buffers, currentTime);
 
-            if (timeRemaining > 0) {
-                animationFrameId = requestAnimationFrame(render);
-            } else {
-                cancelAnimationFrame(animationFrameId);
+            // Check if the simulation time limit has been reached
+            if (currentTime >= timeLimit) {
+                console.log("Time-lapse complete.");
+                isPlaying = false; // Stop the animation
+                timerDisplay.textContent = 0; // Ensure timer shows 0
                 downloadBtn.classList.add('completed');
-                downloadBtn.textContent = 'Time-lapse Complete - Download Shader';
+                downloadBtn.textContent = 'Time-lapse Complete - Download';
+                cancelAnimationFrame(animationFrameId); // Explicitly cancel
+                animationFrameId = null;
+            } else {
+                 // Request the next frame only if playing and within time limit
+                animationFrameId = requestAnimationFrame(render);
             }
         }
 
-        // Draw the scene
-        function drawScene(gl, programInfo, buffers, currentTime) {
-            gl.clearColor(0.0, 0.0, 0.0, 1.0);
-            gl.clearDepth(1.0);
-            gl.enable(gl.DEPTH_TEST);
-            gl.depthFunc(gl.LEQUAL);
-
+        /**
+         * Clears the canvas and draws the scene using the current shader and time.
+         * @param {WebGLRenderingContext} gl - The WebGL context.
+         * @param {object} progInfo - Contains program and locations.
+         * @param {object} bufs - Contains vertex buffers.
+         * @param {number} currentTime - The current simulation time in seconds.
+         */
+        function drawScene(gl, progInfo, bufs, currentTime) {
+            // --- Prepare drawing ---
+            gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black
+            gl.clearDepth(1.0);                // Clear everything
+            gl.enable(gl.DEPTH_TEST);          // Enable depth testing
+            gl.depthFunc(gl.LEQUAL);           // Near things obscure far things
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            // Set up position attribute
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+            // --- Set up attributes ---
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufs.position);
             gl.vertexAttribPointer(
-                programInfo.attribLocations.vertexPosition,
-                2,
-                gl.FLOAT,
-                false,
-                0,
-                0
+                progInfo.attribLocations.vertexPosition,
+                2,        // numComponents (x, y)
+                gl.FLOAT, // type
+                false,    // normalize
+                0,        // stride
+                0         // offset
             );
-            gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+            gl.enableVertexAttribArray(progInfo.attribLocations.vertexPosition);
 
-            // Use shader program
-            gl.useProgram(programInfo.program);
+            // --- Use the program and set uniforms ---
+            gl.useProgram(progInfo.program);
+            gl.uniform1f(progInfo.uniformLocations.time, currentTime);
+            gl.uniform2f(progInfo.uniformLocations.resolution, gl.canvas.width, gl.canvas.height);
 
-            // Set uniforms
-            gl.uniform1f(programInfo.uniformLocations.time, currentTime);
-            gl.uniform2f(programInfo.uniformLocations.resolution, gl.canvas.width, gl.canvas.height);
-
-            // Draw
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            // --- Draw the quad ---
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // 4 vertices for a strip quad
         }
 
-        // Download shader code function
-        function downloadShader() {
-            const shaderCode = `// Solar Plasma Time-lapse Simulation
-// Vertex Shader
+        //======================================================================
+        // Player Controls and Simulation Management
+        //======================================================================
+
+        /** Starts or resumes the animation loop. */
+        function playSimulation() {
+            if (!isPlaying) {
+                console.log("Resuming simulation.");
+                isPlaying = true;
+                // Restart the animation loop if it wasn't already running
+                if (!animationFrameId) {
+                    animationFrameId = requestAnimationFrame(render);
+                }
+            }
+        }
+
+        /** Pauses the animation loop. */
+        function pauseSimulation() {
+            if (isPlaying) {
+                console.log("Pausing simulation.");
+                isPlaying = false;
+                // The render loop will stop requesting frames when isPlaying is false
+                // We don't cancel the *current* frame request, just prevent future ones
+            }
+        }
+
+        /** Resets the simulation timer and state, then starts playing. */
+        function restartSimulation() {
+            console.log("Restarting simulation.");
+            isPlaying = false; // Stop current loop temporarily
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+
+             // Reset time variables
+             const now = performance.now();
+            startTime = now * 0.001; // Reset start time (in seconds)
+            lastRenderTime = 0;        // Reset pause time tracking
+            pausedElapsedTime = 0;     // Reset accumulated pause time
+
+            // Reset UI elements
+            timerDisplay.textContent = timeLimit;
+            downloadBtn.classList.remove('completed');
+            // Set button text based on current shader name
+            downloadBtn.textContent = `Download ${shaders[currentShaderIndex].name}`;
+
+
+            // Ensure it starts playing
+            isPlaying = true;
+            animationFrameId = requestAnimationFrame(render); // Start the loop immediately
+        }
+
+        //======================================================================
+        // UI Interaction and Helpers
+        //======================================================================
+
+        /** Creates shader selection buttons dynamically. */
+        function createShaderButtons() {
+             shaderSelectionDiv.innerHTML = ''; // Clear existing buttons
+            shaders.forEach((shader, index) => {
+                const button = document.createElement('button');
+                button.textContent = shader.name.replace(/_/g, ' '); // Make name more readable
+                button.dataset.shaderIndex = index; // Store index on button
+                button.addEventListener('click', handleShaderSelection);
+                shaderSelectionDiv.appendChild(button);
+            });
+             updateActiveShaderButton(); // Highlight the default active button
+        }
+
+         /** Handles clicking on a shader selection button. */
+         function handleShaderSelection(event) {
+             const selectedIndex = parseInt(event.target.dataset.shaderIndex, 10);
+             if (selectedIndex !== currentShaderIndex) {
+                 console.log(`Switching to shader index: ${selectedIndex}`);
+                if (loadShaderByIndex(selectedIndex)) {
+                    restartSimulation(); // Restart simulation when shader changes
+                } else {
+                     alert("Failed to load the selected shader. Please check the console for errors.");
+                }
+             }
+         }
+
+         /** Updates the visual style of the active shader button. */
+         function updateActiveShaderButton() {
+             const buttons = shaderSelectionDiv.querySelectorAll('button');
+             buttons.forEach(button => {
+                 const index = parseInt(button.dataset.shaderIndex, 10);
+                 if (index === currentShaderIndex) {
+                     button.classList.add('active-shader');
+                 } else {
+                     button.classList.remove('active-shader');
+                 }
+             });
+              // Update download button text when shader changes
+             downloadBtn.textContent = `Download ${shaders[currentShaderIndex].name}`;
+             downloadBtn.classList.remove('completed'); // Ensure completed state is reset
+         }
+
+         /** Updates the info box with the current shader's title and description. */
+         function updateShaderInfo(shader) {
+             shaderTitleEl.textContent = shader.title;
+             shaderDescriptionEl.textContent = shader.description;
+         }
+
+
+        /** Sets up event listeners for player controls and download button. */
+        function setupEventListeners() {
+            playBtn.addEventListener('click', playSimulation);
+            pauseBtn.addEventListener('click', pauseSimulation);
+            restartBtn.addEventListener('click', restartSimulation);
+            downloadBtn.addEventListener('click', downloadCurrentShader);
+        }
+
+        /**
+         * Creates a downloadable file containing the current shader's source code.
+         */
+        function downloadCurrentShader() {
+            if (currentShaderIndex < 0 || currentShaderIndex >= shaders.length) return;
+
+            const currentShader = shaders[currentShaderIndex];
+            const shaderCode = `// Shader: ${currentShader.name}
+// Generated on: ${new Date().toISOString()}
+
+// --- Vertex Shader ---
 ${vsSource}
 
-// Fragment Shader - Solar Plasma Simulation
-${fsSource}`;
-
-            const blob = new Blob([shaderCode], { type: 'text/plain' });
+// --- Fragment Shader (${currentShader.name}) ---
+${currentShader.fsSource}
+`;
+            // Create a Blob (binary large object) containing the text data
+            const blob = new Blob([shaderCode], { type: 'text/plain;charset=utf-8' });
+            // Create a URL for the Blob
             const url = URL.createObjectURL(blob);
-            
+
+            // Create a temporary link element
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'solar-plasma-simulation.glsl';
+            // Sanitize name for filename
+            const filename = `shader-${currentShader.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.glsl`;
+            a.download = filename;
+
+            // Programmatically click the link to trigger download
             document.body.appendChild(a);
             a.click();
+
+            // Clean up: remove the link and revoke the URL
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+
+            console.log(`Downloading shader: ${filename}`);
         }
 
-        // Add event listener for download button
-        downloadBtn.addEventListener('click', downloadShader);
 
-        // Start WebGL when page loads
-        window.onload = initWebGL;
+        //======================================================================
+        // Start the application when the page loads
+        //======================================================================
+        window.onload = () => {
+            if (!initWebGL()) {
+                 console.error("WebGL initialization failed. Application cannot start.");
+                 // Optionally display a user-friendly error message on the page
+             }
+        };
+
     </script>
 </body>
 </html>
