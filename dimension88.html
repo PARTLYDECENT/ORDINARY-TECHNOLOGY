@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA 1-Style Action Sim V2</title>
+    <title>GTA 1-Style Action Sim V3</title>
     <style>
-        /* CSS remains largely the same */
+        /* CSS remains the same */
         body { margin: 0; padding: 0; background-color: #111; overflow: hidden; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        #game-container { position: relative; /* Adjusted in JS */ }
+        #game-container { position: relative; }
         #gameCanvas { border: 2px solid #444; background-color: #000; display: block; image-rendering: pixelated; cursor: crosshair; }
         #hud { position: absolute; color: #fff; padding: 8px; font-size: 13px; text-align: left; top: 10px; left: 10px; background-color: rgba(0, 0, 0, 0.7); border-radius: 5px; border: 1px solid #444; z-index: 10; }
         #hud div { margin-bottom: 4px; }
@@ -19,9 +19,7 @@
         #mini-map { position: absolute; top: 10px; right: 10px; width: 120px; height: 120px; background-color: rgba(0, 0, 0, 0.75); border: 1px solid #444; border-radius: 5px; z-index: 10; overflow: hidden; }
         #mini-map canvas { display: block; }
         #controls-display { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: #bbb; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 11px; text-align: center; border: 1px solid #444; z-index: 10; white-space: nowrap; }
-        /* Placeholders - Hidden */
-        #mission-text { display: none; }
-        #stats { display: none; }
+        #mission-text, #stats { display: none; } /* Hide placeholders */
     </style>
 </head>
 <body>
@@ -51,6 +49,27 @@
         miniMapContainer.appendChild(miniMapCtx.canvas);
         miniMapCtx.canvas.width = 120; miniMapCtx.canvas.height = 120;
 
+        // --- Constants ---
+        // Player Ped Size
+        const PLAYER_PED_WIDTH = 6;
+        const PLAYER_PED_HEIGHT = 9;
+        // Enemy Size (Matches Player Ped)
+        const ENEMY_WIDTH = PLAYER_PED_WIDTH;
+        const ENEMY_HEIGHT = PLAYER_PED_HEIGHT;
+
+        const PROJECTILE_SPEED = 8;
+        const PROJECTILE_LIFESPAN = 60;
+        const PROJECTILE_DAMAGE_PLAYER = 12; // Enemy damage to player
+        const PROJECTILE_DAMAGE_ENEMY = 18; // Player damage to enemy
+        const ENEMY_HEALTH = 50; // Increased health slightly
+        const ENEMY_SPEED = 1.3;
+        const ENEMY_CHASE_DIST = 350;
+        const ENEMY_SHOOT_DIST = 250; // Range at which enemies start shooting
+        const ENEMY_FIRE_RATE = 45; // Frames between enemy shots
+        const ENEMY_BULLET_SPREAD = 5; // Enemy accuracy spread
+        const PLAYER_ENTER_VEHICLE_RANGE = 30;
+        const ANIM_SPEED = 6; // Lower = faster animation
+
         // --- Game State ---
         const gameState = {
             playerState: 'driving',
@@ -59,316 +78,242 @@
                 acceleration: 0.1, deceleration: 0.05, handling: 3.5, angle: 0,
                 fuelLevel: 100, fuelConsumption: 0.02, color: '#0066cc',
                 health: 100, maxHealth: 100,
-                // --- Reduced Ped Size ---
-                pedWidth: 6, // Halved
-                pedHeight: 9, // Halved
-                pedSpeed: 1.5,
-                isWalking: false, walkAnimTimer: 0, walkAnimFrame: 0, walkAnimSpeed: 8,
-                fireCooldown: 0, fireRate: 12, // Slightly faster fire rate
-                bulletSpread: 3 // Angle deviation in degrees
+                pedWidth: PLAYER_PED_WIDTH, pedHeight: PLAYER_PED_HEIGHT, pedSpeed: 1.5,
+                isMoving: false, // Renamed from isWalking for clarity
+                animTimer: 0, animFrame: 0, // 0-3 for 4 frames
+                animSpeed: ANIM_SPEED,
+                fireCooldown: 0, fireRate: 10, // Faster player fire rate
+                bulletSpread: 3
             },
             camera: { x: 0, y: 0, width: canvas.width, height: canvas.height },
-            controls: { /* ... as before ... */
-                up: false, down: false, left: false, right: false,
-                handbrake: false, refuel: false, fire: false,
-                enterExit: false, enterExitProcessed: false
-             },
+            controls: { /* ... */ up: false, down: false, left: false, right: false, handbrake: false, refuel: false, fire: false, enterExit: false, enterExitProcessed: false },
             world: {
                 width: 3000, height: 3000, roadWidth: 60, grassColor: '#1a3d0c',
                 roadColor: '#333', lineColor: '#fff', lineWidth: 2,
                 trees: [], buildings: [], obstacles: [], gasStations: [],
                 vehicles: [], enemies: [], projectiles: [],
-                // --- Added Impassable Zones ---
-                impassableZones: [
-                    // Example: A lake area
-                    { type: 'water', x: 2200, y: 2200, width: 500, height: 600, color: 'rgba(50, 80, 150, 0.6)' },
-                    // Example: Restricted military base area
-                    { type: 'restricted', x: 100, y: 100, width: 400, height: 500, color: 'rgba(100, 100, 100, 0.4)' }
-                ],
+                impassableZones: [ /* ... */ { type: 'water', x: 2200, y: 2200, width: 500, height: 600, color: 'rgba(50, 80, 150, 0.6)' }, { type: 'restricted', x: 100, y: 100, width: 400, height: 500, color: 'rgba(100, 100, 100, 0.4)' } ],
                 startTime: Date.now()
             },
-            // --- Added new FX ---
-            fx: { skidMarks: [], dustParticles: [], explosions: [], muzzleFlashes: [], hitSparks: [] },
-            zones: [ /* ... as before ... */
-                {name: "DOWNTOWN", x: 1000, y: 1000, radius: 600}, {name: "FOREST HILLS", x: 600, y: 2200, radius: 500},
-                {name: "EASTERN PLAINS", x: 2200, y: 1800, radius: 400}, {name: "INDUSTRIAL PARK", x: 2000, y: 500, radius: 350}
-             ],
+            fx: { /* ... */ skidMarks: [], dustParticles: [], explosions: [], muzzleFlashes: [], hitSparks: [] },
+            zones: [ /* ... */ {name: "DOWNTOWN", x: 1000, y: 1000, radius: 600}, {name: "FOREST HILLS", x: 600, y: 2200, radius: 500}, {name: "EASTERN PLAINS", x: 2200, y: 1800, radius: 400}, {name: "INDUSTRIAL PARK", x: 2000, y: 500, radius: 350} ],
             gameOver: false
         };
 
-        // --- Constants ---
-        const PROJECTILE_SPEED = 8; // Slightly faster
-        const PROJECTILE_LIFESPAN = 60; // Slightly shorter life
-        const PROJECTILE_DAMAGE = 18; // Slightly more damage
-        const ENEMY_HEALTH = 45; // Slightly less health
-        // --- Reduced Enemy Size ---
-        const ENEMY_WIDTH = 7; // Halved
-        const ENEMY_HEIGHT = 11; // Halved
-        const ENEMY_SPEED = 1.3;
-        const ENEMY_CHASE_DIST = 350; // Larger aggro range
-        const ENEMY_SHOOT_DIST = 200;
-        const PLAYER_ENTER_VEHICLE_RANGE = 30; // Reduced range due to smaller size
-
         // --- Roads Data ---
-        const roads = [ /* ... as before ... */
-             {x1: 0, y1: 1000, x2: gameState.world.width, y2: 1000}, {x1: 0, y1: 2000, x2: gameState.world.width, y2: 2000},
-             {x1: 1000, y1: 0, x2: 1000, y2: gameState.world.height}, {x1: 2000, y1: 0, x2: 2000, y2: gameState.world.height},
-             {x1: 500, y1: 500, x2: 1500, y2: 1500}, {x1: 2500, y1: 500, x2: 1500, y2: 1500},
-             {x1: 500, y1: 2500, x2: 1500, y2: 1500}, {x1: 2500, y1: 2500, x2: 1500, y2: 1500},
-             {x1: 200, y1: 1000, x2: 500, y2: 1200}, {x1: 2800, y1: 1000, x2: 2500, y2: 1200},
-             {x1: 200, y1: 2000, x2: 500, y2: 1800}, {x1: 2800, y1: 2000, x2: 2500, y2: 1800}
-        ];
+        const roads = [ /* ... */ {x1: 0, y1: 1000, x2: gameState.world.width, y2: 1000}, {x1: 0, y1: 2000, x2: gameState.world.width, y2: 2000}, {x1: 1000, y1: 0, x2: 1000, y2: gameState.world.height}, {x1: 2000, y1: 0, x2: 2000, y2: gameState.world.height}, {x1: 500, y1: 500, x2: 1500, y2: 1500}, {x1: 2500, y1: 500, x2: 1500, y2: 1500}, {x1: 500, y1: 2500, x2: 1500, y2: 1500}, {x1: 2500, y1: 2500, x2: 1500, y2: 1500}, {x1: 200, y1: 1000, x2: 500, y2: 1200}, {x1: 2800, y1: 1000, x2: 2500, y2: 1200}, {x1: 200, y1: 2000, x2: 500, y2: 1800}, {x1: 2800, y1: 2000, x2: 2500, y2: 1800} ];
 
         // --- Input Handling ---
         window.addEventListener('keydown', (e) => { handleKeyInput(e, true); });
         window.addEventListener('keyup', (e) => { handleKeyInput(e, false); });
-        function handleKeyInput(e, isPressed) { /* ... Same as previous ... */
-             const key = e.key.toLowerCase(); switch(key) { case 'arrowup': case 'w': gameState.controls.up = isPressed; break; case 'arrowdown': case 's': gameState.controls.down = isPressed; break; case 'arrowleft': case 'a': gameState.controls.left = isPressed; break; case 'arrowright': case 'd': gameState.controls.right = isPressed; break; case ' ': gameState.controls.handbrake = isPressed; break; case 'f': gameState.controls.refuel = isPressed; break; case 'shift': gameState.controls.fire = isPressed; break; case 'e': if (isPressed && !gameState.controls.enterExitProcessed) { gameState.controls.enterExit = true; gameState.controls.enterExitProcessed = true; } else if (!isPressed) { gameState.controls.enterExitProcessed = false; } break; } if ((key === ' ' || key === 'shift' || key.startsWith('arrow')) && isPressed) e.preventDefault();
-        }
+        function handleKeyInput(e, isPressed) { /* ... Same ... */ const key = e.key.toLowerCase(); switch(key) { case 'arrowup': case 'w': gameState.controls.up = isPressed; break; case 'arrowdown': case 's': gameState.controls.down = isPressed; break; case 'arrowleft': case 'a': gameState.controls.left = isPressed; break; case 'arrowright': case 'd': gameState.controls.right = isPressed; break; case ' ': gameState.controls.handbrake = isPressed; break; case 'f': gameState.controls.refuel = isPressed; break; case 'shift': gameState.controls.fire = isPressed; break; case 'e': if (isPressed && !gameState.controls.enterExitProcessed) { gameState.controls.enterExit = true; gameState.controls.enterExitProcessed = true; } else if (!isPressed) { gameState.controls.enterExitProcessed = false; } break; } if ((key === ' ' || key === 'shift' || key.startsWith('arrow')) && isPressed) e.preventDefault(); }
 
         // --- Enter/Exit Vehicle Logic ---
-        function handleEnterExitAction() { /* ... uses PLAYER_ENTER_VEHICLE_RANGE ... */
-            if (!gameState.controls.enterExit) return;
-            if (gameState.playerState === 'driving') { /* ... Exit logic same ... */
-                const parkedCar = { x: gameState.player.x, y: gameState.player.y, width: gameState.player.width, height: gameState.player.height, angle: gameState.player.angle, color: gameState.player.color, maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling, fuelLevel: gameState.player.fuelLevel };
-                gameState.world.vehicles.push(parkedCar); gameState.playerState = 'onFoot'; const exitOffset = (gameState.player.width / 2) + 5 + gameState.player.pedWidth / 2; const exitAngleRad = (gameState.player.angle - 90) * Math.PI / 180; gameState.player.x += Math.cos(exitAngleRad) * exitOffset; gameState.player.y += Math.sin(exitAngleRad) * exitOffset; gameState.player.speed = 0;
-            } else if (gameState.playerState === 'onFoot') {
-                let closestCar = null;
-                let minDistanceSq = PLAYER_ENTER_VEHICLE_RANGE * PLAYER_ENTER_VEHICLE_RANGE; // Use constant
-                for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) {
-                    const car = gameState.world.vehicles[i]; const dx = gameState.player.x - car.x; const dy = gameState.player.y - car.y; const distanceSq = dx * dx + dy * dy;
-                    if (distanceSq < minDistanceSq) { minDistanceSq = distanceSq; closestCar = car; closestCar.index = i; }
-                }
-                if (closestCar) { /* ... Enter logic same ... */
-                    gameState.playerState = 'driving'; gameState.player.x = closestCar.x; gameState.player.y = closestCar.y; gameState.player.width = closestCar.width; gameState.player.height = closestCar.height; gameState.player.angle = closestCar.angle; gameState.player.color = closestCar.color; gameState.player.maxSpeed = closestCar.maxSpeed; gameState.player.handling = closestCar.handling; gameState.player.fuelLevel = closestCar.fuelLevel; gameState.player.speed = 0; gameState.world.vehicles.splice(closestCar.index, 1);
-                }
-            }
-            gameState.controls.enterExit = false;
-        }
+        function handleEnterExitAction() { /* ... Same ... */ if (!gameState.controls.enterExit) return; if (gameState.playerState === 'driving') { const parkedCar = { x: gameState.player.x, y: gameState.player.y, width: gameState.player.width, height: gameState.player.height, angle: gameState.player.angle, color: gameState.player.color, maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling, fuelLevel: gameState.player.fuelLevel }; gameState.world.vehicles.push(parkedCar); gameState.playerState = 'onFoot'; const exitOffset = (gameState.player.width / 2) + 5 + gameState.player.pedWidth / 2; const exitAngleRad = (gameState.player.angle - 90) * Math.PI / 180; gameState.player.x += Math.cos(exitAngleRad) * exitOffset; gameState.player.y += Math.sin(exitAngleRad) * exitOffset; gameState.player.speed = 0; } else if (gameState.playerState === 'onFoot') { let closestCar = null; let minDistanceSq = PLAYER_ENTER_VEHICLE_RANGE * PLAYER_ENTER_VEHICLE_RANGE; for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) { const car = gameState.world.vehicles[i]; const dx = gameState.player.x - car.x; const dy = gameState.player.y - car.y; const distanceSq = dx * dx + dy * dy; if (distanceSq < minDistanceSq) { minDistanceSq = distanceSq; closestCar = car; closestCar.index = i; } } if (closestCar) { gameState.playerState = 'driving'; gameState.player.x = closestCar.x; gameState.player.y = closestCar.y; gameState.player.width = closestCar.width; gameState.player.height = closestCar.height; gameState.player.angle = closestCar.angle; gameState.player.color = closestCar.color; gameState.player.maxSpeed = closestCar.maxSpeed; gameState.player.handling = closestCar.handling; gameState.player.fuelLevel = closestCar.fuelLevel; gameState.player.speed = 0; gameState.world.vehicles.splice(closestCar.index, 1); } } gameState.controls.enterExit = false; }
 
-        // --- Player Firing Logic (Enhanced) ---
-        function handlePlayerFiring() {
-            if (gameState.playerState === 'onFoot' && gameState.controls.fire && gameState.player.fireCooldown <= 0) {
-                // --- Add Spread ---
-                const spreadRad = (Math.random() - 0.5) * gameState.player.bulletSpread * (Math.PI / 180);
-                const fireAngleRad = gameState.player.angle * Math.PI / 180 + spreadRad;
-
-                const muzzleOffsetX = Math.sin(fireAngleRad) * (gameState.player.pedWidth); // Offset based on direction
-                const muzzleOffsetY = -Math.cos(fireAngleRad) * (gameState.player.pedHeight);
-
-                const startX = gameState.player.x + muzzleOffsetX;
-                const startY = gameState.player.y + muzzleOffsetY;
-
-                // Create Projectile
-                gameState.world.projectiles.push({
-                    x: startX, y: startY,
-                    vx: Math.sin(fireAngleRad) * PROJECTILE_SPEED,
-                    vy: -Math.cos(fireAngleRad) * PROJECTILE_SPEED,
-                    lifespan: PROJECTILE_LIFESPAN, owner: 'player',
-                    damage: PROJECTILE_DAMAGE, color: '#ff0'
-                });
-
-                // --- Create Muzzle Flash ---
-                createMuzzleFlash(startX, startY);
-
-                gameState.player.fireCooldown = gameState.player.fireRate;
-            }
-            if (gameState.player.fireCooldown > 0) gameState.player.fireCooldown--;
-        }
+        // --- Player Firing Logic ---
+        function handlePlayerFiring() { /* ... Same, uses spread ... */ if (gameState.playerState === 'onFoot' && gameState.controls.fire && gameState.player.fireCooldown <= 0) { const spreadRad = (Math.random() - 0.5) * gameState.player.bulletSpread * (Math.PI / 180); const fireAngleRad = gameState.player.angle * Math.PI / 180 + spreadRad; const muzzleOffsetX = Math.sin(fireAngleRad) * (gameState.player.pedWidth); const muzzleOffsetY = -Math.cos(fireAngleRad) * (gameState.player.pedHeight); const startX = gameState.player.x + muzzleOffsetX; const startY = gameState.player.y + muzzleOffsetY; gameState.world.projectiles.push({ x: startX, y: startY, vx: Math.sin(fireAngleRad) * PROJECTILE_SPEED, vy: -Math.cos(fireAngleRad) * PROJECTILE_SPEED, lifespan: PROJECTILE_LIFESPAN, owner: 'player', damage: PROJECTILE_DAMAGE_ENEMY, color: '#ff0' }); createMuzzleFlash(startX, startY); gameState.player.fireCooldown = gameState.player.fireRate; } if (gameState.player.fireCooldown > 0) gameState.player.fireCooldown--; }
 
         // --- Game Loop ---
-        function gameLoop() { /* ... Same as previous ... */
-             if (gameState.gameOver) { drawGameOver(); requestAnimationFrame(gameLoop); return; } handleEnterExitAction(); handlePlayerFiring(); updateGame(); renderGame(); requestAnimationFrame(gameLoop);
-        }
+        function gameLoop() { /* ... Same ... */ if (gameState.gameOver) { drawGameOver(); requestAnimationFrame(gameLoop); return; } handleEnterExitAction(); handlePlayerFiring(); updateGame(); renderGame(); requestAnimationFrame(gameLoop); }
 
         // --- Update Logic ---
-        function updateGame() { /* ... Same structure ... */
-             updatePlayerPosition(); updateEnemies(); updateProjectiles(); updateCamera(); updateParticlesAndEffects(); updateHUD(); checkGameOverCondition();
-        }
+        function updateGame() { /* ... Same ... */ updatePlayerPosition(); updateEnemies(); updateProjectiles(); updateCamera(); updateParticlesAndEffects(); updateHUD(); checkGameOverCondition(); }
 
         // --- Player Update ---
-        function updatePlayerPosition() { /* ... Same structure ... */
-             const oldX = gameState.player.x; const oldY = gameState.player.y; if (gameState.playerState === 'driving') { updateDrivingPhysics(); checkGasStations(); } else if (gameState.playerState === 'onFoot') { updateWalkingPhysics(); } checkCollisions(oldX, oldY, gameState.player, gameState.playerState);
-        }
-        function updateDrivingPhysics() { /* ... Same as previous ... */
-             if (gameState.controls.up && gameState.player.fuelLevel > 0) { gameState.player.speed += gameState.player.acceleration; gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + Math.abs(gameState.player.speed) / gameState.player.maxSpeed); if (Math.random() > 0.7 && Math.abs(gameState.player.speed) > 1) createDustParticle(true); } else if (gameState.controls.down) { if (gameState.player.speed > 0.1) gameState.player.speed -= gameState.player.deceleration * 3; else { gameState.player.speed -= gameState.player.acceleration / 1.5; if (gameState.player.fuelLevel > 0) gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.5; } } else { if (Math.abs(gameState.player.speed) < gameState.player.deceleration) gameState.player.speed = 0; else if (gameState.player.speed > 0) gameState.player.speed -= gameState.player.deceleration; else gameState.player.speed += gameState.player.deceleration; } if (gameState.player.speed > gameState.player.maxSpeed) gameState.player.speed = gameState.player.maxSpeed; const maxReverseSpeed = gameState.player.maxSpeed / 2; if (gameState.player.speed < -maxReverseSpeed) gameState.player.speed = -maxReverseSpeed; if (Math.abs(gameState.player.speed) > 0.5) { let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.7 : 1); let speedModifier = 1.0 - (Math.abs(gameState.player.speed) / (gameState.player.maxSpeed * 1.5)); speedModifier = Math.max(0.3, speedModifier); let turnDirection = gameState.player.speed >= 0 ? 1 : -1; if (gameState.controls.left) { gameState.player.angle -= steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } if (gameState.controls.right) { gameState.player.angle += steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } } if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > 0.5) { gameState.player.speed *= 0.94; if (Math.random() > 0.4) createSkidMark(); } if (gameState.player.fuelLevel < 0) gameState.player.fuelLevel = 0; if (Math.abs(gameState.player.speed) > 0.01) { const radians = gameState.player.angle * Math.PI / 180; gameState.player.x += Math.sin(radians) * gameState.player.speed; gameState.player.y -= Math.cos(radians) * gameState.player.speed; }
-        }
-        function updateWalkingPhysics() { /* ... Same walking + animation logic ... */
-             let moveX = 0; let moveY = 0; const speed = gameState.player.pedSpeed; if (gameState.controls.up) moveY -= speed; if (gameState.controls.down) moveY += speed; if (gameState.controls.left) moveX -= speed; if (gameState.controls.right) moveX += speed; gameState.player.isWalking = (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01); if (moveX !== 0 && moveY !== 0) { const factor = speed / Math.sqrt(moveX * moveX + moveY * moveY); moveX *= factor; moveY *= factor; } if (gameState.player.isWalking) { gameState.player.angle = (Math.atan2(moveX, -moveY) * 180 / Math.PI); } gameState.player.x += moveX; gameState.player.y += moveY; if (gameState.player.isWalking) { gameState.player.walkAnimTimer++; if (gameState.player.walkAnimTimer >= gameState.player.walkAnimSpeed) { gameState.player.walkAnimTimer = 0; gameState.player.walkAnimFrame = 1 - gameState.player.walkAnimFrame; } } else { gameState.player.walkAnimFrame = 0; gameState.player.walkAnimTimer = 0; }
+        function updatePlayerPosition() { /* ... Same structure ... */ const oldX = gameState.player.x; const oldY = gameState.player.y; if (gameState.playerState === 'driving') { updateDrivingPhysics(); checkGasStations(); } else if (gameState.playerState === 'onFoot') { updateWalkingPhysics(); } checkCollisions(oldX, oldY, gameState.player, gameState.playerState); }
+        function updateDrivingPhysics() { /* ... Same ... */ if (gameState.controls.up && gameState.player.fuelLevel > 0) { gameState.player.speed += gameState.player.acceleration; gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + Math.abs(gameState.player.speed) / gameState.player.maxSpeed); if (Math.random() > 0.7 && Math.abs(gameState.player.speed) > 1) createDustParticle(true); } else if (gameState.controls.down) { if (gameState.player.speed > 0.1) gameState.player.speed -= gameState.player.deceleration * 3; else { gameState.player.speed -= gameState.player.acceleration / 1.5; if (gameState.player.fuelLevel > 0) gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.5; } } else { if (Math.abs(gameState.player.speed) < gameState.player.deceleration) gameState.player.speed = 0; else if (gameState.player.speed > 0) gameState.player.speed -= gameState.player.deceleration; else gameState.player.speed += gameState.player.deceleration; } if (gameState.player.speed > gameState.player.maxSpeed) gameState.player.speed = gameState.player.maxSpeed; const maxReverseSpeed = gameState.player.maxSpeed / 2; if (gameState.player.speed < -maxReverseSpeed) gameState.player.speed = -maxReverseSpeed; if (Math.abs(gameState.player.speed) > 0.5) { let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.7 : 1); let speedModifier = 1.0 - (Math.abs(gameState.player.speed) / (gameState.player.maxSpeed * 1.5)); speedModifier = Math.max(0.3, speedModifier); let turnDirection = gameState.player.speed >= 0 ? 1 : -1; if (gameState.controls.left) { gameState.player.angle -= steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } if (gameState.controls.right) { gameState.player.angle += steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } } if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > 0.5) { gameState.player.speed *= 0.94; if (Math.random() > 0.4) createSkidMark(); } if (gameState.player.fuelLevel < 0) gameState.player.fuelLevel = 0; if (Math.abs(gameState.player.speed) > 0.01) { const radians = gameState.player.angle * Math.PI / 180; gameState.player.x += Math.sin(radians) * gameState.player.speed; gameState.player.y -= Math.cos(radians) * gameState.player.speed; } }
+        function updateWalkingPhysics() { /* ... Uses 4-frame animation cycle ... */
+             let moveX = 0; let moveY = 0; const speed = gameState.player.pedSpeed;
+             if (gameState.controls.up) moveY -= speed; if (gameState.controls.down) moveY += speed;
+             if (gameState.controls.left) moveX -= speed; if (gameState.controls.right) moveX += speed;
+             gameState.player.isMoving = (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01);
+             if (moveX !== 0 && moveY !== 0) { const factor = speed / Math.sqrt(moveX * moveX + moveY * moveY); moveX *= factor; moveY *= factor; }
+             if (gameState.player.isMoving) { gameState.player.angle = (Math.atan2(moveX, -moveY) * 180 / Math.PI); }
+             gameState.player.x += moveX; gameState.player.y += moveY;
+             // --- Update 4-Frame Animation ---
+             if (gameState.player.isMoving) {
+                 gameState.player.animTimer++;
+                 if (gameState.player.animTimer >= gameState.player.animSpeed) {
+                     gameState.player.animTimer = 0;
+                     gameState.player.animFrame = (gameState.player.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
+                 }
+             } else {
+                 gameState.player.animFrame = 0; // Idle frame
+                 gameState.player.animTimer = 0;
+             }
         }
 
-        // --- Enemy Logic (Simplified) ---
+        // --- Enemy Logic (With Shooting) ---
         function spawnEnemy(x, y) {
             gameState.world.enemies.push({
                 x: x, y: y, health: ENEMY_HEALTH, maxHealth: ENEMY_HEALTH,
                 width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ENEMY_SPEED, angle: 0,
                 color: `hsl(${Math.random() * 60}, 70%, 50%)`, state: 'idle',
-                aiTimer: Math.random() * 120
+                aiTimer: Math.random() * 120,
+                // Shooting properties
+                fireCooldown: ENEMY_FIRE_RATE / 2 + Math.random() * ENEMY_FIRE_RATE, // Stagger initial shots
+                fireRate: ENEMY_FIRE_RATE,
+                bulletSpread: ENEMY_BULLET_SPREAD,
+                // Animation properties (same as player)
+                isMoving: false, animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED
             });
         }
-        function updateEnemies() { /* ... Same basic chase logic ... */
-             for (let i = gameState.world.enemies.length - 1; i >= 0; i--) { const enemy = gameState.world.enemies[i]; const oldX = enemy.x; const oldY = enemy.y; const dxPlayer = gameState.player.x - enemy.x; const dyPlayer = gameState.player.y - enemy.y; const distSqPlayer = dxPlayer * dxPlayer + dyPlayer * dyPlayer; if (enemy.state === 'idle') { enemy.aiTimer--; if (distSqPlayer < ENEMY_CHASE_DIST * ENEMY_CHASE_DIST) { enemy.state = 'chasing'; } else if (enemy.aiTimer <= 0) { enemy.aiTimer = 120 + Math.random() * 120; } } else if (enemy.state === 'chasing') { if (distSqPlayer > (ENEMY_CHASE_DIST + 50) * (ENEMY_CHASE_DIST + 50)) { enemy.state = 'idle'; enemy.aiTimer = 60; } else { const angleToPlayer = Math.atan2(dyPlayer, dxPlayer); enemy.angle = angleToPlayer * 180 / Math.PI + 90; enemy.x += Math.cos(angleToPlayer) * enemy.speed; enemy.y += Math.sin(angleToPlayer) * enemy.speed; } } checkCollisions(oldX, oldY, enemy, 'enemy'); if (enemy.health <= 0) { createExplosion(enemy.x, enemy.y, enemy.color); gameState.world.enemies.splice(i, 1); } }
+
+        function updateEnemies() {
+            for (let i = gameState.world.enemies.length - 1; i >= 0; i--) {
+                const enemy = gameState.world.enemies[i];
+                const oldX = enemy.x; const oldY = enemy.y;
+                const dxPlayer = gameState.player.x - enemy.x; const dyPlayer = gameState.player.y - enemy.y;
+                const distSqPlayer = dxPlayer * dxPlayer + dyPlayer * dyPlayer;
+
+                let targetAngleRad = Math.atan2(dyPlayer, dxPlayer);
+                enemy.isMoving = false; // Assume not moving initially
+
+                // --- State Logic ---
+                if (enemy.state === 'idle') {
+                    enemy.aiTimer--;
+                    if (distSqPlayer < ENEMY_CHASE_DIST * ENEMY_CHASE_DIST) {
+                        enemy.state = 'chasing';
+                    } else if (enemy.aiTimer <= 0) {
+                        enemy.aiTimer = 120 + Math.random() * 120;
+                    }
+                } else if (enemy.state === 'chasing') {
+                    if (distSqPlayer > (ENEMY_CHASE_DIST + 50) * (ENEMY_CHASE_DIST + 50)) { // Lose player
+                        enemy.state = 'idle'; enemy.aiTimer = 60;
+                    } else {
+                        // Aim towards player
+                        enemy.angle = targetAngleRad * 180 / Math.PI + 90;
+                        // Move if not too close
+                        if (distSqPlayer > (ENEMY_SHOOT_DIST * 0.5) * (ENEMY_SHOOT_DIST * 0.5)) { // Don't crowd too much
+                             enemy.x += Math.cos(targetAngleRad) * enemy.speed;
+                             enemy.y += Math.sin(targetAngleRad) * enemy.speed;
+                             enemy.isMoving = true;
+                        }
+
+                        // --- Enemy Shooting ---
+                        if (distSqPlayer < ENEMY_SHOOT_DIST * ENEMY_SHOOT_DIST && enemy.fireCooldown <= 0) {
+                            // Basic Line of Sight Check (very simple: check midpoint)
+                            const midX = (enemy.x + gameState.player.x) / 2;
+                            const midY = (enemy.y + gameState.player.y) / 2;
+                            let canSeePlayer = true;
+                            const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
+                            for(const obj of worldGeometry) {
+                                if (midX > obj.x && midX < obj.x + obj.width && midY > obj.y && midY < obj.y + obj.height) {
+                                    canSeePlayer = false; break;
+                                }
+                            }
+
+                            if (canSeePlayer) {
+                                const spreadRad = (Math.random() - 0.5) * enemy.bulletSpread * (Math.PI / 180);
+                                const fireAngleRad = targetAngleRad + spreadRad; // Already calculated angle to player
+                                const muzzleOffsetX = Math.sin(fireAngleRad) * (enemy.width);
+                                const muzzleOffsetY = Math.cos(fireAngleRad) * (enemy.height); // Use cos here? Check angle usage
+                                const startX = enemy.x + muzzleOffsetX;
+                                const startY = enemy.y + muzzleOffsetY; // Adjust offset logic if needed
+
+                                gameState.world.projectiles.push({
+                                    x: startX, y: startY,
+                                    vx: Math.cos(fireAngleRad) * PROJECTILE_SPEED, // Use cos for x velocity based on atan2 result
+                                    vy: Math.sin(fireAngleRad) * PROJECTILE_SPEED, // Use sin for y velocity
+                                    lifespan: PROJECTILE_LIFESPAN, owner: 'enemy', // Mark owner
+                                    damage: PROJECTILE_DAMAGE_PLAYER, color: '#f66' // Red enemy bullets
+                                });
+                                createMuzzleFlash(startX, startY);
+                                enemy.fireCooldown = enemy.fireRate;
+                            }
+                        }
+                    }
+                }
+
+                 // Update enemy animation frame (same as player)
+                 if (enemy.isMoving) {
+                     enemy.animTimer++;
+                     if (enemy.animTimer >= enemy.animSpeed) {
+                         enemy.animTimer = 0;
+                         enemy.animFrame = (enemy.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
+                     }
+                 } else {
+                     enemy.animFrame = 0; // Idle frame
+                     enemy.animTimer = 0;
+                 }
+
+                // Update cooldown
+                if (enemy.fireCooldown > 0) enemy.fireCooldown--;
+
+                // Collision check for enemy
+                checkCollisions(oldX, oldY, enemy, 'enemy');
+
+                // Check health
+                if (enemy.health <= 0) {
+                    createExplosion(enemy.x, enemy.y, enemy.color, 0.8); // Slightly smaller explosion
+                    gameState.world.enemies.splice(i, 1);
+                }
+            }
         }
 
-        // --- Projectile Logic (Enhanced Hit Check) ---
+        // --- Projectile Logic (Handles owner) ---
         function updateProjectiles() {
              for (let i = gameState.world.projectiles.length - 1; i >= 0; i--) {
                  const p = gameState.world.projectiles[i];
                  p.x += p.vx; p.y += p.vy; p.lifespan--;
                  let hit = false; let hitWall = false;
 
-                 // 1. Check collision with enemies
+                 // Collision check depends on owner
                  if (p.owner === 'player') {
-                     for (let j = gameState.world.enemies.length - 1; j >= 0; j--) {
-                         const enemy = gameState.world.enemies[j];
-                         const dx = p.x - enemy.x; const dy = p.y - enemy.y;
-                         const hitRadius = Math.max(enemy.width, enemy.height) * 0.6; // Adjusted hit radius for smaller bodies
-                         if (dx * dx + dy * dy < hitRadius * hitRadius) {
-                             enemy.health -= p.damage;
-                             hit = true; // Hit an enemy
-                             break;
-                         }
-                     }
-                 }
-                 // 2. Check collision with player (add later if enemies shoot)
-
-                 // 3. Check collision with world geometry (Buildings, Obstacles, Impassable Zones)
-                 if (!hit) {
-                     const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
-                     for(const obj of worldGeometry) {
-                          if (p.x > obj.x && p.x < obj.x + obj.width && p.y > obj.y && p.y < obj.y + obj.height) {
+                     // Check vs Enemies
+                     for (let j = gameState.world.enemies.length - 1; j >= 0; j--) { /* ... same hit check ... */ const enemy = gameState.world.enemies[j]; const dx = p.x - enemy.x; const dy = p.y - enemy.y; const hitRadius = Math.max(enemy.width, enemy.height) * 0.7; if (dx * dx + dy * dy < hitRadius * hitRadius) { enemy.health -= p.damage; hit = true; break; } }
+                 } else if (p.owner === 'enemy') {
+                     // Check vs Player (on foot only for now)
+                     if (gameState.playerState === 'onFoot') {
+                          const dx = p.x - gameState.player.x;
+                          const dy = p.y - gameState.player.y;
+                          const hitRadius = Math.max(gameState.player.pedWidth, gameState.player.pedHeight) * 0.7;
+                          if (dx * dx + dy * dy < hitRadius * hitRadius) {
+                              gameState.player.health -= p.damage;
                               hit = true;
-                              hitWall = true; // Specifically hit geometry
-                              break;
+                              // Add hit feedback? Screen shake? Red flash?
+                              console.log("Player Hit! Health:", gameState.player.health);
                           }
                      }
+                     // Add check vs player vehicle later if desired
                  }
 
-                 // 4. Check world boundaries
-                 if (p.x < 0 || p.x > gameState.world.width || p.y < 0 || p.y > gameState.world.height) {
-                     hit = true; // Hit world boundary
-                     hitWall = true;
-                 }
+                 // Check collision with world geometry (if not already hit)
+                 if (!hit) { const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for(const obj of worldGeometry) { if (p.x > obj.x && p.x < obj.x + obj.width && p.y > obj.y && p.y < obj.y + obj.height) { hit = true; hitWall = true; break; } } }
+                 // Check world boundaries
+                 if (p.x < 0 || p.x > gameState.world.width || p.y < 0 || p.y > gameState.world.height) { hit = true; hitWall = true; }
 
-                 // Remove projectile if lifespan ends or it hits something
-                 if (p.lifespan <= 0 || hit) {
-                      if (hitWall) {
-                          createHitSparks(p.x, p.y); // Sparks on hitting walls/boundaries
-                      } else if (hit) {
-                          createExplosion(p.x, p.y, p.color, 0.4); // Small blood/hit effect
-                      }
-                     gameState.world.projectiles.splice(i, 1);
-                 }
+                 // Remove projectile
+                 if (p.lifespan <= 0 || hit) { if (hitWall) { createHitSparks(p.x, p.y); } else if (hit && p.owner === 'player') { createExplosion(p.x, p.y, '#ff0', 0.4); /* Enemy hit splash */ } else if (hit && p.owner === 'enemy') { createExplosion(p.x, p.y, '#f66', 0.4); /* Player hit splash */ } gameState.world.projectiles.splice(i, 1); }
              }
          }
 
-        // --- Collision (Includes Impassable Zones) ---
-        function checkCollisions(oldX, oldY, entity, entityType) {
-            const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy';
-            const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width);
-            const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height);
-            const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH };
-            let collisionOccurred = false; let bounced = false;
-
-            // 1. World Boundaries
-            if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; }
-            if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; }
-            entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2;
-            if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) entity.state = 'idle';
-
-            // 2. Object Collision (Buildings, Obstacles, Impassable Zones)
-            const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; // Include impassable
-            for (const obj of objects) {
-                const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height };
-                if (isCollidingAABB(entityRect, objRect)) {
-                    collisionOccurred = true; entity.x = oldX; entity.y = oldY; // Revert pos
-                    if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); }
-                    else if (isEnemy) { entity.state = 'idle'; }
-                    break;
-                }
-            }
-            return collisionOccurred;
-        }
+        // --- Collision ---
+        function checkCollisions(oldX, oldY, entity, entityType) { /* ... Same as previous (uses impassableZones) ... */ const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy'; const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width); const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height); const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH }; let collisionOccurred = false; let bounced = false; if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; } if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; } entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2; if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) entity.state = 'idle'; const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of objects) { const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height }; if (isCollidingAABB(entityRect, objRect)) { collisionOccurred = true; entity.x = oldX; entity.y = oldY; if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); } else if (isEnemy) { entity.state = 'idle'; } break; } } return collisionOccurred; }
         function isCollidingAABB(rect1, rect2) { /* ... Same ... */ return ( rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y ); }
         function checkGasStations() { /* ... Same ... */ if (gameState.playerState !== 'driving') return; if (gameState.controls.refuel) { for (const station of gameState.world.gasStations) { const dx = gameState.player.x - (station.x + station.width / 2); const dy = gameState.player.y - (station.y + station.height / 2); const distanceSq = dx * dx + dy * dy; if (distanceSq < 70 * 70) { gameState.player.fuelLevel += 1.5; if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100; break; } } } }
         function checkLocation() { /* ... Same ... */ let currentZone = null; let closestDistance = Infinity; for (const zone of gameState.zones) { const dx = gameState.player.x - zone.x; const dy = gameState.player.y - zone.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance < zone.radius && distance < closestDistance) { closestDistance = distance; currentZone = zone; } } document.getElementById('location').textContent = `LOC: ${currentZone ? currentZone.name : 'COUNTRYSIDE'}`; }
-        function checkGameOverCondition() {
-            if (gameState.player.health <= 0 && !gameState.gameOver) {
-                gameState.gameOver = true;
-                console.log("GAME OVER");
-                // Optional: Add game over sound effect
-            }
-        }
+        function checkGameOverCondition() { /* ... Same ... */ if (gameState.player.health <= 0 && !gameState.gameOver) { gameState.gameOver = true; console.log("GAME OVER"); } }
 
-        // --- Effects (Added Muzzle Flash, Hit Sparks) ---
+        // --- Effects ---
         function createSkidMark() { /* ... Same ... */ if (gameState.playerState !== 'driving') return; const radians = gameState.player.angle * Math.PI / 180; const wheelOffset = gameState.player.height * 0.3; gameState.fx.skidMarks.push({ x: gameState.player.x - Math.sin(radians) * wheelOffset, y: gameState.player.y + Math.cos(radians) * wheelOffset, angle: gameState.player.angle, alpha: 0.7 + Math.random() * 0.2, width: 2 + Math.abs(gameState.player.speed * 0.5), life: 200 + Math.random() * 100 }); if (gameState.fx.skidMarks.length > 150) gameState.fx.skidMarks.shift(); }
         function createDustParticle(isDrivingEffect = true) { /* ... Same ... */ const pAngle = gameState.player.angle * Math.PI / 180; const offsetDist = isDrivingEffect ? gameState.player.height / 2 : 5; const baseX = gameState.player.x - Math.sin(pAngle) * offsetDist; const baseY = gameState.player.y + Math.cos(pAngle) * offsetDist; gameState.fx.dustParticles.push({ x: baseX + (Math.random() - 0.5) * (isDrivingEffect ? 15 : 5), y: baseY + (Math.random() - 0.5) * (isDrivingEffect ? 15 : 5), size: isDrivingEffect ? 2 + Math.random() * 5 : 1 + Math.random() * 2, alpha: 0.6 + Math.random() * 0.2, life: 25 + Math.random() * 25, vx: (Math.random() - 0.5) * (isDrivingEffect ? 1.5 : 0.5), vy: (Math.random() - 0.5) * (isDrivingEffect ? 1.5 : 0.5) }); if (gameState.fx.dustParticles.length > 80) gameState.fx.dustParticles.shift(); }
         function createExplosion(x, y, color = '#ffa500', scale = 1.0) { /* ... Same ... */ const particles = 15 + Math.floor(Math.random() * 10); for (let i = 0; i < particles; i++) { const angle = Math.random() * Math.PI * 2; const speed = 1 + Math.random() * 3 * scale; gameState.fx.explosions.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: (2 + Math.random() * 4) * scale, alpha: 0.8 + Math.random() * 0.2, life: 20 + Math.random() * 20, color: color }); } }
-        function createMuzzleFlash(x, y) {
-            gameState.fx.muzzleFlashes.push({
-                x: x, y: y, size: 8 + Math.random() * 6, // Larger flash size
-                alpha: 0.9, life: 4 // Very short life
-            });
-        }
-        function createHitSparks(x, y) {
-            const particles = 5 + Math.floor(Math.random() * 5);
-            for (let i = 0; i < particles; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 1 + Math.random() * 2;
-                gameState.fx.hitSparks.push({
-                    x: x, y: y,
-                    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-                    size: 1 + Math.random() * 1.5,
-                    alpha: 0.9, life: 10 + Math.random() * 10, // Short life sparks
-                    color: '#ffcc66' // Yellowish sparks
-                });
-            }
-        }
-
-        function updateParticlesAndEffects() { /* ... Includes new FX updates ... */
-             // Dust
-             for (let i = gameState.fx.dustParticles.length - 1; i >= 0; i--) { const p = gameState.fx.dustParticles[i]; p.x += p.vx; p.y += p.vy; p.life--; p.alpha -= 0.025; if (p.life <= 0 || p.alpha <= 0) gameState.fx.dustParticles.splice(i, 1); }
-             // Skids
-             for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) { const s = gameState.fx.skidMarks[i]; s.alpha -= 0.002; s.life--; if (s.alpha <= 0 || s.life <= 0) gameState.fx.skidMarks.splice(i, 1); }
-             // Explosions
-             for (let i = gameState.fx.explosions.length - 1; i >= 0; i--) { const p = gameState.fx.explosions[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.97; p.vy *= 0.97; p.life--; p.alpha -= 0.04; if (p.life <= 0 || p.alpha <= 0) gameState.fx.explosions.splice(i, 1); }
-             // Muzzle Flashes
-             for (let i = gameState.fx.muzzleFlashes.length - 1; i >= 0; i--) { const f = gameState.fx.muzzleFlashes[i]; f.life--; f.alpha -= 0.25; if (f.life <= 0 || f.alpha <= 0) gameState.fx.muzzleFlashes.splice(i, 1); }
-             // Hit Sparks
-             for (let i = gameState.fx.hitSparks.length - 1; i >= 0; i--) { const s = gameState.fx.hitSparks[i]; s.x += s.vx; s.y += s.vy; s.vx *= 0.95; s.vy *= 0.95; s.life--; s.alpha -= 0.1; if (s.life <= 0 || s.alpha <= 0) gameState.fx.hitSparks.splice(i, 1); }
-        }
+        function createMuzzleFlash(x, y) { /* ... Same ... */ gameState.fx.muzzleFlashes.push({ x: x, y: y, size: 8 + Math.random() * 6, alpha: 0.9, life: 4 }); }
+        function createHitSparks(x, y) { /* ... Same ... */ const particles = 5 + Math.floor(Math.random() * 5); for (let i = 0; i < particles; i++) { const angle = Math.random() * Math.PI * 2; const speed = 1 + Math.random() * 2; gameState.fx.hitSparks.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 1 + Math.random() * 1.5, alpha: 0.9, life: 10 + Math.random() * 10, color: '#ffcc66' }); } }
+        function updateParticlesAndEffects() { /* ... Same ... */ for (let i = gameState.fx.dustParticles.length - 1; i >= 0; i--) { const p = gameState.fx.dustParticles[i]; p.x += p.vx; p.y += p.vy; p.life--; p.alpha -= 0.025; if (p.life <= 0 || p.alpha <= 0) gameState.fx.dustParticles.splice(i, 1); } for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) { const s = gameState.fx.skidMarks[i]; s.alpha -= 0.002; s.life--; if (s.alpha <= 0 || s.life <= 0) gameState.fx.skidMarks.splice(i, 1); } for (let i = gameState.fx.explosions.length - 1; i >= 0; i--) { const p = gameState.fx.explosions[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.97; p.vy *= 0.97; p.life--; p.alpha -= 0.04; if (p.life <= 0 || p.alpha <= 0) gameState.fx.explosions.splice(i, 1); } for (let i = gameState.fx.muzzleFlashes.length - 1; i >= 0; i--) { const f = gameState.fx.muzzleFlashes[i]; f.life--; f.alpha -= 0.25; if (f.life <= 0 || f.alpha <= 0) gameState.fx.muzzleFlashes.splice(i, 1); } for (let i = gameState.fx.hitSparks.length - 1; i >= 0; i--) { const s = gameState.fx.hitSparks[i]; s.x += s.vx; s.y += s.vy; s.vx *= 0.95; s.vy *= 0.95; s.life--; s.alpha -= 0.1; if (s.life <= 0 || s.alpha <= 0) gameState.fx.hitSparks.splice(i, 1); } }
 
         // --- Camera ---
-        function updateCamera() { /* ... Same smooth lerp ... */ const targetX = gameState.player.x - canvas.width / 2; const targetY = gameState.player.y - canvas.height / 2; const lerpFactor = 0.1; gameState.camera.x += (targetX - gameState.camera.x) * lerpFactor; gameState.camera.y += (targetY - gameState.camera.y) * lerpFactor; gameState.camera.x = Math.max(0, Math.min(gameState.camera.x, gameState.world.width - canvas.width)); gameState.camera.y = Math.max(0, Math.min(gameState.camera.y, gameState.world.height - canvas.height)); }
+        function updateCamera() { /* ... Same ... */ const targetX = gameState.player.x - canvas.width / 2; const targetY = gameState.player.y - canvas.height / 2; const lerpFactor = 0.1; gameState.camera.x += (targetX - gameState.camera.x) * lerpFactor; gameState.camera.y += (targetY - gameState.camera.y) * lerpFactor; gameState.camera.x = Math.max(0, Math.min(gameState.camera.x, gameState.world.width - canvas.width)); gameState.camera.y = Math.max(0, Math.min(gameState.camera.y, gameState.world.height - canvas.height)); }
         // --- HUD Update ---
-        function updateHUD() { /* ... Same as previous ... */ document.getElementById('health-level').style.width = `${Math.max(0, (gameState.player.health / gameState.player.maxHealth) * 100)}%`; const showDrivingUI = gameState.playerState === 'driving'; document.getElementById('speed-line').style.display = showDrivingUI ? '' : 'none'; document.getElementById('fuel-line').style.display = showDrivingUI ? '' : 'none'; if (showDrivingUI) { document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 20)); document.getElementById('fuel-level').style.width = `${Math.max(0, gameState.player.fuelLevel)}%`; } checkLocation(); document.getElementById('enemies-left').textContent = gameState.world.enemies.length; }
+        function updateHUD() { /* ... Same ... */ document.getElementById('health-level').style.width = `${Math.max(0, (gameState.player.health / gameState.player.maxHealth) * 100)}%`; const showDrivingUI = gameState.playerState === 'driving'; document.getElementById('speed-line').style.display = showDrivingUI ? '' : 'none'; document.getElementById('fuel-line').style.display = showDrivingUI ? '' : 'none'; if (showDrivingUI) { document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 20)); document.getElementById('fuel-level').style.width = `${Math.max(0, gameState.player.fuelLevel)}%`; } checkLocation(); document.getElementById('enemies-left').textContent = gameState.world.enemies.length; }
 
         // --- Rendering ---
-        function renderGame() { /* ... Includes drawing new FX and zones ... */
-             ctx.fillStyle = gameState.world.grassColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
-             ctx.save(); ctx.translate(-gameState.camera.x, -gameState.camera.y);
-             // Draw world background elements
-             drawImpassableZones(); // Draw zones first
-             drawRoads();
-             // Draw static objects
-             drawBuildings(); drawTrees(); drawObstacles(); drawGasStations();
-             // Draw dynamic objects/effects
-             drawVehicles(); drawEnemies(); drawSkidMarks(); drawDustParticles(); drawExplosions(); drawHitSparks(); drawProjectiles(); drawMuzzleFlashes();
-             drawPlayer();
-             ctx.restore();
-             drawMiniMap();
-        }
+        function renderGame() { /* ... Same structure ... */ ctx.fillStyle = gameState.world.grassColor; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(-gameState.camera.x, -gameState.camera.y); drawImpassableZones(); drawRoads(); drawBuildings(); drawTrees(); drawObstacles(); drawGasStations(); drawVehicles(); drawEnemies(); drawSkidMarks(); drawDustParticles(); drawExplosions(); drawHitSparks(); drawProjectiles(); drawMuzzleFlashes(); drawPlayer(); ctx.restore(); drawMiniMap(); }
 
         // --- Drawing Functions ---
-        function drawImpassableZones() {
-            gameState.world.impassableZones.forEach(zone => {
-                 if (zone.x + zone.width < gameState.camera.x || zone.x > gameState.camera.x + canvas.width ||
-                     zone.y + zone.height < gameState.camera.y || zone.y > gameState.camera.y + canvas.height) return; // Culling
-                ctx.fillStyle = zone.color;
-                ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-                // Optional: Add texture/pattern for water/restricted?
-            });
-        }
+        function drawImpassableZones() { /* ... Same ... */ gameState.world.impassableZones.forEach(zone => { if (zone.x + zone.width < gameState.camera.x || zone.x > gameState.camera.x + canvas.width || zone.y + zone.height < gameState.camera.y || zone.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = zone.color; ctx.fillRect(zone.x, zone.y, zone.width, zone.height); }); }
         function drawRoads() { /* ... Same ... */ roads.forEach(road => { const x1 = road.x1, y1 = road.y1, x2 = road.x2, y2 = road.y2; const midX = (x1+x2)/2, midY = (y1+y2)/2; const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2); if (midX + length < gameState.camera.x || midX - length > gameState.camera.x + canvas.width || midY + length < gameState.camera.y || midY - length > gameState.camera.y + canvas.height) return; const angle = Math.atan2(y2 - y1, x2 - x1); ctx.save(); ctx.translate(x1, y1); ctx.rotate(angle); ctx.fillStyle = gameState.world.roadColor; ctx.fillRect(0, -gameState.world.roadWidth / 2, length, gameState.world.roadWidth); ctx.fillStyle = gameState.world.lineColor; ctx.fillRect(0, -gameState.world.lineWidth / 2, length, gameState.world.lineWidth); ctx.restore(); }); }
         function drawBuildings() { /* ... Same ... */ gameState.world.buildings.forEach(b => { if (b.x + b.width < gameState.camera.x || b.x > gameState.camera.x + canvas.width || b.y + b.height < gameState.camera.y || b.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.width, b.height); ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; for (let wy = b.y + 5; wy < b.y + b.height - 5; wy += 15) { for (let wx = b.x + 5; wx < b.x + b.width - 5; wx += 15) { ctx.fillRect(wx, wy, 7, 7); } } }); }
         function drawTrees() { /* ... Same ... */ gameState.world.trees.forEach(t => { if (t.x + t.radius < gameState.camera.x || t.x - t.radius > gameState.camera.x + canvas.width || t.y + t.radius < gameState.camera.y || t.y - t.radius > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#643200'; ctx.fillRect(t.x - t.radius * 0.2, t.y - t.radius * 0.1, t.radius * 0.4, t.radius * 0.6); ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(t.x, t.y - t.radius * 0.4, t.radius, 0, Math.PI * 2); ctx.fill(); }); }
@@ -379,65 +324,98 @@
         function drawDustParticles() { /* ... Same ... */ gameState.fx.dustParticles.forEach(p => { const CULL_MARGIN = p.size * 2; if (p.x + CULL_MARGIN < gameState.camera.x || p.x - CULL_MARGIN > gameState.camera.x + canvas.width || p.y + CULL_MARGIN < gameState.camera.y || p.y - CULL_MARGIN > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(160, 140, 110, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }); }
         function drawExplosions() { /* ... Same ... */ gameState.fx.explosions.forEach(p => { if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, ${Math.random()*150 + 100}, 0, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 + p.life * 0.05), 0, Math.PI * 2); ctx.fill(); }); }
         function drawProjectiles() { /* ... Same ... */ gameState.world.projectiles.forEach(p => { if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); }); }
-        function drawMuzzleFlashes() {
-            gameState.fx.muzzleFlashes.forEach(f => {
-                if (f.x < gameState.camera.x || f.x > gameState.camera.x + canvas.width || f.y < gameState.camera.y || f.y > gameState.camera.y + canvas.height) return;
-                ctx.fillStyle = `rgba(255, 220, 150, ${f.alpha})`; // Yellowish white flash
-                ctx.beginPath();
-                // Star shape for flash
-                for (let i = 0; i < 10; i++) {
-                    const radius = (i % 2 === 0) ? f.size : f.size / 2;
-                    const angle = i * Math.PI / 5;
-                    ctx.lineTo(f.x + radius * Math.cos(angle), f.y + radius * Math.sin(angle));
-                }
-                ctx.closePath();
-                ctx.fill();
+        function drawMuzzleFlashes() { /* ... Same ... */ gameState.fx.muzzleFlashes.forEach(f => { if (f.x < gameState.camera.x || f.x > gameState.camera.x + canvas.width || f.y < gameState.camera.y || f.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, 220, 150, ${f.alpha})`; ctx.beginPath(); for (let i = 0; i < 10; i++) { const radius = (i % 2 === 0) ? f.size : f.size / 2; const angle = i * Math.PI / 5; ctx.lineTo(f.x + radius * Math.cos(angle), f.y + radius * Math.sin(angle)); } ctx.closePath(); ctx.fill(); }); }
+        function drawHitSparks() { /* ... Same ... */ gameState.fx.hitSparks.forEach(s => { if (s.x < gameState.camera.x || s.x > gameState.camera.x + canvas.width || s.y < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, 200, 100, ${s.alpha})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill(); }); }
+
+        // Draw Player / Enemy (Shared logic for 4-frame animation)
+        function drawCharacter(entity, isPlayer) {
+            const width = isPlayer ? entity.pedWidth : entity.width;
+            const height = isPlayer ? entity.pedHeight : entity.height;
+            const bodyHeight = height * 0.6;
+            const legHeight = height * 0.4;
+            const legWidth = width / 2 - 0.5; // Small gap
+            const headRadius = width / 3.5;
+            const legY = -height / 2 + bodyHeight;
+
+            // Torso
+            ctx.fillStyle = isPlayer ? '#3498db' : entity.color; // Player blue, enemy varied
+            ctx.fillRect(-width / 2, -height / 2, width, bodyHeight);
+
+            // Head
+            ctx.fillStyle = isPlayer ? '#2980b9' : `hsl(${parseInt(entity.color.substring(4, entity.color.indexOf(',')))}, 70%, 35%)`; // Darker shade
+            ctx.beginPath();
+            ctx.arc(0, -height / 2 + headRadius * 0.8, headRadius, 0, Math.PI * 2); // Slightly lower head
+            ctx.fill();
+
+            // Legs (Animated)
+            ctx.fillStyle = '#555'; // Grey pants for all
+            const frame = entity.animFrame;
+
+            // Define leg shapes/positions for each frame (relative to entity center)
+            // [leftX, leftY, leftW, leftH, rightX, rightY, rightW, rightH]
+             const legPos = [
+                 // Frame 0: Idle / Mid-stride 1
+                 [-width / 2 + 0.25, legY, legWidth, legHeight * 0.95,   0.25, legY, legWidth, legHeight * 0.95],
+                 // Frame 1: Left forward
+                 [-width / 2 + 0.25, legY, legWidth, legHeight,           0.25, legY + 1, legWidth, legHeight * 0.7],
+                 // Frame 2: Idle / Mid-stride 2
+                 [-width / 2 + 0.25, legY, legWidth, legHeight * 0.95,   0.25, legY, legWidth, legHeight * 0.95],
+                 // Frame 3: Right forward
+                 [-width / 2 + 0.25, legY + 1, legWidth, legHeight * 0.7,   0.25, legY, legWidth, legHeight]
+             ];
+
+
+            if (!entity.isMoving) {
+                // Idle Stance (Frame 0 slightly modified)
+                ctx.fillRect(-width / 2 + 0.5, legY, width - 1, legHeight);
+            } else {
+                // Walking Frames
+                 const currentLegs = legPos[frame];
+                 // Draw Left Leg
+                 ctx.fillRect(currentLegs[0], currentLegs[1], currentLegs[2], currentLegs[3]);
+                 // Draw Right Leg
+                 ctx.fillRect(currentLegs[4], currentLegs[5], currentLegs[6], currentLegs[7]);
+            }
+        }
+
+        function drawEnemies() {
+            gameState.world.enemies.forEach(enemy => {
+                 const CULL_MARGIN = Math.max(enemy.width, enemy.height) * 1.5;
+                 if (enemy.x + CULL_MARGIN < gameState.camera.x || enemy.x - CULL_MARGIN > gameState.camera.x + canvas.width || enemy.y + CULL_MARGIN < gameState.camera.y || enemy.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
+
+                ctx.save();
+                ctx.translate(enemy.x, enemy.y);
+                ctx.rotate(enemy.angle * Math.PI / 180);
+                drawCharacter(enemy, false); // Use shared drawing function
+                ctx.restore();
+
+                // Health bar
+                const barWidth = 20; const barHeight = 3; const barX = enemy.x - barWidth / 2; const barY = enemy.y - enemy.height / 2 - 8;
+                ctx.fillStyle = '#500'; ctx.fillRect(barX, barY, barWidth, barHeight);
+                ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (enemy.health / enemy.maxHealth), barHeight);
             });
         }
-         function drawHitSparks() {
-             gameState.fx.hitSparks.forEach(s => {
-                  if (s.x < gameState.camera.x || s.x > gameState.camera.x + canvas.width || s.y < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return;
-                 ctx.fillStyle = `rgba(255, 200, 100, ${s.alpha})`; // Spark color
-                 ctx.beginPath();
-                 ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-                 ctx.fill();
-             });
-         }
-        function drawEnemies() { /* ... Same enemy draw + health bar ... */ gameState.world.enemies.forEach(enemy => { const CULL_MARGIN = Math.max(enemy.width, enemy.height) * 1.5; if (enemy.x + CULL_MARGIN < gameState.camera.x || enemy.x - CULL_MARGIN > gameState.camera.x + canvas.width || enemy.y + CULL_MARGIN < gameState.camera.y || enemy.y - CULL_MARGIN > gameState.camera.y + canvas.height) return; ctx.save(); ctx.translate(enemy.x, enemy.y); ctx.rotate(enemy.angle * Math.PI / 180); ctx.fillStyle = enemy.color; ctx.fillRect(-enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-enemy.width * 0.2, -enemy.height * 0.5 - 2, enemy.width * 0.4, 3); ctx.restore(); const barWidth = 20; const barHeight = 3; const barX = enemy.x - barWidth / 2; const barY = enemy.y - enemy.height / 2 - 8; ctx.fillStyle = '#500'; ctx.fillRect(barX, barY, barWidth, barHeight); ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (enemy.health / enemy.maxHealth), barHeight); });}
-        function drawPlayer() { /* ... Uses smaller ped size + leg animation ... */
-            ctx.save(); ctx.translate(gameState.player.x, gameState.player.y); ctx.rotate(gameState.player.angle * Math.PI / 180);
-            if (gameState.playerState === 'driving') { /* ... Car drawing ... */ const carW = gameState.player.width; const carH = gameState.player.height; ctx.fillStyle = gameState.player.color; ctx.fillRect(-carW / 2, -carH / 2, carW, carH); ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8); ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9); ctx.fillStyle = '#1a1a1a'; const wheelW = 4, wheelH = 8; ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); }
-            else { /* ... Ped drawing adjusted for new size ... */ const pedW = gameState.player.pedWidth; const pedH = gameState.player.pedHeight; const bodyHeight = pedH * 0.6; const legHeight = pedH * 0.4; const legWidth = pedW / 2 - 0.5; // Smaller gap
-             ctx.fillStyle = '#3498db'; ctx.fillRect(-pedW / 2, -pedH / 2, pedW, bodyHeight); ctx.fillStyle = '#2980b9'; ctx.beginPath(); ctx.arc(0, -pedH / 2 + 1, pedW / 3.5, 0, Math.PI * 2); ctx.fill(); // Smaller head proportion
-             ctx.fillStyle = '#555'; const legY = -pedH / 2 + bodyHeight; if (!gameState.player.isWalking) { ctx.fillRect(-pedW / 2 + 0.5, legY, pedW - 1, legHeight); } else { if (gameState.player.walkAnimFrame === 0) { ctx.fillRect(-pedW / 2 + 0.25, legY, legWidth, legHeight); ctx.fillRect(0.25, legY + 0.5, legWidth, legHeight * 0.8); } else { ctx.fillRect(-pedW / 2 + 0.25, legY + 0.5, legWidth, legHeight * 0.8); ctx.fillRect(0.25, legY, legWidth, legHeight); } } }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(gameState.player.x, gameState.player.y);
+            ctx.rotate(gameState.player.angle * Math.PI / 180);
+            if (gameState.playerState === 'driving') { /* ... Car drawing same ... */ const carW = gameState.player.width; const carH = gameState.player.height; ctx.fillStyle = gameState.player.color; ctx.fillRect(-carW / 2, -carH / 2, carW, carH); ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8); ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9); ctx.fillStyle = '#1a1a1a'; const wheelW = 4, wheelH = 8; ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); }
+             else {
+                 drawCharacter(gameState.player, true); // Use shared drawing function
+             }
             ctx.restore();
         }
-        function drawMiniMap() { /* ... Includes impassable zones ... */
-             const mapScale = miniMapCtx.canvas.width / gameState.world.width; miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height);
-             // Impassable zones first
-             gameState.world.impassableZones.forEach(zone => { miniMapCtx.fillStyle = zone.color; miniMapCtx.fillRect(zone.x * mapScale, zone.y * mapScale, zone.width * mapScale, zone.height * mapScale); });
-             // Roads
-             miniMapCtx.strokeStyle = '#666'; miniMapCtx.lineWidth = 1.5; roads.forEach(road => { miniMapCtx.beginPath(); miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale); miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale); miniMapCtx.stroke(); });
-             // Stations, Vehicles, Enemies, Player, Camera...
-             miniMapCtx.fillStyle = '#ff3333'; gameState.world.gasStations.forEach(s => { miniMapCtx.fillRect(s.x * mapScale - 1.5, s.y * mapScale - 1.5, 3, 3); }); miniMapCtx.fillStyle = '#aaa'; gameState.world.vehicles.forEach(car => { miniMapCtx.fillRect(car.x * mapScale - 1, car.y * mapScale - 1, 2, 2); }); miniMapCtx.fillStyle = '#f00'; gameState.world.enemies.forEach(e => { miniMapCtx.fillRect(e.x*mapScale -1, e.y*mapScale-1, 2, 2); }); const playerMapX = gameState.player.x * mapScale; const playerMapY = gameState.player.y * mapScale; if (gameState.playerState === 'driving') { miniMapCtx.fillStyle = '#0f0'; miniMapCtx.beginPath(); miniMapCtx.arc(playerMapX, playerMapY, 2.5, 0, Math.PI * 2); miniMapCtx.fill(); } else { miniMapCtx.fillStyle = '#ff0'; miniMapCtx.fillRect(playerMapX - 1, playerMapY - 1, 2, 2); } const angleRad = gameState.player.angle * Math.PI / 180; const dirLen = 4; miniMapCtx.strokeStyle = miniMapCtx.fillStyle; miniMapCtx.lineWidth = 1; miniMapCtx.beginPath(); miniMapCtx.moveTo(playerMapX, playerMapY); miniMapCtx.lineTo(playerMapX + Math.sin(angleRad) * dirLen, playerMapY - Math.cos(angleRad) * dirLen); miniMapCtx.stroke(); miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; miniMapCtx.lineWidth = 1; miniMapCtx.strokeRect( gameState.camera.x * mapScale, gameState.camera.y * mapScale, gameState.camera.width * mapScale, gameState.camera.height * mapScale );
-        }
+        function drawMiniMap() { /* ... Same ... */ const mapScale = miniMapCtx.canvas.width / gameState.world.width; miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height); gameState.world.impassableZones.forEach(zone => { miniMapCtx.fillStyle = zone.color; miniMapCtx.fillRect(zone.x * mapScale, zone.y * mapScale, zone.width * mapScale, zone.height * mapScale); }); miniMapCtx.strokeStyle = '#666'; miniMapCtx.lineWidth = 1.5; roads.forEach(road => { miniMapCtx.beginPath(); miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale); miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale); miniMapCtx.stroke(); }); miniMapCtx.fillStyle = '#ff3333'; gameState.world.gasStations.forEach(s => { miniMapCtx.fillRect(s.x * mapScale - 1.5, s.y * mapScale - 1.5, 3, 3); }); miniMapCtx.fillStyle = '#aaa'; gameState.world.vehicles.forEach(car => { miniMapCtx.fillRect(car.x * mapScale - 1, car.y * mapScale - 1, 2, 2); }); miniMapCtx.fillStyle = '#f00'; gameState.world.enemies.forEach(e => { miniMapCtx.fillRect(e.x*mapScale -1, e.y*mapScale-1, 2, 2); }); const playerMapX = gameState.player.x * mapScale; const playerMapY = gameState.player.y * mapScale; if (gameState.playerState === 'driving') { miniMapCtx.fillStyle = '#0f0'; miniMapCtx.beginPath(); miniMapCtx.arc(playerMapX, playerMapY, 2.5, 0, Math.PI * 2); miniMapCtx.fill(); } else { miniMapCtx.fillStyle = '#ff0'; miniMapCtx.fillRect(playerMapX - 1, playerMapY - 1, 2, 2); } const angleRad = gameState.player.angle * Math.PI / 180; const dirLen = 4; miniMapCtx.strokeStyle = miniMapCtx.fillStyle; miniMapCtx.lineWidth = 1; miniMapCtx.beginPath(); miniMapCtx.moveTo(playerMapX, playerMapY); miniMapCtx.lineTo(playerMapX + Math.sin(angleRad) * dirLen, playerMapY - Math.cos(angleRad) * dirLen); miniMapCtx.stroke(); miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; miniMapCtx.lineWidth = 1; miniMapCtx.strokeRect( gameState.camera.x * mapScale, gameState.camera.y * mapScale, gameState.camera.width * mapScale, gameState.camera.height * mapScale ); }
         function drawGameOver() { /* ... Same ... */ ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.font = "40px 'Courier New', monospace"; ctx.fillStyle = "red"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20); ctx.font = "20px 'Courier New', monospace"; ctx.fillStyle = "white"; ctx.fillText("Refresh to Restart", canvas.width / 2, canvas.height / 2 + 20); }
 
         // --- Initialization & Utilities ---
-        function initGame() { /* ... Same ... */ console.log("Initializing Game..."); createWorldElements(); initializeWorldObjects(); spawnInitialEnemies(8); updateHUD(); window.addEventListener('resize', handleResize); handleResize(); gameLoop(); console.log("Game Loop Started."); }
-        function createWorldElements() { /* ... Building size potentially increased ... */
-             for (let i = 0; i < 200; i++) { gameState.world.trees.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, radius: 5 + Math.random() * 10, color: `hsl(${100 + Math.random() * 30}, ${60 + Math.random() * 30}%, ${20 + Math.random() * 20}%)` }); }
-             // Buildings potentially larger
-             for (let i = 0; i < 45; i++) { // Slightly more buildings
-                 gameState.world.buildings.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, width: 40 + Math.random() * 100, height: 40 + Math.random() * 100, color: `hsl(${200 + Math.random() * 40}, ${20 + Math.random() * 20}%, ${40 + Math.random() * 30}%)` });
-             }
-             for (let i = 0; i < 60; i++) { gameState.world.obstacles.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, width: 10 + Math.random() * 20, height: 10 + Math.random() * 20, color: '#777' }); }
-             for (let i = 0; i < 5; i++) { gameState.world.gasStations.push({ x: 400 + Math.random() * (gameState.world.width - 800), y: 400 + Math.random() * (gameState.world.height - 800), width: 50, height: 60, color: '#c00' }); }
-        }
-        function initializeWorldObjects() { /* ... Same road avoidance ... */ const validTrees = []; gameState.world.trees.forEach(tree => { if (!isOnRoad(tree.x, tree.y, tree.radius * 1.5)) { validTrees.push(tree); } }); gameState.world.trees = validTrees.slice(0, 200); const validBuildings = []; gameState.world.buildings.forEach(b => { if (!isOnRoad(b.x + b.width/2, b.y + b.height/2, Math.max(b.width, b.height) * 0.7)) { validBuildings.push(b); } }); gameState.world.buildings = validBuildings.slice(0, 40); const validObstacles = []; gameState.world.obstacles.forEach(o => { if (!isOnRoad(o.x + o.width/2, o.y + o.height/2, Math.max(o.width, o.height))) { validObstacles.push(o); } }); gameState.world.obstacles = validObstacles.slice(0, 60); console.log(`World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`); }
+        function initGame() { /* ... Same ... */ console.log("Initializing Game..."); createWorldElements(); initializeWorldObjects(); spawnInitialEnemies(10); updateHUD(); window.addEventListener('resize', handleResize); handleResize(); gameLoop(); console.log("Game Loop Started."); } // Spawn more enemies
+        function createWorldElements() { /* ... Same ... */ for (let i = 0; i < 200; i++) { gameState.world.trees.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, radius: 5 + Math.random() * 10, color: `hsl(${100 + Math.random() * 30}, ${60 + Math.random() * 30}%, ${20 + Math.random() * 20}%)` }); } for (let i = 0; i < 45; i++) { gameState.world.buildings.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, width: 40 + Math.random() * 100, height: 40 + Math.random() * 100, color: `hsl(${200 + Math.random() * 40}, ${20 + Math.random() * 20}%, ${40 + Math.random() * 30}%)` }); } for (let i = 0; i < 60; i++) { gameState.world.obstacles.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, width: 10 + Math.random() * 20, height: 10 + Math.random() * 20, color: '#777' }); } for (let i = 0; i < 5; i++) { gameState.world.gasStations.push({ x: 400 + Math.random() * (gameState.world.width - 800), y: 400 + Math.random() * (gameState.world.height - 800), width: 50, height: 60, color: '#c00' }); } }
+        function initializeWorldObjects() { /* ... Same ... */ const validTrees = []; gameState.world.trees.forEach(tree => { if (!isOnRoad(tree.x, tree.y, tree.radius * 1.5)) { validTrees.push(tree); } }); gameState.world.trees = validTrees.slice(0, 200); const validBuildings = []; gameState.world.buildings.forEach(b => { if (!isOnRoad(b.x + b.width/2, b.y + b.height/2, Math.max(b.width, b.height) * 0.7)) { validBuildings.push(b); } }); gameState.world.buildings = validBuildings.slice(0, 40); const validObstacles = []; gameState.world.obstacles.forEach(o => { if (!isOnRoad(o.x + o.width/2, o.y + o.height/2, Math.max(o.width, o.height))) { validObstacles.push(o); } }); gameState.world.obstacles = validObstacles.slice(0, 60); console.log(`World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`); }
         function isOnRoad(x, y, buffer) { /* ... Same ... */ for (const road of roads) { const dx = road.x2 - road.x1, dy = road.y2 - road.y1; const lenSq = dx*dx + dy*dy; if (lenSq === 0) continue; let t = ((x - road.x1) * dx + (y - road.y1) * dy) / lenSq; t = Math.max(0, Math.min(1, t)); const closestX = road.x1 + t * dx; const closestY = road.y1 + t * dy; const distSq = (x - closestX)**2 + (y - closestY)**2; if (distSq < (gameState.world.roadWidth / 2 + buffer)**2) return true; } return false; }
-        function spawnInitialEnemies(count) { /* ... Same spawn logic ... */ let spawned = 0; let attempts = 0; while (spawned < count && attempts < count * 10) { attempts++; const x = Math.random() * gameState.world.width; const y = Math.random() * gameState.world.height; const dx = x - gameState.player.x; const dy = y - gameState.player.y; if (dx*dx + dy*dy < 500*500) continue; if (isOnRoad(x, y, 20)) continue; let inObject = false; const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of worldGeometry) { if (x > obj.x && x < obj.x + obj.width && y > obj.y && y < obj.y + obj.height) { inObject = true; break; } } if (inObject) continue; spawnEnemy(x, y); spawned++; } console.log(`Spawned ${spawned} enemies.`); }
-        function handleResize() { /* ... Same aspect ratio logic ... */ const gameContainer = document.getElementById('game-container'); const windowWidth = window.innerWidth; const windowHeight = window.innerHeight; const aspectRatio = canvas.width / canvas.height; let newWidth = windowWidth * 0.98; let newHeight = newWidth / aspectRatio; if (newHeight > windowHeight * 0.98) { newHeight = windowHeight * 0.98; newWidth = newHeight * aspectRatio; } gameContainer.style.width = `${newWidth}px`; gameContainer.style.height = `${newHeight}px`; }
+        function spawnInitialEnemies(count) { /* ... Same ... */ let spawned = 0; let attempts = 0; while (spawned < count && attempts < count * 10) { attempts++; const x = Math.random() * gameState.world.width; const y = Math.random() * gameState.world.height; const dx = x - gameState.player.x; const dy = y - gameState.player.y; if (dx*dx + dy*dy < 500*500) continue; if (isOnRoad(x, y, 20)) continue; let inObject = false; const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of worldGeometry) { if (x > obj.x && x < obj.x + obj.width && y > obj.y && y < obj.y + obj.height) { inObject = true; break; } } if (inObject) continue; spawnEnemy(x, y); spawned++; } console.log(`Spawned ${spawned} enemies.`); }
+        function handleResize() { /* ... Same ... */ const gameContainer = document.getElementById('game-container'); const windowWidth = window.innerWidth; const windowHeight = window.innerHeight; const aspectRatio = canvas.width / canvas.height; let newWidth = windowWidth * 0.98; let newHeight = newWidth / aspectRatio; if (newHeight > windowHeight * 0.98) { newHeight = windowHeight * 0.98; newWidth = newHeight * aspectRatio; } gameContainer.style.width = `${newWidth}px`; gameContainer.style.height = `${newHeight}px`; }
 
         // --- Start Game ---
         window.onload = initGame;
