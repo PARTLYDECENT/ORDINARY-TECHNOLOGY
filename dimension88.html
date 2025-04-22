@@ -3,36 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	 <meta property="og:image" content="https://partlydecent.github.io/ORDINARY-TECHNOLOGY/banner2.jpg">
-  <meta property="og:image:alt" content="DRIVING GAME VERSION 3">
-  <meta property="og:image:type" content="image/jpeg">
-  <meta property="og:url" content="https://partlydecent.github.io/ORDINARY-TECHNOLOGY/">
-  <meta property="og:type" content="website">
-
-    <title>Pixel Cruiser: Open World Driving</title>
+    <meta property="og:image" content="https://partlydecent.github.io/ORDINARY-TECHNOLOGY/banner2.jpg">
+    <meta property="og:image:alt" content="GTA 1 Style Driving Game">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:url" content="https://partlydecent.github.io/ORDINARY-TECHNOLOGY/">
+    <meta property="og:type" content="website">
+    <title>GTA 1-Style Driving Sim</title>
     <style>
         body {
             margin: 0;
             padding: 0;
+            background-color: #111; /* Dark background */
             overflow: hidden;
-            background-color: #111;
             font-family: 'Courier New', monospace;
-        }
-        
-        #game-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            display: flex; /* Center game container */
             justify-content: center;
-            height: 100vh;
+            align-items: center;
+            min-height: 100vh;
         }
-        
-        #game-canvas {
+
+        #game-container {
+            position: relative; /* Needed for absolute positioning of UI */
+            width: 800px;
+            height: 600px;
+            /* margin: 20px auto; Removed for flex centering */
+        }
+
+        #gameCanvas {
             border: 2px solid #444;
-            background-color: #000;
-            image-rendering: pixelated;
+            background-color: #000; /* Canvas background if needed */
+            display: block; /* Prevent extra space below canvas */
+             image-rendering: pixelated; /* Keep pixel style */
         }
-        
+
+        /* Our Original HUD Elements - Adapted */
         #hud {
             position: absolute;
             color: #fff;
@@ -41,79 +45,133 @@
             text-align: left;
             top: 10px;
             left: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(0, 0, 0, 0.6);
             border-radius: 5px;
             border: 1px solid #444;
+            z-index: 10; /* Ensure it's above canvas */
         }
-        
         #fuel-bar {
             width: 100px;
             height: 10px;
             background-color: #333;
             margin: 5px 0;
+            border: 1px solid #555;
+             overflow: hidden; /* Hide overflow */
+             border-radius: 2px;
         }
-        
         #fuel-level {
             height: 100%;
-            background-color: #3f3;
-            width: 100%;
-            transition: width 0.5s;
+            background-color: #3f3; /* Green fuel */
+            width: 100%; /* Initial full */
+            transition: width 0.5s ease-out;
         }
-        
+        #location {
+             margin-top: 5px;
+        }
+
+        /* Our Original Mini-map */
         #mini-map {
             position: absolute;
             top: 10px;
-            right: 10px;
+            right: 10px; /* Adjusted to fit with stats */
             width: 120px;
             height: 120px;
             background-color: rgba(0, 0, 0, 0.7);
             border: 1px solid #444;
             border-radius: 5px;
+            z-index: 10;
+            overflow: hidden; /* Ensure canvas inside fits */
         }
-        
-        #controls {
+         #mini-map canvas { /* Style the canvas inside minimap */
+             display: block;
+         }
+
+        /* Our Original Controls Display */
+         #controls-display {
+             position: absolute;
+             bottom: 10px;
+             left: 50%;
+             transform: translateX(-50%);
+             color: #aaa;
+             background-color: rgba(0, 0, 0, 0.6);
+             padding: 5px 10px;
+             border-radius: 5px;
+             font-size: 12px;
+             text-align: center;
+             border: 1px solid #444;
+             z-index: 10;
+             white-space: nowrap; /* Prevent wrapping */
+         }
+
+        /* UI Elements from Text Blob (Placeholders) */
+        #mission-text { /* Will overlap controls if active */
             position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #aaa;
-            background-color: rgba(0, 0, 0, 0.5);
+            bottom: 40px; /* Moved up slightly */
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.7);
             padding: 5px 10px;
-            border-radius: 5px; 
-            font-size: 12px;
-            text-align: center;
-            border: 1px solid #444;
+            font-size: 14px;
+            max-width: 780px;
+            z-index: 10;
+             border-radius: 5px;
         }
+        #stats { /* Top right, below minimap if enough space */
+            position: absolute;
+            top: 140px; /* Below minimap */
+            right: 10px;
+            color: white;
+            font-size: 14px;
+            text-align: right;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 5px;
+             border-radius: 5px;
+             border: 1px solid #444;
+            z-index: 10;
+        }
+         #stats div {
+             margin-top: 3px;
+         }
+
     </style>
 </head>
 <body>
     <div id="game-container">
-        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
         <div id="hud">
-            <div>SPEED: <span id="speed">0</span> MPH</div>
-            <div>FUEL:</div>
-            <div id="fuel-bar"><div id="fuel-level"></div></div>
-            <div id="location">LOCATION: DOWNTOWN</div>
-        </div>
-        <div id="mini-map"></div>
-        <div id="controls">
-            WASD or ARROWS to drive | SPACE to handbrake | F to refuel at gas stations
+             <div id="speed-line">SPEED: <span id="speed">0</span> MPH</div>
+             <div id="fuel-line">FUEL:</div>
+             <div id="fuel-bar"><div id="fuel-level"></div></div>
+             <div id="location">LOCATION: DOWNTOWN</div>
+         </div>
+         <div id="mini-map"></div>
+         <div id="controls-display">
+             WASD/Arrows: Move | E: Enter/Exit | F: Refuel (in car) | SPACE: Handbrake (in car)
+         </div>
+
+        <div id="mission-text">Mission text placeholder</div>
+        <div id="stats">
+            <div id="health">Health: 100</div>
+            <div id="money">$: 0</div>
         </div>
     </div>
 
     <script>
-        // Game canvas setup
-        const canvas = document.getElementById('game-canvas');
+        // Game canvas and context
+        const canvas = document.getElementById('gameCanvas'); // Use the correct ID
         const ctx = canvas.getContext('2d');
-        const miniMap = document.getElementById('mini-map');
-        const miniMapCtx = document.createElement('canvas').getContext('2d');
-        miniMap.appendChild(miniMapCtx.canvas);
+        const miniMapContainer = document.getElementById('mini-map'); // Container div
+        const miniMapCtx = document.createElement('canvas').getContext('2d'); // Context for minimap
+        miniMapContainer.appendChild(miniMapCtx.canvas); // Add canvas to div
         miniMapCtx.canvas.width = 120;
         miniMapCtx.canvas.height = 120;
-        
+
         // Game state
         const gameState = {
+            playerState: 'driving', // 'driving' or 'onFoot'
             player: {
+                // Car properties (will be overwritten when entering car)
                 x: 1500,
                 y: 1500,
                 width: 20,
@@ -125,7 +183,13 @@
                 handling: 3.5,
                 angle: 0,
                 fuelLevel: 100,
-                fuelConsumption: 0.02
+                fuelConsumption: 0.02,
+                color: '#0066cc',
+
+                // Pedestrian properties
+                pedWidth: 10,
+                pedHeight: 15,
+                pedSpeed: 1.5,
             },
             camera: {
                 x: 0,
@@ -139,7 +203,8 @@
                 left: false,
                 right: false,
                 handbrake: false,
-                refuel: false
+                refuel: false,
+                enterExit: false // Flag for enter/exit key press
             },
             world: {
                 width: 3000,
@@ -153,6 +218,7 @@
                 buildings: [],
                 obstacles: [],
                 gasStations: [],
+                vehicles: [], // Stores parked vehicles
                 startTime: Date.now()
             },
             fx: {
@@ -166,800 +232,838 @@
                 {name: "INDUSTRIAL PARK", x: 2000, y: 500, radius: 350}
             ]
         };
-        
-        // Create trees (smaller dots on the map)
-        for (let i = 0; i < 200; i++) {
-            gameState.world.trees.push({
-                x: Math.random() * gameState.world.width,
-                y: Math.random() * gameState.world.height,
-                radius: 5 + Math.random() * 10,
-                color: `hsl(${100 + Math.random() * 30}, ${60 + Math.random() * 30}%, ${20 + Math.random() * 20}%)`
-            });
+
+        // --- World Generation ---
+        function createWorldElements() {
+            // Create trees
+            for (let i = 0; i < 200; i++) {
+                gameState.world.trees.push({
+                    x: Math.random() * gameState.world.width,
+                    y: Math.random() * gameState.world.height,
+                    radius: 5 + Math.random() * 10,
+                    color: `hsl(${100 + Math.random() * 30}, ${60 + Math.random() * 30}%, ${20 + Math.random() * 20}%)`
+                });
+            }
+            // Create buildings
+            for (let i = 0; i < 40; i++) {
+                 gameState.world.buildings.push({
+                    x: Math.random() * gameState.world.width,
+                    y: Math.random() * gameState.world.height,
+                    width: 30 + Math.random() * 70,
+                    height: 30 + Math.random() * 70,
+                    color: `hsl(${200 + Math.random() * 40}, ${20 + Math.random() * 20}%, ${40 + Math.random() * 30}%)`
+                });
+            }
+            // Create obstacles
+            for (let i = 0; i < 60; i++) {
+                 gameState.world.obstacles.push({
+                    x: Math.random() * gameState.world.width,
+                    y: Math.random() * gameState.world.height,
+                    width: 10 + Math.random() * 20,
+                    height: 10 + Math.random() * 20,
+                    color: '#777'
+                 });
+            }
+             // Create gas stations
+            for (let i = 0; i < 5; i++) {
+                 gameState.world.gasStations.push({
+                    x: 400 + Math.random() * (gameState.world.width - 800),
+                    y: 400 + Math.random() * (gameState.world.height - 800),
+                    width: 50,
+                    height: 60,
+                    color: '#c00' // Red
+                 });
+            }
+            // Initial parked car (optional) - Example
+             /*gameState.world.vehicles.push({
+                 x: 1600, y: 1500, width: 20, height: 36, angle: 90,
+                 color: '#cc00cc', maxSpeed: 4, handling: 3.0, fuelLevel: 50
+             });*/
         }
-        
-        // Create buildings
-        for (let i = 0; i < 40; i++) {
-            gameState.world.buildings.push({
-                x: Math.random() * gameState.world.width,
-                y: Math.random() * gameState.world.height,
-                width: 30 + Math.random() * 70,
-                height: 30 + Math.random() * 70,
-                color: `hsl(${200 + Math.random() * 40}, ${20 + Math.random() * 20}%, ${40 + Math.random() * 30}%)`
-            });
-        }
-        
-        // Create obstacles
-        for (let i = 0; i < 60; i++) {
-            gameState.world.obstacles.push({
-                x: Math.random() * gameState.world.width,
-                y: Math.random() * gameState.world.height,
-                width: 10 + Math.random() * 20,
-                height: 10 + Math.random() * 20,
-                color: '#777'
-            });
-        }
-        
-        // Create gas stations
-        for (let i = 0; i < 5; i++) {
-            gameState.world.gasStations.push({
-                x: 400 + Math.random() * (gameState.world.width - 800),
-                y: 400 + Math.random() * (gameState.world.height - 800),
-                width: 50,
-                height: 60,
-                color: '#c00'
-            });
-        }
-        
-        // Game roads
+
+        // --- Roads ---
         const roads = [
             // Main horizontal roads
             {x1: 0, y1: 1000, x2: gameState.world.width, y2: 1000},
             {x1: 0, y1: 2000, x2: gameState.world.width, y2: 2000},
-            
             // Main vertical roads
             {x1: 1000, y1: 0, x2: 1000, y2: gameState.world.height},
             {x1: 2000, y1: 0, x2: 2000, y2: gameState.world.height},
-            
             // Diagonal roads
-            {x1: 500, y1: 500, x2: 1500, y2: 1500},
-            {x1: 2500, y1: 500, x2: 1500, y2: 1500},
-            {x1: 500, y1: 2500, x2: 1500, y2: 1500},
-            {x1: 2500, y1: 2500, x2: 1500, y2: 1500},
-            
-            // Curved road segments (represented as straight lines)
-            {x1: 200, y1: 1000, x2: 500, y2: 1200},
-            {x1: 2800, y1: 1000, x2: 2500, y2: 1200},
-            {x1: 200, y1: 2000, x2: 500, y2: 1800},
-            {x1: 2800, y1: 2000, x2: 2500, y2: 1800}
+            {x1: 500, y1: 500, x2: 1500, y2: 1500}, {x1: 2500, y1: 500, x2: 1500, y2: 1500},
+            {x1: 500, y1: 2500, x2: 1500, y2: 1500}, {x1: 2500, y1: 2500, x2: 1500, y2: 1500},
+             // Curved road segments (represented as straight lines)
+             {x1: 200, y1: 1000, x2: 500, y2: 1200}, {x1: 2800, y1: 1000, x2: 2500, y2: 1200},
+             {x1: 200, y1: 2000, x2: 500, y2: 1800}, {x1: 2800, y1: 2000, x2: 2500, y2: 1800}
         ];
-        
-        // Event listeners for controls
-        window.addEventListener('keydown', (e) => {
-            handleKeyInput(e, true);
-        });
-        
-        window.addEventListener('keyup', (e) => {
-            handleKeyInput(e, false);
-        });
-        
+
+         // --- Input Handling ---
+        window.addEventListener('keydown', (e) => { handleKeyInput(e, true); });
+        window.addEventListener('keyup', (e) => { handleKeyInput(e, false); });
+
         function handleKeyInput(e, isPressed) {
-            switch(e.key) {
-                case 'ArrowUp':
-                case 'w':
-                    gameState.controls.up = isPressed;
-                    break;
-                case 'ArrowDown':
-                case 's':
-                    gameState.controls.down = isPressed;
-                    break;
-                case 'ArrowLeft':
-                case 'a':
-                    gameState.controls.left = isPressed;
-                    break;
-                case 'ArrowRight':
-                case 'd':
-                    gameState.controls.right = isPressed;
-                    break;
-                case ' ':
-                    gameState.controls.handbrake = isPressed;
-                    break;
-                case 'f':
-                    gameState.controls.refuel = isPressed;
+            const key = e.key.toLowerCase(); // Normalize key
+            switch(key) {
+                case 'arrowup': case 'w': gameState.controls.up = isPressed; break;
+                case 'arrowdown': case 's': gameState.controls.down = isPressed; break;
+                case 'arrowleft': case 'a': gameState.controls.left = isPressed; break;
+                case 'arrowright': case 'd': gameState.controls.right = isPressed; break;
+                case ' ': gameState.controls.handbrake = isPressed; break;
+                case 'f': gameState.controls.refuel = isPressed; break;
+                case 'e':
+                    if (isPressed && !gameState.controls.enterExitProcessed) { // Prevent holding E
+                        gameState.controls.enterExit = true;
+                        gameState.controls.enterExitProcessed = true; // Mark as processed for this press
+                    } else if (!isPressed) {
+                         gameState.controls.enterExitProcessed = false; // Reset on key up
+                    }
                     break;
             }
+             // Prevent default browser action for spacebar (scrolling)
+             if (key === ' ' && isPressed) {
+                 e.preventDefault();
+             }
         }
-        
-        // Main game loop
+
+        // --- Enter/Exit Logic ---
+        function handleEnterExitAction() {
+            if (!gameState.controls.enterExit) return; // Only act if flag is set
+
+            if (gameState.playerState === 'driving') {
+                // --- Exit Vehicle ---
+                const parkedCar = {
+                    x: gameState.player.x, y: gameState.player.y,
+                    width: gameState.player.width, height: gameState.player.height,
+                    angle: gameState.player.angle, color: gameState.player.color,
+                    maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling,
+                    fuelLevel: gameState.player.fuelLevel
+                };
+                gameState.world.vehicles.push(parkedCar);
+                gameState.playerState = 'onFoot';
+
+                // Position player next to car's left door
+                const exitOffset = (gameState.player.width / 2) + 5 + gameState.player.pedWidth / 2;
+                const exitAngleRad = (gameState.player.angle - 90) * Math.PI / 180;
+                gameState.player.x += Math.cos(exitAngleRad) * exitOffset;
+                gameState.player.y += Math.sin(exitAngleRad) * exitOffset;
+                gameState.player.speed = 0;
+
+            } else if (gameState.playerState === 'onFoot') {
+                // --- Enter Vehicle ---
+                let closestCar = null;
+                let minDistanceSq = 40 * 40; // Interaction radius (squared)
+
+                for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) {
+                    const car = gameState.world.vehicles[i];
+                    const dx = gameState.player.x - car.x;
+                    const dy = gameState.player.y - car.y;
+                    const distanceSq = dx * dx + dy * dy;
+
+                    if (distanceSq < minDistanceSq) {
+                        minDistanceSq = distanceSq;
+                        closestCar = car;
+                        closestCar.index = i;
+                    }
+                }
+
+                if (closestCar) {
+                    gameState.playerState = 'driving';
+                    // Restore car properties
+                    gameState.player.x = closestCar.x; gameState.player.y = closestCar.y;
+                    gameState.player.width = closestCar.width; gameState.player.height = closestCar.height;
+                    gameState.player.angle = closestCar.angle; gameState.player.color = closestCar.color;
+                    gameState.player.maxSpeed = closestCar.maxSpeed; gameState.player.handling = closestCar.handling;
+                    gameState.player.fuelLevel = closestCar.fuelLevel;
+                    gameState.player.speed = 0; // Start stationary
+
+                    gameState.world.vehicles.splice(closestCar.index, 1); // Remove from parked list
+                }
+            }
+            gameState.controls.enterExit = false; // Reset flag after processing
+        }
+
+        // --- Game Loop ---
         function gameLoop() {
+            handleEnterExitAction(); // Process enter/exit before physics
             updateGame();
             renderGame();
             requestAnimationFrame(gameLoop);
         }
-        
+
+        // --- Update Logic ---
         function updateGame() {
-            updatePlayerPosition();
+            updatePlayerPosition(); // Handles both driving and walking physics
             updateCamera();
             updateParticles();
-            checkGasStations();
-            checkLocation();
+             // updateDayNightCycle(); // Optional: uncomment to enable
+             updateHUD(); // Update UI elements
         }
-        
+
         function updatePlayerPosition() {
-            // Handle acceleration and deceleration
+             const oldX = gameState.player.x;
+             const oldY = gameState.player.y;
+
+            if (gameState.playerState === 'driving') {
+                updateDrivingPhysics();
+                 checkGasStations(); // Only relevant when driving
+            } else if (gameState.playerState === 'onFoot') {
+                updateWalkingPhysics();
+            }
+
+             // Perform collision checks AFTER tentative position update
+             checkCollisions(oldX, oldY);
+        }
+
+        function updateDrivingPhysics() {
+            // --- Driving Physics Logic (Adapted from previous response) ---
             if (gameState.controls.up && gameState.player.fuelLevel > 0) {
                 gameState.player.speed += gameState.player.acceleration;
-                gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + gameState.player.speed / gameState.player.maxSpeed);
-                
-                // Create dust particles while accelerating
-                if (Math.random() > 0.7) {
-                    createDustParticle();
-                }
+                gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + Math.abs(gameState.player.speed) / gameState.player.maxSpeed);
+                if (Math.random() > 0.7 && Math.abs(gameState.player.speed) > 1) createDustParticle(true);
             } else if (gameState.controls.down) {
-                if (gameState.player.speed > 0) {
-                    gameState.player.speed -= gameState.player.deceleration * 2;
-                } else {
-                    gameState.player.speed -= gameState.player.acceleration / 2;
-                }
-                
-                if (gameState.player.speed < -gameState.player.maxSpeed / 2) {
-                    gameState.player.speed = -gameState.player.maxSpeed / 2;
-                }
-                
-                if (gameState.player.fuelLevel > 0) {
-                    gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.3;
+                if (gameState.player.speed > 0.1) gameState.player.speed -= gameState.player.deceleration * 3;
+                else {
+                    gameState.player.speed -= gameState.player.acceleration / 1.5;
+                    if (gameState.player.fuelLevel > 0) gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.5;
                 }
             } else {
-                // Natural deceleration
-                if (Math.abs(gameState.player.speed) < gameState.player.deceleration) {
-                    gameState.player.speed = 0;
-                } else if (gameState.player.speed > 0) {
-                    gameState.player.speed -= gameState.player.deceleration;
-                } else {
-                    gameState.player.speed += gameState.player.deceleration;
-                }
+                if (Math.abs(gameState.player.speed) < gameState.player.deceleration) gameState.player.speed = 0;
+                else if (gameState.player.speed > 0) gameState.player.speed -= gameState.player.deceleration;
+                else gameState.player.speed += gameState.player.deceleration;
             }
-            
-            // Cap maximum speed
-            if (gameState.player.speed > gameState.player.maxSpeed) {
-                gameState.player.speed = gameState.player.maxSpeed;
-            }
-            
-            // Handle steering
-            if (Math.abs(gameState.player.speed) > 0.1) {
-                let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.5 : 1);
-                
+
+            if (gameState.player.speed > gameState.player.maxSpeed) gameState.player.speed = gameState.player.maxSpeed;
+            const maxReverseSpeed = gameState.player.maxSpeed / 2;
+            if (gameState.player.speed < -maxReverseSpeed) gameState.player.speed = -maxReverseSpeed;
+
+            if (Math.abs(gameState.player.speed) > 0.5) {
+                let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.7 : 1); // More handbrake effect
+                let speedModifier = 1.0 - (Math.abs(gameState.player.speed) / (gameState.player.maxSpeed * 1.5));
+                speedModifier = Math.max(0.3, speedModifier);
+                let turnDirection = gameState.player.speed >= 0 ? 1 : -1;
+
                 if (gameState.controls.left) {
-                    gameState.player.angle -= steeringFactor * (gameState.player.speed / gameState.player.maxSpeed);
-                    
-                    // Create skid marks during hard turns with handbrake
-                    if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 2) {
-                        createSkidMark();
-                    }
+                    gameState.player.angle -= steeringFactor * speedModifier * turnDirection;
+                    if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark();
                 }
-                
                 if (gameState.controls.right) {
-                    gameState.player.angle += steeringFactor * (gameState.player.speed / gameState.player.maxSpeed);
-                    
-                    // Create skid marks during hard turns with handbrake
-                    if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 2) {
-                        createSkidMark();
-                    }
+                    gameState.player.angle += steeringFactor * speedModifier * turnDirection;
+                     if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark();
                 }
             }
-            
-            // Apply handbrake
+
             if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > 0.5) {
-                gameState.player.speed *= 0.95;
-                
-                // Create skid marks when handbraking
-                if (Math.random() > 0.6) {
-                    createSkidMark();
-                }
+                gameState.player.speed *= 0.94; // Slightly more handbrake friction
+                 if (Math.random() > 0.4) createSkidMark();
             }
-            
-            // Update player position based on angle and speed
-            if (Math.abs(gameState.player.speed) > 0) {
+
+            if (gameState.player.fuelLevel < 0) gameState.player.fuelLevel = 0;
+
+            if (Math.abs(gameState.player.speed) > 0.01) {
                 const radians = gameState.player.angle * Math.PI / 180;
-                const dx = Math.sin(radians) * gameState.player.speed;
-                const dy = -Math.cos(radians) * gameState.player.speed;
-                
-                const newX = gameState.player.x + dx;
-                const newY = gameState.player.y + dy;
-                
-                // Check for collision with world boundaries
-                if (newX > 0 && newX < gameState.world.width) {
-                    gameState.player.x = newX;
-                } else {
-                    gameState.player.speed *= -0.5; // Bounce off boundaries
-                }
-                
-                if (newY > 0 && newY < gameState.world.height) {
-                    gameState.player.y = newY;
-                } else {
-                    gameState.player.speed *= -0.5; // Bounce off boundaries
-                }
-                
-                // Check for collisions with obstacles
-                checkCollisions();
-            }
-            
-            // Update fuel gauge display
-            document.getElementById('fuel-level').style.width = `${gameState.player.fuelLevel}%`;
-            document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 20));
-        }
-        
-        function checkCollisions() {
-            // Check buildings
-            for (const building of gameState.world.buildings) {
-                if (isColliding(gameState.player, building)) {
-                    gameState.player.speed *= -0.5; // Bounce off buildings
-                    createDustParticle();
-                    createDustParticle(); // Extra particles for collision
-                    break;
-                }
-            }
-            
-            // Check obstacles
-            for (const obstacle of gameState.world.obstacles) {
-                if (isColliding(gameState.player, obstacle)) {
-                    gameState.player.speed *= -0.3; // Bounce off obstacles
-                    createDustParticle();
-                    break;
-                }
+                gameState.player.x += Math.sin(radians) * gameState.player.speed;
+                gameState.player.y -= Math.cos(radians) * gameState.player.speed;
             }
         }
-        
-        function isColliding(a, b) {
-            // Simple rectangle collision
+
+        function updateWalkingPhysics() {
+            // --- Walking Physics Logic ---
+            let moveX = 0; let moveY = 0;
+            const speed = gameState.player.pedSpeed;
+
+            if (gameState.controls.up) moveY -= speed;
+            if (gameState.controls.down) moveY += speed;
+            if (gameState.controls.left) moveX -= speed;
+            if (gameState.controls.right) moveX += speed;
+
+            if (moveX !== 0 && moveY !== 0) { // Normalize diagonal
+                const factor = speed / Math.sqrt(moveX * moveX + moveY * moveY);
+                moveX *= factor; moveY *= factor;
+            }
+
+            if (Math.abs(moveX) > 0.1 || Math.abs(moveY) > 0.1) { // Update angle based on movement
+                gameState.player.angle = (Math.atan2(moveX, -moveY) * 180 / Math.PI);
+            }
+
+            gameState.player.x += moveX;
+            gameState.player.y += moveY;
+        }
+
+        function checkCollisions(oldX, oldY) {
+             // Define player bounds based on state
+             const pW = gameState.playerState === 'driving' ? gameState.player.width : gameState.player.pedWidth;
+             const pH = gameState.playerState === 'driving' ? gameState.player.height : gameState.player.pedHeight;
+             // Note: Using AABB collision centered on player x/y for simplicity
+             const playerRect = {
+                 x: gameState.player.x - pW / 2, y: gameState.player.y - pH / 2,
+                 width: pW, height: pH
+             };
+
+            let collisionOccurred = false;
+
+             // 1. World Boundaries Check (applied BEFORE object collision)
+             let bounced = false;
+             if (playerRect.x < 0) { playerRect.x = 0; bounced = true;}
+             if (playerRect.y < 0) { playerRect.y = 0; bounced = true;}
+             if (playerRect.x + playerRect.width > gameState.world.width) {
+                 playerRect.x = gameState.world.width - playerRect.width; bounced = true;
+             }
+              if (playerRect.y + playerRect.height > gameState.world.height) {
+                 playerRect.y = gameState.world.height - playerRect.height; bounced = true;
+             }
+             // Update player position from rect and bounce car if needed
+             gameState.player.x = playerRect.x + pW / 2;
+             gameState.player.y = playerRect.y + pH / 2;
+             if (bounced && gameState.playerState === 'driving') {
+                 gameState.player.speed *= -0.4;
+             }
+
+
+             // 2. Object Collision Check (Buildings, Obstacles)
+             const objects = [...gameState.world.buildings, ...gameState.world.obstacles];
+             for (const obj of objects) {
+                 const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height };
+                 if (isCollidingAABB(playerRect, objRect)) {
+                     collisionOccurred = true;
+                     if (gameState.playerState === 'driving') {
+                         // Simple bounce and slight pushback
+                         gameState.player.speed *= -0.5;
+                         gameState.player.x = oldX; // Revert position slightly
+                         gameState.player.y = oldY;
+                         createDustParticle(false); createDustParticle(false);
+                     } else {
+                         // Pedestrian collision: Revert position (simple stop)
+                         gameState.player.x = oldX;
+                         gameState.player.y = oldY;
+                         // More precise pushback (optional):
+                         // Calculate overlap and push player back along axis of least penetration
+                     }
+                     break; // Handle one collision per frame for simplicity
+                 }
+             }
+         }
+
+        function isCollidingAABB(rect1, rect2) {
             return (
-                a.x < b.x + b.width &&
-                a.x + a.width > b.x &&
-                a.y < b.y + b.height &&
-                a.y + a.height > b.y
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
             );
         }
-        
-        function checkGasStations() {
+
+         function checkGasStations() {
+            if (gameState.playerState !== 'driving') return;
             if (gameState.controls.refuel) {
                 for (const station of gameState.world.gasStations) {
-                    // Check if player is near a gas station
-                    const dx = gameState.player.x - station.x;
-                    const dy = gameState.player.y - station.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < 80) {
-                        // Refuel the car
-                        gameState.player.fuelLevel += 1;
-                        if (gameState.player.fuelLevel > 100) {
-                            gameState.player.fuelLevel = 100;
-                        }
+                    const dx = gameState.player.x - (station.x + station.width / 2); // Check center
+                    const dy = gameState.player.y - (station.y + station.height / 2);
+                    const distanceSq = dx * dx + dy * dy;
+                    if (distanceSq < 70 * 70) { // Increased radius
+                        gameState.player.fuelLevel += 1.5; // Faster refueling
+                        if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100;
+                        // Maybe add a visual/sound cue here
                         break;
                     }
                 }
             }
         }
-        
+
         function checkLocation() {
-            let currentZone = null;
-            let closestDistance = Infinity;
-            
-            for (const zone of gameState.zones) {
-                const dx = gameState.player.x - zone.x;
-                const dy = gameState.player.y - zone.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < zone.radius && distance < closestDistance) {
-                    closestDistance = distance;
-                    currentZone = zone;
-                }
-            }
-            
-            if (currentZone) {
-                document.getElementById('location').textContent = `LOCATION: ${currentZone.name}`;
-            } else {
-                document.getElementById('location').textContent = 'LOCATION: COUNTRYSIDE';
-            }
-        }
-        
-        function createSkidMark() {
-            const radians = gameState.player.angle * Math.PI / 180;
-            gameState.fx.skidMarks.push({
-                x: gameState.player.x - Math.sin(radians) * 10,
-                y: gameState.player.y + Math.cos(radians) * 10,
-                angle: gameState.player.angle,
-                alpha: 0.8,
-                width: 2 + Math.abs(gameState.player.speed)
-            });
-            
-            // Limit the number of skid marks
-            if (gameState.fx.skidMarks.length > 100) {
-                gameState.fx.skidMarks.shift();
-            }
-        }
-        
-        function createDustParticle() {
-            const radians = gameState.player.angle * Math.PI / 180;
-            const offX = Math.random() * 10 - 5;
-            const offY = Math.random() * 10 - 5;
-            
+             let currentZone = null;
+             let closestDistance = Infinity;
+             for (const zone of gameState.zones) {
+                 const dx = gameState.player.x - zone.x;
+                 const dy = gameState.player.y - zone.y;
+                 const distance = Math.sqrt(dx * dx + dy * dy);
+                 if (distance < zone.radius && distance < closestDistance) {
+                     closestDistance = distance;
+                     currentZone = zone;
+                 }
+             }
+             document.getElementById('location').textContent = `LOCATION: ${currentZone ? currentZone.name : 'COUNTRYSIDE'}`;
+         }
+
+         // --- Effects ---
+         function createSkidMark() {
+             if (gameState.playerState !== 'driving') return;
+             const radians = gameState.player.angle * Math.PI / 180;
+             // Place skid marks slightly behind the center based on car orientation
+             const wheelOffset = gameState.player.height * 0.3; // Approx rear axle position
+             gameState.fx.skidMarks.push({
+                 x: gameState.player.x - Math.sin(radians) * wheelOffset,
+                 y: gameState.player.y + Math.cos(radians) * wheelOffset,
+                 angle: gameState.player.angle,
+                 alpha: 0.7 + Math.random() * 0.2, // Slightly varied alpha
+                 width: 2 + Math.abs(gameState.player.speed * 0.5), // Wider at higher speed
+                 life: 200 + Math.random() * 100 // Longer life
+             });
+             if (gameState.fx.skidMarks.length > 150) gameState.fx.skidMarks.shift(); // Limit count
+         }
+
+         function createDustParticle(isDrivingEffect = true) {
+            const pAngle = gameState.player.angle * Math.PI / 180;
+            const offsetDist = isDrivingEffect ? gameState.player.height / 2 : 5; // From player center
+            const baseX = gameState.player.x - Math.sin(pAngle) * offsetDist; // Behind car or near feet
+            const baseY = gameState.player.y + Math.cos(pAngle) * offsetDist;
+
             gameState.fx.dustParticles.push({
-                x: gameState.player.x - Math.sin(radians) * 20 + offX,
-                y: gameState.player.y + Math.cos(radians) * 20 + offY,
-                size: 2 + Math.random() * 5,
-                alpha: 0.7,
-                life: 30 + Math.random() * 30,
-                vx: Math.random() * 2 - 1,
-                vy: Math.random() * 2 - 1
+                x: baseX + (Math.random() - 0.5) * (isDrivingEffect ? 15 : 5), // Spread
+                y: baseY + (Math.random() - 0.5) * (isDrivingEffect ? 15 : 5),
+                size: isDrivingEffect ? 2 + Math.random() * 5 : 1 + Math.random() * 2,
+                alpha: 0.6 + Math.random() * 0.2,
+                life: 25 + Math.random() * 25, // Shorter life
+                vx: (Math.random() - 0.5) * (isDrivingEffect ? 1.5 : 0.5),
+                vy: (Math.random() - 0.5) * (isDrivingEffect ? 1.5 : 0.5)
             });
-        }
-        
-        function updateParticles() {
-            // Update dust particles
-            for (let i = gameState.fx.dustParticles.length - 1; i >= 0; i--) {
-                const particle = gameState.fx.dustParticles[i];
-                particle.x += particle.vx;
-                particle.y += particle.vy;
-                particle.life -= 1;
-                particle.alpha -= 0.02;
-                
-                if (particle.life <= 0 || particle.alpha <= 0) {
-                    gameState.fx.dustParticles.splice(i, 1);
-                }
-            }
-            
-            // Fade out skid marks over time
-            for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) {
-                const skid = gameState.fx.skidMarks[i];
-                skid.alpha -= 0.001;
-                
-                if (skid.alpha <= 0) {
-                    gameState.fx.skidMarks.splice(i, 1);
-                }
-            }
-        }
-        
+            if (gameState.fx.dustParticles.length > 80) gameState.fx.dustParticles.shift(); // Limit count
+         }
+
+         function updateParticles() {
+             // Update dust
+             for (let i = gameState.fx.dustParticles.length - 1; i >= 0; i--) {
+                 const p = gameState.fx.dustParticles[i];
+                 p.x += p.vx; p.y += p.vy; p.life--; p.alpha -= 0.025; // Fade faster
+                 if (p.life <= 0 || p.alpha <= 0) gameState.fx.dustParticles.splice(i, 1);
+             }
+             // Update skid marks
+             for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) {
+                 const s = gameState.fx.skidMarks[i];
+                 s.alpha -= 0.002; // Fade slower
+                 s.life--;
+                 if (s.alpha <= 0 || s.life <= 0) gameState.fx.skidMarks.splice(i, 1);
+             }
+         }
+
+        // --- Camera ---
         function updateCamera() {
-            // Camera follows the player
-            gameState.camera.x = gameState.player.x - canvas.width / 2;
-            gameState.camera.y = gameState.player.y - canvas.height / 2;
-            
+            // Smooth camera follow (Lerp)
+             const targetX = gameState.player.x - canvas.width / 2;
+             const targetY = gameState.player.y - canvas.height / 2;
+             const lerpFactor = 0.1; // Adjust for smoother/stiffer camera
+
+             gameState.camera.x += (targetX - gameState.camera.x) * lerpFactor;
+             gameState.camera.y += (targetY - gameState.camera.y) * lerpFactor;
+
+
             // Keep camera within world bounds
-            if (gameState.camera.x < 0) gameState.camera.x = 0;
-            if (gameState.camera.y < 0) gameState.camera.y = 0;
-            if (gameState.camera.x > gameState.world.width - canvas.width)
-                gameState.camera.x = gameState.world.width - canvas.width;
-            if (gameState.camera.y > gameState.world.height - canvas.height)
-                gameState.camera.y = gameState.world.height - canvas.height;
+            gameState.camera.x = Math.max(0, Math.min(gameState.camera.x, gameState.world.width - canvas.width));
+            gameState.camera.y = Math.max(0, Math.min(gameState.camera.y, gameState.world.height - canvas.height));
         }
-        
+
+         // --- HUD Update ---
+         function updateHUD() {
+             const speedElement = document.getElementById('speed');
+             const speedLine = document.getElementById('speed-line');
+             const fuelBarContainer = document.getElementById('fuel-bar');
+             const fuelLine = document.getElementById('fuel-line');
+             const fuelLevelElement = document.getElementById('fuel-level');
+
+             if (gameState.playerState === 'driving') {
+                 speedLine.style.display = '';
+                 fuelBarContainer.style.display = '';
+                 fuelLine.style.display = '';
+                 speedElement.textContent = Math.abs(Math.round(gameState.player.speed * 20));
+                 fuelLevelElement.style.width = `${Math.max(0, gameState.player.fuelLevel)}%`;
+             } else {
+                 speedLine.style.display = 'none';
+                 fuelBarContainer.style.display = 'none';
+                 fuelLine.style.display = 'none';
+             }
+             checkLocation(); // Update location regardless of state
+             // Update placeholder stats (not functional yet)
+             document.getElementById('health').textContent = `Health: 100`;
+             document.getElementById('money').textContent = `$: 0`;
+             document.getElementById('mission-text').textContent = "No active mission";
+         }
+
+        // --- Rendering ---
         function renderGame() {
             // Clear canvas
             ctx.fillStyle = gameState.world.grassColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw the world
+
+             // Translate context based on camera
+             ctx.save();
+             ctx.translate(-gameState.camera.x, -gameState.camera.y);
+
+            // --- Draw World Elements (Relative to Camera) ---
             drawRoads();
             drawBuildings();
             drawTrees();
             drawObstacles();
             drawGasStations();
+            drawVehicles(); // Draw parked vehicles
             drawSkidMarks();
             drawDustParticles();
-            drawPlayer();
-            
-            // Draw mini-map
+            drawPlayer(); // Draw active player (car or ped)
+
+             ctx.restore(); // Restore context translation
+
+            // --- Draw UI Elements (Fixed Position) ---
             drawMiniMap();
+            // HUD text is updated via updateHUD() directly to DOM
         }
-        
+
+        // --- Drawing Functions (Draw elements relative to camera) ---
         function drawRoads() {
             roads.forEach(road => {
-                // Transform road coordinates to screen coordinates
-                const x1 = road.x1 - gameState.camera.x;
-                const y1 = road.y1 - gameState.camera.y;
-                const x2 = road.x2 - gameState.camera.x;
-                const y2 = road.y2 - gameState.camera.y;
-                
-                // Calculate the angle of the road
+                const x1 = road.x1, y1 = road.y1, x2 = road.x2, y2 = road.y2;
+                // Basic culling check (rough)
+                const midX = (x1+x2)/2, midY = (y1+y2)/2;
+                const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+                if (midX + length < gameState.camera.x || midX - length > gameState.camera.x + canvas.width ||
+                    midY + length < gameState.camera.y || midY - length > gameState.camera.y + canvas.height) {
+                    return; // Skip drawing if road is likely off-screen
+                }
+
                 const angle = Math.atan2(y2 - y1, x2 - x1);
-                const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-                
-                // Draw the road as a rectangle
                 ctx.save();
                 ctx.translate(x1, y1);
                 ctx.rotate(angle);
-                
-                // Road background
+                // Road base
                 ctx.fillStyle = gameState.world.roadColor;
                 ctx.fillRect(0, -gameState.world.roadWidth / 2, length, gameState.world.roadWidth);
-                
-                // Road center line
+                // Center line (solid for simplicity here)
                 ctx.fillStyle = gameState.world.lineColor;
-                ctx.fillRect(0, -gameState.world.lineWidth / 2, length, gameState.world.lineWidth);
-                
-                // Dashed lines on both sides
-                ctx.setLineDash([20, 20]);
-                ctx.strokeStyle = gameState.world.lineColor;
-                ctx.lineWidth = gameState.world.lineWidth;
-                ctx.beginPath();
-                ctx.moveTo(0, -gameState.world.roadWidth / 4);
-                ctx.lineTo(length, -gameState.world.roadWidth / 4);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(0, gameState.world.roadWidth / 4);
-                ctx.lineTo(length, gameState.world.roadWidth / 4);
-                ctx.stroke();
-                
+                 ctx.fillRect(0, -gameState.world.lineWidth / 2, length, gameState.world.lineWidth);
+                 // Dashed lines (optional - can be performance heavy)
+                 /* ctx.setLineDash([20, 20]);
+                 ctx.strokeStyle = gameState.world.lineColor;
+                 ctx.lineWidth = gameState.world.lineWidth;
+                 ctx.beginPath(); ctx.moveTo(0, -gameState.world.roadWidth / 4); ctx.lineTo(length, -gameState.world.roadWidth / 4); ctx.stroke();
+                 ctx.beginPath(); ctx.moveTo(0, gameState.world.roadWidth / 4); ctx.lineTo(length, gameState.world.roadWidth / 4); ctx.stroke();
+                 ctx.setLineDash([]); */
                 ctx.restore();
             });
         }
-        
+
         function drawBuildings() {
-            gameState.world.buildings.forEach(building => {
-                const screenX = building.x - gameState.camera.x;
-                const screenY = building.y - gameState.camera.y;
-                
-                // Only draw if visible on screen
-                if (
-                    screenX + building.width >= 0 &&
-                    screenX <= canvas.width &&
-                    screenY + building.height >= 0 &&
-                    screenY <= canvas.height
-                ) {
-                    ctx.fillStyle = building.color;
-                    ctx.fillRect(screenX, screenY, building.width, building.height);
-                    
-                    // Draw building details
-                    ctx.fillStyle = '#222';
-                    for (let i = 0; i < 3; i++) {
-                        for (let j = 0; j < 3; j++) {
-                            if (Math.random() > 0.5) {
-                                ctx.fillRect(
-                                    screenX + 5 + (building.width / 3) * i,
-                                    screenY + 5 + (building.height / 3) * j,
-                                    building.width / 4,
-                                    building.height / 4
-                                );
-                            }
-                        }
-                    }
-                }
+            gameState.world.buildings.forEach(b => {
+                 if (b.x + b.width < gameState.camera.x || b.x > gameState.camera.x + canvas.width ||
+                     b.y + b.height < gameState.camera.y || b.y > gameState.camera.y + canvas.height) return;
+                ctx.fillStyle = b.color;
+                ctx.fillRect(b.x, b.y, b.width, b.height);
+                 // Simple window details
+                 ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                 for (let wy = b.y + 5; wy < b.y + b.height - 5; wy += 15) {
+                     for (let wx = b.x + 5; wx < b.x + b.width - 5; wx += 15) {
+                         ctx.fillRect(wx, wy, 7, 7);
+                     }
+                 }
             });
         }
-        
+
         function drawTrees() {
-            gameState.world.trees.forEach(tree => {
-                const screenX = tree.x - gameState.camera.x;
-                const screenY = tree.y - gameState.camera.y;
-                
-                // Only draw if visible on screen
-                if (
-                    screenX + tree.radius >= 0 &&
-                    screenX - tree.radius <= canvas.width &&
-                    screenY + tree.radius >= 0 &&
-                    screenY - tree.radius <= canvas.height
-                ) {
-                    // Draw tree trunk
-                    ctx.fillStyle = '#643200';
-                    ctx.fillRect(screenX - tree.radius / 4, screenY - tree.radius / 4, tree.radius / 2, tree.radius / 2);
-                    
-                    // Draw tree top
-                    ctx.fillStyle = tree.color;
-                    ctx.beginPath();
-                    ctx.arc(screenX, screenY - tree.radius / 2, tree.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            });
-        }
-        
+             gameState.world.trees.forEach(t => {
+                  if (t.x + t.radius < gameState.camera.x || t.x - t.radius > gameState.camera.x + canvas.width ||
+                      t.y + t.radius < gameState.camera.y || t.y - t.radius > gameState.camera.y + canvas.height) return;
+                 // Trunk
+                 ctx.fillStyle = '#643200';
+                 ctx.fillRect(t.x - t.radius * 0.2, t.y - t.radius * 0.1, t.radius * 0.4, t.radius * 0.6);
+                 // Leaves
+                 ctx.fillStyle = t.color;
+                 ctx.beginPath();
+                 ctx.arc(t.x, t.y - t.radius * 0.4, t.radius, 0, Math.PI * 2);
+                 ctx.fill();
+             });
+         }
+
         function drawObstacles() {
-            gameState.world.obstacles.forEach(obstacle => {
-                const screenX = obstacle.x - gameState.camera.x;
-                const screenY = obstacle.y - gameState.camera.y;
-                
-                // Only draw if visible on screen
-                if (
-                    screenX + obstacle.width >= 0 &&
-                    screenX <= canvas.width &&
-                    screenY + obstacle.height >= 0 &&
-                    screenY <= canvas.height
-                ) {
-                    ctx.fillStyle = obstacle.color;
-                    ctx.fillRect(screenX, screenY, obstacle.width, obstacle.height);
-                }
-            });
-        }
-        
+             gameState.world.obstacles.forEach(o => {
+                  if (o.x + o.width < gameState.camera.x || o.x > gameState.camera.x + canvas.width ||
+                      o.y + o.height < gameState.camera.y || o.y > gameState.camera.y + canvas.height) return;
+                 ctx.fillStyle = o.color;
+                 ctx.fillRect(o.x, o.y, o.width, o.height);
+             });
+         }
+
         function drawGasStations() {
-            gameState.world.gasStations.forEach(station => {
-                const screenX = station.x - gameState.camera.x;
-                const screenY = station.y - gameState.camera.y;
-                
-                // Only draw if visible on screen
-                if (
-                    screenX + station.width >= 0 &&
-                    screenX <= canvas.width &&
-                    screenY + station.height >= 0 &&
-                    screenY <= canvas.height
-                ) {
-                    // Draw gas station base
-                    ctx.fillStyle = '#777';
-                    ctx.fillRect(screenX - 10, screenY - 10, station.width + 20, station.height + 20);
-                    
-                    // Draw gas pump
-                    ctx.fillStyle = station.color;
-                    ctx.fillRect(screenX, screenY, station.width, station.height);
-                    
-                    // Draw gas symbol
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '20px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('⛽', screenX + station.width / 2, screenY + station.height / 2 + 5);
-                }
-            });
-        }
-        
+             gameState.world.gasStations.forEach(s => {
+                  if (s.x + s.width < gameState.camera.x || s.x > gameState.camera.x + canvas.width ||
+                      s.y + s.height < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return;
+                 // Base
+                 ctx.fillStyle = '#666'; // Concrete base
+                 ctx.fillRect(s.x - 5, s.y - 5, s.width + 10, s.height + 10);
+                 // Pump
+                 ctx.fillStyle = s.color;
+                 ctx.fillRect(s.x, s.y, s.width, s.height);
+                 // Symbol (Emoji)
+                 ctx.fillStyle = '#fff';
+                 ctx.font = '24px monospace';
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 ctx.fillText('⛽', s.x + s.width / 2, s.y + s.height / 2);
+             });
+         }
+
+         function drawVehicles() { // Draws parked vehicles
+             gameState.world.vehicles.forEach(car => {
+                  // Culling check
+                 const CULL_MARGIN = Math.max(car.width, car.height) * 1.5;
+                 if (car.x + CULL_MARGIN < gameState.camera.x || car.x - CULL_MARGIN > gameState.camera.x + canvas.width ||
+                     car.y + CULL_MARGIN < gameState.camera.y || car.y - CULL_MARGIN > gameState.camera.y + canvas.height) {
+                     return;
+                 }
+
+                 ctx.save();
+                 ctx.translate(car.x, car.y); // Translate to center
+                 ctx.rotate(car.angle * Math.PI / 180);
+                 // Draw car body relative to its center
+                 ctx.fillStyle = car.color;
+                 ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+                 // Windows
+                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Slightly transparent
+                 ctx.fillRect(-car.width / 2 + 3, -car.height / 2 + 3, car.width - 6, 8); // Front
+                 ctx.fillRect(-car.width / 2 + 3, car.height / 2 - 12, car.width - 6, 9); // Rear
+                  // Wheels
+                 ctx.fillStyle = '#1a1a1a';
+                 const wheelW = 4, wheelH = 8;
+                 ctx.fillRect(-car.width / 2 - wheelW/2, -car.height / 2 + 5, wheelW, wheelH); // FL
+                 ctx.fillRect(car.width / 2 - wheelW/2, -car.height / 2 + 5, wheelW, wheelH); // FR
+                 ctx.fillRect(-car.width / 2 - wheelW/2, car.height / 2 - 13, wheelW, wheelH); // RL
+                 ctx.fillRect(car.width / 2 - wheelW/2, car.height / 2 - 13, wheelW, wheelH); // RR
+                 ctx.restore();
+             });
+         }
+
         function drawSkidMarks() {
             gameState.fx.skidMarks.forEach(skid => {
-                const screenX = skid.x - gameState.camera.x;
-                const screenY = skid.y - gameState.camera.y;
-                
+                // Culling
+                 const CULL_MARGIN = skid.width * 2;
+                 if (skid.x + CULL_MARGIN < gameState.camera.x || skid.x - CULL_MARGIN > gameState.camera.x + canvas.width ||
+                     skid.y + CULL_MARGIN < gameState.camera.y || skid.y - CULL_MARGIN > gameState.camera.y + canvas.height) {
+                     return;
+                 }
+
                 ctx.save();
-                ctx.translate(screenX, screenY);
+                ctx.translate(skid.x, skid.y);
                 ctx.rotate(skid.angle * Math.PI / 180);
-                
-                ctx.fillStyle = `rgba(0, 0, 0, ${skid.alpha})`;
-                ctx.fillRect(-skid.width / 2, -2, skid.width, 4);
-                
+                ctx.fillStyle = `rgba(0, 0, 0, ${skid.alpha * 0.6})`; // Make them fainter
+                ctx.fillRect(-skid.width / 2, -1.5, skid.width, 3); // Slightly thinner
                 ctx.restore();
             });
         }
-        
+
         function drawDustParticles() {
-            gameState.fx.dustParticles.forEach(particle => {
-                const screenX = particle.x - gameState.camera.x;
-                const screenY = particle.y - gameState.camera.y;
-                
-                ctx.fillStyle = `rgba(210, 180, 140, ${particle.alpha})`;
+            gameState.fx.dustParticles.forEach(p => {
+                 // Culling
+                 const CULL_MARGIN = p.size * 2;
+                  if (p.x + CULL_MARGIN < gameState.camera.x || p.x - CULL_MARGIN > gameState.camera.x + canvas.width ||
+                      p.y + CULL_MARGIN < gameState.camera.y || p.y - CULL_MARGIN > gameState.camera.y + canvas.height) {
+                      return;
+                  }
+                ctx.fillStyle = `rgba(160, 140, 110, ${p.alpha})`; // Browner dust
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, particle.size, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                 ctx.fill();
             });
         }
-        
-        function drawPlayer() {
-            // Transform to player position and rotation
-            ctx.save();
-            
-            const screenX = gameState.player.x - gameState.camera.x;
-            const screenY = gameState.player.y - gameState.camera.y;
-            
-            ctx.translate(screenX, screenY);
-            ctx.rotate(gameState.player.angle * Math.PI / 180);
-            
-            // Draw car body
-            ctx.fillStyle = '#0066cc';
-            ctx.fillRect(-gameState.player.width / 2, -gameState.player.height / 2, gameState.player.width, gameState.player.height);
-            
-            // Draw windows
-            ctx.fillStyle = '#99ccff';
-            ctx.fillRect(-gameState.player.width / 2 + 3, -gameState.player.height / 2 + 3, gameState.player.width - 6, 8);
-            ctx.fillRect(-gameState.player.width / 2 + 3, gameState.player.height / 2 - 12, gameState.player.width - 6, 9);
-            
-            // Draw wheels
-            ctx.fillStyle = '#000';
-            ctx.fillRect(-gameState.player.width / 2 - 2, -gameState.player.height / 2 + 5, 4, 8);
-            ctx.fillRect(gameState.player.width / 2 - 2, -gameState.player.height / 2 + 5, 4, 8);
-            ctx.fillRect(-gameState.player.width / 2 - 2, gameState.player.height / 2 - 13, 4, 8);
-            ctx.fillRect(gameState.player.width / 2 - 2, gameState.player.height / 2 - 13, 4, 8);
-            
-            ctx.restore();
-        }
-        
-        function drawMiniMap() {
+
+         function drawPlayer() { // Draws the active player (car or ped)
+             ctx.save();
+             ctx.translate(gameState.player.x, gameState.player.y); // Translate to center
+             ctx.rotate(gameState.player.angle * Math.PI / 180);
+
+             if (gameState.playerState === 'driving') {
+                 const carW = gameState.player.width; const carH = gameState.player.height;
+                 // Draw car body
+                 ctx.fillStyle = gameState.player.color;
+                 ctx.fillRect(-carW / 2, -carH / 2, carW, carH);
+                 // Windows
+                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)';
+                 ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8); // Front
+                 ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9); // Rear
+                  // Wheels
+                 ctx.fillStyle = '#1a1a1a';
+                 const wheelW = 4, wheelH = 8;
+                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); // FL
+                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); // FR
+                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); // RL
+                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); // RR
+             } else {
+                 // Draw Pedestrian
+                 const pedW = gameState.player.pedWidth; const pedH = gameState.player.pedHeight;
+                 // Body (Simple: one color)
+                 ctx.fillStyle = '#3498db'; // Blue shirt
+                 ctx.fillRect(-pedW / 2, -pedH / 2, pedW, pedH);
+                 // Head (darker circle on top)
+                  ctx.fillStyle = '#2980b9'; // Darker blue
+                  ctx.beginPath();
+                  ctx.arc(0, -pedH / 2 + 2, pedW/3, 0, Math.PI * 2); // Head circle
+                  ctx.fill();
+             }
+             ctx.restore();
+         }
+
+        function drawMiniMap() { // Draws on the separate minimap canvas
             const mapScale = miniMapCtx.canvas.width / gameState.world.width;
-            
-            // Clear mini-map
-            miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Darker background
             miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height);
-            
+
             // Draw roads
+            miniMapCtx.strokeStyle = '#666'; // Darker roads
+            miniMapCtx.lineWidth = 1.5;
             roads.forEach(road => {
-                miniMapCtx.strokeStyle = '#555';
-                miniMapCtx.lineWidth = 2
-				miniMapCtx.strokeStyle = '#555';
-miniMapCtx.lineWidth = 2;
-miniMapCtx.beginPath();
-miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale);
-miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale);
-miniMapCtx.stroke();
-});
-
-// Draw gas stations on mini-map
-gameState.world.gasStations.forEach(station => {
-    miniMapCtx.fillStyle = '#ff0000';
-    miniMapCtx.fillRect(
-        station.x * mapScale - 2,
-        station.y * mapScale - 2,
-        4, 4
-    );
-});
-
-// Draw player on mini-map
-miniMapCtx.fillStyle = '#00ff00';
-miniMapCtx.beginPath();
-miniMapCtx.arc(
-    gameState.player.x * mapScale,
-    gameState.player.y * mapScale,
-    3, 0, Math.PI * 2
-);
-miniMapCtx.fill();
-
-// Draw player direction indicator
-const dirX = gameState.player.x + Math.sin(gameState.player.angle * Math.PI / 180) * 10;
-const dirY = gameState.player.y - Math.cos(gameState.player.angle * Math.PI / 180) * 10;
-miniMapCtx.strokeStyle = '#00ff00';
-miniMapCtx.beginPath();
-miniMapCtx.moveTo(gameState.player.x * mapScale, gameState.player.y * mapScale);
-miniMapCtx.lineTo(dirX * mapScale, dirY * mapScale);
-miniMapCtx.stroke();
-
-// Draw visible screen area
-miniMapCtx.strokeStyle = '#ffffff';
-miniMapCtx.strokeRect(
-    gameState.camera.x * mapScale,
-    gameState.camera.y * mapScale,
-    gameState.camera.width * mapScale,
-    gameState.camera.height * mapScale
-);
-}
-
-// Initialize trees that are not on roads
-function initializeWorldObjects() {
-    // Clear existing trees and reassign
-    gameState.world.trees = [];
-    for (let i = 0; i < 200; i++) {
-        const x = Math.random() * gameState.world.width;
-        const y = Math.random() * gameState.world.height;
-        
-        // Check if the tree is on a road
-        if (!isOnRoad(x, y, 20)) {
-            gameState.world.trees.push({
-                x: x,
-                y: y,
-                radius: 5 + Math.random() * 10,
-                color: `hsl(${100 + Math.random() * 30}, ${60 + Math.random() * 30}%, ${20 + Math.random() * 20}%)`
+                miniMapCtx.beginPath();
+                miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale);
+                miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale);
+                miniMapCtx.stroke();
             });
+
+            // Draw gas stations
+            miniMapCtx.fillStyle = '#ff3333'; // Brighter red
+             gameState.world.gasStations.forEach(s => {
+                 miniMapCtx.fillRect(s.x * mapScale - 1.5, s.y * mapScale - 1.5, 3, 3);
+             });
+
+            // Draw parked vehicles
+             miniMapCtx.fillStyle = '#aaa'; // Lighter grey
+             gameState.world.vehicles.forEach(car => {
+                 miniMapCtx.fillRect(car.x * mapScale - 1, car.y * mapScale - 1, 2, 2);
+             });
+
+            // Draw player
+            const playerMapX = gameState.player.x * mapScale;
+            const playerMapY = gameState.player.y * mapScale;
+             if (gameState.playerState === 'driving') {
+                 miniMapCtx.fillStyle = '#00ff00'; // Green
+                 miniMapCtx.beginPath(); miniMapCtx.arc(playerMapX, playerMapY, 2.5, 0, Math.PI * 2); miniMapCtx.fill();
+             } else {
+                  miniMapCtx.fillStyle = '#ffff00'; // Yellow
+                  miniMapCtx.fillRect(playerMapX - 1.5, playerMapY - 1.5, 3, 3); // Square
+             }
+             // Player direction
+             const angleRad = gameState.player.angle * Math.PI / 180;
+             const dirLen = 5;
+             miniMapCtx.strokeStyle = miniMapCtx.fillStyle; // Match player color
+             miniMapCtx.lineWidth = 1;
+             miniMapCtx.beginPath(); miniMapCtx.moveTo(playerMapX, playerMapY);
+             miniMapCtx.lineTo(playerMapX + Math.sin(angleRad) * dirLen, playerMapY - Math.cos(angleRad) * dirLen);
+             miniMapCtx.stroke();
+
+             // Draw camera view rectangle
+             miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // Fainter white
+             miniMapCtx.lineWidth = 1;
+             miniMapCtx.strokeRect(
+                 gameState.camera.x * mapScale, gameState.camera.y * mapScale,
+                 gameState.camera.width * mapScale, gameState.camera.height * mapScale
+             );
+         }
+
+        // --- Initialization ---
+        function initGame() {
+            console.log("Initializing Game...");
+            createWorldElements();
+             initializeWorldObjects(); // Place objects away from roads
+
+            // Set initial HUD state
+            updateHUD();
+
+            // Handle window resize
+            window.addEventListener('resize', handleResize);
+            handleResize(); // Call once initially
+
+             // Start game loop
+            gameLoop();
+            console.log("Game Loop Started.");
+
+            // Optional: Start day/night cycle
+             //setInterval(updateDayNightCycle, 1000);
         }
-    }
-    
-    // Clear existing buildings and reassign
-    gameState.world.buildings = [];
-    for (let i = 0; i < 40; i++) {
-        const width = 30 + Math.random() * 70;
-        const height = 30 + Math.random() * 70;
-        const x = Math.random() * (gameState.world.width - width);
-        const y = Math.random() * (gameState.world.height - height);
-        
-        // Check if the building is on a road
-        if (!isOnRoad(x + width/2, y + height/2, Math.max(width, height) / 2)) {
-            gameState.world.buildings.push({
-                x: x,
-                y: y,
-                width: width,
-                height: height,
-                color: `hsl(${200 + Math.random() * 40}, ${20 + Math.random() * 20}%, ${40 + Math.random() * 30}%)`
+
+        // Function to place objects away from roads (from original code)
+        function initializeWorldObjects() {
+            // Refine tree placement
+             const validTrees = [];
+             gameState.world.trees.forEach(tree => {
+                 if (!isOnRoad(tree.x, tree.y, tree.radius * 1.5)) { // Add buffer
+                     validTrees.push(tree);
+                 }
+             });
+             gameState.world.trees = validTrees.slice(0, 200); // Keep up to 200 valid trees
+
+            // Refine building placement
+            const validBuildings = [];
+            gameState.world.buildings.forEach(b => {
+                if (!isOnRoad(b.x + b.width/2, b.y + b.height/2, Math.max(b.width, b.height) * 0.7)) {
+                    validBuildings.push(b);
+                }
             });
-        }
-    }
-}
+             gameState.world.buildings = validBuildings.slice(0, 40); // Keep up to 40
 
-function isOnRoad(x, y, buffer) {
-    for (const road of roads) {
-        const roadX1 = road.x1;
-        const roadY1 = road.y1;
-        const roadX2 = road.x2;
-        const roadY2 = road.y2;
-        
-        // Calculate the distance from point to line segment
-        const A = x - roadX1;
-        const B = y - roadY1;
-        const C = roadX2 - roadX1;
-        const D = roadY2 - roadY1;
-        
-        const dot = A * C + B * D;
-        const lenSq = C * C + D * D;
-        let param = -1;
-        
-        if (lenSq !== 0) param = dot / lenSq;
-        
-        let xx, yy;
-        
-        if (param < 0) {
-            xx = roadX1;
-            yy = roadY1;
-        } else if (param > 1) {
-            xx = roadX2;
-            yy = roadY2;
-        } else {
-            xx = roadX1 + param * C;
-            yy = roadY1 + param * D;
-        }
-        
-        const dx = x - xx;
-        const dy = y - yy;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance < gameState.world.roadWidth / 2 + buffer) {
-            return true;
-        }
-    }
-    
-    return false;
-}
+            // Refine obstacle placement
+            const validObstacles = [];
+             gameState.world.obstacles.forEach(o => {
+                 if (!isOnRoad(o.x + o.width/2, o.y + o.height/2, Math.max(o.width, o.height))) {
+                     validObstacles.push(o);
+                 }
+             });
+            gameState.world.obstacles = validObstacles.slice(0, 60); // Keep up to 60
 
-// Game day/night cycle
-function updateDayNightCycle() {
-    const cycleTime = 300000; // 5 minutes for full day-night cycle
-    const elapsedTime = (Date.now() - gameState.world.startTime) % cycleTime;
-    const timeRatio = elapsedTime / cycleTime;
-    
-    // Calculate brightness level (0 to 1)
-    // Using sin wave to transition between day and night
-    const brightness = 0.5 + 0.4 * Math.sin(timeRatio * Math.PI * 2);
-    
-    // Update grass color
-    const grassHue = 100; // Green
-    const grassSaturation = Math.floor(60 * brightness);
-    const grassLightness = Math.floor(26 * brightness);
-    gameState.world.grassColor = `hsl(${grassHue}, ${grassSaturation}%, ${grassLightness}%)`;
-    
-    // Update road color
-    const roadLightness = Math.floor(20 * brightness);
-    gameState.world.roadColor = `hsl(0, 0%, ${roadLightness}%)`;
-    
-    // Update sky color (canvas background)
-    document.body.style.backgroundColor = `hsl(210, 50%, ${Math.floor(10 + 30 * brightness)}%)`;
-}
+             console.log(`World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`);
+         }
 
-// Handle window resize
-function handleResize() {
-    // Keep the game responsive while maintaining the aspect ratio
-    const gameContainer = document.getElementById('game-container');
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-    
-    const ratio = canvas.width / canvas.height;
-    let newWidth = windowWidth * 0.9;
-    let newHeight = newWidth / ratio;
-    
-    if (newHeight > windowHeight * 0.9) {
-        newHeight = windowHeight * 0.9;
-        newWidth = newHeight * ratio;
-    }
-    
-    canvas.style.width = `${newWidth}px`;
-    canvas.style.height = `${newHeight}px`;
-}
+        // Check if a point is on or too close to a road
+        function isOnRoad(x, y, buffer) {
+             for (const road of roads) {
+                 const dx = road.x2 - road.x1, dy = road.y2 - road.y1;
+                 const lenSq = dx*dx + dy*dy;
+                 let t = ((x - road.x1) * dx + (y - road.y1) * dy) / lenSq;
+                 t = Math.max(0, Math.min(1, t)); // Clamp to segment
 
-// Game initialization
-function initGame() {
-    // Initialize world objects
-    initializeWorldObjects();
-    
-    // Handle window resize
-    window.addEventListener('resize', handleResize);
-    handleResize();
-    
-    // Start the game loop
-    gameLoop();
-    
-    // Add day/night cycle update
-    setInterval(updateDayNightCycle, 1000); // Update every second
-}
+                 const closestX = road.x1 + t * dx;
+                 const closestY = road.y1 + t * dy;
+                 const distSq = (x - closestX)**2 + (y - closestY)**2;
 
-// Start the game
-initGame();
-  </script>
+                 if (distSq < (gameState.world.roadWidth / 2 + buffer)**2) {
+                     return true; // Point is too close to this road segment
+                 }
+             }
+             return false; // Point is clear of all roads
+         }
+
+        // Day/Night Cycle (Optional)
+         function updateDayNightCycle() {
+             const cycleTime = 300000; // 5 minutes
+             const timeRatio = ((Date.now() - gameState.world.startTime) % cycleTime) / cycleTime;
+             const brightness = 0.4 + 0.6 * Math.sin(timeRatio * Math.PI * 2 + Math.PI/2); // Adjusted for smoother night
+
+             // Update colors based on brightness (0=dark, 1=bright)
+             const grassLight = Math.floor(10 + 25 * brightness);
+             gameState.world.grassColor = `hsl(100, 50%, ${grassLight}%)`;
+
+             const roadLight = Math.floor(5 + 25 * brightness);
+              gameState.world.roadColor = `hsl(0, 0%, ${roadLight}%)`;
+
+             const bodyLight = Math.floor(5 + 15 * brightness);
+             document.body.style.backgroundColor = `hsl(210, 30%, ${bodyLight}%)`;
+         }
+
+        // Handle window resize - Maintain aspect ratio
+        function handleResize() {
+             const gameContainer = document.getElementById('game-container');
+             const windowWidth = window.innerWidth;
+             const windowHeight = window.innerHeight;
+             const aspectRatio = canvas.width / canvas.height;
+
+             let newWidth = windowWidth * 0.95; // Use more screen width
+             let newHeight = newWidth / aspectRatio;
+
+             if (newHeight > windowHeight * 0.95) { // Use more screen height
+                 newHeight = windowHeight * 0.95;
+                 newWidth = newHeight * aspectRatio;
+             }
+
+             // Adjust container size instead of just canvas style for better UI positioning
+             gameContainer.style.width = `${newWidth}px`;
+             gameContainer.style.height = `${newHeight}px`;
+         }
+
+
+        // --- Start the game ---
+        window.onload = initGame;
+
+    </script>
 </body>
 </html>
