@@ -107,7 +107,7 @@
             // Original UV coordinates (0 to 1)
             vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
 
-            float time_warp = u_time * 0.1; // Controls phase speed
+            float time_warp = u_time * 0.2; // Controls phase speed
             const float TOTAL_PHASES_F = 20.0;
             float phase = mod(time_warp, TOTAL_PHASES_F);
             float phaseProgress = fract(phase); // Progress within current phase
