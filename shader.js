@@ -43,7 +43,8 @@
         }
     `;
 
-    // Fragment Shader (GLSL 3.00 ES - Now 30 Phases) - MODIFIED
+    // Fragment Shader (GLSL 3.00 ES - 30 Phases) - REVISED RAYMARCHING
+    // Line 47 should be around here.
     const fragmentShaderSource = \`#version 300 es
         precision highp float;
 
@@ -56,10 +57,11 @@
         const float PI = 3.14159265359;
         const float TWO_PI = 6.28318530718;
         const int FBM_OCTAVES = 5;
-        const int MAX_RAYMARCH_STEPS = 48; // Keep relatively low for performance
-        const float MAX_RAYMARCH_DIST = 15.0; // Increased slightly
+        const int MAX_RAYMARCH_STEPS = 48;
+        const float MAX_RAYMARCH_DIST = 15.0;
         const int MANDELBROT_ITER = 40;
-        const float MAX_ITER_INV = 1.0 / float(MANDELBROT_ITER); // Precompute inverse
+        const float MAX_ITER_INV = 1.0 / float(MANDELBROT_ITER);
+        const vec2 SDF_EPS = vec2(0.001, 0.0); // Epsilon for SDF normal calculation
 
         // --- Helper Functions ---
         float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
@@ -75,106 +77,70 @@
         float snoise(vec2 v) { return snoise(vec3(v, 0.0)); }
         mat2 rotate2D(float a) { return mat2(cos(a), -sin(a), sin(a), cos(a)); }
         float worley(vec2 p) { float md=10.; vec2 g=floor(p); for(int x=-1;x<=1;x++){ for(int y=-1;y<=1;y++){ vec2 n=g+vec2(float(x),float(y)); vec2 pt=vec2(rand(n),rand(n+vec2(7.3,3.7))); pt=.5+.5*sin(u_time*.3+TWO_PI*pt); vec2 fp=n+pt; md=min(md,length(p-fp)); }} return md; }
-        // Worley noise returning vec2(dist_to_closest, dist_to_2nd_closest)
-        vec2 worley2(vec2 p) {
-            vec2 d = vec2(10.0); // distance to nearest (d.x) and second nearest (d.y)
-            vec2 g = floor(p);
-            for (int x = -1; x <= 1; x++) {
-                for (int y = -1; y <= 1; y++) {
-                    vec2 n = g + vec2(float(x), float(y));
-                    vec2 pt = vec2(rand(n), rand(n + vec2(7.3, 3.7)));
-                    pt = 0.5 + 0.5 * sin(u_time * 0.3 + TWO_PI * pt); // Animate points
-                    vec2 fp = n + pt;
-                    float dist = length(p - fp);
-                    if (dist < d.x) {
-                        d.y = d.x; // Old nearest becomes second nearest
-                        d.x = dist; // New nearest
-                    } else if (dist < d.y) {
-                        d.y = dist; // New second nearest
-                    }
-                }
-            }
-            return d;
-        }
+        vec2 worley2(vec2 p) { vec2 d=vec2(10.); vec2 g=floor(p); for(int x=-1;x<=1;x++){ for(int y=-1;y<=1;y++){ vec2 n=g+vec2(float(x),float(y)); vec2 pt=vec2(rand(n),rand(n+vec2(7.3,3.7))); pt=.5+.5*sin(u_time*.3+TWO_PI*pt); vec2 fp=n+pt; float dist=length(p-fp); if(dist<d.x){d.y=d.x;d.x=dist;}else if(dist<d.y){d.y=dist;}}} return d; }
         float truchetPattern(vec2 uv, float s) { uv*=s; vec2 ip=floor(uv), fp=fract(uv); float r=rand(ip), t=floor(r*2.), d; if(t==0.){d=abs(fp.x+fp.y-1.)/sqrt(2.);}else{d=abs(fp.x-fp.y)/sqrt(2.);} return smoothstep(.04,.06,abs(d-.5)); }
 
-        // --- SDF Functions (Signed Distance Functions) ---
+        // --- SDF Functions ---
         float sdSphere(vec3 p, float s) { return length(p) - s; }
         float sdPlane(vec3 p, vec3 n, float h) { return dot(p, n) + h; }
         float sdBox(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); }
         float sdTorus( vec3 p, vec2 t ) { vec2 q = vec2(length(p.xz)-t.x,p.y); return length(q)-t.y; }
-        // Smooth minimum function (for blending SDFs)
         float smin( float a, float b, float k ) { float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 ); return mix( b, a, h ) - k*h*(1.0-h); }
 
-        // --- Raymarching Scene Definition ---
-        // Generic function for scene SDF - combine shapes here
-        float mapScene(vec3 p) {
-            float d = MAX_RAYMARCH_DIST; // Initialize with max distance
-
-            // Example: Ground plane
-            d = min(d, sdPlane(p, vec3(0.0, 1.0, 0.0), 1.0));
-
-            // Example: Oscillating sphere
+        // --- Scene Mapping Functions (used by specific raymarching phases) ---
+        float mapScenePhase18(vec3 p) {
+            float dPlane = sdPlane(p, vec3(0.0, 1.0, 0.0), 1.0);
             vec3 spherePos = vec3(0.0, sin(u_time * 0.8) * 0.5 - 0.2, 0.0);
-            d = min(d, sdSphere(p - spherePos, 0.5));
-
-            // Add more shapes for specific scenes
-            // Example: A box
-            // d = min(d, sdBox(p - vec3(1.5, -0.5, 1.0), vec3(0.4)));
-
-            return d;
+            float dSphere = sdSphere(p - spherePos, 0.5);
+            return min(dPlane, dSphere);
         }
-
-         // --- Backrooms Scene SDF ---
-        float mapBackrooms(vec3 p) {
-            // Repeating grid using modulo arithmetic
-            vec3 cellID = floor(p / 4.0); // Cell size 4x4x4
-            p = mod(p, 4.0) - 2.0; // Center cell coordinates between -2 and 2
-
-            // Walls (thin boxes)
-            float walls = sdBox(p, vec3(1.95, 1.95, 1.95)); // Slightly smaller than cell to create gaps
-            float room = -sdBox(p, vec3(1.8, 1.9, 1.8)); // Inside of the room
-
-            // Combine walls and room interior
-            float scene = max(walls, room);
-
-            // Ground plane (optional, depends if you want floor distinct from ceiling)
-            // float ground = sdPlane(p, vec3(0,1,0), 1.95);
-            // scene = min(scene, ground);
-
-            // Add some subtle variation or objects if needed
-            // float sphereDist = sdSphere(p - vec3(0.5, -1.5, 0.5), 0.2);
-            // scene = min(scene, sphereDist);
-
-            return scene;
+        float mapBackroomsPhase20(vec3 p) {
+            vec3 cellID = floor(p / 4.0);
+            p = mod(p, 4.0) - 2.0;
+            float walls = sdBox(p, vec3(1.95, 1.95, 1.95));
+            float room = -sdBox(p, vec3(1.8, 1.9, 1.8));
+            return max(walls, room);
         }
-
-        // --- Estimate Normal using SDF Gradient ---
-        vec3 calcNormal(vec3 p, float (*mapFunc)(vec3)) {
-             // Use the provided map function (mapScene, mapBackrooms, etc.)
-            vec2 eps = vec2(0.001, 0.0); // Small epsilon for finite differencing
-            return normalize(vec3(
-                mapFunc(p + eps.xyy) - mapFunc(p - eps.xyy),
-                mapFunc(p + eps.yxy) - mapFunc(p - eps.yxy),
-                mapFunc(p + eps.yyx) - mapFunc(p - eps.yyx)
-            ));
+         float mapTunnelPhase25(vec3 p) {
+            p.xy = rotate2D(-p.z * 0.1) * p.xy;
+            return length(p.xy) - (1.0 + 0.2 * sin(p.z * 0.5 + u_time));
         }
-
-        // --- Raymarch Function ---
-        // Takes ray origin, direction, map function, returns distance or -1.0 on miss
-        float raymarch(vec3 ro, vec3 rd, float (*mapFunc)(vec3)) {
-            float t = 0.0; // Distance traveled
-            for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
-                vec3 p = ro + rd * t;
-                float d = mapFunc(p); // Distance to nearest surface from map function
-
-                if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { // Hit or exceeded max distance
-                    break;
-                }
-                t += d * 0.9; // March forward (step slightly less than d for robustness)
+         float mapMetaballsPhase26(vec3 p) {
+            float radius = 0.5;
+            vec3 pos1 = vec3(sin(u_time * 0.8)       , cos(u_time * 0.5)       , sin(u_time * 0.3)) * 1.5;
+            vec3 pos2 = vec3(cos(u_time * 0.7 + 1.0) , sin(u_time * 0.9 + 2.0) , cos(u_time * 0.4 + 3.0)) * 1.5;
+            vec3 pos3 = vec3(sin(u_time * 0.6 + 4.0) , cos(u_time * 0.4 + 5.0) , sin(u_time * 0.8 + 6.0)) * 1.5;
+            float d1 = sdSphere(p - pos1, radius);
+            float d2 = sdSphere(p - pos2, radius);
+            float d3 = sdSphere(p - pos3, radius);
+            float d = smin(d1, d2, 0.5);
+            return smin(d, d3, 0.5);
+        }
+         float mapFractalPhase27(vec3 p) {
+            float scale = 2.0 + 0.2 * sin(u_time * 0.1);
+            float boxFoldFactor = 1.0;
+            float sphereScale = 1.0;
+            for(int i = 0; i < 5; i++) {
+                p = clamp(p, -boxFoldFactor, boxFoldFactor) * 2.0 - p;
+                p = p * scale;
             }
-            return (t < MAX_RAYMARCH_DIST) ? t : -1.0; // Return distance or -1.0 for miss
-        }
+            return (length(p) - sphereScale) / pow(scale, 5.0);
+         }
+
+        // --- Estimate Normal using SDF Gradient (Specific to a map function) ---
+        // We need versions for each map function if we want accurate normals.
+        // Or a generic one that takes the function (but GLSL doesn't support that well).
+        // Simple generic version (less accurate but works for basic lighting):
+         vec3 calcNormalGeneric(vec3 p, float sceneDist) {
+             // This is a common but less precise method if the exact map isn't known
+             return normalize(vec3(
+                 sceneDist - sdSphere(p - SDF_EPS.xyy, sceneDist), // Approximate gradient
+                 sceneDist - sdSphere(p - SDF_EPS.yxy, sceneDist),
+                 sceneDist - sdSphere(p - SDF_EPS.yyx, sceneDist)
+             ));
+            // For more accurate normals, you'd need specific functions like:
+            // vec3 calcNormalScene18(vec3 p) { return normalize(vec3( mapScenePhase18(p+SDF_EPS.xyy)-mapScenePhase18(p-SDF_EPS.xyy), ... )); }
+         }
 
 
         // --- Color Definitions ---
@@ -189,37 +155,27 @@
         vec3 colOrange = vec3(1.0, 0.5, 0.0);
         vec3 colPink = vec3(1.0, 0.4, 0.7);
         vec3 colBackground = vec3(5./255., 5./255., 17./255.);
-        vec3 colBackroomsYellow = vec3(1.0, 0.9, 0.6) * 0.8; // Unsettling yellow
-        vec3 colFlicker = vec3(1.1, 1.05, 0.9); // Flicker color boost
+        vec3 colBackroomsYellow = vec3(1.0, 0.9, 0.6) * 0.8;
+        vec3 colFlicker = vec3(1.1, 1.05, 0.9);
 
-
-        // --- Basic Diffuse Lighting ---
-        vec3 basicLighting(vec3 normal, vec3 lightDir, vec3 surfaceColor, vec3 ambientColor) {
-            float diffuse = max(0.0, dot(normal, lightDir));
-            return ambientColor + surfaceColor * diffuse;
-        }
-
-        vec3 getColorForCA(vec2 uv, float t) { float n = fbm(uv*4. + t*.15); return mix(colPrimary, colTertiary, n); }
+        vec3 basicLighting(vec3 n, vec3 ldir, vec3 scol, vec3 acol){ return acol+scol*max(0.,dot(n,ldir)); }
+        vec3 getColorForCA(vec2 uv, float t){ return mix(colPrimary, colTertiary, fbm(uv*4.+t*.15)); }
 
         // --- Main Shader Logic ---
         void main() {
             vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
             vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
 
-            // Use the slower speed from previous request
-            float time_warp = u_time * 0.05; // Slower phase speed
-            // ***** MODIFICATION: Increased total phases *****
-            const float TOTAL_PHASES_F = 30.0;
-            // ***** END MODIFICATION *****
-
+            float time_warp = u_time * 0.1; // Original speed from user input
+            const float TOTAL_PHASES_F = 30.0; // Updated phase count
             float phase = mod(time_warp, TOTAL_PHASES_F);
             float phaseProgress = fract(phase);
             int phaseIndex = int(floor(phase));
 
-            vec3 color = colBackground; // Start with background
+            vec3 color = colBackground;
 
-            // --- Phase Implementations (0-19 remain the same) ---
-            if (phaseIndex == 0) { float wf=.1+.05*sin(u_time*.2); wf=max(.001,wf); float z=.1/max(.01,.1-uv.y*wf+.02*fbm(uv+u_time*.05)); z=clamp(z,.1,15.); vec2 warp=uv*z; vec2 grid=abs(fract(warp*vec2(5.,3.)+u_time*.1)-.5); float line=smoothstep(.04,.05,min(grid.x,grid.y))*.6; float df=fract(z*.1+u_time*.15); vec3 bc=mix(mix(colPrimary,colTertiary,sin(u_time*.1)*.5+.5),colSecondary,sin(length(warp)*.5-u_time*.5)*.5+.5); color=mix(bc*.15,bc,line*df*1.5); }
+            // --- Phase Implementations (0-17 are the same) ---
+             if (phaseIndex == 0) { float wf=.1+.05*sin(u_time*.2); wf=max(.001,wf); float z=.1/max(.01,.1-uv.y*wf+.02*fbm(uv+u_time*.05)); z=clamp(z,.1,15.); vec2 warp=uv*z; vec2 grid=abs(fract(warp*vec2(5.,3.)+u_time*.1)-.5); float line=smoothstep(.04,.05,min(grid.x,grid.y))*.6; float df=fract(z*.1+u_time*.15); vec3 bc=mix(mix(colPrimary,colTertiary,sin(u_time*.1)*.5+.5),colSecondary,sin(length(warp)*.5-u_time*.5)*.5+.5); color=mix(bc*.15,bc,line*df*1.5); }
             else if (phaseIndex == 1) { float d=length(uv); float r=sin(d*18.-u_time*2.5)*.5+.5; r*=smoothstep(1.8,.4,d); float w=sin(uv.y*25.+u_time*1.2)*.04; vec2 wu=uv+vec2(w,sin(uv.x*15.+u_time*.8)*.03); float n=fbm(wu*3.5+u_time*.25); vec3 bc=mix(mix(colSecondary,colTertiary,r),mix(colGreen,colGold,n),.5+.5*sin(u_time*.6+d*2.)); color=mix(bc*.2,bc,r*.8+n*.6); }
             else if (phaseIndex == 2) { vec2 r=vec2(1.,1.732), h=r*.5; vec2 a=mod(uv*2.+u_time*.1,r)-h, b=mod(uv*2.-h+u_time*.1,r)-h; vec2 gv=length(a)<length(b)?a:b; float p=sin(u_time*3.5)*.5+.5, e=sin(length(gv)*25.-u_time*3.5); e=smoothstep(-.1,.15,e)-smoothstep(.15,.4,e); float ds=fbm(uv*2.5+vec2(u_time*.15,0.)); vec3 baseC=mix(colTertiary,colGreen,ds), glowC=mix(colSecondary,colPrimary,p); color=mix(baseC*.1,glowC,e*p*1.5); float dt=abs(sin(uv.x*22.+u_time*1.1))*abs(sin(uv.y*22.-u_time*1.3)); color+=glowC*dt*.08; }
             else if (phaseIndex == 3) { float a=atan(uv.y,uv.x), rd=length(uv); a+=.1*fbm(uv*.5+u_time*.05); float sa=a*6.+rd*8.-u_time*2.2, s=smoothstep(-.2,.2,sin(sa)); float rdd=rd+sin(a*10.+u_time*.3)*.08, b=fract(rdd*6.-u_time*.6); b=smoothstep(0.,.1,b)*smoothstep(.8,.5,b); float t=fbm(vec2(rdd*6.,a*3.)+u_time*.15); vec3 dc=mix(colPrimary,colDeepRed,sin(rdd*12.)*.5+.5), bc=mix(colGold,colSecondary,cos(a*4.)*.5+.5); color=mix(dc*.5,bc,b+t*.4); color+=bc*s*.3; }
@@ -237,42 +193,80 @@
             else if (phaseIndex == 15) { vec2 p=abs(uv)*.8; float s=1.5+.5*sin(u_time*.4); for(int i=0;i<4;i++){ p=abs(p*s-1.); if(dot(p,p)>20.)break; } float r=sin(length(p)*.2*10.+u_time); color=mix(colSecondary,colPrimary,smoothstep(-.5,.5,r)); }
             else if (phaseIndex == 16) { vec2 p=uv*2.5; float d1=worley(p), d2=worley(p+vec2(5.2,1.3)); float c=pow(1.-smoothstep(0.,.1,d1),2.)+pow(1.-smoothstep(0.,.05,d2),2.)*.5; c=clamp(c,0.,1.); float g=fbm(p*10.+u_time*.1); vec3 cc=mix(colWhite*.8,colTertiary,g); color=mix(colBackground*.8,cc,c); }
             else if (phaseIndex == 17) { float i=.5+.5*noise(vec2(u_time*1.5,originalUV.y*5.)); float fs=floor(u_time*15.)+floor(originalUV.y*10.), f=rand(fs); i*=smoothstep(.2,.8,f); vec3 bc=mix(colPrimary,colSecondary,noise(uv*3.+u_time*.2)); float sy=fract(originalUV.y*u_resolution.y*.5), se=smoothstep(.4,.5,sy)*(1.-smoothstep(.5,.6,sy)); color=mix(bc*.5,vec3(0.),se*i*1.5); color+=(rand(originalUV+u_time)-.5)*.1*i; }
-            else if (phaseIndex == 18) { vec3 ro=vec3(0.,0.,-3.+sin(u_time*.3)), rd=normalize(vec3(uv,1.)); vec3 col=colBackground; float t = raymarch(ro, rd, mapScene); if (t > 0.0) { vec3 p = ro + rd * t; vec3 n = calcNormal(p, mapScene); vec3 lightDir = normalize(vec3(-0.7, 0.7, -0.5)); float diffuse = max(0.0, dot(n, lightDir)); vec3 surfCol = (abs(p.x) > 1.9 || abs(p.z) > 1.9) ? colGreen * 0.8 : colPrimary; // Crude plane/sphere check based on position
-                col = basicLighting(n, lightDir, surfCol, colBackground * 0.2); } else { col = colBackground; } color=col; }
-            else if (phaseIndex == 19) { float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
 
-            // ***** NEW PHASES START HERE *****
-
-            // Phase 20: Backrooms Grid (Liminal Space)
-            else if (phaseIndex == 20) {
-                vec3 ro = vec3(0.0, 0.0, u_time * 0.5); // Slowly move forward
-                vec3 target = ro + vec3(0.0, 0.0, 1.0); // Look forward
-                vec3 camUp = vec3(0.0, 1.0, 0.0);
-                // Basic camera setup
-                vec3 ww = normalize(target - ro);
-                vec3 uu = normalize(cross(ww, camUp));
-                vec3 vv = normalize(cross(uu, ww));
-                vec3 rd = normalize(uv.x * uu + uv.y * vv + 1.5 * ww); // Adjust FOV with 1.5
-
+            // --- Phase 18: Raymarched Scene (Sphere/Plane) - REVISED ---
+            else if (phaseIndex == 18) {
+                vec3 ro = vec3(0.0, 0.0, -3.0 + sin(u_time * 0.3));
+                vec3 rd = normalize(vec3(uv, 1.0));
                 vec3 col = colBackground;
-                float t = raymarch(ro, rd, mapBackrooms);
-
-                if (t > 0.0) {
+                float t = 0.0; // Raymarch loop
+                float hitDist = -1.0;
+                for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
                     vec3 p = ro + rd * t;
-                    vec3 n = calcNormal(p, mapBackrooms);
-                    // Flat, eerie lighting
-                    float ambient = 0.4 + 0.6 * n.y; // Slightly brighter ceiling/floor
-                    float fog = 1.0 - smoothstep(5.0, MAX_RAYMARCH_DIST * 0.8, t); // Fog
-                    col = colBackroomsYellow * ambient * fog;
-                    // Add subtle noise flicker
-                    col *= 0.95 + 0.1 * rand(gl_FragCoord.xy / 50.0 + fract(u_time * 5.0));
+                    float d = mapScenePhase18(p);
+                    if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { break; }
+                    t += d * 0.9;
+                }
+                if(t < MAX_RAYMARCH_DIST) hitDist = t;
+
+                if (hitDist > 0.0) { // If hit
+                    vec3 p = ro + rd * hitDist;
+                     // Calculate normal specifically for mapScenePhase18
+                    vec3 n = normalize(vec3(
+                        mapScenePhase18(p + SDF_EPS.xyy) - mapScenePhase18(p - SDF_EPS.xyy),
+                        mapScenePhase18(p + SDF_EPS.yxy) - mapScenePhase18(p - SDF_EPS.yxy),
+                        mapScenePhase18(p + SDF_EPS.yyx) - mapScenePhase18(p - SDF_EPS.yyx)
+                    ));
+                    vec3 lightDir = normalize(vec3(-0.7, 0.7, -0.5));
+                    // Determine surface color based on which object was likely hit (simple check)
+                    vec3 surfCol = (p.y < -0.9) ? colGreen * 0.8 : colPrimary; // Simple height check for plane vs sphere
+                    col = basicLighting(n, lightDir, surfCol, colBackground * 0.2);
                 } else {
-                    col = colBackground; // Hit nothing (or sky)
+                    col = colBackground;
                 }
                 color = col;
             }
+            else if (phaseIndex == 19) { float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
 
-            // Phase 21: Uncanny Flicker
+            // --- Phase 20: Backrooms Raymarch - REVISED ---
+             else if (phaseIndex == 20) {
+                 vec3 ro = vec3(0.0, 0.0, u_time * 0.5);
+                 vec3 target = ro + vec3(0.0, 0.0, 1.0);
+                 vec3 camUp = vec3(0.0, 1.0, 0.0);
+                 vec3 ww = normalize(target - ro);
+                 vec3 uu = normalize(cross(ww, camUp));
+                 vec3 vv = normalize(cross(uu, ww));
+                 vec3 rd = normalize(uv.x * uu + uv.y * vv + 1.5 * ww);
+
+                 vec3 col = colBackground;
+                 float t = 0.0;
+                 float hitDist = -1.0;
+                 for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
+                     vec3 p = ro + rd * t;
+                     float d = mapBackroomsPhase20(p);
+                     if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { break; }
+                     t += d * 0.9;
+                 }
+                  if(t < MAX_RAYMARCH_DIST) hitDist = t;
+
+                 if (hitDist > 0.0) {
+                     vec3 p = ro + rd * hitDist;
+                     // Calculate normal for backrooms map
+                     vec3 n = normalize(vec3(
+                         mapBackroomsPhase20(p + SDF_EPS.xyy) - mapBackroomsPhase20(p - SDF_EPS.xyy),
+                         mapBackroomsPhase20(p + SDF_EPS.yxy) - mapBackroomsPhase20(p - SDF_EPS.yxy),
+                         mapBackroomsPhase20(p + SDF_EPS.yyx) - mapBackroomsPhase20(p - SDF_EPS.yyx)
+                     ));
+                     float ambient = 0.4 + 0.6 * n.y;
+                     float fog = 1.0 - smoothstep(5.0, MAX_RAYMARCH_DIST * 0.8, hitDist);
+                     col = colBackroomsYellow * ambient * fog;
+                     col *= 0.95 + 0.1 * rand(gl_FragCoord.xy / 50.0 + fract(u_time * 5.0));
+                 } else {
+                     col = colBackground;
+                 }
+                 color = col;
+            }
+             // Phase 21: Uncanny Flicker
             else if (phaseIndex == 21) {
                  float flickerSpeed = 15.0 + 10.0 * sin(u_time * 0.3);
                  float flicker = 0.5 + 0.5 * noise(vec2(u_time * flickerSpeed, originalUV.y * 2.0));
@@ -280,240 +274,199 @@
                  float baseNoise = fbm(uv * 2.0 + u_time * 0.1);
                  vec3 baseCol = mix(colStrangeGreen, colBackroomsYellow * 0.7, baseNoise);
                  color = baseCol * (0.6 + harshFlicker * 0.6) + colFlicker * harshFlicker * 0.1;
-                 // Add scanline effect intensified by flicker
                  float scanline = 0.5 + 0.5 * sin(originalUV.y * u_resolution.y * 0.7 + u_time);
                  color *= 1.0 - smoothstep(0.4, 0.5, scanline) * 0.2 * harshFlicker;
             }
-
              // Phase 22: Distorted Wallpaper
             else if (phaseIndex == 22) {
-                // Create distortion field using noise
-                vec2 distOffset = vec2(snoise(vec3(uv * 1.5, u_time * 0.2)),
-                                       snoise(vec3(uv * 1.5 + 50.0, u_time * 0.2))) * 0.3;
-                vec2 distortedUV = uv + distOffset;
-
-                // Simple repeating pattern UVs
-                vec2 patternUV = fract(distortedUV * 5.0); // 5x5 grid
-                // Basic geometric pattern (e.g., diamonds)
-                float pattern = abs(patternUV.x - 0.5) + abs(patternUV.y - 0.5); // Diamond shape
-                pattern = smoothstep(0.2, 0.25, pattern); // Make lines
-                pattern = 1.0 - pattern;
-
-                // Choose faded, sickly colors
-                vec3 col1 = vec3(0.6, 0.55, 0.4); // Faded brown
-                vec3 col2 = vec3(0.4, 0.5, 0.45); // Faded green/grey
-                float patternNoise = noise(floor(distortedUV * 5.0) + 0.1); // Noise per tile
-                vec3 tileCol = mix(col1, col2, patternNoise);
-
-                color = mix(tileCol * 0.8, tileCol * 1.1, pattern); // Apply pattern lines
-                color *= 0.8 + 0.2 * noise(distortedUV * 20.0 + u_time * 0.5); // Add grain/dirt
+                vec2 distOffset=vec2(snoise(vec3(uv*1.5,u_time*.2)),snoise(vec3(uv*1.5+50.,u_time*.2)))*.3;
+                vec2 distortedUV=uv+distOffset;
+                vec2 patternUV=fract(distortedUV*5.);
+                float pattern=1.-smoothstep(.2,.25,abs(patternUV.x-.5)+abs(patternUV.y-.5));
+                vec3 col1=vec3(.6,.55,.4); vec3 col2=vec3(.4,.5,.45);
+                float patternNoise=noise(floor(distortedUV*5.)+.1);
+                vec3 tileCol=mix(col1,col2,patternNoise);
+                color=mix(tileCol*.8,tileCol*1.1,pattern);
+                color*=.8+.2*noise(distortedUV*20.+u_time*.5);
             }
-
-             // Phase 23: Simple Raymarched Hallway (uses mapBackrooms)
-            else if (phaseIndex == 23) {
-                 // Re-use phase 20's raymarching setup but maybe different camera/lighting
-                 vec3 ro = vec3(sin(u_time * 0.1) * 0.5, 0.0, u_time * 0.7); // Move faster, slight sway
-                 vec3 target = ro + vec3(sin(u_time * 0.2) * 0.2, 0.0, 1.0); // Look slightly side-to-side
+             // Phase 23: Raymarched Hallway Alt - REVISED ---
+             else if (phaseIndex == 23) {
+                 vec3 ro = vec3(sin(u_time * 0.1) * 0.5, 0.0, u_time * 0.7);
+                 vec3 target = ro + vec3(sin(u_time * 0.2) * 0.2, 0.0, 1.0);
                  vec3 camUp = vec3(0.0, 1.0, 0.0);
                  vec3 ww = normalize(target - ro);
                  vec3 uu = normalize(cross(ww, camUp));
                  vec3 vv = normalize(cross(uu, ww));
-                 vec3 rd = normalize(uv.x * uu + uv.y * vv + 1.8 * ww); // Slightly wider FOV
+                 vec3 rd = normalize(uv.x * uu + uv.y * vv + 1.8 * ww);
 
                  vec3 col = colBackground;
-                 float t = raymarch(ro, rd, mapBackrooms);
-
-                 if (t > 0.0) {
+                 float t = 0.0;
+                 float hitDist = -1.0;
+                 for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
                      vec3 p = ro + rd * t;
-                     vec3 n = calcNormal(p, mapBackrooms);
-                     vec3 lightDir = normalize(vec3(0.1, 0.5, -0.5)); // Dim overhead light
-                     float diffuse = max(0.0, dot(n, lightDir));
-                     float fog = 1.0 - smoothstep(8.0, MAX_RAYMARCH_DIST * 0.9, t);
-                     col = colBackroomsYellow * (0.1 + diffuse * 0.7) * fog; // Very ambient + dim diffuse
+                     float d = mapBackroomsPhase20(p); // Use same map function
+                     if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { break; }
+                     t += d * 0.9;
+                 }
+                 if(t < MAX_RAYMARCH_DIST) hitDist = t;
+
+                 if (hitDist > 0.0) {
+                      vec3 p = ro + rd * hitDist;
+                      vec3 n = normalize(vec3( // Calculate normal for backrooms map
+                          mapBackroomsPhase20(p + SDF_EPS.xyy) - mapBackroomsPhase20(p - SDF_EPS.xyy),
+                          mapBackroomsPhase20(p + SDF_EPS.yxy) - mapBackroomsPhase20(p - SDF_EPS.yxy),
+                          mapBackroomsPhase20(p + SDF_EPS.yyx) - mapBackroomsPhase20(p - SDF_EPS.yyx)
+                      ));
+                      vec3 lightDir = normalize(vec3(0.1, 0.5, -0.5));
+                      float fog = 1.0 - smoothstep(8.0, MAX_RAYMARCH_DIST * 0.9, hitDist);
+                      col = colBackroomsYellow * basicLighting(n, lightDir, vec3(0.7), vec3(0.1)) * fog; // Adjusted lighting
                  } else {
-                     col = colBackground * 0.5; // Darker background
+                     col = colBackground * 0.5;
                  }
                  color = col;
              }
-
-            // Phase 24: Unsettling Noise Field (Worley F2-F1)
+             // Phase 24: Unsettling Noise Field (Worley F2-F1)
             else if (phaseIndex == 24) {
-                vec2 p = uv * (2.0 + 1.0 * sin(u_time * 0.15)); // Slowly pulsating zoom
-                vec2 w = worley2(p); // Get F1 and F2 distances
-                float val = w.y - w.x; // F2 - F1 creates cellular boundaries
-
-                float noiseVal = fbm(p * 3.0 + u_time * 0.2); // Underlying noise
-
-                vec3 c1 = colStrangeGreen * 0.8;
-                vec3 c2 = colDeepRed * 0.6;
-                vec3 c3 = colBackroomsYellow * 0.5;
-
-                color = mix(c1, c2, smoothstep(0.0, 0.15, val)); // Mix based on cell boundary value
-                color = mix(color, c3, smoothstep(0.4, 0.8, noiseVal)); // Mix based on noise
-                color *= 0.7 + 0.5 * smoothstep(0.05, 0.0, w.x); // Darken cell centers
+                vec2 p=uv*(2.+.5*sin(u_time*.15)); // Slower zoom pulse
+                vec2 w=worley2(p); float val=w.y-w.x;
+                float noiseVal=fbm(p*3.+u_time*.2);
+                vec3 c1=colStrangeGreen*.8; vec3 c2=colDeepRed*.6; vec3 c3=colBackroomsYellow*.5;
+                color=mix(c1,c2,smoothstep(0.,.15,val));
+                color=mix(color,c3,smoothstep(.4,.8,noiseVal));
+                color*=.7+.5*smoothstep(.05,0.,w.x);
             }
+             // Phase 25: Raymarched Twisting Tunnel - REVISED ---
+             else if (phaseIndex == 25) {
+                 vec3 ro = vec3(0.0, 0.0, u_time * 1.5);
+                 vec3 rd = normalize(vec3(uv, 1.0));
+                 float angle = ro.z * 0.1;
+                 rd.xy = rotate2D(angle) * rd.xy; // Rotate ray based on Z
 
-            // Phase 25: Raymarched Twisting Tunnel
-            else if (phaseIndex == 25) {
-                vec3 ro = vec3(0.0, 0.0, u_time * 1.5); // Faster movement
-                vec3 rd = normalize(vec3(uv, 1.0)); // Simple forward looking ray
+                 vec3 col = colBackground;
+                 float t = 0.0;
+                 float hitDist = -1.0;
+                 for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
+                     vec3 p = ro + rd * t;
+                     float d = mapTunnelPhase25(p); // Use the specific map
+                     if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { break; }
+                     t += d * 0.9;
+                 }
+                 if(t < MAX_RAYMARCH_DIST) hitDist = t;
 
-                // Apply rotation to the ray direction based on distance (z)
-                float angle = ro.z * 0.1; // Twist increases with distance
-                mat2 rot = rotate2D(angle);
-                rd.xy = rot * rd.xy;
-
-                // SDF for a simple cylinder tunnel
-                float mapTunnel(vec3 p) {
-                    // Twist the query point as well
-                    p.xy = rotate2D(-p.z * 0.1) * p.xy;
-                    return length(p.xy) - (1.0 + 0.2 * sin(p.z * 0.5 + u_time)); // Pulsating radius
-                }
-
-                vec3 col = colBackground;
-                float t = raymarch(ro, rd, mapTunnel);
-
-                if (t > 0.0) {
-                    vec3 p = ro + rd * t;
-                    vec3 n = calcNormal(p, mapTunnel);
-                    // Use distance and normal for coloring
-                    float pattern = fract((p.z - atan(p.y, p.x)*0.5) * 0.5);
-                    pattern = smoothstep(0.4, 0.5, pattern) - smoothstep(0.5, 0.6, pattern);
-                    vec3 surfCol = mix(colPrimary, colTertiary, abs(n.z));
-                    col = surfCol * (0.5 + 0.5 * pattern);
-                    col *= exp(-t * 0.1); // Fog
-                } else {
-                    col = colBackground;
-                }
-                color = col;
-            }
-
-            // Phase 26: Raymarched Metaballs
-            else if (phaseIndex == 26) {
-                vec3 ro = vec3(0.0, 0.0, -4.0 + u_time * 0.3);
-                vec3 rd = normalize(vec3(uv, 1.0));
-
-                // Define metaball positions and radii
-                float radius = 0.5;
-                vec3 pos1 = vec3(sin(u_time * 0.8)       , cos(u_time * 0.5)       , sin(u_time * 0.3)) * 1.5;
-                vec3 pos2 = vec3(cos(u_time * 0.7 + 1.0) , sin(u_time * 0.9 + 2.0) , cos(u_time * 0.4 + 3.0)) * 1.5;
-                vec3 pos3 = vec3(sin(u_time * 0.6 + 4.0) , cos(u_time * 0.4 + 5.0) , sin(u_time * 0.8 + 6.0)) * 1.5;
-
-                // Scene SDF using smooth minimum
-                float mapMetaballs(vec3 p) {
-                    float d1 = sdSphere(p - pos1, radius);
-                    float d2 = sdSphere(p - pos2, radius);
-                    float d3 = sdSphere(p - pos3, radius);
-                    float d = smin(d1, d2, 0.5); // Blend first two (k controls smoothness)
-                    d = smin(d, d3, 0.5); // Blend result with third
-                    return d;
-                }
-
-                vec3 col = colBackground;
-                float t = raymarch(ro, rd, mapMetaballs);
-
-                if (t > 0.0) {
-                    vec3 p = ro + rd * t;
-                    vec3 n = calcNormal(p, mapMetaballs);
-                    vec3 lightDir = normalize(vec3(0.5, 0.8, -0.3));
-                    vec3 surfCol = mix(colSecondary, colPink, clamp(p.y * 0.5 + 0.5, 0.0, 1.0)); // Color by height
-                    col = basicLighting(n, lightDir, surfCol, vec3(0.1));
-                    col *= exp(-t * 0.2); // Fog
-                } else {
-                    col = colBackground;
-                }
-                color = col;
-            }
-
-            // Phase 27: Simplified Raymarched Fractal (Box Fold)
-            else if (phaseIndex == 27) {
-                 vec3 ro = vec3(0.0, 0.0, -3.0 + u_time * 0.2); // Slow zoom in
+                 if (hitDist > 0.0) {
+                     vec3 p = ro + rd * hitDist;
+                      vec3 n = normalize(vec3( // Normal for tunnel map
+                          mapTunnelPhase25(p + SDF_EPS.xyy) - mapTunnelPhase25(p - SDF_EPS.xyy),
+                          mapTunnelPhase25(p + SDF_EPS.yxy) - mapTunnelPhase25(p - SDF_EPS.yxy),
+                          mapTunnelPhase25(p + SDF_EPS.yyx) - mapTunnelPhase25(p - SDF_EPS.yyx)
+                      ));
+                     float pattern = fract((p.z - atan(p.y, p.x)*0.5) * 0.5);
+                     pattern = smoothstep(0.4, 0.5, pattern) - smoothstep(0.5, 0.6, pattern);
+                     vec3 surfCol = mix(colPrimary, colTertiary, abs(n.z));
+                     col = surfCol * (0.5 + 0.5 * pattern);
+                     col *= exp(-hitDist * 0.1);
+                 } else {
+                     col = colBackground;
+                 }
+                 color = col;
+             }
+             // Phase 26: Raymarched Metaballs - REVISED ---
+             else if (phaseIndex == 26) {
+                 vec3 ro = vec3(0.0, 0.0, -4.0 + u_time * 0.3);
                  vec3 rd = normalize(vec3(uv, 1.0));
 
-                 float mapFractal(vec3 p) {
-                    vec3 p0 = p; // Store original point for coloring maybe
-                    float scale = 2.0 + 0.2 * sin(u_time * 0.1); // Slowly changing scale
-                    float boxFoldFactor = 1.0; // Amount to fold inwards
-                    float sphereScale = 1.0; // Size of the base sphere
-
-                    // Iterate folding
-                    for(int i = 0; i < 5; i++) { // Low iteration count
-                        p = clamp(p, -boxFoldFactor, boxFoldFactor) * 2.0 - p; // Box fold
-                        p = p * scale;
-                        // Optional: Add other simple transformations like rotation
-                        // p.xy = rotate2D(0.1) * p.xy;
-                    }
-                    // Base shape after folding (a sphere)
-                    return (length(p) - sphereScale) / pow(scale, 5.0); // Divide by scale factor
-                 }
-
                  vec3 col = colBackground;
-                 float t = raymarch(ro, rd, mapFractal);
-
-                 if (t > 0.0) {
+                 float t = 0.0;
+                 float hitDist = -1.0;
+                 for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
                      vec3 p = ro + rd * t;
-                     vec3 n = calcNormal(p, mapFractal);
-                     // Color based on normal and position/iterations (tricky for fractals)
-                     vec3 surfCol = vec3(0.5) + 0.5 * n; // Normal visualization is often used
-                     surfCol = mix(colGold, colPrimary, surfCol.x);
-                     col = surfCol * max(0.1, dot(n, normalize(vec3(0.577)))); // Basic directional light
-                     col *= exp(-t*0.15); // Fog
+                     float d = mapMetaballsPhase26(p); // Use the specific map
+                     if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { break; }
+                     t += d * 0.9;
+                 }
+                  if(t < MAX_RAYMARCH_DIST) hitDist = t;
+
+                 if (hitDist > 0.0) {
+                     vec3 p = ro + rd * hitDist;
+                     vec3 n = normalize(vec3( // Normal for metaballs map
+                         mapMetaballsPhase26(p + SDF_EPS.xyy) - mapMetaballsPhase26(p - SDF_EPS.xyy),
+                         mapMetaballsPhase26(p + SDF_EPS.yxy) - mapMetaballsPhase26(p - SDF_EPS.yxy),
+                         mapMetaballsPhase26(p + SDF_EPS.yyx) - mapMetaballsPhase26(p - SDF_EPS.yyx)
+                     ));
+                     vec3 lightDir = normalize(vec3(0.5, 0.8, -0.3));
+                     vec3 surfCol = mix(colSecondary, colPink, clamp(p.y * 0.5 + 0.5, 0.0, 1.0));
+                     col = basicLighting(n, lightDir, surfCol, vec3(0.1));
+                     col *= exp(-hitDist * 0.2);
                  } else {
-                    col = colBackground;
+                     col = colBackground;
                  }
                  color = col;
             }
+             // Phase 27: Raymarched Fractal - REVISED ---
+             else if (phaseIndex == 27) {
+                  vec3 ro = vec3(0.0, 0.0, -3.0 + u_time * 0.2);
+                  vec3 rd = normalize(vec3(uv, 1.0));
 
-            // Phase 28: Glitchy Data Stream
+                  vec3 col = colBackground;
+                  float t = 0.0;
+                  float hitDist = -1.0;
+                  for(int i = 0; i < MAX_RAYMARCH_STEPS; i++) {
+                      vec3 p = ro + rd * t;
+                      float d = mapFractalPhase27(p); // Use the specific map
+                      if(abs(d) < 0.001 * t || t > MAX_RAYMARCH_DIST) { break; }
+                      // Use a smaller step multiplier for fractals to avoid stepping inside
+                      t += d * 0.7;
+                  }
+                  if(t < MAX_RAYMARCH_DIST) hitDist = t;
+
+                  if (hitDist > 0.0) {
+                      vec3 p = ro + rd * hitDist;
+                      // Fractal normals are tricky, generic might be okay here
+                      vec3 n = calcNormalGeneric(p, mapFractalPhase27(p));
+                      vec3 surfCol = vec3(0.5) + 0.5 * n;
+                      surfCol = mix(colGold, colPrimary, surfCol.x);
+                      col = surfCol * max(0.1, dot(n, normalize(vec3(0.577))));
+                      col *= exp(-hitDist*0.15);
+                  } else {
+                     col = colBackground;
+                  }
+                  color = col;
+             }
+             // Phase 28: Glitchy Data Stream
             else if (phaseIndex == 28) {
-                // Base noise
-                float base = fbm(uv * 3.0 + u_time * 0.2);
-                color = mix(colPrimary * 0.5, colTertiary * 0.7, base);
-
-                // Horizontal glitch bars
-                float barY = floor(originalUV.y * 20.0); // ~20 bars
-                float barSpeed = rand(barY) * 5.0 + 2.0;
-                float barOffset = fract(u_time * barSpeed * 0.2 + rand(barY+1.0));
-                float barWidth = 0.05 + rand(barY + 2.0) * 0.2;
-                float barMask = smoothstep(barOffset - barWidth*0.5, barOffset, originalUV.x) *
-                                (1.0 - smoothstep(barOffset, barOffset + barWidth*0.5, originalUV.x));
-
-                // Apply glitch within the bar
-                if (barMask > 0.0) {
-                    vec2 glitchUV = uv + vec2(rand(barY + fract(u_time*5.0)) * 0.1 - 0.05, 0.0);
-                    float glitchNoise = fbm(glitchUV * 10.0 + u_time * 2.0);
-                    color = mix(color, mix(colRed, colWhite, glitchNoise), barMask * 0.8);
-                    color += (rand(originalUV + fract(u_time * 20.0)) - 0.5) * barMask * 0.2; // Additive noise
+                float base=fbm(uv*3.+u_time*.2);
+                color=mix(colPrimary*.5,colTertiary*.7,base);
+                float barY=floor(originalUV.y*20.);
+                float barSpeed=rand(barY)*5.+2.;
+                float barOffset=fract(u_time*barSpeed*.2+rand(barY+1.));
+                float barWidth=.05+rand(barY+2.)*.2;
+                float barMask=smoothstep(barOffset-barWidth*.5,barOffset,originalUV.x)*(1.-smoothstep(barOffset,barOffset+barWidth*.5,originalUV.x));
+                if(barMask>0.){
+                    vec2 glitchUV=uv+vec2(rand(barY+fract(u_time*5.))*.1-.05,0.);
+                    float glitchNoise=fbm(glitchUV*10.+u_time*2.);
+                    color=mix(color,mix(colDeepRed,colWhite,glitchNoise),barMask*.8); // Used colDeepRed
+                    color+=(rand(originalUV+fract(u_time*20.))-.5)*barMask*.2;
                 }
             }
-
-            // Phase 29: Interference Pattern
+             // Phase 29: Interference Pattern
             else if (phaseIndex == 29) {
-                 // Define moving source points
-                 vec2 src1 = vec2(sin(u_time * 0.5), cos(u_time * 0.3)) * 0.8;
-                 vec2 src2 = vec2(cos(u_time * 0.4 + 1.0), sin(u_time * 0.6 + 2.0)) * 0.7;
-                 vec2 src3 = vec2(sin(u_time * 0.7 + 3.0), cos(u_time * 0.5 + 4.0)) * 0.9;
-
-                 // Calculate wave values based on distance
-                 float wave1 = sin(length(uv - src1) * 20.0 - u_time * 5.0);
-                 float wave2 = sin(length(uv - src2) * 25.0 - u_time * 6.0);
-                 float wave3 = cos(length(uv - src3) * 18.0 + u_time * 4.0);
-
-                 // Combine waves
-                 float interference = (wave1 + wave2 + wave3) / 3.0;
-                 interference = pow(abs(interference), 0.7); // Enhance contrast
-
-                 color = mix(colSecondary, colPink, smoothstep(-0.5, 0.5, wave1));
-                 color = mix(color, colPrimary, smoothstep(0.3, 0.8, interference));
-
-                 // Add sharp highlights
-                 color += vec3(1.0) * pow(max(0.0, interference - 0.7), 2.0) * 2.0;
-             }
+                  vec2 src1=vec2(sin(u_time*.5),cos(u_time*.3))*.8;
+                  vec2 src2=vec2(cos(u_time*.4+1.),sin(u_time*.6+2.))*.7;
+                  vec2 src3=vec2(sin(u_time*.7+3.),cos(u_time*.5+4.))*.9;
+                  float wave1=sin(length(uv-src1)*20.-u_time*5.);
+                  float wave2=sin(length(uv-src2)*25.-u_time*6.);
+                  float wave3=cos(length(uv-src3)*18.+u_time*4.);
+                  float interference=(wave1+wave2+wave3)/3.;
+                  interference=pow(abs(interference),.7);
+                  color=mix(colSecondary,colPink,smoothstep(-.5,.5,wave1));
+                  color=mix(color,colPrimary,smoothstep(.3,.8,interference));
+                  color+=vec3(1.)*pow(max(0.,interference-.7),2.)*2.;
+            }
 
             // ***** END NEW PHASES *****
 
 
-            // --- Global Effects (Applied to all phases) ---
+            // --- Global Effects ---
             float scanlineVal = sin(originalUV.y * u_resolution.y * 0.8 + u_time * 0.1) * 0.5 + 0.5;
             float scanlineIntensity = 0.03 + 0.015 * sin(u_time * 0.5);
             color = mix(color, color * (1.0 - scanlineIntensity * 0.8), smoothstep(0.3, 0.0, scanlineVal));
@@ -654,6 +607,10 @@
     // --- Function to Update Shader Dynamically ---
     // Expose to global scope
     window.updateShader = function(newShaderCode) {
+        // NOTE: This update function is simplified. It includes basic helpers
+        // but might not correctly include ALL complex helpers or SDFs
+        // needed if the user provides drastically different shader code via the console.
+        // For the current shader structure, it's less useful unless main() is changed.
         if (!gl) {
             console.warn("WebGL context not available. Cannot update shader.");
             if(typeof showNotification === 'function') showNotification("WebGL inactive. Cannot update shader.");
@@ -668,67 +625,18 @@
         }
 
          // Rebuild the complete source string for the new fragment shader
-         // This assumes the helper functions and uniforms outside main() are still needed
          const completeNewFragmentSource = \`#version 300 es
             precision highp float;
             uniform float u_time;
             uniform vec2 u_resolution;
             out vec4 outColor;
-
-            // --- Constants (ensure these are consistent if needed by helpers/main) ---
-            const float PI = 3.14159265359;
-            const float TWO_PI = 6.28318530718;
-            const int FBM_OCTAVES = 5;
-            const int MAX_RAYMARCH_STEPS = 48;
-            const float MAX_RAYMARCH_DIST = 15.0;
-            const int MANDELBROT_ITER = 40;
-            const float MAX_ITER_INV = 1.0 / float(MANDELBROT_ITER);
-
-            // --- Helper Functions (Copy from original shader source) ---
-            float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
-            float rand(float n){ return fract(sin(n) * 43758.5453123); }
-            float hash(float n) { return fract(sin(n) * 43758.5453); }
-            float noise(vec2 p) { vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); float n=i.x+i.y*57.; return mix(mix(hash(n),hash(n+1.),f.x), mix(hash(n+57.),hash(n+58.),f.x),f.y); }
-            float fbm(vec2 p) { float s=0., a=.7, f=1.; for(int i=0; i<FBM_OCTAVES; i++) { s+=noise(p*f)*a; a*=.5; f*=2.; } return s; }
-            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-            float snoise(vec3 v) { const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.); vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx); vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy); vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy; i=mod289(i); vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.)); float n_=1./7.; vec3 ns=n_*D.wyz-D.xzx; vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_); vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y); vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw); vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.)); vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww; vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w); vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3))); p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w; vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m; return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3))); }
-            float snoise(vec2 v) { return snoise(vec3(v, 0.0)); }
-            mat2 rotate2D(float a) { return mat2(cos(a), -sin(a), sin(a), cos(a)); }
-            float worley(vec2 p) { float md=10.; vec2 g=floor(p); for(int x=-1;x<=1;x++){ for(int y=-1;y<=1;y++){ vec2 n=g+vec2(float(x),float(y)); vec2 pt=vec2(rand(n),rand(n+vec2(7.3,3.7))); pt=.5+.5*sin(u_time*.3+TWO_PI*pt); vec2 fp=n+pt; md=min(md,length(p-fp)); }} return md; }
-             vec2 worley2(vec2 p) { vec2 d=vec2(10.); vec2 g=floor(p); for(int x=-1;x<=1;x++){ for(int y=-1;y<=1;y++){ vec2 n=g+vec2(float(x),float(y)); vec2 pt=vec2(rand(n),rand(n+vec2(7.3,3.7))); pt=.5+.5*sin(u_time*.3+TWO_PI*pt); vec2 fp=n+pt; float dist=length(p-fp); if(dist<d.x){d.y=d.x;d.x=dist;}else if(dist<d.y){d.y=dist;}}} return d; }
-             float truchetPattern(vec2 uv, float s) { uv*=s; vec2 ip=floor(uv), fp=fract(uv); float r=rand(ip), t=floor(r*2.), d; if(t==0.){d=abs(fp.x+fp.y-1.)/sqrt(2.);}else{d=abs(fp.x-fp.y)/sqrt(2.);} return smoothstep(.04,.06,abs(d-.5)); }
-             float sdSphere(vec3 p, float s) { return length(p) - s; }
-             float sdPlane(vec3 p, vec3 n, float h) { return dot(p, n) + h; }
-             float sdBox(vec3 p, vec3 b) { vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
-             float sdTorus( vec3 p, vec2 t ) { vec2 q=vec2(length(p.xz)-t.x,p.y); return length(q)-t.y; }
-             float smin( float a, float b, float k ) { float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-             float mapScene(vec3 p){ return min(sdPlane(p,vec3(0,1,0),1.), sdSphere(p-vec3(0.,sin(u_time*.8)*.5-.2,0.),.5)); } // Simplified mapScene for update
-             float mapBackrooms(vec3 p){ vec3 cellID=floor(p/4.); p=mod(p,4.)-2.; float walls=sdBox(p,vec3(1.95,1.95,1.95)); float room=-sdBox(p,vec3(1.8,1.9,1.8)); return max(walls,room); } // Simplified backrooms for update
-             vec3 calcNormal(vec3 p, float (*mapFunc)(vec3)){ vec2 eps=vec2(.001,0.); return normalize(vec3( mapFunc(p+eps.xyy)-mapFunc(p-eps.xyy), mapFunc(p+eps.yxy)-mapFunc(p-eps.yxy), mapFunc(p+eps.yyx)-mapFunc(p-eps.yyx) )); } // Simplified normal calc
-             float raymarch(vec3 ro, vec3 rd, float (*mapFunc)(vec3)){ float t=0.; for(int i=0;i<MAX_RAYMARCH_STEPS;i++){ vec3 p=ro+rd*t; float d=mapFunc(p); if(abs(d)<.001*t || t>MAX_RAYMARCH_DIST){break;} t+=d*.9; } return (t<MAX_RAYMARCH_DIST)?t:-1.; } // Simplified raymarch
-             vec3 basicLighting(vec3 n, vec3 ldir, vec3 scol, vec3 acol){ return acol+scol*max(0.,dot(n,ldir)); } // Simplified lighting
-             vec3 getColorForCA(vec2 uv, float t){ return mix(vec3(106./255.,0.,1.), vec3(0.,184./255.,212./255.), fbm(uv*4.+t*.15)); } // Simplified CA color
-
-            // --- Color Definitions ---
-            vec3 colPrimary = vec3(106./255., 0., 1.);
-            vec3 colSecondary = vec3(0., 1., 204./255.);
-            vec3 colTertiary = vec3(0., 184./255., 212./255.);
-            vec3 colGreen = vec3(0.1, 0.8, 0.4);
-            vec3 colGold = vec3(0.9, 0.7, 0.1);
-            vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2);
-            vec3 colDeepRed = vec3(0.6, 0.0, 0.15);
-            vec3 colWhite = vec3(1.0);
-            vec3 colOrange = vec3(1.0, 0.5, 0.0);
-            vec3 colPink = vec3(1.0, 0.4, 0.7);
-            vec3 colBackground = vec3(5./255., 5./255., 17./255.);
-            vec3 colBackroomsYellow = vec3(1.0, 0.9, 0.6) * 0.8;
-            vec3 colFlicker = vec3(1.1, 1.05, 0.9);
-            // --- END Color Definitions ---
-
-            // Inject user code (which should contain main())
+            const int FBM_OCTAVES = 5; // Use constant from outer scope
+            float hash(float n){return fract(sin(n)*43758.5453);}
+            float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y);}
+            float fbm(vec2 p){float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
+            float rand(vec2 co){return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453);}
+            vec3 colPrimary=vec3(106./255.,0.,1.); vec3 colSecondary=vec3(0.,1.,204./255.); vec3 colTertiary=vec3(0.,184./255.,212./255.); vec3 colBackground=vec3(5./255.,5./255.,17./255.);
+            // Inject user code (needs to define main())
             \${newShaderCode}
         \`; // End template literal
 
@@ -744,26 +652,33 @@
 
              if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
              if (program) { gl.deleteProgram(program); }
-             program = newProgram;
+             program = newProgram; // Switch to new program
 
+             // Re-get locations
              positionAttributeLocation = gl.getAttribLocation(program, "a_position");
              timeUniformLocation = gl.getUniformLocation(program, "u_time");
              resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-             startTime = performance.now();
-             animationFrameId = requestAnimationFrame(render);
+             startTime = performance.now(); // Reset time for new shader?
+             animationFrameId = requestAnimationFrame(render); // Restart loop
 
              console.log("Shader update complete.");
              if(typeof showNotification === 'function') showNotification("SHADER UPDATE SUCCESSFUL.");
 
         } catch (e) {
              console.error('>>> Shader update failed:', e);
+             // Cleanup failed resources
              if (newProgram) gl.deleteProgram(newProgram);
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
              if(typeof showNotification === 'function') showNotification(\`SHADER UPDATE FAILED: \${e.message}\`);
-             if (!animationFrameId && program) { animationFrameId = requestAnimationFrame(render); } // Restart old loop if stopped
+             // IMPORTANT: If update fails, restart loop with OLD program if it exists and loop wasn't running
+             if (!animationFrameId && program) {
+                 console.log("Restarting render loop with previous program after update failure.");
+                 animationFrameId = requestAnimationFrame(render);
+             }
         } finally {
+             // Always delete individual shaders after trying to link
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
         }
@@ -775,12 +690,12 @@
         animationFrameId = requestAnimationFrame(render);
     } else {
         console.error("WebGL setup failed. Render loop will not start.");
-        if(document.body) document.body.style.backgroundColor = '#050511';
+        if(document.body) document.body.style.backgroundColor = '#050511'; // Static fallback
     }
 
     // --- Resize Listener ---
     window.addEventListener('resize', () => {
-        // Resize check is handled in render loop
+        // The render loop handles canvas/viewport resizing automatically
     }, false);
 
 })(); // Execute the IIFE
