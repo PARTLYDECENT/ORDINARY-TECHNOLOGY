@@ -4,10 +4,9 @@
     "use strict"; // Enable strict mode
 
     // --- WebGL Setup and Shader Logic ---
-    // --- (Derived from sources 200-548) ---
-
-    const webglCanvas = document.getElementById('webglCanvas');
-    let gl = null; // Keep gl scoped within this IIFE
+    // Line 3
+    const webglCanvas = document.getElementById('webglCanvas'); // Line 4 (Approximate target of error)
+    let gl = null; // Keep gl scoped within this IIFE // Line 5
 
     if (!webglCanvas) {
         console.error("WebGL Canvas element with id 'webglCanvas' not found!");
@@ -49,7 +48,7 @@
     `;
 
     // Fragment Shader (GLSL 3.00 ES - 20 Phases)
-    const fragmentShaderSource = `#version 300 es
+    const fragmentShaderSource = \`#version 300 es
         precision highp float; // Precision qualifier required in fragment shaders
 
         // Uniforms: Inputs from JavaScript
@@ -151,24 +150,23 @@
             // Final Output (ensure alpha is 1.0)
             outColor = vec4(clamp(color, 0.0, 1.0), 1.0);
         }
-    `;
+    \`; // Using template literal for easier multi-line string
 
     // --- WebGL Utility Functions ---
     function createShader(type, source) {
         const shader = gl.createShader(type);
-        if (!shader) { throw new Error(`Failed to create shader (type: ${type})`); }
+        if (!shader) { throw new Error(\`Failed to create shader (type: \${type})\`); }
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
             const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
             const infoLog = gl.getShaderInfoLog(shader);
-            console.error(`>>> Shader compile error (${shaderType}):\n${infoLog}`);
-            // Log source with line numbers for easier debugging
-            const lines = source.split('\n');
-            const sourceWithLines = lines.map((line, index) => `${index + 1}: ${line}`).join('\n');
-            console.error(`--- Shader Source (${shaderType}) ---\n${sourceWithLines}\n--------------------------`);
+            console.error(\`>>> Shader compile error (\${shaderType}):\\n\${infoLog}\`);
+            const lines = source.split('\\n');
+            const sourceWithLines = lines.map((line, index) => \`\${index + 1}: \${line}\`).join('\\n');
+            console.error(\`--- Shader Source (\${shaderType}) ---\\n\${sourceWithLines}\\n--------------------------\`);
             gl.deleteShader(shader);
-            throw new Error(`Shader compilation failed: ${shaderType}`);
+            throw new Error(\`Shader compilation failed: \${shaderType}\`);
         }
         return shader;
     }
@@ -182,20 +180,18 @@
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             const infoLog = gl.getProgramInfoLog(program);
             console.error('>>> Program link error:', infoLog);
-            // Log info about attached shaders if linking fails
             const shaders = gl.getAttachedShaders(program);
             if (shaders) {
                  shaders.forEach(shader => {
                      const type = gl.getShaderParameter(shader, gl.SHADER_TYPE);
                      const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
-                     console.error(`--- Attached ${shaderType} Shader Info Log ---\n${gl.getShaderInfoLog(shader)}`);
+                     console.error(\`--- Attached \${shaderType} Shader Info Log ---\\n\${gl.getShaderInfoLog(shader)}\`);
                  });
             }
             gl.deleteProgram(program);
             throw new Error("Program linking failed");
         }
-        // Detaching shaders after successful linking is good practice
-        // but not strictly required by WebGL spec. Can sometimes help resource management.
+        // Detach shaders after linking
         gl.detachShader(program, vertexShader);
         gl.detachShader(program, fragmentShader);
         return program;
@@ -207,7 +203,7 @@
     let timeUniformLocation = null;
     let resolutionUniformLocation = null;
     let positionBuffer = null;
-    let animationFrameId = null; // Keep track of animation frame request
+    let animationFrameId = null;
     let startTime = performance.now();
 
     // --- Initialize WebGL Program and Buffers ---
@@ -219,38 +215,31 @@
             fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
             program = createProgram(vs, fs);
 
-            // Get attribute/uniform locations (only need to do this once per program)
             positionAttributeLocation = gl.getAttribLocation(program, "a_position");
             timeUniformLocation = gl.getUniformLocation(program, "u_time");
             resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-            // Basic check if locations are valid
-            if (positionAttributeLocation === -1) console.warn("Attribute 'a_position' not found in shader program.");
-            if (!timeUniformLocation) console.warn("Uniform 'u_time' not found in shader program."); // Uniform location is object or null
-            if (!resolutionUniformLocation) console.warn("Uniform 'u_resolution' not found in shader program.");
+            if (positionAttributeLocation === -1) console.warn("Attribute 'a_position' not found.");
+            if (!timeUniformLocation) console.warn("Uniform 'u_time' not found.");
+            if (!resolutionUniformLocation) console.warn("Uniform 'u_resolution' not found.");
 
-            // Create buffer for the fullscreen quad positions
             positionBuffer = gl.createBuffer();
             if (!positionBuffer) throw new Error("Failed to create position buffer");
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-            // Use TRIANGLE_STRIP: (-1,1), (-1,-1), (1,1), (1,-1) covers the screen
             const positions = new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1]);
             gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-            return true; // Indicate successful setup
+            return true; // Success
 
         } catch (error) {
             console.error(">>> Failed during WebGL setup:", error);
-            // Clean up partial resources if error occurred
             if (program) gl.deleteProgram(program);
             if (vs) gl.deleteShader(vs);
             if (fs) gl.deleteShader(fs);
             if (positionBuffer) gl.deleteBuffer(positionBuffer);
-            program = null; // Ensure program is null if setup failed
-            return false; // Indicate setup failure
+            program = null;
+            return false; // Failure
         } finally {
-            // Delete shaders after program creation (whether successful or not)
-            // as they are linked into the program.
             if (vs) gl.deleteShader(vs);
             if (fs) gl.deleteShader(fs);
         }
@@ -258,175 +247,100 @@
 
     // --- Render Loop ---
     function render(now) {
-        if (!program) { // If program is null (setup failed or deleted), stop rendering
+        if (!program) {
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
             return;
         }
+        let time = (now - startTime) * 0.001;
 
-        // Calculate time elapsed
-        let time = (now - startTime) * 0.001; // Time in seconds
-
-        // --- Canvas Resize Check ---
-        // More efficient than resize event listener for continuous resizing
         const currentWidth = window.innerWidth;
         const currentHeight = window.innerHeight;
         if (webglCanvas.width !== currentWidth || webglCanvas.height !== currentHeight) {
             webglCanvas.width = currentWidth;
             webglCanvas.height = currentHeight;
-            // Update the WebGL viewport to match the new canvas size
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-            console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`);
         }
 
-        // --- Prepare for Drawing ---
-        // Clear might not be necessary if shader draws fullscreen opaque pixels
-        // gl.clearColor(0, 0, 0, 0); // Clear to transparent black
-        // gl.clear(gl.COLOR_BUFFER_BIT);
-
-        // Select the program to use
         gl.useProgram(program);
 
-        // --- Set up Vertex Attributes ---
         if (positionAttributeLocation !== -1 && positionBuffer) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); // Bind the position buffer
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
             gl.enableVertexAttribArray(positionAttributeLocation);
-            // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
-            gl.vertexAttribPointer(
-                positionAttributeLocation, // location
-                2,         // size (num components per iteration, vec2)
-                gl.FLOAT,  // type
-                false,     // normalize
-                0,         // stride (0 = use size * sizeof(type))
-                0          // offset (bytes from start of buffer)
-            );
+            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
         } else {
-            // Disable attribute if not used or buffer missing, prevents potential errors
-            if (positionAttributeLocation !== -1) gl.disableVertexAttribArray(positionAttributeLocation);
+             if (positionAttributeLocation !== -1) gl.disableVertexAttribArray(positionAttributeLocation);
         }
 
-        // --- Set Uniforms ---
-        if (timeUniformLocation) {
-           gl.uniform1f(timeUniformLocation, time);
-        }
-        if (resolutionUniformLocation) {
-           gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
-        }
+        if (timeUniformLocation) { gl.uniform1f(timeUniformLocation, time); }
+        if (resolutionUniformLocation) { gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height); }
 
-        // --- Draw the Quad ---
-        // Draw 4 vertices using the bound buffer and TRIANGLE_STRIP mode
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        // --- Request Next Frame ---
         animationFrameId = requestAnimationFrame(render);
     }
 
     // --- Function to Update Shader Dynamically ---
-    // Expose this function to the global scope so it can be called from index.html
+    // Expose to global scope
     window.updateShader = function(newShaderCode) {
         if (!gl) {
             console.warn("WebGL context not available. Cannot update shader.");
             if(typeof showNotification === 'function') showNotification("WebGL inactive. Cannot update shader.");
             return;
         }
-        console.log("Attempting shader update with new code...");
+        console.log("Attempting shader update...");
 
-        // Basic validation
         if (!newShaderCode || typeof newShaderCode !== 'string' || newShaderCode.indexOf('main()') === -1) {
-             console.error("Invalid shader code provided: Missing main() function or not a string.");
+             console.error("Invalid shader code provided: Missing main() or not a string.");
              if(typeof showNotification === 'function') showNotification("Invalid shader code: Missing main().");
-             console.error("Provided code:\n", newShaderCode);
              return;
         }
 
-        // Construct the full source for the new fragment shader, including essential parts
-         const completeNewFragmentSource = `#version 300 es
+         const completeNewFragmentSource = \`#version 300 es
             precision highp float;
             uniform float u_time;
             uniform vec2 u_resolution;
             out vec4 outColor;
-
-            // --- Include Common Helper Functions ---
-            const int FBM_OCTAVES = ${FBM_OCTAVES}; // Use the JS constant
-            float hash(float n) { return fract(sin(n) * 43758.5453); }
-            float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
-            float fbm(vec2 p) { float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
-            float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
-            // --- END Helper Functions ---
-
-            // --- Common Colors ---
-            vec3 colPrimary = vec3(106./255., 0., 1.);
-            vec3 colSecondary = vec3(0., 1., 204./255.);
-            vec3 colTertiary = vec3(0., 184./255., 212./255.);
-            vec3 colBackground = vec3(5./255., 5./255., 17./255.);
-            // --- END Colors ---
-
-            // --- User Provided Shader Code ---
-            ${newShaderCode}
-            // --- End User Code ---
-        `;
+            const int FBM_OCTAVES = \${FBM_OCTAVES};
+            float hash(float n){return fract(sin(n)*43758.5453);}
+            float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y);}
+            float fbm(vec2 p){float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
+            float rand(vec2 co){return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453);}
+            vec3 colPrimary=vec3(106./255.,0.,1.); vec3 colSecondary=vec3(0.,1.,204./255.); vec3 colTertiary=vec3(0.,184./255.,212./255.); vec3 colBackground=vec3(5./255.,5./255.,17./255.);
+            \${newShaderCode} // Inject user code
+        \`; // Using template literal
 
         let newVs = null;
         let newFs = null;
         let newProgram = null;
         try {
-             // Recompile the vertex shader (it's simple, but good practice)
              newVs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-             // Compile the new fragment shader
              newFs = createShader(gl.FRAGMENT_SHADER, completeNewFragmentSource);
-             // Link the new program
              newProgram = createProgram(newVs, newFs);
 
-             // --- Success! Switch to the new program ---
              console.log("New shader compiled and linked successfully.");
 
-             // Stop the old animation loop before changing the program
-             if (animationFrameId) {
-                 cancelAnimationFrame(animationFrameId);
-                 animationFrameId = null;
-             }
+             if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+             if (program) { gl.deleteProgram(program); }
+             program = newProgram;
 
-             // Delete the old program *before* assigning the new one
-             if (program) {
-                 gl.deleteProgram(program);
-                 console.log("Old program deleted.");
-             }
-             program = newProgram; // Assign the new program
-
-             // Re-get all attribute and uniform locations for the *new* program
              positionAttributeLocation = gl.getAttribLocation(program, "a_position");
              timeUniformLocation = gl.getUniformLocation(program, "u_time");
              resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-             // Optional: Check new locations for debugging
-             if (positionAttributeLocation === -1) console.warn("New program missing 'a_position' attribute.");
-             if (!timeUniformLocation) console.warn("New program missing 'u_time' uniform.");
-             if (!resolutionUniformLocation) console.warn("New program missing 'u_resolution' uniform.");
-
-             // Restart the render loop with the new program
-             startTime = performance.now(); // Optionally reset start time
+             startTime = performance.now();
              animationFrameId = requestAnimationFrame(render);
 
-             console.log("Shader update complete. Render loop restarted.");
-              if(typeof showNotification === 'function') showNotification("SHADER UPDATE SUCCESSFUL.");
+             console.log("Shader update complete.");
+             if(typeof showNotification === 'function') showNotification("SHADER UPDATE SUCCESSFUL.");
 
         } catch (e) {
-             console.error('>>> Shader update failed during compile/link:', e);
-             // Clean up partially created resources from the failed update attempt
-             if (newProgram) gl.deleteProgram(newProgram); // Should be null if link failed, but check anyway
+             console.error('>>> Shader update failed:', e);
+             if (newProgram) gl.deleteProgram(newProgram);
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
-             // Do NOT delete the old 'program' if the update failed, keep it running
-             if(typeof showNotification === 'function') showNotification(`SHADER UPDATE FAILED: ${e.message}`);
-
-             // If the render loop was stopped, restart it with the old program
-             if (!animationFrameId && program) {
-                console.log("Restarting render loop with previous program after update failure.");
-                animationFrameId = requestAnimationFrame(render);
-             }
-
+             if(typeof showNotification === 'function') showNotification(\`SHADER UPDATE FAILED: \${e.message}\`);
+             if (!animationFrameId && program) { animationFrameId = requestAnimationFrame(render); } // Restart old loop if stopped
         } finally {
-             // Delete the new shaders regardless of success, as they are now linked (or failed)
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
         }
@@ -434,27 +348,16 @@
 
     // --- Start WebGL ---
     if (setupWebGL()) {
-        // Start the rendering loop only if setup was successful
         console.log("WebGL setup successful. Starting render loop.");
         animationFrameId = requestAnimationFrame(render);
     } else {
         console.error("WebGL setup failed. Render loop will not start.");
-        // Ensure static background as fallback
         if(document.body) document.body.style.backgroundColor = '#050511';
     }
 
     // --- Resize Listener ---
-    // Handles canvas buffer resizing via check in render loop, but good to have listener too.
     window.addEventListener('resize', () => {
-        // The actual resizing logic is handled within the render loop check
-        // This listener ensures responsiveness if the loop somehow stops temporarily
-        // and helps trigger the check on resize events.
-        if (!animationFrameId && program) {
-            // If the loop isn't running but we have a program, request a frame
-            // This might happen if the tab was hidden and the loop stopped
-            console.log("Resize event: Requesting animation frame.");
-            animationFrameId = requestAnimationFrame(render);
-        }
-    }, false); // Use passive: true? Might improve scroll perf slightly if listener is heavy.
+        // Resize check is handled in render loop
+    }, false);
 
 })(); // Execute the IIFE
