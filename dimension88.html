@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA 1-Style Action Sim V3 - Enhanced</title>
+    <title>Wasteland Action Sim</title>
     <style>
-        /* CSS remains the same */
         body { margin: 0; padding: 0; background-color: #111; overflow: hidden; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         #game-container { position: relative; }
         #gameCanvas { border: 2px solid #444; background-color: #000; display: block; image-rendering: pixelated; cursor: crosshair; }
@@ -20,6 +19,9 @@
         #mini-map canvas { display: block; }
         #controls-display { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: #bbb; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 11px; text-align: center; border: 1px solid #444; z-index: 10; white-space: nowrap; }
         #mission-text, #stats { display: none; } /* Hide placeholders */
+        #weapon-display { position: absolute; bottom: 10px; right: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; }
+        #vehicle-display { position: absolute; top: 40px; left: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; display: none;} /* Added vehicle display */
+        #error-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-size: 20px; background-color: rgba(0, 0, 0, 0.8); padding: 20px; border-radius: 10px; border: 2px solid red; z-index: 100; display: none; } /* Error display */
     </style>
 </head>
 <body>
@@ -30,15 +32,16 @@
              <div id="speed-line">SPD: <span id="speed">0</span></div>
              <div id="fuel-line">FUEL: <div id="fuel-bar"><div id="fuel-level"></div></div></div>
              <div id="location">LOCATION: UNKNOWN</div>
-             <div id="enemy-count">ENEMIES: <span id="enemies-left">0</span></div>
-         </div>
+             <div id="enemy-count">ZOMBIES: <span id="enemies-left">0</span></div> </div>
          <div id="mini-map"></div>
          <div id="controls-display">
-             WASD/Arrows: Move | E: Enter/Exit | F: Refuel | SPACE: Handbrake | SHIFT: Fire
+             WASD/Arrows: Move | E: Enter/Exit | F: Refuel | SPACE: Handbrake | SHIFT/Click: Fire | Q: Switch Weapon
          </div>
-        <div id="mission-text"></div>
+        <div id="weapon-display">WEAPON: PISTOL</div>
+        <div id="vehicle-display">VEHICLE: NONE</div> <div id="mission-text"></div>
         <div id="stats"></div>
     </div>
+    <div id="error-display">An error occurred. Check the console for details.</div>
 
     <script>
         // --- Canvas and Context ---
@@ -49,6 +52,11 @@
         miniMapContainer.appendChild(miniMapCtx.canvas);
         miniMapCtx.canvas.width = 120; miniMapCtx.canvas.height = 120;
 
+        // --- Audio Context ---
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let engineNoiseOscillator = null;
+        let engineNoiseGain = null;
+
         // --- Constants ---
         // Player Ped Size
         const PLAYER_PED_WIDTH = 6;
@@ -57,76 +65,299 @@
         const ENEMY_WIDTH = PLAYER_PED_WIDTH;
         const ENEMY_HEIGHT = PLAYER_PED_HEIGHT;
 
+        // Projectile Constants
         const PROJECTILE_SPEED = 8;
         const PROJECTILE_LIFESPAN = 60;
         const PROJECTILE_DAMAGE_PLAYER = 12; // Enemy damage to player
-        const PROJECTILE_DAMAGE_ENEMY = 18; // Player damage to enemy
-        const ENEMY_HEALTH = 50; // Increased health slightly
-        const ENEMY_SPEED = 1.3;
-        const ENEMY_CHASE_DIST = 350;
-        const ENEMY_SHOOT_DIST = 250; // Range at which enemies start shooting
-        const ENEMY_FIRE_RATE = 45; // Frames between enemy shots
-        const ENEMY_BULLET_SPREAD = 5; // Enemy accuracy spread
+        const PROJECTILE_DAMAGE_PISTOL = 18; // Player pistol damage to enemy
+        const PROJECTILE_DAMAGE_MACHINEGUN = 10; // Player machine gun damage to enemy
+
+        const ZOMBIE_HEALTH = 40; // Slightly less health for zombies
+        const ZOMBIE_SPEED = 1.0; // Slower zombie speed
+        const ZOMBIE_MELEE_DAMAGE = 15; // Damage when zombies hit player
+        const ZOMBIE_ATTACK_COOLDOWN = 60; // Frames between zombie attacks
+        const ENEMY_CHASE_DIST = 350; // Still use this for aggro range
         const PLAYER_ENTER_VEHICLE_RANGE = 30;
-        const ANIM_SPEED = 6; // Lower = faster animation
+        const ANIM_SPEED = 8; // Slower animation for zombies
+
+        // Weapon Properties
+        const WEAPONS = {
+            'pistol': {
+                fireRate: 10,
+                bulletSpread: 3,
+                damage: PROJECTILE_DAMAGE_PISTOL,
+                color: '#ff0' // Yellow bullets
+            },
+            'machinegun': {
+                fireRate: 5, // Faster fire rate
+                bulletSpread: 8, // More spread
+                damage: PROJECTILE_DAMAGE_MACHINEGUN,
+                color: '#ffa500' // Orange bullets
+            }
+        };
+
+        // Vehicle Properties
+        const VEHICLE_TYPES = {
+            'sedan': {
+                width: 20, height: 36, maxSpeed: 5, acceleration: 0.1, deceleration: 0.05, handling: 3.5, fuelConsumption: 0.02, color: '#0066cc'
+            },
+            'truck': {
+                width: 25, height: 45, maxSpeed: 3.5, acceleration: 0.07, deceleration: 0.03, handling: 2.5, fuelConsumption: 0.03, color: '#8b4513' // Brown
+            },
+            'sportsCar': {
+                width: 18, height: 34, maxSpeed: 7, acceleration: 0.15, deceleration: 0.06, handling: 4, fuelConsumption: 0.025, color: '#dc143c' // Crimson
+            },
+             'buggy': {
+                width: 18, height: 30, maxSpeed: 6, acceleration: 0.12, deceleration: 0.04, handling: 4.5, fuelConsumption: 0.018, color: '#9acd32' // YellowGreen
+             }
+        };
+
 
         // --- Game State ---
         const gameState = {
             playerState: 'driving',
             player: {
-                x: 1500, y: 1500, width: 20, height: 36, speed: 0, maxSpeed: 5,
-                acceleration: 0.1, deceleration: 0.05, handling: 3.5, angle: 0,
-                fuelLevel: 100, fuelConsumption: 0.02, color: '#0066cc',
-                health: 100, maxHealth: 100,
+                x: 1500, y: 1500, speed: 0, angle: 0,
+                fuelLevel: 100, health: 100, maxHealth: 100,
                 pedWidth: PLAYER_PED_WIDTH, pedHeight: PLAYER_PED_HEIGHT, pedSpeed: 1.5,
-                isMoving: false, // Renamed from isWalking for clarity
-                animTimer: 0, animFrame: 0, // 0-3 for 4 frames
+                isMoving: false,
+                animTimer: 0, animFrame: 0,
                 animSpeed: ANIM_SPEED,
-                fireCooldown: 0, fireRate: 10, // Faster player fire rate
-                bulletSpread: 3
+                fireCooldown: 0,
+                currentWeapon: 'pistol',
+                hasMachineGun: false,
+                killedEnemiesCount: 0,
+                // Current Vehicle Properties (copied from VEHICLE_TYPES when entering)
+                width: VEHICLE_TYPES.sedan.width,
+                height: VEHICLE_TYPES.sedan.height,
+                maxSpeed: VEHICLE_TYPES.sedan.maxSpeed,
+                acceleration: VEHICLE_TYPES.sedan.acceleration,
+                deceleration: VEHICLE_TYPES.sedan.deceleration,
+                handling: VEHICLE_TYPES.sedan.handling,
+                fuelConsumption: VEHICLE_TYPES.sedan.fuelConsumption,
+                color: VEHICLE_TYPES.sedan.color,
+                currentVehicleType: 'sedan' // Track current vehicle type
             },
             camera: { x: 0, y: 0, width: canvas.width, height: canvas.height },
-            controls: { up: false, down: false, left: false, right: false, handbrake: false, refuel: false, fire: false, enterExit: false, enterExitProcessed: false },
+            controls: { up: false, down: false, left: false, right: false, handbrake: false, refuel: false, fire: false, enterExit: false, enterExitProcessed: false, switchWeapon: false, switchWeaponProcessed: false, mouseFire: false },
             world: {
-                width: 3000, height: 3000, roadWidth: 60, grassColor: '#1a3d0c',
-                roadColor: '#333', lineColor: '#fff', lineWidth: 2,
+                width: 3000, height: 3000, roadWidth: 60, grassColor: '#8B8467', // Wasteland ground color
+                roadColor: '#5A5240', lineColor: '#A09888', lineWidth: 2, // Desaturated road colors
                 trees: [], buildings: [], obstacles: [], gasStations: [],
-                vehicles: [], enemies: [], projectiles: [],
-                impassableZones: [ { type: 'water', x: 2200, y: 2200, width: 500, height: 600, color: 'rgba(50, 80, 150, 0.6)' }, { type: 'restricted', x: 100, y: 100, width: 400, height: 500, color: 'rgba(100, 100, 100, 0.4)' } ],
+                vehicles: [], enemies: [], projectiles: [], // Enemies are now zombies
+                impassableZones: [ { type: 'rocky', x: 2200, y: 2200, width: 500, height: 600, color: 'rgba(90, 80, 70, 0.6)' }, { type: 'ruins', x: 100, y: 100, width: 400, height: 500, color: 'rgba(120, 110, 100, 0.4)' } ], // Wasteland impassable zones
                 startTime: Date.now()
             },
             fx: { skidMarks: [], dustParticles: [], explosions: [], muzzleFlashes: [], hitSparks: [] },
-            zones: [ {name: "DOWNTOWN", x: 1000, y: 1000, radius: 600}, {name: "FOREST HILLS", x: 600, y: 2200, radius: 500}, {name: "EASTERN PLAINS", x: 2200, y: 1800, radius: 400}, {name: "INDUSTRIAL PARK", x: 2000, y: 500, radius: 350} ],
+            zones: [ {name: "SCRAPYARD", x: 1000, y: 1000, radius: 600}, {name: "CAYON PASS", x: 600, y: 2200, radius: 500}, {name: "DUST FLATS", x: 2200, y: 1800, radius: 400}, {name: "BROKEN CITY", x: 2000, y: 500, radius: 350} ], // Wasteland zones
             gameOver: false
         };
 
-        // --- Roads Data ---
-        const roads = [ {x1: 0, y1: 1000, x2: gameState.world.width, y2: 1000}, {x1: 0, y1: 2000, x2: gameState.world.width, y2: 2000}, {x1: 1000, y1: 0, x2: 1000, y2: gameState.world.height}, {x1: 2000, y1: 0, x2: 2000, y2: gameState.world.height}, {x1: 500, y1: 500, x2: 1500, y2: 1500}, {x1: 2500, y1: 500, x2: 1500, y2: 1500}, {x1: 500, y1: 2500, x2: 1500, y2: 1500}, {x1: 2500, y1: 2500, x2: 1500, y2: 1500}, {x1: 200, y1: 1000, x2: 500, y2: 1200}, {x1: 2800, y1: 1000, x2: 2500, y2: 1200}, {x1: 200, y1: 2000, x2: 500, y2: 1800}, {x1: 2800, y1: 2000, x2: 2500, y2: 1800} ];
+        // --- Roads Data (Adjusted for potential broken roads) ---
+        const roads = [
+            {x1: 0, y1: 1000, x2: gameState.world.width, y2: 1000},
+            {x1: 0, y1: 2000, x2: gameState.world.width, y2: 2000},
+            {x1: 1000, y1: 0, x2: 1000, y2: gameState.world.height},
+            {x1: 2000, y1: 0, x2: 2000, y2: gameState.world.height},
+            // Add some broken segments or less defined paths
+            {x1: 500, y1: 500, x2: 700, y2: 700},
+            {x1: 800, y1: 800, x2: 1500, y2: 1500},
+            {x1: 2500, y1: 500, x2: 2300, y2: 700},
+            {x1: 2200, y1: 800, x2: 1500, y2: 1500},
+            {x1: 500, y1: 2500, x2: 700, y2: 2300},
+            {x1: 800, y1: 2200, x2: 1500, y2: 1500},
+            {x1: 2500, y1: 2500, x2: 2300, y2: 2300},
+            {x1: 2200, y1: 2200, x2: 1500, y2: 1500},
+        ];
+
 
         // --- Input Handling ---
         window.addEventListener('keydown', (e) => { handleKeyInput(e, true); });
         window.addEventListener('keyup', (e) => { handleKeyInput(e, false); });
-        function handleKeyInput(e, isPressed) { const key = e.key.toLowerCase(); switch(key) { case 'arrowup': case 'w': gameState.controls.up = isPressed; break; case 'arrowdown': case 's': gameState.controls.down = isPressed; break; case 'arrowleft': case 'a': gameState.controls.left = isPressed; break; case 'arrowright': case 'd': gameState.controls.right = isPressed; break; case ' ': gameState.controls.handbrake = isPressed; break; case 'f': gameState.controls.refuel = isPressed; break; case 'shift': gameState.controls.fire = isPressed; break; case 'e': if (isPressed && !gameState.controls.enterExitProcessed) { gameState.controls.enterExit = true; gameState.controls.enterExitProcessed = true; } else if (!isPressed) { gameState.controls.enterExitProcessed = false; } break; } if ((key === ' ' || key === 'shift' || key.startsWith('arrow')) && isPressed) e.preventDefault(); }
+        canvas.addEventListener('mousedown', (e) => { if (e.button === 0) gameState.controls.mouseFire = true; }); // Left click
+        canvas.addEventListener('mouseup', (e) => { if (e.button === 0) gameState.controls.mouseFire = false; });
+
+        function handleKeyInput(e, isPressed) {
+            const key = e.key.toLowerCase();
+            switch(key) {
+                case 'arrowup': case 'w': gameState.controls.up = isPressed; break;
+                case 'arrowdown': case 's': gameState.controls.down = isPressed; break;
+                case 'arrowleft': case 'a': gameState.controls.left = isPressed; break;
+                case 'arrowright': case 'd': gameState.controls.right = isPressed; break;
+                case ' ': gameState.controls.handbrake = isPressed; break;
+                case 'f': gameState.controls.refuel = isPressed; break;
+                case 'shift': gameState.controls.fire = isPressed; break;
+                case 'e':
+                    if (isPressed && !gameState.controls.enterExitProcessed) {
+                        gameState.controls.enterExit = true;
+                        gameState.controls.enterExitProcessed = true;
+                    } else if (!isPressed) {
+                        gameState.controls.enterExitProcessed = false;
+                    }
+                    break;
+                case 'q': // Weapon switch key
+                    if (isPressed && !gameState.controls.switchWeaponProcessed) {
+                         gameState.controls.switchWeapon = true;
+                         gameState.controls.switchWeaponProcessed = true;
+                    } else if (!isPressed) {
+                         gameState.controls.switchWeaponProcessed = false;
+                    }
+                    break;
+            }
+            // Prevent default for movement and actions to stop scrolling/other browser behavior
+            if ((key === ' ' || key === 'shift' || key.startsWith('arrow') || key === 'e' || key === 'q') && isPressed) {
+                 e.preventDefault();
+            }
+        }
+
+        // --- Weapon Switching Logic ---
+        function handleWeaponSwitch() {
+            if (!gameState.controls.switchWeapon || gameState.playerState !== 'onFoot') return;
+
+            if (gameState.player.hasMachineGun) {
+                if (gameState.player.currentWeapon === 'pistol') {
+                    gameState.player.currentWeapon = 'machinegun';
+                } else {
+                    gameState.player.currentWeapon = 'pistol';
+                }
+            }
+            // Update HUD
+            document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`;
+
+            gameState.controls.switchWeapon = false;
+        }
+
 
         // --- Enter/Exit Vehicle Logic ---
-        function handleEnterExitAction() { if (!gameState.controls.enterExit) return; if (gameState.playerState === 'driving') { const parkedCar = { x: gameState.player.x, y: gameState.player.y, width: gameState.player.width, height: gameState.player.height, angle: gameState.player.angle, color: gameState.player.color, maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling, fuelLevel: gameState.player.fuelLevel }; gameState.world.vehicles.push(parkedCar); gameState.playerState = 'onFoot'; const exitOffset = (gameState.player.width / 2) + 5 + gameState.player.pedWidth / 2; const exitAngleRad = (gameState.player.angle - 90) * Math.PI / 180; gameState.player.x += Math.cos(exitAngleRad) * exitOffset; gameState.player.y += Math.sin(exitAngleRad) * exitOffset; gameState.player.speed = 0; } else if (gameState.playerState === 'onFoot') { let closestCar = null; let minDistanceSq = PLAYER_ENTER_VEHICLE_RANGE * PLAYER_ENTER_VEHICLE_RANGE; for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) { const car = gameState.world.vehicles[i]; const dx = gameState.player.x - car.x; const dy = gameState.player.y - car.y; const distanceSq = dx * dx + dy * dy; if (distanceSq < minDistanceSq) { minDistanceSq = distanceSq; closestCar = car; closestCar.index = i; } } if (closestCar) { gameState.playerState = 'driving'; gameState.player.x = closestCar.x; gameState.player.y = closestCar.y; gameState.player.width = closestCar.width; gameState.player.height = closestCar.height; gameState.player.angle = closestCar.angle; gameState.player.color = closestCar.color; gameState.player.maxSpeed = closestCar.maxSpeed; gameState.player.handling = closestCar.handling; gameState.player.fuelLevel = closestCar.fuelLevel; gameState.player.speed = 0; gameState.world.vehicles.splice(closestCar.index, 1); } } gameState.controls.enterExit = false; }
+        function handleEnterExitAction() {
+            if (!gameState.controls.enterExit) return;
+
+            if (gameState.playerState === 'driving') {
+                // Store current vehicle properties before exiting
+                const parkedCar = {
+                    x: gameState.player.x, y: gameState.player.y,
+                    width: gameState.player.width, height: gameState.player.height,
+                    angle: gameState.player.angle, color: gameState.player.color,
+                    maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling,
+                    fuelLevel: gameState.player.fuelLevel,
+                    type: gameState.player.currentVehicleType // Store vehicle type
+                };
+                gameState.world.vehicles.push(parkedCar);
+
+                gameState.playerState = 'onFoot';
+                const exitOffset = (gameState.player.width / 2) + 5 + gameState.player.pedWidth / 2;
+                const exitAngleRad = (gameState.player.angle - 90) * Math.PI / 180;
+                gameState.player.x += Math.cos(exitAngleRad) * exitOffset;
+                gameState.player.y += Math.sin(exitAngleRad) * exitOffset;
+                gameState.player.speed = 0;
+                stopEngineNoise();
+                 document.getElementById('vehicle-display').style.display = 'none'; // Hide vehicle display
+            } else if (gameState.playerState === 'onFoot') {
+                let closestCar = null;
+                let minDistanceSq = PLAYER_ENTER_VEHICLE_RANGE * PLAYER_ENTER_VEHICLE_RANGE;
+
+                for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) {
+                    const car = gameState.world.vehicles[i];
+                    const dx = gameState.player.x - car.x;
+                    const dy = gameState.player.y - car.y;
+                    const distanceSq = dx * dx + dy * dy;
+
+                    if (distanceSq < minDistanceSq) {
+                        minDistanceSq = distanceSq;
+                        closestCar = car;
+                        closestCar.index = i; // Store index for removal
+                    }
+                }
+
+                if (closestCar) {
+                    gameState.playerState = 'driving';
+                    // Transfer vehicle properties to player
+                    gameState.player.x = closestCar.x;
+                    gameState.player.y = closestCar.y;
+                    gameState.player.width = closestCar.width;
+                    gameState.player.height = closestCar.height;
+                    gameState.player.angle = closestCar.angle;
+                    gameState.player.color = closestCar.color;
+                    gameState.player.maxSpeed = closestCar.maxSpeed;
+                    gameState.player.acceleration = VEHICLE_TYPES[closestCar.type].acceleration; // Ensure correct acceleration
+                    gameState.player.deceleration = VEHICLE_TYPES[closestCar.type].deceleration; // Ensure correct deceleration
+                    gameState.player.handling = closestCar.handling;
+                    gameState.player.fuelLevel = closestCar.fuelLevel;
+                    gameState.player.fuelConsumption = VEHICLE_TYPES[closestCar.type].fuelConsumption; // Ensure correct fuel consumption
+                    gameState.player.speed = 0;
+                    gameState.player.currentVehicleType = closestCar.type; // Set current vehicle type
+
+                    gameState.world.vehicles.splice(closestCar.index, 1); // Remove vehicle from world
+
+                    startEngineNoise();
+                    document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`; // Update vehicle display
+                    document.getElementById('vehicle-display').style.display = ''; // Show vehicle display
+                }
+            }
+            gameState.controls.enterExit = false;
+        }
+
 
         // --- Player Firing Logic ---
-        function handlePlayerFiring() { if (gameState.playerState === 'onFoot' && gameState.controls.fire && gameState.player.fireCooldown <= 0) { const spreadRad = (Math.random() - 0.5) * gameState.player.bulletSpread * (Math.PI / 180); const fireAngleRad = gameState.player.angle * Math.PI / 180 + spreadRad; const muzzleOffsetX = Math.sin(fireAngleRad) * (gameState.player.pedWidth / 2 + 2); // Adjusted muzzle offset
-                const muzzleOffsetY = -Math.cos(fireAngleRad) * (gameState.player.pedHeight / 2 + 2); // Adjusted muzzle offset
+        function handlePlayerFiring() {
+            const currentWeaponProps = WEAPONS[gameState.player.currentWeapon];
+            const isFiring = (gameState.controls.fire || gameState.controls.mouseFire) && gameState.playerState === 'onFoot';
+
+            if (isFiring && gameState.player.fireCooldown <= 0) {
+                const spreadRad = (Math.random() - 0.5) * currentWeaponProps.bulletSpread * (Math.PI / 180);
+                const fireAngleRad = gameState.player.angle * Math.PI / 180 + spreadRad;
+                const muzzleOffsetX = Math.sin(fireAngleRad) * (gameState.player.pedWidth / 2 + 2);
+                const muzzleOffsetY = -Math.cos(fireAngleRad) * (gameState.player.pedHeight / 2 + 2);
                 const startX = gameState.player.x + muzzleOffsetX;
                 const startY = gameState.player.y + muzzleOffsetY;
-                gameState.world.projectiles.push({ x: startX, y: startY, vx: Math.sin(fireAngleRad) * PROJECTILE_SPEED, vy: -Math.cos(fireAngleRad) * PROJECTILE_SPEED, lifespan: PROJECTILE_LIFESPAN, owner: 'player', damage: PROJECTILE_DAMAGE_ENEMY, color: '#ff0' }); createMuzzleFlash(startX, startY); gameState.player.fireCooldown = gameState.player.fireRate; } if (gameState.player.fireCooldown > 0) gameState.player.fireCooldown--; }
+
+                gameState.world.projectiles.push({
+                    x: startX, y: startY,
+                    vx: Math.sin(fireAngleRad) * PROJECTILE_SPEED,
+                    vy: -Math.cos(fireAngleRad) * PROJECTILE_SPEED,
+                    lifespan: PROJECTILE_LIFESPAN,
+                    owner: 'player',
+                    damage: currentWeaponProps.damage,
+                    color: currentWeaponProps.color
+                });
+
+                createMuzzleFlash(startX, startY);
+                playShotSound(gameState.player.currentWeapon); // Play sound
+                gameState.player.fireCooldown = currentWeaponProps.fireRate;
+            }
+
+            if (gameState.player.fireCooldown > 0) {
+                gameState.player.fireCooldown--;
+            }
+        }
 
         // --- Game Loop ---
-        function gameLoop() { if (gameState.gameOver) { drawGameOver(); requestAnimationFrame(gameLoop); return; } handleEnterExitAction(); handlePlayerFiring(); updateGame(); renderGame(); requestAnimationFrame(gameLoop); }
+        function gameLoop() {
+            try {
+                if (gameState.gameOver) {
+                    drawGameOver();
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
+                handleEnterExitAction();
+                handleWeaponSwitch();
+                handlePlayerFiring();
+                updateGame();
+                renderGame();
+                requestAnimationFrame(gameLoop);
+            } catch (error) {
+                console.error("Error in gameLoop:", error);
+                document.getElementById('error-display').style.display = 'block';
+            }
+        }
 
         // --- Update Logic ---
         function updateGame() { updatePlayerPosition(); updateEnemies(); updateProjectiles(); updateCamera(); updateParticlesAndEffects(); updateHUD(); checkGameOverCondition(); }
 
         // --- Player Update ---
-        function updatePlayerPosition() { const oldX = gameState.player.x; const oldY = gameState.player.y; if (gameState.playerState === 'driving') { updateDrivingPhysics(); checkGasStations(); } else if (gameState.playerState === 'onFoot') { updateWalkingPhysics(); } checkCollisions(oldX, oldY, gameState.player, gameState.playerState); }
-        function updateDrivingPhysics() { if (gameState.controls.up && gameState.player.fuelLevel > 0) { gameState.player.speed += gameState.player.acceleration; gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + Math.abs(gameState.player.speed) / gameState.player.maxSpeed); if (Math.random() > 0.7 && Math.abs(gameState.player.speed) > 1) createDustParticle(true); } else if (gameState.controls.down) { if (gameState.player.speed > 0.1) gameState.player.speed -= gameState.player.deceleration * 3; else { gameState.player.speed -= gameState.player.acceleration / 1.5; if (gameState.player.fuelLevel > 0) gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.5; } } else { if (Math.abs(gameState.player.speed) < gameState.player.deceleration) gameState.player.speed = 0; else if (gameState.player.speed > 0) gameState.player.speed -= gameState.player.deceleration; else gameState.player.speed += gameState.player.deceleration; } if (gameState.player.speed > gameState.player.maxSpeed) gameState.player.speed = gameState.player.maxSpeed; const maxReverseSpeed = gameState.player.maxSpeed / 2; if (gameState.player.speed < -maxReverseSpeed) gameState.player.speed = -maxReverseSpeed; if (Math.abs(gameState.player.speed) > 0.5) { let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.7 : 1); let speedModifier = 1.0 - (Math.abs(gameState.player.speed) / (gameState.player.maxSpeed * 1.5)); speedModifier = Math.max(0.3, speedModifier); let turnDirection = gameState.player.speed >= 0 ? 1 : -1; if (gameState.controls.left) { gameState.player.angle -= steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } if (gameState.controls.right) { gameState.player.angle += steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } } if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > 0.5) { gameState.player.speed *= 0.94; if (Math.random() > 0.4) createSkidMark(); } if (gameState.player.fuelLevel < 0) gameState.player.fuelLevel = 0; if (Math.abs(gameState.player.speed) > 0.01) { const radians = gameState.player.angle * Math.PI / 180; gameState.player.x += Math.sin(radians) * gameState.player.speed; gameState.player.y -= Math.cos(radians) * gameState.player.speed; } }
+        function updatePlayerPosition() { const oldX = gameState.player.x; const oldY = gameState.player.y; if (gameState.playerState === 'driving') { updateDrivingPhysics(); checkGasStations(); updateEngineNoise(); } else if (gameState.playerState === 'onFoot') { updateWalkingPhysics(); stopEngineNoise(); } checkCollisions(oldX, oldY, gameState.player, gameState.playerState); }
+        function updateDrivingPhysics() { if (gameState.controls.up && gameState.player.fuelLevel > 0) { gameState.player.speed += gameState.player.acceleration; gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + Math.abs(gameState.player.speed) / gameState.player.maxSpeed); if (Math.random() > 0.7 && Math.abs(gameState.player.speed) > 1) createDustParticle(true); } else if (gameState.controls.down) { if (gameState.player.speed > 0.1) gameState.player.speed -= gameState.player.deceleration * 3; else { gameState.player.speed -= gameState.player.acceleration / 1.5; if (gameState.player.fuelLevel > 0) gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.5; } } else { if (Math.abs(gameState.player.speed) < gameState.player.deceleration) gameState.player.speed = 0; else if (gameState.player.speed > 0) gameState.player.speed -= gameState.player.deceleration; else gameState.player.speed += gameState.player.deceleration; } if (gameState.player.speed > gameState.player.maxSpeed) gameState.player.speed = gameState.player.maxSpeed; const maxReverseSpeed = gameState.player.maxSpeed / 2; if (gameState.player.speed < -maxReverseSpeed) gameState.player.speed = -maxReverseSpeed; if (Math.abs(gameState.player.speed) > 0.5) { let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.7 : 1); let speedModifier = 1.0 - (Math.abs(gameState.player.speed) / (gameState.player.maxSpeed * 1.5)); speedModifier = Math.max(0.3, speedModifier); let turnDirection = gameState.player.speed >= 0 ? 1 : -1; if (gameState.controls.left) { gameState.player.angle -= steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } if (gameState.controls.right) { gameState.player.angle += steeringFactor * speedModifier * turnDirection; // Adjusted steering factor application
+                if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } } if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > 0.5) { gameState.player.speed *= 0.94; if (Math.random() > 0.4) createSkidMark(); } if (gameState.player.fuelLevel < 0) gameState.player.fuelLevel = 0; if (Math.abs(gameState.player.speed) > 0.01) { const radians = gameState.player.angle * Math.PI / 180; gameState.player.x += Math.sin(radians) * gameState.player.speed; gameState.player.y -= Math.cos(radians) * gameState.player.speed; } }
         function updateWalkingPhysics() {
              let moveX = 0; let moveY = 0; const speed = gameState.player.pedSpeed;
              if (gameState.controls.up) moveY -= speed; if (gameState.controls.down) moveY += speed;
@@ -148,108 +379,72 @@
              }
         }
 
-        // --- Enemy Logic (With Shooting) ---
-        function spawnEnemy(x, y) {
+        // --- Zombie Logic (Melee Only) ---
+        function spawnEnemy(x, y) { // Renamed function conceptually, still uses 'enemies' array
             gameState.world.enemies.push({
-                x: x, y: y, health: ENEMY_HEALTH, maxHealth: ENEMY_HEALTH,
-                width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ENEMY_SPEED, angle: 0,
-                color: `hsl(${Math.random() * 60}, 70%, 50%)`, state: 'idle',
-                aiTimer: Math.random() * 120,
-                // Shooting properties
-                fireCooldown: ENEMY_FIRE_RATE / 2 + Math.random() * ENEMY_FIRE_RATE, // Stagger initial shots
-                fireRate: ENEMY_FIRE_RATE,
-                bulletSpread: ENEMY_BULLET_SPREAD,
-                // Animation properties (same as player)
-                isMoving: false, animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED
+                x: x, y: y, health: ZOMBIE_HEALTH, maxHealth: ZOMBIE_HEALTH,
+                width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ZOMBIE_SPEED, angle: 0,
+                color: `hsl(100, ${10 + Math.random() * 20}%, ${30 + Math.random() * 10}%)`, // Greenish/greyish zombie color
+                state: 'chasing', // Zombies are always aggressive
+                attackCooldown: 0, // Added attack cooldown
+                // Animation properties (same as player, but slower)
+                isMoving: true, // Zombies are always moving
+                animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED + 2 // Slower animation
             });
         }
 
         function updateEnemies() {
             for (let i = gameState.world.enemies.length - 1; i >= 0; i--) {
-                const enemy = gameState.world.enemies[i];
-                const oldX = enemy.x; const oldY = enemy.y;
-                const dxPlayer = gameState.player.x - enemy.x; const dyPlayer = gameState.player.y - enemy.y;
+                const zombie = gameState.world.enemies[i]; // Renamed for clarity
+                const oldX = zombie.x; const oldY = zombie.y;
+                const dxPlayer = gameState.player.x - zombie.x; const dyPlayer = gameState.player.y - zombie.y;
                 const distSqPlayer = dxPlayer * dxPlayer + dyPlayer * dyPlayer;
 
                 let targetAngleRad = Math.atan2(dyPlayer, dxPlayer);
-                enemy.isMoving = false; // Assume not moving initially
+                zombie.isMoving = true; // Zombies are always moving
 
-                // --- State Logic ---
-                if (enemy.state === 'idle') {
-                    enemy.aiTimer--;
-                    if (distSqPlayer < ENEMY_CHASE_DIST * ENEMY_CHASE_DIST) {
-                        enemy.state = 'chasing';
-                    } else if (enemy.aiTimer <= 0) {
-                        enemy.aiTimer = 120 + Math.random() * 120;
-                    }
-                } else if (enemy.state === 'chasing') {
-                    if (distSqPlayer > (ENEMY_CHASE_DIST + 50) * (ENEMY_CHASE_DIST + 50)) { // Lose player
-                        enemy.state = 'idle'; enemy.aiTimer = 60;
-                    } else {
-                        // Aim towards player
-                        enemy.angle = targetAngleRad * 180 / Math.PI + 90;
-                        // Move if not too close
-                        if (distSqPlayer > (ENEMY_SHOOT_DIST * 0.5) * (ENEMY_SHOOT_DIST * 0.5)) { // Don't crowd too much
-                             enemy.x += Math.cos(targetAngleRad) * enemy.speed;
-                             enemy.y += Math.sin(targetAngleRad) * enemy.speed;
-                             enemy.isMoving = true;
-                        }
+                // Zombies always chase the player
+                zombie.angle = targetAngleRad * 180 / Math.PI + 90;
 
-                        // --- Enemy Shooting ---
-                        if (distSqPlayer < ENEMY_SHOOT_DIST * ENEMY_SHOOT_DIST && enemy.fireCooldown <= 0) {
-                            // Basic Line of Sight Check (very simple: check midpoint)
-                            const midX = (enemy.x + gameState.player.x) / 2;
-                            const midY = (enemy.y + gameState.player.y) / 2;
-                            let canSeePlayer = true;
-                            const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
-                            for(const obj of worldGeometry) {
-                                if (midX > obj.x && midX < obj.x + obj.width && midY > obj.y && midY < obj.y + obj.height) {
-                                    canSeePlayer = false; break;
-                                }
-                            }
+                // Move towards player
+                zombie.x += Math.cos(targetAngleRad) * zombie.speed;
+                zombie.y += Math.sin(targetAngleRad) * zombie.speed;
 
-                            if (canSeePlayer) {
-                                const spreadRad = (Math.random() - 0.5) * enemy.bulletSpread * (Math.PI / 180);
-                                const fireAngleRad = targetAngleRad + spreadRad; // Already calculated angle to player
-                                const muzzleOffsetX = Math.cos(fireAngleRad) * (enemy.width / 2 + 2); // Adjusted offset
-                                const muzzleOffsetY = Math.sin(fireAngleRad) * (enemy.height / 2 + 2); // Adjusted offset
-
-                                gameState.world.projectiles.push({
-                                    x: enemy.x + muzzleOffsetX, y: enemy.y + muzzleOffsetY,
-                                    vx: Math.cos(fireAngleRad) * PROJECTILE_SPEED,
-                                    vy: Math.sin(fireAngleRad) * PROJECTILE_SPEED,
-                                    lifespan: PROJECTILE_LIFESPAN, owner: 'enemy', // Mark owner
-                                    damage: PROJECTILE_DAMAGE_PLAYER, color: '#f66' // Red enemy bullets
-                                });
-                                createMuzzleFlash(enemy.x + muzzleOffsetX, enemy.y + muzzleOffsetY);
-                                enemy.fireCooldown = enemy.fireRate;
-                            }
-                        }
-                    }
+                // --- Zombie Melee Attack ---
+                // Check if close enough to attack and attack is not on cooldown
+                if (gameState.playerState === 'onFoot' && distSqPlayer < (zombie.width + gameState.player.pedWidth) * (zombie.height + gameState.player.pedHeight) / 4 && zombie.attackCooldown <= 0) {
+                    gameState.player.health -= ZOMBIE_MELEE_DAMAGE;
+                    zombie.attackCooldown = ZOMBIE_ATTACK_COOLDOWN; // Reset cooldown
+                    console.log("Player Attacked by Zombie! Health:", gameState.player.health);
+                    // Add hit feedback for player?
                 }
 
-                 // Update enemy animation frame (same as player)
-                 if (enemy.isMoving) {
-                     enemy.animTimer++;
-                     if (enemy.animTimer >= enemy.animSpeed) {
-                         enemy.animTimer = 0;
-                         enemy.animFrame = (enemy.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
-                     }
-                 } else {
-                     enemy.animFrame = 0; // Idle frame
-                     enemy.animTimer = 0;
+                 // Update zombie animation frame (slower)
+                 zombie.animTimer++;
+                 if (zombie.animTimer >= zombie.animSpeed) {
+                     zombie.animTimer = 0;
+                     zombie.animFrame = (zombie.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
                  }
 
-                // Update cooldown
-                if (enemy.fireCooldown > 0) enemy.fireCooldown--;
+                // Update attack cooldown
+                if (zombie.attackCooldown > 0) zombie.attackCooldown--;
 
-                // Collision check for enemy
-                checkCollisions(oldX, oldY, enemy, 'enemy');
+                // Collision check for zombie
+                checkCollisions(oldX, oldY, zombie, 'enemy'); // Still use 'enemy' type for collision logic
 
                 // Check health
-                if (enemy.health <= 0) {
-                    createExplosion(enemy.x, enemy.y, enemy.color, 0.8); // Slightly smaller explosion
-                    gameState.world.enemies.splice(i, 1);
+                if (zombie.health <= 0) {
+                    createExplosion(zombie.x, zombie.y, zombie.color, 0.8); // Slightly smaller explosion
+                    gameState.world.enemies.splice(i, 1); // Remove zombie
+                    gameState.player.killedEnemiesCount++; // Increment killed enemy count
+                    // Check if player gets machine gun
+                    if (gameState.player.killedEnemiesCount === 1 && !gameState.player.hasMachineGun) {
+                        gameState.player.hasMachineGun = true;
+                        console.log("Player acquired Machine Gun!"); // Log for debugging
+                        // Optionally switch weapon immediately
+                        // gameState.player.currentWeapon = 'machinegun';
+                        // document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`;
+                    }
                 }
             }
         }
@@ -263,22 +458,12 @@
 
                  // Collision check depends on owner
                  if (p.owner === 'player') {
-                     // Check vs Enemies
-                     for (let j = gameState.world.enemies.length - 1; j >= 0; j--) { const enemy = gameState.world.enemies[j]; const dx = p.x - enemy.x; const dy = p.y - enemy.y; const hitRadius = Math.max(enemy.width, enemy.height) * 0.7; if (dx * dx + dy * dy < hitRadius * hitRadius) { enemy.health -= p.damage; hit = true; break; } }
-                 } else if (p.owner === 'enemy') {
-                     // Check vs Player (on foot only for now)
-                     if (gameState.playerState === 'onFoot') {
-                          const dx = p.x - gameState.player.x;
-                          const dy = p.y - gameState.player.y;
-                          const hitRadius = Math.max(gameState.player.pedWidth, gameState.player.pedHeight) * 0.7;
-                          if (dx * dx + dy * dy < hitRadius * hitRadius) {
-                              gameState.player.health -= p.damage;
-                              hit = true;
-                              // Add hit feedback? Screen shake? Red flash?
-                              console.log("Player Hit! Health:", gameState.player.health);
-                          }
-                     }
-                     // Add check vs player vehicle later if desired
+                     // Check vs Zombies (enemies)
+                     for (let j = gameState.world.enemies.length - 1; j >= 0; j--) { const zombie = gameState.world.enemies[j]; const dx = p.x - zombie.x; const dy = p.y - zombie.y; const hitRadius = Math.max(zombie.width, zombie.height) * 0.7; if (dx * dx + dy * dy < hitRadius * hitRadius) { zombie.health -= p.damage; hit = true; break; } }
+                 } else if (p.owner === 'enemy') { // This block is now effectively for zombie attacks (which are melee)
+                     // Projectiles from 'enemy' (zombies) are removed as they are melee only
+                     gameState.world.projectiles.splice(i, 1);
+                     continue; // Move to the next projectile
                  }
 
                  // Check collision with world geometry (if not already hit)
@@ -287,15 +472,15 @@
                  if (p.x < 0 || p.x > gameState.world.width || p.y < 0 || p.y > gameState.world.height) { hit = true; hitWall = true; }
 
                  // Remove projectile
-                 if (p.lifespan <= 0 || hit) { if (hitWall) { createHitSparks(p.x, p.y); } else if (hit && p.owner === 'player') { createExplosion(p.x, p.y, '#ff0', 0.4); /* Enemy hit splash */ } else if (hit && p.owner === 'enemy') { createExplosion(p.x, p.y, '#f66', 0.4); /* Player hit splash */ } gameState.world.projectiles.splice(i, 1); }
+                 if (p.lifespan <= 0 || hit) { if (hitWall) { createHitSparks(p.x, p.y); } else if (hit && p.owner === 'player') { createExplosion(p.x, p.y, '#ff0', 0.4); /* Zombie hit splash */ } gameState.world.projectiles.splice(i, 1); } // Removed enemy hit splash
              }
          }
 
         // --- Collision ---
-        function checkCollisions(oldX, oldY, entity, entityType) { const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy'; const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width); const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height); const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH }; let collisionOccurred = false; let bounced = false; if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; } if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; } entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2; if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) entity.state = 'idle'; const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of objects) { const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height }; if (isCollidingAABB(entityRect, objRect)) { collisionOccurred = true; entity.x = oldX; entity.y = oldY; if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); } else if (isEnemy) { entity.state = 'idle'; } break; } } return collisionOccurred; }
+        function checkCollisions(oldX, oldY, entity, entityType) { const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy'; const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width); const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height); const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH }; let collisionOccurred = false; let bounced = false; if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; } if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; } entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2; if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) { /* Zombies don't change state on bounce */ } const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of objects) { const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height }; if (isCollidingAABB(entityRect, objRect)) { collisionOccurred = true; entity.x = oldX; entity.y = oldY; if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); } else if (isEnemy) { /* Zombies just stop on collision */ } break; } } return collisionOccurred; } // Adjusted enemy collision response
         function isCollidingAABB(rect1, rect2) { return ( rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y ); }
         function checkGasStations() { if (gameState.playerState !== 'driving') return; if (gameState.controls.refuel) { for (const station of gameState.world.gasStations) { const dx = gameState.player.x - (station.x + station.width / 2); const dy = gameState.player.y - (station.y + station.height / 2); const distanceSq = dx * dx + dy * dy; if (distanceSq < 70 * 70) { gameState.player.fuelLevel += 1.5; if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100; break; } } } }
-        function checkLocation() { let currentZone = null; let closestDistance = Infinity; for (const zone of gameState.zones) { const dx = gameState.player.x - zone.x; const dy = gameState.player.y - zone.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance < zone.radius && distance < closestDistance) { closestDistance = distance; currentZone = zone; } } document.getElementById('location').textContent = `LOC: ${currentZone ? currentZone.name : 'COUNTRYSIDE'}`; }
+        function checkLocation() { let currentZone = null; let closestDistance = Infinity; for (const zone of gameState.zones) { const dx = gameState.player.x - zone.x; const dy = gameState.player.y - zone.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance < zone.radius && distance < closestDistance) { closestDistance = distance; currentZone = zone; } } document.getElementById('location').textContent = `LOC: ${currentZone ? currentZone.name : 'WASTELAND'}`; } // Updated default location
         function checkGameOverCondition() { if (gameState.player.health <= 0 && !gameState.gameOver) { gameState.gameOver = true; console.log("GAME OVER"); } }
 
         // --- Effects ---
@@ -331,48 +516,162 @@
              for (let i = gameState.fx.hitSparks.length - 1; i >= 0; i--) { const s = gameState.fx.hitSparks[i]; s.x += s.vx; s.y += s.vy; s.vx *= 0.9; s.vy *= 0.9; s.life--; s.alpha -= 0.12; if (s.life <= 0 || s.alpha <= 0) gameState.fx.hitSparks.splice(i, 1); } // Faster drag and fade
         }
 
+        // --- Sound Functions (Basic Procedural Tones) ---
+        function playShotSound(weaponType) {
+            try { // Added error handling for audio
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Start at low volume
+
+                if (weaponType === 'pistol') {
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1); // Quick fade
+                } else if (weaponType === 'machinegun') {
+                     oscillator.type = 'square';
+                     oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
+                     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05); // Faster fade
+                }
+
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.15); // Stop after a short time
+            } catch (error) {
+                 console.error("Error playing shot sound:", error);
+            }
+        }
+
+        function startEngineNoise() {
+             try { // Added error handling for audio
+                 if (!engineNoiseOscillator) {
+                     engineNoiseOscillator = audioContext.createOscillator();
+                     engineNoiseGain = audioContext.createGain();
+
+                     engineNoiseOscillator.type = 'sawtooth'; // Sawtooth wave for a richer sound
+                     engineNoiseOscillator.frequency.setValueAtTime(100, audioContext.currentTime); // Base frequency
+                     engineNoiseGain.gain.setValueAtTime(0.05, audioContext.currentTime); // Low initial volume
+
+                     engineNoiseOscillator.connect(engineNoiseGain);
+                     engineNoiseGain.connect(audioContext.destination);
+
+                     engineNoiseOscillator.start();
+                 }
+             } catch (error) {
+                 console.error("Error starting engine noise:", error);
+             }
+        }
+
+        function updateEngineNoise() {
+             try { // Added error handling for audio
+                 if (engineNoiseOscillator) {
+                     // Vary frequency and volume based on speed
+                     const speedFactor = Math.abs(gameState.player.speed) / gameState.player.maxSpeed;
+                     const frequency = 100 + speedFactor * 200; // Frequency increases with speed
+                     const volume = 0.05 + speedFactor * 0.1; // Volume increases with speed
+
+                     engineNoiseOscillator.frequency.linearRampToValueAtTime(frequency, audioContext.currentTime + 0.1);
+                     engineNoiseGain.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.1);
+                 }
+             } catch (error) {
+                 console.error("Error updating engine noise:", error);
+             }
+        }
+
+        function stopEngineNoise() {
+             try { // Added error handling for audio
+                 if (engineNoiseOscillator) {
+                     engineNoiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5); // Fade out
+                     engineNoiseOscillator.stop(audioContext.currentTime + 0.5); // Stop after fade
+                     engineNoiseOscillator = null;
+                     engineNoiseGain = null;
+                 }
+             } catch (error) {
+                 console.error("Error stopping engine noise:", error);
+             }
+        }
+
+
         // --- Camera ---
         function updateCamera() { const targetX = gameState.player.x - canvas.width / 2; const targetY = gameState.player.y - canvas.height / 2; const lerpFactor = 0.1; gameState.camera.x += (targetX - gameState.camera.x) * lerpFactor; gameState.camera.y += (targetY - gameState.camera.y) * lerpFactor; gameState.camera.x = Math.max(0, Math.min(gameState.camera.x, gameState.world.width - canvas.width)); gameState.camera.y = Math.max(0, Math.min(gameState.camera.y, gameState.world.height - canvas.height)); }
         // --- HUD Update ---
-        function updateHUD() { document.getElementById('health-level').style.width = `${Math.max(0, (gameState.player.health / gameState.player.maxHealth) * 100)}%`; const showDrivingUI = gameState.playerState === 'driving'; document.getElementById('speed-line').style.display = showDrivingUI ? '' : 'none'; document.getElementById('fuel-line').style.display = showDrivingUI ? '' : 'none'; if (showDrivingUI) { document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 20)); document.getElementById('fuel-level').style.width = `${Math.max(0, gameState.player.fuelLevel)}%`; } checkLocation(); document.getElementById('enemies-left').textContent = gameState.world.enemies.length; }
+        function updateHUD() {
+             document.getElementById('health-level').style.width = `${Math.max(0, (gameState.player.health / gameState.player.maxHealth) * 100)}%`;
+             const showDrivingUI = gameState.playerState === 'driving';
+             document.getElementById('speed-line').style.display = showDrivingUI ? '' : 'none';
+             document.getElementById('fuel-line').style.display = showDrivingUI ? '' : 'none';
+             document.getElementById('weapon-display').style.display = gameState.playerState === 'onFoot' ? '' : 'none'; // Show weapon only on foot
+             document.getElementById('vehicle-display').style.display = showDrivingUI ? '' : 'none'; // Show vehicle display only when driving
+
+
+             if (showDrivingUI) {
+                 document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 20));
+                 document.getElementById('fuel-level').style.width = `${Math.max(0, gameState.player.fuelLevel)}%`;
+                 document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`; // Update vehicle display
+             }
+             checkLocation();
+             document.getElementById('enemies-left').textContent = gameState.world.enemies.length; // Still use enemies array for count
+             document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`; // Ensure weapon display is updated
+        }
 
         // --- Rendering ---
         function renderGame() {
-            ctx.fillStyle = gameState.world.grassColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (!ctx) { // Check if context is valid
+                console.error("Canvas context is not available.");
+                document.getElementById('error-display').style.display = 'block';
+                document.getElementById('error-display').textContent = 'Error: Canvas context not found.';
+                return;
+            }
 
-            ctx.save();
-            ctx.translate(-gameState.camera.x, -gameState.camera.y);
+            try { // Added error handling for rendering
+                ctx.fillStyle = gameState.world.grassColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            drawImpassableZones();
-            drawRoads();
-            drawBuildings();
-            drawTrees();
-            drawObstacles();
-            drawGasStations();
-            drawSkidMarks(); // Draw skid marks before vehicles/characters
-            drawDustParticles(); // Draw dust before characters
+                ctx.save();
+                ctx.translate(-gameState.camera.x, -gameState.camera.y);
 
-            drawVehicles();
-            drawEnemies(); // Draw enemies before player
-            drawPlayer();
+                drawImpassableZones();
+                drawRoads();
+                drawBuildings();
+                drawTrees();
+                drawObstacles();
+                drawGasStations();
+                drawSkidMarks(); // Draw skid marks before vehicles/characters
+                drawDustParticles(); // Draw dust before characters
 
-            drawExplosions();
-            drawHitSparks();
-            drawProjectiles();
-            drawMuzzleFlashes();
+                drawVehicles();
+                drawEnemies(); // Draw enemies (zombies) before player
+                drawPlayer();
+
+                drawExplosions();
+                drawHitSparks();
+                drawProjectiles();
+                drawMuzzleFlashes();
 
 
-            ctx.restore();
-            drawMiniMap();
+                ctx.restore();
+                drawMiniMap();
+            } catch (error) {
+                console.error("Error during rendering:", error);
+                 document.getElementById('error-display').style.display = 'block';
+                 document.getElementById('error-display').textContent = 'Rendering Error. Check console.';
+            }
         }
 
         // --- Drawing Functions ---
         function drawImpassableZones() { gameState.world.impassableZones.forEach(zone => { if (zone.x + zone.width < gameState.camera.x || zone.x > gameState.camera.x + canvas.width || zone.y + zone.height < gameState.camera.y || zone.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = zone.color; ctx.fillRect(zone.x, zone.y, zone.width, zone.height); }); }
-        function drawRoads() { roads.forEach(road => { const x1 = road.x1, y1 = road.y1, x2 = road.x2, y2 = road.y2; const midX = (x1+x2)/2, midY = (y1+y2)/2; const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2); if (midX + length < gameState.camera.x || midX - length > gameState.camera.x + canvas.width || midY + length < gameState.camera.y || midY - length > gameState.camera.y + canvas.height) return; const angle = Math.atan2(y2 - y1, x2 - x1); ctx.save(); ctx.translate(x1, y1); ctx.rotate(angle); ctx.fillStyle = gameState.world.roadColor; ctx.fillRect(0, -gameState.world.roadWidth / 2, length, gameState.world.roadWidth); ctx.fillStyle = gameState.world.lineColor; ctx.fillRect(0, -gameState.world.lineWidth / 2, length, gameState.world.lineWidth); ctx.restore(); }); }
-        function drawBuildings() { gameState.world.buildings.forEach(b => { if (b.x + b.width < gameState.camera.x || b.x > gameState.camera.x + canvas.width || b.y + b.height < gameState.camera.y || b.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.width, b.height); ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; for (let wy = b.y + 5; wy < b.y + b.height - 5; wy += 15) { for (let wx = b.x + 5; wx < b.x + b.width - 5; wx += 15) { ctx.fillRect(wx, wy, 7, 7); } } }); }
-        function drawTrees() { gameState.world.trees.forEach(t => { if (t.x + t.radius < gameState.camera.x || t.x - t.radius > gameState.camera.x + canvas.width || t.y + t.radius < gameState.camera.y || t.y - t.radius > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#643200'; ctx.fillRect(t.x - t.radius * 0.2, t.y - t.radius * 0.1, t.radius * 0.4, t.radius * 0.6); ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(t.x, t.y - t.radius * 0.4, t.radius, 0, Math.PI * 2); ctx.fill(); }); }
-        function drawObstacles() { gameState.world.obstacles.forEach(o => { if (o.x + o.width < gameState.camera.x || o.x > gameState.camera.x + canvas.width || o.y + o.height < gameState.camera.y || o.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = o.color; ctx.fillRect(o.x, o.y, o.width, o.height); }); }
+        function drawRoads() { roads.forEach(road => { const x1 = road.x1, y1 = road.y1, x2 = road.x2, y2 = road.y2; const midX = (x1+x2)/2, midY = (y1+y2)/2; const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2); if (midX + length < gameState.camera.x || midX - length > gameState.camera.x + canvas.width || midY + length > gameState.camera.y + canvas.height || midY - length < gameState.camera.y) return; // Corrected culling check
+            const angle = Math.atan2(y2 - y1, x2 - x1); ctx.save(); ctx.translate(x1, y1); ctx.rotate(angle); ctx.fillStyle = gameState.world.roadColor; ctx.fillRect(0, -gameState.world.roadWidth / 2, length, gameState.world.roadWidth); ctx.fillStyle = gameState.world.lineColor; // Draw a broken line
+            const segmentLength = 10; const gapLength = 10; let currentPos = 0; while(currentPos < length) { ctx.fillRect(currentPos, -gameState.world.lineWidth / 2, segmentLength, gameState.world.lineWidth); currentPos += segmentLength + gapLength; } ctx.restore(); }); } // Modified road drawing for broken lines
+        function drawBuildings() { gameState.world.buildings.forEach(b => { if (b.x + b.width < gameState.camera.x || b.x > gameState.camera.x + canvas.width || b.y + b.height < gameState.camera.y || b.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.width, b.height); ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Darker windows
+            for (let wy = b.y + 8; wy < b.y + b.height - 8; wy += 20) { for (let wx = b.x + 8; wx < b.x + b.width - 8; wx += 20) { ctx.fillRect(wx, wy, 10, 10); } } }); } // Adjusted window size and spacing
+        function drawTrees() { gameState.world.trees.forEach(t => { if (t.x + t.radius < gameState.camera.x || t.x - t.radius > gameState.camera.x + canvas.width || t.y + t.radius < gameState.camera.y || t.y - t.radius > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#8B4513'; // Brown trunk
+            ctx.fillRect(t.x - t.radius * 0.2, t.y - t.radius * 0.1, t.radius * 0.4, t.radius * 0.6); ctx.fillStyle = t.color; ctx.beginPath(); // Draw a more scraggly top
+            const numSpikes = 8 + Math.random() * 4; const spikeLength = t.radius * (0.8 + Math.random() * 0.4); for(let i = 0; i < numSpikes; i++) { const angle = (i / numSpikes) * Math.PI * 2; const innerRadius = t.radius * 0.5; const outerRadius = t.radius * (0.8 + Math.random() * 0.4); const x = t.x + Math.cos(angle) * outerRadius; const y = t.y - t.radius * 0.4 + Math.sin(angle) * outerRadius; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.closePath(); ctx.fill(); }); } // Modified tree drawing for wasteland look
+        function drawObstacles() { gameState.world.obstacles.forEach(o => { if (o.x + o.width < gameState.camera.x || o.x > gameState.camera.x + canvas.width || o.y + o.height < gameState.camera.y || o.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#777'; ctx.fillRect(o.x, o.y, o.width, o.height); }); }
         function drawGasStations() { gameState.world.gasStations.forEach(s => { if (s.x + s.width < gameState.camera.x || s.x > gameState.camera.x + canvas.width || s.y + s.height < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#666'; ctx.fillRect(s.x - 5, s.y - 5, s.width + 10, s.height + 10); ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.width, s.height); ctx.fillStyle = '#fff'; ctx.font = '24px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⛽', s.x + s.width / 2, s.y + s.height / 2); }); }
         function drawVehicles() { gameState.world.vehicles.forEach(car => { const CULL_MARGIN = Math.max(car.width, car.height) * 1.5; if (car.x + CULL_MARGIN < gameState.camera.x || car.x - CULL_MARGIN > gameState.camera.x + canvas.width || car.y + CULL_MARGIN < gameState.camera.y || car.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
             // Draw shadow
@@ -384,7 +683,71 @@
             ctx.save();
             ctx.translate(car.x, car.y);
             ctx.rotate(car.angle * Math.PI / 180);
-            const carW = car.width; const carH = car.height; ctx.fillStyle = car.color; ctx.fillRect(-carW / 2, -carH / 2, carW, carH); ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8); ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9); ctx.fillStyle = '#1a1a1a'; const wheelW = 4, wheelH = 8; ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.restore(); }); }
+
+            // Draw different car shapes based on type
+            const carW = car.width;
+            const carH = car.height;
+            ctx.fillStyle = car.color;
+
+            if (car.type === 'sedan') {
+                 ctx.fillRect(-carW / 2, -carH / 2, carW, carH);
+                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
+                 ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8);
+                 ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9);
+                 ctx.fillStyle = '#1a1a1a'; // Wheels
+                 const wheelW = 4, wheelH = 8;
+                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
+                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
+            } else if (car.type === 'truck') {
+                 ctx.fillRect(-carW / 2, -carH / 2, carW, carH * 0.6); // Cabin
+                 ctx.fillRect(-carW / 2 + 2, -carH / 2 + carH * 0.6, carW - 4, carH * 0.4); // Bed
+                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
+                 ctx.fillRect(-carW / 2 + 4, -carH / 2 + 4, carW - 8, 8);
+                  ctx.fillStyle = '#1a1a1a'; // Wheels
+                 const wheelW = 5, wheelH = 10;
+                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
+                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
+                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
+                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
+            } else if (car.type === 'sportsCar') {
+                 ctx.beginPath(); // Sleeker shape
+                 ctx.moveTo(-carW / 2, 0);
+                 ctx.lineTo(-carW / 2 + 5, -carH / 2);
+                 ctx.lineTo(carW / 2 - 5, -carH / 2);
+                 ctx.lineTo(carW / 2, 0);
+                 ctx.lineTo(carW / 2 - 5, carH / 2);
+                 ctx.lineTo(-carW / 2 + 5, carH / 2);
+                 ctx.closePath();
+                 ctx.fill();
+                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
+                 ctx.fillRect(-carW / 2 + 8, -carH / 2 + 4, carW - 16, 6);
+                 ctx.fillRect(-carW / 2 + 8, carH / 2 - 10, carW - 16, 6);
+                  ctx.fillStyle = '#1a1a1a'; // Wheels
+                 const wheelW = 3, wheelH = 7;
+                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
+                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
+                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
+                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
+            } else if (car.type === 'buggy') {
+                      ctx.fillRect(-carW / 2, -carH / 2 + carH * 0.2, carW, carH * 0.8); // Main body
+                      ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Roll cage
+                      ctx.fillRect(-carW / 2 + 2, -carH / 2, carW - 4, carH * 0.3);
+                       ctx.fillStyle = '#1a1a1a'; // Wheels
+                      const wheelW = 5, wheelH = 10;
+                      ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                      ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                      ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
+                      ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
+                 }
+
+             }
+             else {
+                 drawCharacter(gameState.player, true); // Use shared drawing function
+             }
+            ctx.restore();
+        }
         function drawSkidMarks() { gameState.fx.skidMarks.forEach(skid => { const CULL_MARGIN = skid.width * 2; if (skid.x + CULL_MARGIN < gameState.camera.x || skid.x - CULL_MARGIN > gameState.camera.x + canvas.width || skid.y + CULL_MARGIN < gameState.camera.y || skid.y - CULL_MARGIN > gameState.camera.y + canvas.height) return; ctx.save(); ctx.translate(skid.x, skid.y); ctx.rotate(skid.angle * Math.PI / 180); ctx.fillStyle = `rgba(0, 0, 0, ${skid.alpha * 0.6})`; ctx.fillRect(-skid.width / 2, -1.5, skid.width, 3); ctx.restore(); }); }
         function drawDustParticles() { gameState.fx.dustParticles.forEach(p => { const CULL_MARGIN = p.size * 2; if (p.x + CULL_MARGIN < gameState.camera.x || p.x - CULL_MARGIN > gameState.camera.x + canvas.width || p.y + CULL_MARGIN < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(160, 140, 110, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }); }
         function drawExplosions() {
@@ -462,21 +825,21 @@
             }
         }
 
-        function drawEnemies() {
-            gameState.world.enemies.forEach(enemy => {
-                 const CULL_MARGIN = Math.max(enemy.width, enemy.height) * 1.5;
-                 if (enemy.x + CULL_MARGIN < gameState.camera.x || enemy.x - CULL_MARGIN > gameState.camera.x + canvas.width || enemy.y + CULL_MARGIN < gameState.camera.y || enemy.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
+        function drawEnemies() { // This now draws zombies
+            gameState.world.enemies.forEach(zombie => {
+                 const CULL_MARGIN = Math.max(zombie.width, zombie.height) * 1.5;
+                 if (zombie.x + CULL_MARGIN < gameState.camera.x || zombie.x - CULL_MARGIN > gameState.camera.x + canvas.width || zombie.y + CULL_MARGIN < gameState.camera.y || zombie.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
 
                 ctx.save();
-                ctx.translate(enemy.x, enemy.y);
-                ctx.rotate(enemy.angle * Math.PI / 180);
-                drawCharacter(enemy, false); // Use shared drawing function
+                ctx.translate(zombie.x, zombie.y);
+                ctx.rotate(zombie.angle * Math.PI / 180);
+                drawCharacter(zombie, false); // Use shared drawing function (will be drawn with zombie color)
                 ctx.restore();
 
                 // Health bar
-                const barWidth = 20; const barHeight = 3; const barX = enemy.x - barWidth / 2; const barY = enemy.y - enemy.height / 2 - 8;
+                const barWidth = 20; const barHeight = 3; const barX = zombie.x - barWidth / 2; const barY = zombie.y - zombie.height / 2 - 8;
                 ctx.fillStyle = '#500'; ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (enemy.health / enemy.maxHealth), barHeight);
+                ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (zombie.health / zombie.maxHealth), barHeight);
             });
         }
 
@@ -491,7 +854,65 @@
                 ctx.ellipse(0 + 5, 0 + 5, gameState.player.width * 0.7, gameState.player.height * 0.7, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                const carW = gameState.player.width; const carH = gameState.player.height; ctx.fillStyle = gameState.player.color; ctx.fillRect(-carW / 2, -carH / 2, carW, carH); ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8); ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9); ctx.fillStyle = '#1a1a1a'; const wheelW = 4, wheelH = 8; ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); }
+                // Draw player's current vehicle based on type
+                 const carW = gameState.player.width;
+                 const carH = gameState.player.height;
+                 ctx.fillStyle = gameState.player.color;
+
+                 if (gameState.player.currentVehicleType === 'sedan') {
+                      ctx.fillRect(-carW / 2, -carH / 2, carW, carH);
+                      ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
+                      ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8);
+                      ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9);
+                      ctx.fillStyle = '#1a1a1a'; // Wheels
+                      const wheelW = 4, wheelH = 8;
+                      ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                      ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                      ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
+                      ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
+                 } else if (gameState.player.currentVehicleType === 'truck') {
+                     ctx.fillRect(-carW / 2, -carH / 2, carW, carH * 0.6); // Cabin
+                     ctx.fillRect(-carW / 2 + 2, -carH / 2 + carH * 0.6, carW - 4, carH * 0.4); // Bed
+                     ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
+                     ctx.fillRect(-carW / 2 + 4, -carH / 2 + 4, carW - 8, 8);
+                      ctx.fillStyle = '#1a1a1a'; // Wheels
+                     const wheelW = 5, wheelH = 10;
+                     ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
+                     ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
+                     ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
+                     ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
+                 } else if (gameState.player.currentVehicleType === 'sportsCar') {
+                     ctx.beginPath(); // Sleeker shape
+                     ctx.moveTo(-carW / 2, 0);
+                     ctx.lineTo(-carW / 2 + 5, -carH / 2);
+                     ctx.lineTo(carW / 2 - 5, -carH / 2);
+                     ctx.lineTo(carW / 2, 0);
+                     ctx.lineTo(carW / 2 - 5, carH / 2);
+                     ctx.lineTo(-carW / 2 + 5, carH / 2);
+                     ctx.closePath();
+                     ctx.fill();
+                     ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
+                     ctx.fillRect(-carW / 2 + 8, -carH / 2 + 4, carW - 16, 6);
+                     ctx.fillRect(-carW / 2 + 8, carH / 2 - 10, carW - 16, 6);
+                      ctx.fillStyle = '#1a1a1a'; // Wheels
+                     const wheelW = 3, wheelH = 7;
+                     ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
+                     ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
+                     ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
+                     ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
+                 } else if (gameState.player.currentVehicleType === 'buggy') {
+                      ctx.fillRect(-carW / 2, -carH / 2 + carH * 0.2, carW, carH * 0.8); // Main body
+                      ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Roll cage
+                      ctx.fillRect(-carW / 2 + 2, -carH / 2, carW - 4, carH * 0.3);
+                       ctx.fillStyle = '#1a1a1a'; // Wheels
+                      const wheelW = 5, wheelH = 10;
+                      ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                      ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
+                      ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
+                      ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
+                 }
+
+             }
              else {
                  drawCharacter(gameState.player, true); // Use shared drawing function
              }
@@ -501,11 +922,124 @@
         function drawGameOver() { ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.font = "40px 'Courier New', monospace"; ctx.fillStyle = "red"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20); ctx.font = "20px 'Courier New', monospace"; ctx.fillStyle = "white"; ctx.fillText("Refresh to Restart", canvas.width / 2, canvas.height / 2 + 20); }
 
         // --- Initialization & Utilities ---
-        function initGame() { console.log("Initializing Game..."); createWorldElements(); initializeWorldObjects(); spawnInitialEnemies(15); updateHUD(); window.addEventListener('resize', handleResize); handleResize(); gameLoop(); console.log("Game Loop Started."); } // Spawn more enemies
-        function createWorldElements() { for (let i = 0; i < 200; i++) { gameState.world.trees.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, radius: 5 + Math.random() * 10, color: `hsl(${100 + Math.random() * 30}, ${60 + Math.random() * 30}%, ${20 + Math.random() * 20}%)` }); } for (let i = 0; i < 45; i++) { gameState.world.buildings.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, width: 40 + Math.random() * 100, height: 40 + Math.random() * 100, color: `hsl(${200 + Math.random() * 40}, ${20 + Math.random() * 20}%, ${40 + Math.random() * 30}%)` }); } for (let i = 0; i < 60; i++) { gameState.world.obstacles.push({ x: Math.random() * gameState.world.width, y: Math.random() * gameState.world.height, width: 10 + Math.random() * 20, height: 10 + Math.random() * 20, color: '#777' }); } for (let i = 0; i < 5; i++) { gameState.world.gasStations.push({ x: 400 + Math.random() * (gameState.world.width - 800), y: 400 + Math.random() * (gameState.world.height - 800), width: 50, height: 60, color: '#c00' }); } }
-        function initializeWorldObjects() { const validTrees = []; gameState.world.trees.forEach(tree => { if (!isOnRoad(tree.x, tree.y, tree.radius * 1.5)) { validTrees.push(tree); } }); gameState.world.trees = validTrees.slice(0, 200); const validBuildings = []; gameState.world.buildings.forEach(b => { if (!isOnRoad(b.x + b.width/2, b.y + b.height/2, Math.max(b.width, b.height) * 0.7)) { validBuildings.push(b); } }); gameState.world.buildings = validBuildings.slice(0, 40); const validObstacles = []; gameState.world.obstacles.forEach(o => { if (!isOnRoad(o.x + o.width/2, o.y + o.height/2, Math.max(o.width, o.height))) { validObstacles.push(o); } }); gameState.world.obstacles = validObstacles.slice(0, 60); console.log(`World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`); }
+        function initGame() {
+            console.log("Initializing Game...");
+            try { // Added error handling for initialization
+                createWorldElements();
+                initializeWorldObjects();
+                spawnInitialEnemies(20);
+                spawnVehicles(10);
+                updateHUD();
+                window.addEventListener('resize', handleResize);
+                handleResize();
+                gameLoop();
+                console.log("Game Loop Started.");
+            } catch (error) {
+                console.error("Error during initialization:", error);
+                document.getElementById('error-display').style.display = 'block';
+                document.getElementById('error-display').textContent = 'Initialization Error. Check console.';
+            }
+        }
+        function createWorldElements() {
+             // Wasteland trees (more sparse, different colors)
+             for (let i = 0; i < 100; i++) {
+                 gameState.world.trees.push({
+                     x: Math.random() * gameState.world.width,
+                     y: Math.random() * gameState.world.height,
+                     radius: 5 + Math.random() * 8, // Smaller trees
+                     color: `hsl(${60 + Math.random() * 30}, ${40 + Math.random() * 20}%, ${20 + Math.random() * 15}%)` // Brownish/yellowish
+                 });
+             }
+             // Wasteland buildings (fewer, more desaturated)
+             for (let i = 0; i < 20; i++) {
+                 gameState.world.buildings.push({
+                     x: Math.random() * gameState.world.width,
+                     y: Math.random() * gameState.world.height,
+                     width: 50 + Math.random() * 80, // Slightly smaller buildings
+                     height: 50 + Math.random() * 80,
+                     color: `hsl(${30 + Math.random() * 20}, ${10 + Math.random() * 10}%, ${40 + Math.random() * 20}%)` // Greyish/brownish
+                 });
+             }
+             // Wasteland obstacles (rocks, debris)
+             for (let i = 0; i < 100; i++) {
+                 gameState.world.obstacles.push({
+                     x: Math.random() * gameState.world.width,
+                     y: Math.random() * gameState.world.height,
+                     width: 15 + Math.random() * 25, // Larger obstacles
+                     height: 15 + Math.random() * 25,
+                     color: '#555' // Grey rocks
+                 });
+             }
+             // Gas stations (same as before)
+             for (let i = 0; i < 5; i++) {
+                 gameState.world.gasStations.push({ x: 400 + Math.random() * (gameState.world.width - 800), y: 400 + Math.random() * (gameState.world.height - 800), width: 50, height: 60, color: '#c00' });
+             }
+        }
+        function initializeWorldObjects() {
+             const validTrees = []; gameState.world.trees.forEach(tree => { if (!isOnRoad(tree.x, tree.y, tree.radius * 1.5)) { validTrees.push(tree); } }); gameState.world.trees = validTrees.slice(0, 100); // Limit trees
+             const validBuildings = []; gameState.world.buildings.forEach(b => { if (!isOnRoad(b.x + b.width/2, b.y + b.height/2, Math.max(b.width, b.height) * 0.7)) { validBuildings.push(b); } }); gameState.world.buildings = validBuildings.slice(0, 20); // Limit buildings
+             const validObstacles = []; gameState.world.obstacles.forEach(o => { if (!isOnRoad(o.x + o.width/2, o.y + o.height/2, Math.max(o.width, o.height))) { validObstacles.push(o); } }); gameState.world.obstacles = validObstacles.slice(0, 100); // Limit obstacles
+             console.log(`World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`);
+        }
         function isOnRoad(x, y, buffer) { for (const road of roads) { const dx = road.x2 - road.x1, dy = road.y2 - road.y1; const lenSq = dx*dx + dy*dy; if (lenSq === 0) continue; let t = ((x - road.x1) * dx + (y - road.y1) * dy) / lenSq; t = Math.max(0, Math.min(1, t)); const closestX = road.x1 + t * dx; const closestY = road.y1 + t * dy; const distSq = (x - closestX)**2 + (y - closestY)**2; if (distSq < (gameState.world.roadWidth / 2 + buffer)**2) return true; } return false; }
         function spawnInitialEnemies(count) { let spawned = 0; let attempts = 0; while (spawned < count && attempts < count * 10) { attempts++; const x = Math.random() * gameState.world.width; const y = Math.random() * gameState.world.height; const dx = x - gameState.player.x; const dy = y - gameState.player.y; if (dx*dx + dy*dy < 500*500) continue; if (isOnRoad(x, y, 20)) continue; let inObject = false; const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of worldGeometry) { if (x > obj.x && x < obj.x + obj.width && y > obj.y && y < obj.y + obj.height) { inObject = true; break; } } if (inObject) continue; spawnEnemy(x, y); spawned++; } console.log(`Spawned ${spawned} enemies.`); }
+
+        // --- Spawn Vehicles ---
+        function spawnVehicles(count) {
+            let spawned = 0;
+            let attempts = 0;
+            const vehicleTypes = Object.keys(VEHICLE_TYPES);
+
+            while (spawned < count && attempts < count * 20) { // More attempts for vehicles
+                attempts++;
+                const x = Math.random() * gameState.world.width;
+                const y = Math.random() * gameState.world.height;
+
+                // Avoid spawning too close to the player's initial position
+                const dx = x - gameState.player.x;
+                const dy = y - gameState.player.y;
+                if (dx * dx + dy * dy < 300 * 300) continue; // Spawn further away
+
+                // Avoid spawning on impassable zones or too close to other objects
+                let inObject = false;
+                const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
+                for (const obj of worldGeometry) {
+                    // Simple AABB check with a buffer
+                    const buffer = 30; // Give some space around objects
+                    if (x > obj.x - buffer && x < obj.x + obj.width + buffer &&
+                        y > obj.y - buffer && y < obj.y + obj.height + buffer) {
+                        inObject = true;
+                        break;
+                    }
+                }
+                if (inObject) continue;
+
+                // Select a random vehicle type
+                const randomVehicleType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
+                const vehicleProps = VEHICLE_TYPES[randomVehicleType];
+
+                // Create the vehicle object
+                gameState.world.vehicles.push({
+                    x: x, y: y,
+                    width: vehicleProps.width,
+                    height: vehicleProps.height,
+                    angle: Math.random() * 360, // Random initial angle
+                    color: vehicleProps.color,
+                    maxSpeed: vehicleProps.maxSpeed,
+                    acceleration: vehicleProps.acceleration,
+                    deceleration: vehicleProps.deceleration,
+                    handling: vehicleProps.handling,
+                    fuelConsumption: vehicleProps.fuelConsumption,
+                    fuelLevel: 100, // Start with full fuel
+                    type: randomVehicleType // Store the type
+                });
+
+                spawned++;
+            }
+            console.log(`Spawned ${spawned} vehicles.`);
+        }
+
+
         function handleResize() { const gameContainer = document.getElementById('game-container'); const windowWidth = window.innerWidth; const windowHeight = window.innerHeight; const aspectRatio = canvas.width / canvas.height; let newWidth = windowWidth * 0.98; let newHeight = newWidth / aspectRatio; if (newHeight > windowHeight * 0.98) { newHeight = windowHeight * 0.98; newWidth = newHeight * aspectRatio; } gameContainer.style.width = `${newWidth}px`; gameContainer.style.height = `${newHeight}px`; }
 
         // --- Start Game ---
