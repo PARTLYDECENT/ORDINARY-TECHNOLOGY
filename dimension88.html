@@ -301,8 +301,26 @@
         // --- Effects ---
         function createSkidMark() { if (gameState.playerState !== 'driving') return; const radians = gameState.player.angle * Math.PI / 180; const wheelOffset = gameState.player.height * 0.3; gameState.fx.skidMarks.push({ x: gameState.player.x - Math.sin(radians) * wheelOffset, y: gameState.player.y + Math.cos(radians) * wheelOffset, angle: gameState.player.angle, alpha: 0.5 + Math.random() * 0.3, width: 3 + Math.abs(gameState.player.speed * 0.6), life: 250 + Math.random() * 150 }); if (gameState.fx.skidMarks.length > 200) gameState.fx.skidMarks.shift(); } // Increased life and width variation
         function createDustParticle(isDrivingEffect = true) { const pAngle = gameState.player.angle * Math.PI / 180; const offsetDist = isDrivingEffect ? gameState.player.height / 2 : 5; const baseX = gameState.player.x - Math.sin(pAngle) * offsetDist; const baseY = gameState.player.y + Math.cos(pAngle) * offsetDist; gameState.fx.dustParticles.push({ x: baseX + (Math.random() - 0.5) * (isDrivingEffect ? 20 : 8), y: baseY + (Math.random() - 0.5) * (isDrivingEffect ? 20 : 8), size: isDrivingEffect ? 3 + Math.random() * 7 : 1.5 + Math.random() * 3, alpha: 0.5 + Math.random() * 0.3, life: 30 + Math.random() * 30, vx: (Math.random() - 0.5) * (isDrivingEffect ? 2 : 0.8), vy: (Math.random() - 0.5) * (isDrivingEffect ? 2 : 0.8) }); if (gameState.fx.dustParticles.length > 100) gameState.fx.dustParticles.shift(); } // Increased size and velocity variation
-        function createExplosion(x, y, color = '#ffa500', scale = 1.0) { const particles = 20 + Math.floor(Math.random() * 15); for (let i = 0; i < particles; i++) { const angle = Math.random() * Math.PI * 2; const speed = 1.5 + Math.random() * 4 * scale; const particleColor = `hsl(${Math.random() * 60 + (color === '#ff0' ? 50 : (color === '#f66' ? 0 : 30))}, 90%, 60%)`; // More varied explosion colors
-                gameState.fx.explosions.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: (3 + Math.random() * 5) * scale, alpha: 0.7 + Math.random() * 0.3, life: 25 + Math.random() * 25, color: particleColor }); } if (gameState.fx.explosions.length > 100) gameState.fx.explosions.shift(); } // More particles, size, and life variation
+        function createExplosion(x, y, color = '#ffa500', scale = 1.0) {
+            const particles = 20 + Math.floor(Math.random() * 15);
+            for (let i = 0; i < particles; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1.5 + Math.random() * 4 * scale;
+                const particleColor = `hsl(${Math.random() * 60 + (color === '#ff0' ? 50 : (color === '#f66' ? 0 : 30))}, 90%, 60%)`;
+                const life = 25 + Math.random() * 25; // Define life here
+                gameState.fx.explosions.push({
+                    x: x, y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: (3 + Math.random() * 5) * scale,
+                    alpha: 0.7 + Math.random() * 0.3,
+                    life: life, // Use the defined life
+                    initialLife: life, // Store initial life
+                    color: particleColor
+                });
+            }
+            if (gameState.fx.explosions.length > 100) gameState.fx.explosions.shift();
+        } // More particles, size, and life variation
         function createMuzzleFlash(x, y) { gameState.fx.muzzleFlashes.push({ x: x, y: y, size: 10 + Math.random() * 8, alpha: 1.0, life: 3 }); } // Brighter, shorter life
         function createHitSparks(x, y) { const particles = 8 + Math.floor(Math.random() * 8); for (let i = 0; i < particles; i++) { const angle = Math.random() * Math.PI * 2; const speed = 1.5 + Math.random() * 3; gameState.fx.hitSparks.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 1.5 + Math.random() * 2, alpha: 1.0, life: 15 + Math.random() * 15, color: '#ffda99' }); } } // More sparks, brighter, longer life
         function updateParticlesAndEffects() {
@@ -369,8 +387,20 @@
             const carW = car.width; const carH = car.height; ctx.fillStyle = car.color; ctx.fillRect(-carW / 2, -carH / 2, carW, carH); ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8); ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9); ctx.fillStyle = '#1a1a1a'; const wheelW = 4, wheelH = 8; ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH); ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH); ctx.restore(); }); }
         function drawSkidMarks() { gameState.fx.skidMarks.forEach(skid => { const CULL_MARGIN = skid.width * 2; if (skid.x + CULL_MARGIN < gameState.camera.x || skid.x - CULL_MARGIN > gameState.camera.x + canvas.width || skid.y + CULL_MARGIN < gameState.camera.y || skid.y - CULL_MARGIN > gameState.camera.y + canvas.height) return; ctx.save(); ctx.translate(skid.x, skid.y); ctx.rotate(skid.angle * Math.PI / 180); ctx.fillStyle = `rgba(0, 0, 0, ${skid.alpha * 0.6})`; ctx.fillRect(-skid.width / 2, -1.5, skid.width, 3); ctx.restore(); }); }
         function drawDustParticles() { gameState.fx.dustParticles.forEach(p => { const CULL_MARGIN = p.size * 2; if (p.x + CULL_MARGIN < gameState.camera.x || p.x - CULL_MARGIN > gameState.camera.x + canvas.width || p.y + CULL_MARGIN < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(160, 140, 110, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }); }
-        function drawExplosions() { gameState.fx.explosions.forEach(p => { if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, ${Math.random()*150 + 100}, 0, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 + (25 - p.life) * 0.08), 0, Math.PI * 2); // Expand before fading
-            ctx.fill(); }); }
+        function drawExplosions() {
+            gameState.fx.explosions.forEach(p => {
+                if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return;
+                ctx.fillStyle = `rgba(255, ${Math.random()*150 + 100}, 0, ${p.alpha})`;
+                ctx.beginPath();
+                // Calculate radius based on elapsed life
+                const elapsedLife = p.initialLife - p.life;
+                const expansionFactor = elapsedLife * 0.08; // Controls how fast it expands
+                const currentRadius = p.size * (1 + expansionFactor);
+                // Ensure radius is never negative or too small
+                ctx.arc(p.x, p.y, Math.max(0.1, currentRadius), 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
         function drawProjectiles() { gameState.world.projectiles.forEach(p => { if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); }); }
         function drawMuzzleFlashes() { gameState.fx.muzzleFlashes.forEach(f => { if (f.x < gameState.camera.x || f.x > gameState.camera.x + canvas.width || f.y < gameState.camera.y || f.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, 220, 150, ${f.alpha})`; ctx.beginPath(); for (let i = 0; i < 10; i++) { const radius = (i % 2 === 0) ? f.size : f.size / 2; const angle = i * Math.PI / 5; ctx.lineTo(f.x + radius * Math.cos(angle), f.y + radius * Math.sin(angle)); } ctx.closePath(); ctx.fill(); }); }
         function drawHitSparks() { gameState.fx.hitSparks.forEach(s => { if (s.x < gameState.camera.x || s.x > gameState.camera.x + canvas.width || s.y < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, 200, 100, ${s.alpha})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill(); }); }
