@@ -3,20 +3,19 @@
 (function() {
     "use strict"; // Enable strict mode
 
-    // --- WebGL Setup and Shader Logic ---
-
+    // --- DOM Element Check ---
     const webglCanvas = document.getElementById('webglCanvas');
-    let gl = null; // Keep gl scoped within this IIFE
-
     if (!webglCanvas) {
         console.error("WebGL Canvas element with id 'webglCanvas' not found!");
         return; // Stop script execution if canvas isn't found
     }
 
+    // --- WebGL Context Initialization ---
+    let gl = null; // Keep gl scoped within this IIFE
     try {
         webglCanvas.width = window.innerWidth;
         webglCanvas.height = window.innerHeight;
-        // Try to get webgl2, fall back to webgl1
+        // Try to get webgl2, fall back to webgl1 or experimental
         gl = webglCanvas.getContext('webgl2') ||
              webglCanvas.getContext('webgl') ||
              webglCanvas.getContext('experimental-webgl');
@@ -38,172 +37,220 @@
     }
 
     // --- Shader Sources ---
-    // Vertex Shader (GLSL 3.00 ES)
+
+    // Vertex Shader (GLSL 3.00 ES) - Simple pass-through
     const vertexShaderSource = `#version 300 es
         precision highp float; // Precision needed in VS for GLSL 300 es
-        in vec4 a_position;
+        in vec4 a_position;    // Input vertex position (from buffer)
         void main() {
-            gl_Position = a_position; // Pass position through
+            // Directly forward the position to clip space
+            gl_Position = a_position;
         }
     `;
 
-    // Fragment Shader (GLSL 3.00 ES - REVISED: Raymarched Mandelbulb Variation)
+    // Fragment Shader (GLSL 3.00 ES - Raymarched Mandelbulb Variation)
     const fragmentShaderSource = `#version 300 es
-        precision highp float; // Precision qualifier required in fragment shaders
+        precision highp float; // High precision is important for raymarching
 
         // Uniforms: Inputs from JavaScript
-        uniform float u_time;
-        uniform vec2 u_resolution;
+        uniform float u_time;       // Current time in seconds
+        uniform vec2 u_resolution; // Canvas resolution in pixels
 
-        // Output variable: Replaces gl_FragColor
+        // Output variable: The final color of the fragment
         out vec4 outColor;
 
         // --- Constants ---
-        const int MAX_STEPS = 80;        // Increased steps for potentially better quality
-        const float MAX_DIST = 100.0;      // Max distance to march
-        const float SURFACE_DIST = 0.001; // Hit threshold (epsilon)
+        const int MAX_STEPS = 80;        // Max iterations for raymarching loop
+        const float MAX_DIST = 100.0;    // Max distance to trace a ray
+        const float SURFACE_DIST = 0.001;// Threshold to consider a surface hit
         const float PI = 3.14159265359;
-        const int FBM_OCTAVES = 5; // Keep for updateShader compatibility if needed elsewhere
 
         // --- Helper Functions ---
-        // Basic random function
-        float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
-
-        // --- SDF Definitions (Inspired by Inigo Quilez / Shader Bible) ---
-        // Basic Sphere SDF
-        float sdSphere( vec3 p, float s ) {
-            return length(p)-s;
+        // Basic pseudo-random number generator for a 2D vector
+        float rand(vec2 co){
+            return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
         }
 
-        // Mandelbulb SDF variation
+        // --- SDF Definitions (Signed Distance Functions) ---
+
+        // Simple Sphere SDF: distance from point p to sphere of radius s centered at origin
+        float sdSphere( vec3 p, float s ) {
+            return length(p) - s;
+        }
+
+        // Mandelbulb Fractal SDF variation (complex shape defined by iteration)
         float sdMandelbulb( vec3 pos ) {
-            vec3 z = pos;
-            float dr = 1.0;
-            float r = 0.0;
-            float power = 8.0 + 2.0 * sin(u_time * 0.2); // Unhinged: Power animates wildly
+            vec3 z = pos; // Iteration variable, starts at the sample point
+            float dr = 1.0; // Derivative approximation for distance estimation
+            float r = 0.0;  // Magnitude of z
+            // Power determines the fractal's complexity, animated for effect
+            float power = 8.0 + 2.0 * sin(u_time * 0.2);
 
-            for (int i = 0; i < 5; i++) { // Lower iterations for performance/glitchiness
+            // Iterate the Mandelbulb formula
+            for (int i = 0; i < 5; i++) { // Low iteration count for performance/glitchy look
                 r = length(z);
-                if (r > 2.0) break; // Bailout
+                if (r > 2.0) break; // Bailout condition: point is likely outside the set
 
-                // Convert to polar coordinates
-                float theta = acos(clamp(z.z/r, -1.0, 1.0)); // Clamp for safety
-                float phi = atan(z.y, z.x);
+                // Convert to spherical coordinates
+                float theta = acos(clamp(z.z / r, -1.0, 1.0)); // Angle from Z axis (clamped for safety)
+                float phi = atan(z.y, z.x);             // Angle from X axis in XY plane
+
+                // Update derivative estimation
                 dr = pow(r, power - 1.0) * power * dr + 1.0;
 
-                // Scale and rotate
+                // Scale and rotate in spherical coordinates based on power and time
                 float zr = pow(r, power);
-                theta = theta * power + u_time * 0.5; // Add time-based twist
-                phi = phi * power + u_time * 0.4;
+                theta = theta * power + u_time * 0.5; // Twist based on time
+                phi = phi * power + u_time * 0.4;   // Twist based on time
 
-                // Convert back to Cartesian coordinates and add original position
+                // Convert back to Cartesian coordinates and add original position (the fractal formula)
                 z = zr * vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
                 z += pos;
             }
-            // Distance estimation
+            // Return the estimated distance to the Mandelbulb surface
             return 0.5 * log(r) * r / dr;
         }
 
-        // Scene SDF: Combining shapes
+        // Scene SDF: Defines the entire world geometry by combining primitives
         float sceneSDF( vec3 p ) {
-            float ground = p.y + 1.5; // Simple plane
-            p.y += sin(p.x * 0.5 + u_time) * 0.2; // Wobble the fractal
-            p.x += cos(p.z * 0.5 - u_time * 1.1) * 0.3;
-            float fractal = sdMandelbulb(p * (1.0 + 0.3 * sin(u_time * 0.1))); // Scale oscillates
-            return min(ground, fractal); // Union
+            // Ground Plane: Simple plane at y = -1.5
+            float ground = p.y + 1.5;
+
+            // Warp the space before evaluating the fractal for a wobbling effect
+            vec3 warped_p = p;
+            warped_p.y += sin(p.x * 0.5 + u_time) * 0.2;
+            warped_p.x += cos(p.z * 0.5 - u_time * 1.1) * 0.3;
+
+            // Mandelbulb fractal, with oscillating scale based on time
+            float fractal = sdMandelbulb(warped_p * (1.0 + 0.3 * sin(u_time * 0.1)));
+
+            // Combine ground and fractal using minimum (boolean union)
+            return min(ground, fractal);
         }
 
-        // --- Normal Calculation (Gradient of SDF) --- *** FIXED ***
+        // --- Normal Calculation (Gradient of SDF) ---
+        // Calculates the surface normal at point p by sampling the SDF gradient
         vec3 calcNormal( vec3 p ) {
-            float eps = SURFACE_DIST * 0.5; // Use a small epsilon based on surface distance
+            // Epsilon: small offset for finite difference calculation
+            float eps = SURFACE_DIST * 0.5; // Should be small relative to details
+            // Calculate gradient by sampling SDF slightly offset in each axis direction
             vec3 n = vec3(
-                sceneSDF( vec3(p.x+eps, p.y, p.z) ) - sceneSDF( vec3(p.x-eps, p.y, p.z) ), // Difference along X
-                sceneSDF( vec3(p.x, p.y+eps, p.z) ) - sceneSDF( vec3(p.x, p.y-eps, p.z) ), // Difference along Y
-                sceneSDF( vec3(p.x, p.y, p.z+eps) ) - sceneSDF( vec3(p.x, p.y, p.z-eps) )  // Difference along Z
+                sceneSDF( vec3(p.x + eps, p.y, p.z) ) - sceneSDF( vec3(p.x - eps, p.y, p.z) ),
+                sceneSDF( vec3(p.x, p.y + eps, p.z) ) - sceneSDF( vec3(p.x, p.y - eps, p.z) ),
+                sceneSDF( vec3(p.x, p.y, p.z + eps) ) - sceneSDF( vec3(p.x, p.y, p.z - eps) )
             );
+            // Normalize the resulting gradient vector to get the unit normal
             return normalize(n);
         }
 
         // --- Raymarching Function (Sphere Tracing) ---
+        // Marches a ray from origin 'ro' in direction 'rd' and returns distance to hit
         float rayMarch( vec3 ro, vec3 rd ) {
-            float dO = 0.0; // Distance from Origin
-            for( int i=0; i < MAX_STEPS; i++ ) {
-                vec3 p = ro + rd * dO;  // Current position
-                float dS = sceneSDF(p); // Distance to Scene
-                // Use a slightly larger factor for the relative epsilon to avoid artifacts
-                if( dS < SURFACE_DIST * max(1.0, dO * 0.1) ) { // Hit condition (relative epsilon)
-                     return dO;
+            float dO = 0.0; // Distance traveled along the ray from the Origin
+            for( int i = 0; i < MAX_STEPS; i++ ) {
+                vec3 p = ro + rd * dO;  // Current point along the ray
+                float dS = sceneSDF(p); // Calculate distance from current point to the scene surface
+
+                // Check for hit: if distance is very small (relative to distance traveled)
+                // Use a relative epsilon to handle varying scales and distances
+                if( dS < SURFACE_DIST * max(1.0, dO * 0.1) ) {
+                     return dO; // Return the distance traveled to the hit point
                 }
-                dO += dS * (0.6 + 0.4 * rand(rd.xy + float(i))); // Step forward, add some noise
-                if( dO > MAX_DIST ) { // Missed
-                    return MAX_DIST;
+
+                // Advance the ray by the safe distance 'dS'
+                // Add some randomness to step size for a potentially jittery/noisy effect
+                dO += dS * (0.6 + 0.4 * rand(rd.xy + float(i)));
+
+                // Check if the ray has traveled too far
+                if( dO > MAX_DIST ) {
+                    return MAX_DIST; // Return max distance if no hit within range
                 }
             }
-            return MAX_DIST; // Missed
+            return MAX_DIST; // Return max distance if no hit within MAX_STEPS
         }
 
         // --- Main Shader Logic ---
         void main() {
-            // Normalized device coordinates, aspect corrected, origin center
+            // Calculate normalized device coordinates (uv) - range depends on aspect ratio, typically -1 to 1 on shortest side
             vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.x, u_resolution.y);
-            vec2 originalUV = gl_FragCoord.xy / u_resolution.xy; // Keep original UVs if needed
+            // Keep original UV coordinates (0 to 1) if needed for effects like scanlines
+            // vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
 
             // --- Camera Setup ---
-            vec3 ro = vec3(2.5 * cos(u_time * 0.3), 1.5 + sin(u_time * 0.2), 2.5 * sin(u_time * 0.3)); // Ray Origin (animated)
+            // Define camera position (animated orbit)
+            vec3 ro = vec3(2.5 * cos(u_time * 0.3), 1.5 + sin(u_time * 0.2), 2.5 * sin(u_time * 0.3));
+            // Define point the camera looks at
             vec3 target = vec3(0.0, 0.5, 0.0);
-            vec3 camF = normalize(target - ro); // Forward
-            vec3 camR = normalize(cross(vec3(0.0, 1.0, 0.0), camF)); // Right
-            vec3 camU = cross(camF, camR); // Up
-            // Calculate Ray Direction (perspective)
-            vec3 rd = normalize(uv.x * camR + uv.y * camU + 1.5 * camF); // Adjust 1.5 for FOV
+            // Calculate camera orientation vectors
+            vec3 camForward = normalize(target - ro);                 // Forward direction
+            vec3 camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camForward)); // Right direction
+            vec3 camUp = cross(camForward, camRight);                   // Up direction
+
+            // Calculate ray direction for the current pixel (perspective projection)
+            // The '1.5' factor controls the Field of View (FOV) - smaller is more zoomed in
+            vec3 rd = normalize(uv.x * camRight + uv.y * camUp + 1.5 * camForward);
 
             // --- Raymarch the scene ---
-            float dist = rayMarch(ro, rd);
+            float dist = rayMarch(ro, rd); // Get distance to the first hit
 
             // --- Shading ---
-            vec3 col = vec3(0.0); // Background
-            if( dist < MAX_DIST ) { // Hit
-                vec3 p = ro + rd * dist; // Hit position
-                vec3 n = calcNormal(p); // Normal
+            vec3 col = vec3(0.0); // Initialize color to black (background)
 
-                // Lighting (simple Blinn-Phong-ish)
-                vec3 lightPos = vec3(5.0 * sin(u_time * 0.6), 5.0, 5.0 * cos(u_time * 0.6)); // Animated light
-                vec3 lightDir = normalize(lightPos - p);
-                vec3 viewDir = normalize(ro - p);
-                vec3 halfwayDir = normalize(lightDir + viewDir);
+            if( dist < MAX_DIST ) { // If the ray hit something within the max distance
+                vec3 p = ro + rd * dist; // Calculate the exact hit position
+                vec3 n = calcNormal(p);  // Calculate the surface normal at the hit point
 
-                // Unhinged Material Colors based on position/normal/time
+                // Define light properties (animated position)
+                vec3 lightPos = vec3(5.0 * sin(u_time * 0.6), 5.0, 5.0 * cos(u_time * 0.6));
+                vec3 lightColor = vec3(1.0, 0.95, 0.9); // Slightly warm light
+
+                // Calculate lighting vectors
+                vec3 lightDir = normalize(lightPos - p);   // Direction from hit point to light
+                vec3 viewDir = normalize(ro - p);      // Direction from hit point to camera
+                vec3 halfwayDir = normalize(lightDir + viewDir); // Halfway vector for Blinn-Phong
+
+                // Define material properties (procedural & "unhinged")
+                // Base color varies with position and time
                 vec3 baseColor = vec3(0.6, 0.2, 0.8) + 0.4 * sin(p * 3.0 + u_time * 2.0);
-                baseColor = mix(baseColor, vec3(0.1, 0.9, 0.5), smoothstep(-0.5, 0.5, n.y)); // Color based on normal Y
-                baseColor = clamp(baseColor, 0.0, 1.0); // Ensure valid color range
+                // Mix color based on the surface normal's Y component (e.g., green tops, purple sides)
+                baseColor = mix(baseColor, vec3(0.1, 0.9, 0.5), smoothstep(-0.5, 0.5, n.y));
+                baseColor = clamp(baseColor, 0.0, 1.0); // Ensure color is within valid range [0,1]
 
-                float ambient = 0.2;
-                float diffuse = max(dot(n, lightDir), 0.0) * 0.8;
-                float specular = pow(max(dot(n, halfwayDir), 0.0), 32.0) * (0.5 + 0.5 * sin(u_time)); // Pulsating specular
+                // Calculate Blinn-Phong lighting components
+                float ambient = 0.2; // Ambient light contribution
+                float diffuse = max(dot(n, lightDir), 0.0) * 0.8; // Diffuse reflection (Lambertian)
+                // Specular reflection, with intensity pulsating over time
+                float specular = pow(max(dot(n, halfwayDir), 0.0), 32.0) * (0.5 + 0.5 * sin(u_time));
 
-                col = baseColor * (ambient + diffuse) + vec3(1.0) * specular;
+                // Combine lighting components
+                col = baseColor * lightColor * (ambient + diffuse) + lightColor * specular;
 
-                // Cheap distance fog
+                // Add cheap distance fog effect
+                // Fog fades in from 0 distance up to 80% of MAX_DIST
                 float fogAmount = smoothstep(0.0, MAX_DIST * 0.8, dist);
-                col = mix(col, vec3(0.05, 0.0, 0.1), fogAmount); // Mix with dark purple fog
+                // Mix the calculated color with a dark purple fog color based on distance
+                col = mix(col, vec3(0.05, 0.0, 0.1), fogAmount);
 
             } else {
-               // Background Sky - procedural noise
-               col = vec3(0.1, 0.0, 0.2) + 0.2 * pow(max(0.0, dot(rd, vec3(0.0, 1.0, 0.0))), 2.0); // Simple gradient + up-vector glow
-               col += 0.05 * rand(uv + fract(u_time)); // Add some noise
+               // Background Sky: If the ray missed the scene
+               // Simple gradient based on ray direction's Y component + noise
+               col = vec3(0.1, 0.0, 0.2) + 0.2 * pow(max(0.0, dot(rd, vec3(0.0, 1.0, 0.0))), 2.0);
+               col += 0.05 * rand(uv + fract(u_time)); // Add some random noise
             }
 
-            // Final color correction / effects
-            col = pow(col, vec3(0.8, 0.9, 1.0)); // Color grading tweak
-            col += (rand(gl_FragCoord.xy)-0.5)*0.05; // Noise grain
+            // --- Final Color Adjustments ---
+            // Apply a simple power curve for color grading/contrast adjustment
+            col = pow(col, vec3(0.8, 0.9, 1.0));
+            // Add subtle random noise grain based on screen coordinates
+            col += (rand(gl_FragCoord.xy) - 0.5) * 0.05;
 
-            // Ensure alpha is 1.0
+            // Final output: Clamp color to valid [0,1] range and set alpha to 1.0 (opaque)
             outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
         }
     `; // End of fragmentShaderSource
 
     // --- WebGL Utility Functions ---
-    // (createShader, createProgram functions remain exactly the same)
+    // (createShader and createProgram functions remain unchanged)
      function createShader(type, source) {
         const shader = gl.createShader(type);
         if (!shader) { throw new Error(`Failed to create shader (type: ${type})`); }
@@ -213,7 +260,6 @@
             const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
             const infoLog = gl.getShaderInfoLog(shader);
             console.error(`>>> Shader compile error (${shaderType}):\n${infoLog}`);
-            // Log source with line numbers for easier debugging
             const lines = source.split('\n');
             const sourceWithLines = lines.map((line, index) => `${index + 1}: ${line}`).join('\n');
             console.error(`--- Shader Source (${shaderType}) ---\n${sourceWithLines}\n--------------------------`);
@@ -232,7 +278,6 @@
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             const infoLog = gl.getProgramInfoLog(program);
             console.error('>>> Program link error:', infoLog);
-            // Log info about attached shaders if linking fails
             const shaders = gl.getAttachedShaders(program);
             if (shaders) {
                  shaders.forEach(shader => {
@@ -244,24 +289,23 @@
             gl.deleteProgram(program);
             throw new Error("Program linking failed");
         }
-        // Detaching shaders after successful linking is good practice
         gl.detachShader(program, vertexShader);
         gl.detachShader(program, fragmentShader);
         return program;
     }
 
     // --- WebGL State Variables ---
-    // (program, attribute/uniform locations, buffer, animationFrameId, startTime remain the same)
+    // (Variables remain unchanged)
     let program = null;
     let positionAttributeLocation = -1;
     let timeUniformLocation = null;
     let resolutionUniformLocation = null;
     let positionBuffer = null;
-    let animationFrameId = null; // Keep track of animation frame request
+    let animationFrameId = null;
     let startTime = performance.now();
 
     // --- Initialize WebGL Program and Buffers ---
-    // (setupWebGL remains functionally the same, using the new fragmentShaderSource)
+    // (setupWebGL function remains unchanged)
     function setupWebGL() {
         let vs = null;
         let fs = null;
@@ -270,21 +314,17 @@
             fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource); // Uses the new fragment shader source
             program = createProgram(vs, fs);
 
-            // Get attribute/uniform locations
             positionAttributeLocation = gl.getAttribLocation(program, "a_position");
             timeUniformLocation = gl.getUniformLocation(program, "u_time");
             resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-            // Basic check if locations are valid
             if (positionAttributeLocation === -1) console.warn("Attribute 'a_position' not found in shader program.");
             if (!timeUniformLocation) console.warn("Uniform 'u_time' not found in shader program.");
             if (!resolutionUniformLocation) console.warn("Uniform 'u_resolution' not found in shader program.");
 
-            // Create buffer for the fullscreen quad positions
             positionBuffer = gl.createBuffer();
             if (!positionBuffer) throw new Error("Failed to create position buffer");
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-            // Use TRIANGLE_STRIP: (-1,1), (-1,-1), (1,1), (1,-1) covers the screen
             const positions = new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1]);
             gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
@@ -292,62 +332,48 @@
 
         } catch (error) {
             console.error(">>> Failed during WebGL setup:", error);
-            // Clean up partial resources if error occurred
             if (program) gl.deleteProgram(program);
             if (vs) gl.deleteShader(vs);
             if (fs) gl.deleteShader(fs);
             if (positionBuffer) gl.deleteBuffer(positionBuffer);
-            program = null; // Ensure program is null if setup failed
+            program = null;
             return false; // Indicate setup failure
         } finally {
-            // Delete shaders after program creation (whether successful or not)
             if (vs) gl.deleteShader(vs);
             if (fs) gl.deleteShader(fs);
         }
     }
 
     // --- Render Loop ---
-    // (render function remains functionally the same)
+    // (render function remains unchanged)
     function render(now) {
-        if (!program) { // If program is null (setup failed or deleted), stop rendering
+        if (!program) {
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
             return;
         }
 
-        // Calculate time elapsed
         let time = (now - startTime) * 0.001; // Time in seconds
 
-        // --- Canvas Resize Check ---
         const currentWidth = window.innerWidth;
         const currentHeight = window.innerHeight;
         if (webglCanvas.width !== currentWidth || webglCanvas.height !== currentHeight) {
             webglCanvas.width = currentWidth;
             webglCanvas.height = currentHeight;
-            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height); // Update viewport
-            console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`);
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            // console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`); // Optional: uncomment for resize logging
         }
 
-        // --- Prepare for Drawing ---
         gl.useProgram(program);
 
-        // --- Set up Vertex Attributes ---
         if (positionAttributeLocation !== -1 && positionBuffer) {
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
             gl.enableVertexAttribArray(positionAttributeLocation);
-            gl.vertexAttribPointer(
-                positionAttributeLocation, // location
-                2,                     // size (num components per iteration, vec2)
-                gl.FLOAT,              // type
-                false,                 // normalize
-                0,                     // stride (0 = use size * sizeof(type))
-                0                      // offset (bytes from start of buffer)
-            );
+            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
         } else {
             if (positionAttributeLocation !== -1) gl.disableVertexAttribArray(positionAttributeLocation);
         }
 
-        // --- Set Uniforms ---
         if (timeUniformLocation) {
            gl.uniform1f(timeUniformLocation, time);
         }
@@ -355,16 +381,13 @@
            gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
         }
 
-        // --- Draw the Quad ---
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-        // --- Request Next Frame ---
         animationFrameId = requestAnimationFrame(render);
     }
 
     // --- Function to Update Shader Dynamically ---
-    // (updateShader function remains functionally the same)
-    // Expose this function to the global scope so it can be called from index.html
+    // (updateShader function remains unchanged)
     window.updateShader = function(newShaderCode) {
         if (!gl) {
             console.warn("WebGL context not available. Cannot update shader.");
@@ -373,7 +396,6 @@
         }
         console.log("Attempting shader update with new code...");
 
-        // Basic validation
         if (!newShaderCode || typeof newShaderCode !== 'string' || newShaderCode.indexOf('main()') === -1) {
              console.error("Invalid shader code provided: Missing main() function or not a string.");
              if(typeof showNotification === 'function') showNotification("Invalid shader code: Missing main().");
@@ -381,7 +403,6 @@
              return;
         }
 
-        // Construct the full source for the new fragment shader, including essential parts
          const completeNewFragmentSource = `#version 300 es
             precision highp float;
             uniform float u_time;
@@ -389,7 +410,7 @@
             out vec4 outColor;
 
             // --- Include Common Helper Functions ---
-            // Helper functions needed by the dynamic code (adjust as necessary)
+            // These might be needed by the dynamically injected code
             float hash(float n) { return fract(sin(n) * 43758.5453); }
             float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
             float fbm(vec2 p) { float s=0.,a=.7,f=1.;int FBM_OCTAVES_DYNAMIC=5; for(int i=0;i<FBM_OCTAVES_DYNAMIC;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
@@ -412,35 +433,25 @@
         let newFs = null;
         let newProgram = null;
         try {
-             // Recompile the vertex shader
              newVs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-             // Compile the new fragment shader
              newFs = createShader(gl.FRAGMENT_SHADER, completeNewFragmentSource);
-             // Link the new program
              newProgram = createProgram(newVs, newFs);
 
-             // --- Success! Switch to the new program ---
              console.log("New shader compiled and linked successfully.");
 
-             // Stop the old animation loop
              if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
-
-             // Delete the old program *before* assigning the new one
              if (program) { gl.deleteProgram(program); console.log("Old program deleted."); }
-             program = newProgram; // Assign the new program
+             program = newProgram;
 
-             // Re-get all attribute and uniform locations for the *new* program
              positionAttributeLocation = gl.getAttribLocation(program, "a_position");
              timeUniformLocation = gl.getUniformLocation(program, "u_time");
              resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-             // Optional: Check new locations
              if (positionAttributeLocation === -1) console.warn("New program missing 'a_position' attribute.");
              if (!timeUniformLocation) console.warn("New program missing 'u_time' uniform.");
              if (!resolutionUniformLocation) console.warn("New program missing 'u_resolution' uniform.");
 
-             // Restart the render loop with the new program
-             startTime = performance.now(); // Optionally reset start time
+             startTime = performance.now();
              animationFrameId = requestAnimationFrame(render);
 
              console.log("Shader update complete. Render loop restarted.");
@@ -448,21 +459,16 @@
 
         } catch (e) {
              console.error('>>> Shader update failed during compile/link:', e);
-             // Clean up partially created resources from the failed update attempt
              if (newProgram) gl.deleteProgram(newProgram);
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
-             // Do NOT delete the old 'program' if the update failed
              if(typeof showNotification === 'function') showNotification(`SHADER UPDATE FAILED: ${e.message}`);
-
-             // If the render loop was stopped, restart it with the old program
              if (!animationFrameId && program) {
                  console.log("Restarting render loop with previous program after update failure.");
                  animationFrameId = requestAnimationFrame(render);
              }
 
         } finally {
-             // Delete the new shaders regardless of success
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
         }
@@ -470,20 +476,20 @@
 
     // --- Start WebGL ---
     if (setupWebGL()) {
-        // Start the rendering loop only if setup was successful
         console.log("WebGL setup successful. Starting render loop.");
         animationFrameId = requestAnimationFrame(render);
     } else {
         console.error("WebGL setup failed. Render loop will not start.");
-        // Ensure static background as fallback
         if(document.body) document.body.style.backgroundColor = '#050511';
     }
 
     // --- Resize Listener ---
-    // (Resize listener remains the same)
+    // (Resize listener remains unchanged)
     window.addEventListener('resize', () => {
-        // The actual resizing logic is handled within the render loop check
+        // Resize check is handled in render loop
         if (!animationFrameId && program) {
+            // If the loop isn't running but we have a program, request a frame
+            // This might happen if the tab was hidden and the loop stopped
             console.log("Resize event: Requesting animation frame.");
             animationFrameId = requestAnimationFrame(render);
         }
@@ -492,36 +498,4 @@
 })(); // Execute the IIFE
 ```
 
-**Reasoning for the fix:**
-
-The error messages clearly pointed to lines 69-71 within the `calcNormal` function. The original incorrect code was:
-
-```glsl
-vec3 calcNormal( vec3 p ) {
-    vec2 e = vec2(SURFACE_DIST * 0.5, 0.0); // Smaller epsilon for normal calc
-    return normalize( vec3( sceneSDF(p + e.xyy()) - sceneSDF(p - e.xyy()), // INCORRECT
-                           sceneSDF(p + e.yxy()) - sceneSDF(p - e.yxy()), // INCORRECT
-                           sceneSDF(p + e.yyx()) - sceneSDF(p - e.yyx())  // INCORRECT
-                         ));
-}
-```
-
-The corrected code replaces the invalid swizzling with explicit `vec3` constructions for the offsets along each axis:
-
-```glsl
-vec3 calcNormal( vec3 p ) {
-    float eps = SURFACE_DIST * 0.5; // Define epsilon directly
-    vec3 n = vec3(
-        sceneSDF( vec3(p.x+eps, p.y, p.z) ) - sceneSDF( vec3(p.x-eps, p.y, p.z) ), // CORRECT X offset
-        sceneSDF( vec3(p.x, p.y+eps, p.z) ) - sceneSDF( vec3(p.x, p.y-eps, p.z) ), // CORRECT Y offset
-        sceneSDF( vec3(p.x, p.y, p.z+eps) ) - sceneSDF( vec3(p.x, p.y, p.z-eps) )  // CORRECT Z offset
-    );
-    return normalize(n);
-}
-```
-
-This method correctly calculates the gradient of the SDF by sampling slightly offset points along the X, Y, and Z axes and finding the difference.
-
-I also adjusted the relative epsilon check in the `rayMarch` function slightly (`max(1.0, dO * 0.1)`) as this can sometimes help prevent artifacts when the ray origin is very close to a surface.
-
-This corrected version should compile and run without the previous errors. Let me know if you encounter any other issu
+I've updated the code block with the corrected `calcNormal` function and ensured the overall JavaScript structure appears sound. This should resolve the `Unexpected identifier 'calcNormal'` syntax err
