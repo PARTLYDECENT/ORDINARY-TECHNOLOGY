@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wasteland Action Sim</title>
+    <title>Wasteland Zombie Survival</title>
     <style>
         body { margin: 0; padding: 0; background-color: #111; overflow: hidden; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         #game-container { position: relative; }
@@ -21,7 +21,6 @@
         #mission-text, #stats { display: none; } /* Hide placeholders */
         #weapon-display { position: absolute; bottom: 10px; right: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; }
         #vehicle-display { position: absolute; top: 40px; left: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; display: none;} /* Added vehicle display */
-        #error-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-size: 20px; background-color: rgba(0, 0, 0, 0.8); padding: 20px; border-radius: 10px; border: 2px solid red; z-index: 100; display: none; } /* Error display */
     </style>
 </head>
 <body>
@@ -32,7 +31,8 @@
              <div id="speed-line">SPD: <span id="speed">0</span></div>
              <div id="fuel-line">FUEL: <div id="fuel-bar"><div id="fuel-level"></div></div></div>
              <div id="location">LOCATION: UNKNOWN</div>
-             <div id="enemy-count">ZOMBIES: <span id="enemies-left">0</span></div> </div>
+             <div id="enemy-count">ZOMBIES: <span id="enemies-left">0</span></div>
+         </div>
          <div id="mini-map"></div>
          <div id="controls-display">
              WASD/Arrows: Move | E: Enter/Exit | F: Refuel | SPACE: Handbrake | SHIFT/Click: Fire | Q: Switch Weapon
@@ -41,7 +41,6 @@
         <div id="vehicle-display">VEHICLE: NONE</div> <div id="mission-text"></div>
         <div id="stats"></div>
     </div>
-    <div id="error-display">An error occurred. Check the console for details.</div>
 
     <script>
         // --- Canvas and Context ---
@@ -65,18 +64,19 @@
         const ENEMY_WIDTH = PLAYER_PED_WIDTH;
         const ENEMY_HEIGHT = PLAYER_PED_HEIGHT;
 
-        // Projectile Constants
+        // Projectile Constants (Only for player now)
         const PROJECTILE_SPEED = 8;
         const PROJECTILE_LIFESPAN = 60;
-        const PROJECTILE_DAMAGE_PLAYER = 12; // Enemy damage to player
         const PROJECTILE_DAMAGE_PISTOL = 18; // Player pistol damage to enemy
         const PROJECTILE_DAMAGE_MACHINEGUN = 10; // Player machine gun damage to enemy
 
-        const ZOMBIE_HEALTH = 40; // Slightly less health for zombies
-        const ZOMBIE_SPEED = 1.0; // Slower zombie speed
-        const ZOMBIE_MELEE_DAMAGE = 15; // Damage when zombies hit player
-        const ZOMBIE_ATTACK_COOLDOWN = 60; // Frames between zombie attacks
-        const ENEMY_CHASE_DIST = 350; // Still use this for aggro range
+        const ENEMY_HEALTH = 70; // Increased health for zombies
+        const ENEMY_SPEED = 0.8; // Slower zombie speed
+        const ENEMY_CHASE_DIST = 400; // Increased chase distance
+        const ENEMY_ATTACK_DIST = 20; // Melee attack distance
+        const ENEMY_ATTACK_COOLDOWN = 60; // Frames between zombie attacks
+        const ENEMY_DAMAGE_MELEE = 8; // Damage per zombie melee hit
+
         const PLAYER_ENTER_VEHICLE_RANGE = 30;
         const ANIM_SPEED = 8; // Slower animation for zombies
 
@@ -125,7 +125,7 @@
                 animSpeed: ANIM_SPEED,
                 fireCooldown: 0,
                 currentWeapon: 'pistol',
-                hasMachineGun: false,
+                hasMachineGun: false, // Player still has a machine gun for now
                 killedEnemiesCount: 0,
                 // Current Vehicle Properties (copied from VEHICLE_TYPES when entering)
                 width: VEHICLE_TYPES.sedan.width,
@@ -144,7 +144,7 @@
                 width: 3000, height: 3000, roadWidth: 60, grassColor: '#8B8467', // Wasteland ground color
                 roadColor: '#5A5240', lineColor: '#A09888', lineWidth: 2, // Desaturated road colors
                 trees: [], buildings: [], obstacles: [], gasStations: [],
-                vehicles: [], enemies: [], projectiles: [], // Enemies are now zombies
+                vehicles: [], enemies: [], projectiles: [],
                 impassableZones: [ { type: 'rocky', x: 2200, y: 2200, width: 500, height: 600, color: 'rgba(90, 80, 70, 0.6)' }, { type: 'ruins', x: 100, y: 100, width: 400, height: 500, color: 'rgba(120, 110, 100, 0.4)' } ], // Wasteland impassable zones
                 startTime: Date.now()
             },
@@ -332,24 +332,7 @@
         }
 
         // --- Game Loop ---
-        function gameLoop() {
-            try {
-                if (gameState.gameOver) {
-                    drawGameOver();
-                    requestAnimationFrame(gameLoop);
-                    return;
-                }
-                handleEnterExitAction();
-                handleWeaponSwitch();
-                handlePlayerFiring();
-                updateGame();
-                renderGame();
-                requestAnimationFrame(gameLoop);
-            } catch (error) {
-                console.error("Error in gameLoop:", error);
-                document.getElementById('error-display').style.display = 'block';
-            }
-        }
+        function gameLoop() { if (gameState.gameOver) { drawGameOver(); requestAnimationFrame(gameLoop); return; } handleEnterExitAction(); handleWeaponSwitch(); handlePlayerFiring(); updateGame(); renderGame(); requestAnimationFrame(gameLoop); }
 
         // --- Update Logic ---
         function updateGame() { updatePlayerPosition(); updateEnemies(); updateProjectiles(); updateCamera(); updateParticlesAndEffects(); updateHUD(); checkGameOverCondition(); }
@@ -379,92 +362,108 @@
              }
         }
 
-        // --- Zombie Logic (Melee Only) ---
-        function spawnEnemy(x, y) { // Renamed function conceptually, still uses 'enemies' array
+        // --- Enemy Logic (Zombie Behavior) ---
+        function spawnEnemy(x, y) {
             gameState.world.enemies.push({
-                x: x, y: y, health: ZOMBIE_HEALTH, maxHealth: ZOMBIE_HEALTH,
-                width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ZOMBIE_SPEED, angle: 0,
-                color: `hsl(100, ${10 + Math.random() * 20}%, ${30 + Math.random() * 10}%)`, // Greenish/greyish zombie color
-                state: 'chasing', // Zombies are always aggressive
-                attackCooldown: 0, // Added attack cooldown
-                // Animation properties (same as player, but slower)
-                isMoving: true, // Zombies are always moving
-                animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED + 2 // Slower animation
+                x: x, y: y, health: ENEMY_HEALTH, maxHealth: ENEMY_HEALTH,
+                width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ENEMY_SPEED, angle: 0,
+                color: `hsl(100, 50%, 30%)`, // Greenish color for zombies
+                state: 'idle',
+                aiTimer: Math.random() * 120,
+                attackCooldown: ENEMY_ATTACK_COOLDOWN, // Cooldown for melee attack
+                // Animation properties (same as player)
+                isMoving: false, animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED
             });
         }
 
         function updateEnemies() {
             for (let i = gameState.world.enemies.length - 1; i >= 0; i--) {
-                const zombie = gameState.world.enemies[i]; // Renamed for clarity
-                const oldX = zombie.x; const oldY = zombie.y;
-                const dxPlayer = gameState.player.x - zombie.x; const dyPlayer = gameState.player.y - zombie.y;
+                const enemy = gameState.world.enemies[i];
+                const oldX = enemy.x; const oldY = enemy.y;
+                const dxPlayer = gameState.player.x - enemy.x; const dyPlayer = gameState.player.y - enemy.y;
                 const distSqPlayer = dxPlayer * dxPlayer + dyPlayer * dyPlayer;
+                const distPlayer = Math.sqrt(distSqPlayer);
 
                 let targetAngleRad = Math.atan2(dyPlayer, dxPlayer);
-                zombie.isMoving = true; // Zombies are always moving
+                enemy.isMoving = false; // Assume not moving initially
 
-                // Zombies always chase the player
-                zombie.angle = targetAngleRad * 180 / Math.PI + 90;
+                // --- State Logic ---
+                if (enemy.state === 'idle') {
+                    enemy.aiTimer--;
+                    if (distSqPlayer < ENEMY_CHASE_DIST * ENEMY_CHASE_DIST) {
+                        enemy.state = 'chasing';
+                    } else if (enemy.aiTimer <= 0) {
+                        enemy.aiTimer = 120 + Math.random() * 120;
+                    }
+                } else if (enemy.state === 'chasing') {
+                    if (distSqPlayer > (ENEMY_CHASE_DIST + 50) * (ENEMY_CHASE_DIST + 50)) { // Lose player
+                        enemy.state = 'idle'; enemy.aiTimer = 60;
+                    } else {
+                        // Aim towards player
+                        enemy.angle = targetAngleRad * 180 / Math.PI + 90;
 
-                // Move towards player
-                zombie.x += Math.cos(targetAngleRad) * zombie.speed;
-                zombie.y += Math.sin(targetAngleRad) * zombie.speed;
+                        // Move towards player
+                         if (distPlayer > ENEMY_ATTACK_DIST * 0.8) { // Stop just short of attack distance
+                            enemy.x += Math.cos(targetAngleRad) * enemy.speed;
+                            enemy.y += Math.sin(targetAngleRad) * enemy.speed;
+                            enemy.isMoving = true;
+                         }
 
-                // --- Zombie Melee Attack ---
-                // Check if close enough to attack and attack is not on cooldown
-                if (gameState.playerState === 'onFoot' && distSqPlayer < (zombie.width + gameState.player.pedWidth) * (zombie.height + gameState.player.pedHeight) / 4 && zombie.attackCooldown <= 0) {
-                    gameState.player.health -= ZOMBIE_MELEE_DAMAGE;
-                    zombie.attackCooldown = ZOMBIE_ATTACK_COOLDOWN; // Reset cooldown
-                    console.log("Player Attacked by Zombie! Health:", gameState.player.health);
-                    // Add hit feedback for player?
+
+                        // --- Zombie Melee Attack ---
+                        if (distPlayer < ENEMY_ATTACK_DIST && enemy.attackCooldown <= 0 && gameState.playerState === 'onFoot') {
+                             gameState.player.health -= ENEMY_DAMAGE_MELEE;
+                             enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
+                             console.log("Player bitten! Health:", gameState.player.health); // Log bite for debugging
+                             // Add visual/audio feedback for bite?
+                        }
+                    }
                 }
 
-                 // Update zombie animation frame (slower)
-                 zombie.animTimer++;
-                 if (zombie.animTimer >= zombie.animSpeed) {
-                     zombie.animTimer = 0;
-                     zombie.animFrame = (zombie.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
+                 // Update enemy animation frame (same as player)
+                 if (enemy.isMoving) {
+                     enemy.animTimer++;
+                     if (enemy.animTimer >= enemy.animSpeed) {
+                         enemy.animTimer = 0;
+                         enemy.animFrame = (enemy.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
+                     }
+                 } else {
+                     enemy.animFrame = 0; // Idle frame
+                     enemy.animTimer = 0;
                  }
 
-                // Update attack cooldown
-                if (zombie.attackCooldown > 0) zombie.attackCooldown--;
+                // Update cooldown
+                if (enemy.attackCooldown > 0) enemy.attackCooldown--;
 
-                // Collision check for zombie
-                checkCollisions(oldX, oldY, zombie, 'enemy'); // Still use 'enemy' type for collision logic
+                // Collision check for enemy
+                checkCollisions(oldX, oldY, enemy, 'enemy');
 
                 // Check health
-                if (zombie.health <= 0) {
-                    createExplosion(zombie.x, zombie.y, zombie.color, 0.8); // Slightly smaller explosion
-                    gameState.world.enemies.splice(i, 1); // Remove zombie
+                if (enemy.health <= 0) {
+                    createExplosion(enemy.x, enemy.y, '#8B0000', 0.6); // Dark red explosion for death
+                    gameState.world.enemies.splice(i, 1);
                     gameState.player.killedEnemiesCount++; // Increment killed enemy count
-                    // Check if player gets machine gun
-                    if (gameState.player.killedEnemiesCount === 1 && !gameState.player.hasMachineGun) {
-                        gameState.player.hasMachineGun = true;
-                        console.log("Player acquired Machine Gun!"); // Log for debugging
-                        // Optionally switch weapon immediately
-                        // gameState.player.currentWeapon = 'machinegun';
-                        // document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`;
-                    }
+                    // Removed machine gun drop logic
                 }
             }
         }
 
-        // --- Projectile Logic (Handles owner) ---
+        // --- Projectile Logic (Only for player now) ---
         function updateProjectiles() {
              for (let i = gameState.world.projectiles.length - 1; i >= 0; i--) {
                  const p = gameState.world.projectiles[i];
+                 // Only process player projectiles
+                 if (p.owner !== 'player') {
+                     gameState.world.projectiles.splice(i, 1); // Remove non-player projectiles (shouldn't exist now)
+                     continue;
+                 }
+
                  p.x += p.vx; p.y += p.vy; p.lifespan--;
                  let hit = false; let hitWall = false;
 
-                 // Collision check depends on owner
-                 if (p.owner === 'player') {
-                     // Check vs Zombies (enemies)
-                     for (let j = gameState.world.enemies.length - 1; j >= 0; j--) { const zombie = gameState.world.enemies[j]; const dx = p.x - zombie.x; const dy = p.y - zombie.y; const hitRadius = Math.max(zombie.width, zombie.height) * 0.7; if (dx * dx + dy * dy < hitRadius * hitRadius) { zombie.health -= p.damage; hit = true; break; } }
-                 } else if (p.owner === 'enemy') { // This block is now effectively for zombie attacks (which are melee)
-                     // Projectiles from 'enemy' (zombies) are removed as they are melee only
-                     gameState.world.projectiles.splice(i, 1);
-                     continue; // Move to the next projectile
-                 }
+                 // Collision check vs Enemies
+                 for (let j = gameState.world.enemies.length - 1; j >= 0; j--) { const enemy = gameState.world.enemies[j]; const dx = p.x - enemy.x; const dy = p.y - enemy.y; const hitRadius = Math.max(enemy.width, enemy.height) * 0.7; if (dx * dx + dy * dy < hitRadius * hitRadius) { enemy.health -= p.damage; hit = true; break; } }
+
 
                  // Check collision with world geometry (if not already hit)
                  if (!hit) { const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for(const obj of worldGeometry) { if (p.x > obj.x && p.x < obj.x + obj.width && p.y > obj.y && p.y < obj.y + obj.height) { hit = true; hitWall = true; break; } } }
@@ -472,12 +471,12 @@
                  if (p.x < 0 || p.x > gameState.world.width || p.y < 0 || p.y > gameState.world.height) { hit = true; hitWall = true; }
 
                  // Remove projectile
-                 if (p.lifespan <= 0 || hit) { if (hitWall) { createHitSparks(p.x, p.y); } else if (hit && p.owner === 'player') { createExplosion(p.x, p.y, '#ff0', 0.4); /* Zombie hit splash */ } gameState.world.projectiles.splice(i, 1); } // Removed enemy hit splash
+                 if (p.lifespan <= 0 || hit) { if (hitWall) { createHitSparks(p.x, p.y); } else if (hit && p.owner === 'player') { createExplosion(p.x, p.y, '#ff0', 0.4); /* Enemy hit splash */ } gameState.world.projectiles.splice(i, 1); }
              }
          }
 
         // --- Collision ---
-        function checkCollisions(oldX, oldY, entity, entityType) { const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy'; const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width); const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height); const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH }; let collisionOccurred = false; let bounced = false; if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; } if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; } entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2; if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) { /* Zombies don't change state on bounce */ } const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of objects) { const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height }; if (isCollidingAABB(entityRect, objRect)) { collisionOccurred = true; entity.x = oldX; entity.y = oldY; if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); } else if (isEnemy) { /* Zombies just stop on collision */ } break; } } return collisionOccurred; } // Adjusted enemy collision response
+        function checkCollisions(oldX, oldY, entity, entityType) { const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy'; const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width); const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height); const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH }; let collisionOccurred = false; let bounced = false; if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; } if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; } entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2; if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) entity.state = 'idle'; const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of objects) { const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height }; if (isCollidingAABB(entityRect, objRect)) { collisionOccurred = true; entity.x = oldX; entity.y = oldY; if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); } else if (isEnemy) { entity.state = 'idle'; } break; } } return collisionOccurred; }
         function isCollidingAABB(rect1, rect2) { return ( rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y ); }
         function checkGasStations() { if (gameState.playerState !== 'driving') return; if (gameState.controls.refuel) { for (const station of gameState.world.gasStations) { const dx = gameState.player.x - (station.x + station.width / 2); const dy = gameState.player.y - (station.y + station.height / 2); const distanceSq = dx * dx + dy * dy; if (distanceSq < 70 * 70) { gameState.player.fuelLevel += 1.5; if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100; break; } } } }
         function checkLocation() { let currentZone = null; let closestDistance = Infinity; for (const zone of gameState.zones) { const dx = gameState.player.x - zone.x; const dy = gameState.player.y - zone.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance < zone.radius && distance < closestDistance) { closestDistance = distance; currentZone = zone; } } document.getElementById('location').textContent = `LOC: ${currentZone ? currentZone.name : 'WASTELAND'}`; } // Updated default location
@@ -491,7 +490,7 @@
             for (let i = 0; i < particles; i++) {
                 const angle = Math.random() * Math.PI * 2;
                 const speed = 1.5 + Math.random() * 4 * scale;
-                const particleColor = `hsl(${Math.random() * 60 + (color === '#ff0' ? 50 : (color === '#f66' ? 0 : 30))}, 90%, 60%)`;
+                const particleColor = color; // Use provided color for explosion
                 const life = 25 + Math.random() * 25; // Define life here
                 gameState.fx.explosions.push({
                     x: x, y: y,
@@ -518,79 +517,63 @@
 
         // --- Sound Functions (Basic Procedural Tones) ---
         function playShotSound(weaponType) {
-            try { // Added error handling for audio
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
 
-                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Start at low volume
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Start at low volume
 
-                if (weaponType === 'pistol') {
-                    oscillator.type = 'sine';
-                    oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1); // Quick fade
-                } else if (weaponType === 'machinegun') {
-                     oscillator.type = 'square';
-                     oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
-                     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05); // Faster fade
-                }
-
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.15); // Stop after a short time
-            } catch (error) {
-                 console.error("Error playing shot sound:", error);
+            if (weaponType === 'pistol') {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1); // Quick fade
+            } else if (weaponType === 'machinegun') {
+                 oscillator.type = 'square';
+                 oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
+                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05); // Faster fade
             }
+
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.15); // Stop after a short time
         }
 
         function startEngineNoise() {
-             try { // Added error handling for audio
-                 if (!engineNoiseOscillator) {
-                     engineNoiseOscillator = audioContext.createOscillator();
-                     engineNoiseGain = audioContext.createGain();
+             if (!engineNoiseOscillator) {
+                 engineNoiseOscillator = audioContext.createOscillator();
+                 engineNoiseGain = audioContext.createGain();
 
-                     engineNoiseOscillator.type = 'sawtooth'; // Sawtooth wave for a richer sound
-                     engineNoiseOscillator.frequency.setValueAtTime(100, audioContext.currentTime); // Base frequency
-                     engineNoiseGain.gain.setValueAtTime(0.05, audioContext.currentTime); // Low initial volume
+                 engineNoiseOscillator.type = 'sawtooth'; // Sawtooth wave for a richer sound
+                 engineNoiseOscillator.frequency.setValueAtTime(100, audioContext.currentTime); // Base frequency
+                 engineNoiseGain.gain.setValueAtTime(0.05, audioContext.currentTime); // Low initial volume
 
-                     engineNoiseOscillator.connect(engineNoiseGain);
-                     engineNoiseGain.connect(audioContext.destination);
+                 engineNoiseOscillator.connect(engineNoiseGain);
+                 engineNoiseGain.connect(audioContext.destination);
 
-                     engineNoiseOscillator.start();
-                 }
-             } catch (error) {
-                 console.error("Error starting engine noise:", error);
+                 engineNoiseOscillator.start();
              }
         }
 
         function updateEngineNoise() {
-             try { // Added error handling for audio
-                 if (engineNoiseOscillator) {
-                     // Vary frequency and volume based on speed
-                     const speedFactor = Math.abs(gameState.player.speed) / gameState.player.maxSpeed;
-                     const frequency = 100 + speedFactor * 200; // Frequency increases with speed
-                     const volume = 0.05 + speedFactor * 0.1; // Volume increases with speed
+             if (engineNoiseOscillator) {
+                 // Vary frequency and volume based on speed
+                 const speedFactor = Math.abs(gameState.player.speed) / gameState.player.maxSpeed;
+                 const frequency = 100 + speedFactor * 200; // Frequency increases with speed
+                 const volume = 0.05 + speedFactor * 0.1; // Volume increases with speed
 
-                     engineNoiseOscillator.frequency.linearRampToValueAtTime(frequency, audioContext.currentTime + 0.1);
-                     engineNoiseGain.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.1);
-                 }
-             } catch (error) {
-                 console.error("Error updating engine noise:", error);
+                 engineNoiseOscillator.frequency.linearRampToValueAtTime(frequency, audioContext.currentTime + 0.1);
+                 engineNoiseGain.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.1);
              }
         }
 
         function stopEngineNoise() {
-             try { // Added error handling for audio
-                 if (engineNoiseOscillator) {
-                     engineNoiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5); // Fade out
-                     engineNoiseOscillator.stop(audioContext.currentTime + 0.5); // Stop after fade
-                     engineNoiseOscillator = null;
-                     engineNoiseGain = null;
-                 }
-             } catch (error) {
-                 console.error("Error stopping engine noise:", error);
+             if (engineNoiseOscillator) {
+                 engineNoiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5); // Fade out
+                 engineNoiseOscillator.stop(audioContext.currentTime + 0.5); // Stop after fade
+                 engineNoiseOscillator = null;
+                 engineNoiseGain = null;
              }
         }
 
@@ -613,52 +596,39 @@
                  document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`; // Update vehicle display
              }
              checkLocation();
-             document.getElementById('enemies-left').textContent = gameState.world.enemies.length; // Still use enemies array for count
+             document.getElementById('enemies-left').textContent = gameState.world.enemies.length;
              document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`; // Ensure weapon display is updated
         }
 
         // --- Rendering ---
         function renderGame() {
-            if (!ctx) { // Check if context is valid
-                console.error("Canvas context is not available.");
-                document.getElementById('error-display').style.display = 'block';
-                document.getElementById('error-display').textContent = 'Error: Canvas context not found.';
-                return;
-            }
+            ctx.fillStyle = gameState.world.grassColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            try { // Added error handling for rendering
-                ctx.fillStyle = gameState.world.grassColor;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-gameState.camera.x, -gameState.camera.y);
 
-                ctx.save();
-                ctx.translate(-gameState.camera.x, -gameState.camera.y);
+            drawImpassableZones();
+            drawRoads();
+            drawBuildings();
+            drawTrees();
+            drawObstacles();
+            drawGasStations();
+            drawSkidMarks(); // Draw skid marks before vehicles/characters
+            drawDustParticles(); // Draw dust before characters
 
-                drawImpassableZones();
-                drawRoads();
-                drawBuildings();
-                drawTrees();
-                drawObstacles();
-                drawGasStations();
-                drawSkidMarks(); // Draw skid marks before vehicles/characters
-                drawDustParticles(); // Draw dust before characters
+            drawVehicles();
+            drawEnemies(); // Draw enemies before player
+            drawPlayer();
 
-                drawVehicles();
-                drawEnemies(); // Draw enemies (zombies) before player
-                drawPlayer();
-
-                drawExplosions();
-                drawHitSparks();
-                drawProjectiles();
-                drawMuzzleFlashes();
+            drawExplosions();
+            drawHitSparks();
+            drawProjectiles();
+            drawMuzzleFlashes();
 
 
-                ctx.restore();
-                drawMiniMap();
-            } catch (error) {
-                console.error("Error during rendering:", error);
-                 document.getElementById('error-display').style.display = 'block';
-                 document.getElementById('error-display').textContent = 'Rendering Error. Check console.';
-            }
+            ctx.restore();
+            drawMiniMap();
         }
 
         // --- Drawing Functions ---
@@ -742,18 +712,15 @@
                       ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
                  }
 
-             }
-             else {
-                 drawCharacter(gameState.player, true); // Use shared drawing function
-             }
+
             ctx.restore();
-        }
+        }); }
         function drawSkidMarks() { gameState.fx.skidMarks.forEach(skid => { const CULL_MARGIN = skid.width * 2; if (skid.x + CULL_MARGIN < gameState.camera.x || skid.x - CULL_MARGIN > gameState.camera.x + canvas.width || skid.y + CULL_MARGIN < gameState.camera.y || skid.y - CULL_MARGIN > gameState.camera.y + canvas.height) return; ctx.save(); ctx.translate(skid.x, skid.y); ctx.rotate(skid.angle * Math.PI / 180); ctx.fillStyle = `rgba(0, 0, 0, ${skid.alpha * 0.6})`; ctx.fillRect(-skid.width / 2, -1.5, skid.width, 3); ctx.restore(); }); }
         function drawDustParticles() { gameState.fx.dustParticles.forEach(p => { const CULL_MARGIN = p.size * 2; if (p.x + CULL_MARGIN < gameState.camera.x || p.x - CULL_MARGIN > gameState.camera.x + canvas.width || p.y + CULL_MARGIN < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(160, 140, 110, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }); }
         function drawExplosions() {
             gameState.fx.explosions.forEach(p => {
                 if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return;
-                ctx.fillStyle = `rgba(255, ${Math.random()*150 + 100}, 0, ${p.alpha})`;
+                ctx.fillStyle = `rgba(${parseInt(p.color.substring(1, 3), 16)}, ${parseInt(p.color.substring(3, 5), 16)}, ${parseInt(p.color.substring(5, 7), 16)}, ${p.alpha})`; // Use color from particle data
                 ctx.beginPath();
                 // Calculate radius based on elapsed life
                 const elapsedLife = p.initialLife - p.life;
@@ -789,7 +756,7 @@
             ctx.fillRect(-width / 2, -height / 2, width, bodyHeight);
 
             // Head
-            ctx.fillStyle = isPlayer ? '#2980b9' : `hsl(${parseInt(entity.color.substring(4, entity.color.indexOf(',')))}, 70%, 35%)`; // Darker shade
+            ctx.fillStyle = isPlayer ? '#2980b9' : `hsl(${parseInt(entity.color.substring(4, entity.color.indexOf(',')))}, 50%, 25%)`; // Darker, less saturated for zombie
             ctx.beginPath();
             ctx.arc(0, -height / 2 + headRadius * 0.8, headRadius, 0, Math.PI * 2); // Slightly lower head
             ctx.fill();
@@ -825,21 +792,21 @@
             }
         }
 
-        function drawEnemies() { // This now draws zombies
-            gameState.world.enemies.forEach(zombie => {
-                 const CULL_MARGIN = Math.max(zombie.width, zombie.height) * 1.5;
-                 if (zombie.x + CULL_MARGIN < gameState.camera.x || zombie.x - CULL_MARGIN > gameState.camera.x + canvas.width || zombie.y + CULL_MARGIN < gameState.camera.y || zombie.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
+        function drawEnemies() {
+            gameState.world.enemies.forEach(enemy => {
+                 const CULL_MARGIN = Math.max(enemy.width, enemy.height) * 1.5;
+                 if (enemy.x + CULL_MARGIN < gameState.camera.x || enemy.x - CULL_MARGIN > gameState.camera.x + canvas.width || enemy.y + CULL_MARGIN < gameState.camera.y || enemy.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
 
                 ctx.save();
-                ctx.translate(zombie.x, zombie.y);
-                ctx.rotate(zombie.angle * Math.PI / 180);
-                drawCharacter(zombie, false); // Use shared drawing function (will be drawn with zombie color)
+                ctx.translate(enemy.x, enemy.y);
+                ctx.rotate(enemy.angle * Math.PI / 180);
+                drawCharacter(enemy, false); // Use shared drawing function
                 ctx.restore();
 
                 // Health bar
-                const barWidth = 20; const barHeight = 3; const barX = zombie.x - barWidth / 2; const barY = zombie.y - zombie.height / 2 - 8;
+                const barWidth = 20; const barHeight = 3; const barX = enemy.x - barWidth / 2; const barY = enemy.y - enemy.height / 2 - 8;
                 ctx.fillStyle = '#500'; ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (zombie.health / zombie.maxHealth), barHeight);
+                ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (enemy.health / enemy.maxHealth), barHeight);
             });
         }
 
@@ -918,28 +885,12 @@
              }
             ctx.restore();
         }
-        function drawMiniMap() { const mapScale = miniMapCtx.canvas.width / gameState.world.width; miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height); gameState.world.impassableZones.forEach(zone => { miniMapCtx.fillStyle = zone.color; miniMapCtx.fillRect(zone.x * mapScale, zone.y * mapScale, zone.width * mapScale, zone.height * mapScale); }); miniMapCtx.strokeStyle = '#666'; miniMapCtx.lineWidth = 1.5; roads.forEach(road => { miniMapCtx.beginPath(); miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale); miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale); miniMapCtx.stroke(); }); miniMapCtx.fillStyle = '#ff3333'; gameState.world.gasStations.forEach(s => { miniMapCtx.fillRect(s.x * mapScale - 1.5, s.y * mapScale - 1.5, 3, 3); }); miniMapCtx.fillStyle = '#aaa'; gameState.world.vehicles.forEach(car => { miniMapCtx.fillRect(car.x * mapScale - 1, car.y * mapScale - 1, 2, 2); }); miniMapCtx.fillStyle = '#f00'; gameState.world.enemies.forEach(e => { miniMapCtx.fillRect(e.x*mapScale -1, e.y*mapScale-1, 2, 2); }); const playerMapX = gameState.player.x * mapScale; const playerMapY = gameState.player.y * mapScale; if (gameState.playerState === 'driving') { miniMapCtx.fillStyle = '#0f0'; miniMapCtx.beginPath(); miniMapCtx.arc(playerMapX, playerMapY, 2.5, 0, Math.PI * 2); miniMapCtx.fill(); } else { miniMapCtx.fillStyle = '#ff0'; miniMapCtx.fillRect(playerMapX - 1, playerMapY - 1, 2, 2); } const angleRad = gameState.player.angle * Math.PI / 180; const dirLen = 4; miniMapCtx.strokeStyle = miniMapCtx.fillStyle; miniMapCtx.lineWidth = 1; miniMapCtx.beginPath(); miniMapCtx.moveTo(playerMapX, playerMapY); miniMapCtx.lineTo(playerMapX + Math.sin(angleRad) * dirLen, playerMapY - Math.cos(angleRad) * dirLen); miniMapCtx.stroke(); miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; miniMapCtx.lineWidth = 1; miniMapCtx.strokeRect( gameState.camera.x * mapScale, gameState.camera.y * mapScale, gameState.camera.width * mapScale, gameState.camera.height * mapScale ); }
+        function drawMiniMap() { const mapScale = miniMapCtx.canvas.width / gameState.world.width; miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height); gameState.world.impassableZones.forEach(zone => { miniMapCtx.fillStyle = zone.color; miniMapCtx.fillRect(zone.x * mapScale, zone.y * mapScale, zone.width * mapScale, zone.height * mapScale); }); miniMapCtx.strokeStyle = '#666'; miniMapCtx.lineWidth = 1.5; roads.forEach(road => { miniMapCtx.beginPath(); miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale); miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale); miniMapCtx.stroke(); }); miniMapCtx.fillStyle = '#ff3333'; gameState.world.gasStations.forEach(s => { miniMapCtx.fillRect(s.x * mapScale - 1.5, s.y * mapScale - 1.5, 3, 3); }); miniMapCtx.fillStyle = '#aaa'; gameState.world.vehicles.forEach(car => { miniMapCtx.fillRect(car.x * mapScale - 1, car.y * mapScale - 1, 2, 2); }); miniMapCtx.fillStyle = '#008000'; gameState.world.enemies.forEach(e => { miniMapCtx.fillRect(e.x*mapScale -1, e.y*mapScale-1, 2, 2); }); const playerMapX = gameState.player.x * mapScale; const playerMapY = gameState.player.y * mapScale; if (gameState.playerState === 'driving') { miniMapCtx.fillStyle = '#0f0'; miniMapCtx.beginPath(); miniMapCtx.arc(playerMapX, playerMapY, 2.5, 0, Math.PI * 2); miniMapCtx.fill(); } else { miniMapCtx.fillStyle = '#ff0'; miniMapCtx.fillRect(playerMapX - 1, playerMapY - 1, 2, 2); } const angleRad = gameState.player.angle * Math.PI / 180; const dirLen = 4; miniMapCtx.strokeStyle = miniMapCtx.fillStyle; miniMapCtx.lineWidth = 1; miniMapCtx.beginPath(); miniMapCtx.moveTo(playerMapX, playerMapY); miniMapCtx.lineTo(playerMapX + Math.sin(angleRad) * dirLen, playerMapY - Math.cos(angleRad) * dirLen); miniMapCtx.stroke(); miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; miniMapCtx.lineWidth = 1; miniMapCtx.strokeRect(
+                 gameState.camera.x * mapScale, gameState.camera.y * mapScale, gameState.camera.width * mapScale, gameState.camera.height * mapScale ); }
         function drawGameOver() { ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.font = "40px 'Courier New', monospace"; ctx.fillStyle = "red"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20); ctx.font = "20px 'Courier New', monospace"; ctx.fillStyle = "white"; ctx.fillText("Refresh to Restart", canvas.width / 2, canvas.height / 2 + 20); }
 
         // --- Initialization & Utilities ---
-        function initGame() {
-            console.log("Initializing Game...");
-            try { // Added error handling for initialization
-                createWorldElements();
-                initializeWorldObjects();
-                spawnInitialEnemies(20);
-                spawnVehicles(10);
-                updateHUD();
-                window.addEventListener('resize', handleResize);
-                handleResize();
-                gameLoop();
-                console.log("Game Loop Started.");
-            } catch (error) {
-                console.error("Error during initialization:", error);
-                document.getElementById('error-display').style.display = 'block';
-                document.getElementById('error-display').textContent = 'Initialization Error. Check console.';
-            }
-        }
+        function initGame() { console.log("Initializing Game..."); createWorldElements(); initializeWorldObjects(); spawnInitialEnemies(30); spawnVehicles(10); updateHUD(); window.addEventListener('resize', handleResize); handleResize(); gameLoop(); console.log("Game Loop Started."); } // Spawn more enemies (zombies) and vehicles
         function createWorldElements() {
              // Wasteland trees (more sparse, different colors)
              for (let i = 0; i < 100; i++) {
