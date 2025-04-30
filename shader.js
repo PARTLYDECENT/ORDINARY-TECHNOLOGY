@@ -49,6 +49,7 @@
     `;
 
     // Fragment Shader (GLSL 3.00 ES - Raymarched Mandelbulb Variation)
+    // This is the shader that runs initially
     const fragmentShaderSource = `#version 300 es
         precision highp float; // High precision is important for raymarching
 
@@ -140,7 +141,8 @@
                 sceneSDF( vec3(p.x, p.y, p.z + eps) ) - sceneSDF( vec3(p.x, p.y, p.z - eps) )
             );
             // Normalize the resulting gradient vector to get the unit normal
-            return normalize(n);
+            // Add a small value to prevent normalization of zero vector if gradient is zero
+            return normalize(n + vec3(1e-6));
         }
 
         // --- Raymarching Function (Sphere Tracing) ---
@@ -173,78 +175,54 @@
         void main() {
             // Calculate normalized device coordinates (uv) - range depends on aspect ratio, typically -1 to 1 on shortest side
             vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.x, u_resolution.y);
-            // Keep original UV coordinates (0 to 1) if needed for effects like scanlines
-            // vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
 
             // --- Camera Setup ---
-            // Define camera position (animated orbit)
             vec3 ro = vec3(2.5 * cos(u_time * 0.3), 1.5 + sin(u_time * 0.2), 2.5 * sin(u_time * 0.3));
-            // Define point the camera looks at
             vec3 target = vec3(0.0, 0.5, 0.0);
-            // Calculate camera orientation vectors
-            vec3 camForward = normalize(target - ro);                 // Forward direction
-            vec3 camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camForward)); // Right direction
-            vec3 camUp = cross(camForward, camRight);                   // Up direction
-
-            // Calculate ray direction for the current pixel (perspective projection)
-            // The '1.5' factor controls the Field of View (FOV) - smaller is more zoomed in
+            vec3 camForward = normalize(target - ro);
+            vec3 camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camForward));
+            vec3 camUp = cross(camForward, camRight);
             vec3 rd = normalize(uv.x * camRight + uv.y * camUp + 1.5 * camForward);
 
             // --- Raymarch the scene ---
-            float dist = rayMarch(ro, rd); // Get distance to the first hit
+            float dist = rayMarch(ro, rd);
 
             // --- Shading ---
             vec3 col = vec3(0.0); // Initialize color to black (background)
 
-            if( dist < MAX_DIST ) { // If the ray hit something within the max distance
-                vec3 p = ro + rd * dist; // Calculate the exact hit position
-                vec3 n = calcNormal(p);  // Calculate the surface normal at the hit point
+            if( dist < MAX_DIST ) { // If the ray hit something
+                vec3 p = ro + rd * dist;
+                vec3 n = calcNormal(p);
 
-                // Define light properties (animated position)
                 vec3 lightPos = vec3(5.0 * sin(u_time * 0.6), 5.0, 5.0 * cos(u_time * 0.6));
-                vec3 lightColor = vec3(1.0, 0.95, 0.9); // Slightly warm light
+                vec3 lightColor = vec3(1.0, 0.95, 0.9);
+                vec3 lightDir = normalize(lightPos - p);
+                vec3 viewDir = normalize(ro - p);
+                vec3 halfwayDir = normalize(lightDir + viewDir);
 
-                // Calculate lighting vectors
-                vec3 lightDir = normalize(lightPos - p);   // Direction from hit point to light
-                vec3 viewDir = normalize(ro - p);      // Direction from hit point to camera
-                vec3 halfwayDir = normalize(lightDir + viewDir); // Halfway vector for Blinn-Phong
-
-                // Define material properties (procedural & "unhinged")
-                // Base color varies with position and time
                 vec3 baseColor = vec3(0.6, 0.2, 0.8) + 0.4 * sin(p * 3.0 + u_time * 2.0);
-                // Mix color based on the surface normal's Y component (e.g., green tops, purple sides)
                 baseColor = mix(baseColor, vec3(0.1, 0.9, 0.5), smoothstep(-0.5, 0.5, n.y));
-                baseColor = clamp(baseColor, 0.0, 1.0); // Ensure color is within valid range [0,1]
+                baseColor = clamp(baseColor, 0.0, 1.0);
 
-                // Calculate Blinn-Phong lighting components
-                float ambient = 0.2; // Ambient light contribution
-                float diffuse = max(dot(n, lightDir), 0.0) * 0.8; // Diffuse reflection (Lambertian)
-                // Specular reflection, with intensity pulsating over time
+                float ambient = 0.2;
+                float diffuse = max(dot(n, lightDir), 0.0) * 0.8;
                 float specular = pow(max(dot(n, halfwayDir), 0.0), 32.0) * (0.5 + 0.5 * sin(u_time));
 
-                // Combine lighting components
                 col = baseColor * lightColor * (ambient + diffuse) + lightColor * specular;
 
-                // Add cheap distance fog effect
-                // Fog fades in from 0 distance up to 80% of MAX_DIST
                 float fogAmount = smoothstep(0.0, MAX_DIST * 0.8, dist);
-                // Mix the calculated color with a dark purple fog color based on distance
                 col = mix(col, vec3(0.05, 0.0, 0.1), fogAmount);
 
             } else {
-               // Background Sky: If the ray missed the scene
-               // Simple gradient based on ray direction's Y component + noise
+               // Background Sky
                col = vec3(0.1, 0.0, 0.2) + 0.2 * pow(max(0.0, dot(rd, vec3(0.0, 1.0, 0.0))), 2.0);
-               col += 0.05 * rand(uv + fract(u_time)); // Add some random noise
+               col += 0.05 * rand(uv + fract(u_time));
             }
 
             // --- Final Color Adjustments ---
-            // Apply a simple power curve for color grading/contrast adjustment
             col = pow(col, vec3(0.8, 0.9, 1.0));
-            // Add subtle random noise grain based on screen coordinates
             col += (rand(gl_FragCoord.xy) - 0.5) * 0.05;
 
-            // Final output: Clamp color to valid [0,1] range and set alpha to 1.0 (opaque)
             outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
         }
     `; // End of fragmentShaderSource
@@ -311,7 +289,7 @@
         let fs = null;
         try {
             vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-            fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource); // Uses the new fragment shader source
+            fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource); // Uses the main fragment shader source
             program = createProgram(vs, fs);
 
             positionAttributeLocation = gl.getAttribLocation(program, "a_position");
@@ -361,7 +339,7 @@
             webglCanvas.width = currentWidth;
             webglCanvas.height = currentHeight;
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-            // console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`); // Optional: uncomment for resize logging
+            // console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`);
         }
 
         gl.useProgram(program);
@@ -387,14 +365,14 @@
     }
 
     // --- Function to Update Shader Dynamically ---
-    // (updateShader function remains unchanged)
+    // *** SIMPLIFIED TEMPLATE LITERAL FOR TESTING ***
     window.updateShader = function(newShaderCode) {
         if (!gl) {
             console.warn("WebGL context not available. Cannot update shader.");
             if(typeof showNotification === 'function') showNotification("WebGL inactive. Cannot update shader.");
             return;
         }
-        console.log("Attempting shader update with new code...");
+        console.log("Attempting shader update with new code (using simplified template)...");
 
         if (!newShaderCode || typeof newShaderCode !== 'string' || newShaderCode.indexOf('main()') === -1) {
              console.error("Invalid shader code provided: Missing main() function or not a string.");
@@ -403,41 +381,35 @@
              return;
         }
 
+         // *** VERY SIMPLE TEMPLATE FOR DIAGNOSTICS ***
+         // It only includes the bare minimum and the user's code.
+         // If this works, the problem is likely in the complex string construction
+         // or the interaction with the helper functions/colors we removed here.
          const completeNewFragmentSource = `#version 300 es
             precision highp float;
             uniform float u_time;
             uniform vec2 u_resolution;
             out vec4 outColor;
 
-            // --- Include Common Helper Functions ---
-            // These might be needed by the dynamically injected code
-            float hash(float n) { return fract(sin(n) * 43758.5453); }
-            float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
-            float fbm(vec2 p) { float s=0.,a=.7,f=1.;int FBM_OCTAVES_DYNAMIC=5; for(int i=0;i<FBM_OCTAVES_DYNAMIC;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
-            float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
-            // --- END Helper Functions ---
-
-            // --- Common Colors --- // Define common colors if dynamic code needs them
-            vec3 colPrimary = vec3(106./255., 0., 1.);
-            vec3 colSecondary = vec3(0., 1., 204./255.);
-            vec3 colTertiary = vec3(0., 184./255., 212./255.);
-            vec3 colBackground = vec3(5./255., 5./255., 17./255.);
-            // --- END Colors ---
+            // Minimal common elements needed by almost any shader
+            vec3 colBackground = vec3(0.0); // Simple background
 
             // --- User Provided Shader Code ---
             ${newShaderCode}
             // --- End User Code ---
         `;
+        // Log the generated source for debugging
+        // console.log("Generated Shader Source for Update:\n", completeNewFragmentSource);
 
         let newVs = null;
         let newFs = null;
         let newProgram = null;
         try {
              newVs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-             newFs = createShader(gl.FRAGMENT_SHADER, completeNewFragmentSource);
+             newFs = createShader(gl.FRAGMENT_SHADER, completeNewFragmentSource); // Compile the simplified source
              newProgram = createProgram(newVs, newFs);
 
-             console.log("New shader compiled and linked successfully.");
+             console.log("New shader compiled and linked successfully (using simplified template).");
 
              if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
              if (program) { gl.deleteProgram(program); console.log("Old program deleted."); }
@@ -455,14 +427,14 @@
              animationFrameId = requestAnimationFrame(render);
 
              console.log("Shader update complete. Render loop restarted.");
-              if(typeof showNotification === 'function') showNotification("SHADER UPDATE SUCCESSFUL.");
+              if(typeof showNotification === 'function') showNotification("SHADER UPDATE SUCCESSFUL (Simplified).");
 
         } catch (e) {
-             console.error('>>> Shader update failed during compile/link:', e);
+             console.error('>>> Shader update failed during compile/link (using simplified template):', e);
              if (newProgram) gl.deleteProgram(newProgram);
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
-             if(typeof showNotification === 'function') showNotification(`SHADER UPDATE FAILED: ${e.message}`);
+             if(typeof showNotification === 'function') showNotification(`SHADER UPDATE FAILED (Simplified): ${e.message}`);
              if (!animationFrameId && program) {
                  console.log("Restarting render loop with previous program after update failure.");
                  animationFrameId = requestAnimationFrame(render);
@@ -484,12 +456,8 @@
     }
 
     // --- Resize Listener ---
-    // (Resize listener remains unchanged)
     window.addEventListener('resize', () => {
-        // Resize check is handled in render loop
         if (!animationFrameId && program) {
-            // If the loop isn't running but we have a program, request a frame
-            // This might happen if the tab was hidden and the loop stopped
             console.log("Resize event: Requesting animation frame.");
             animationFrameId = requestAnimationFrame(render);
         }
@@ -498,4 +466,20 @@
 })(); // Execute the IIFE
 ```
 
-I've updated the code block with the corrected `calcNormal` function and ensured the overall JavaScript structure appears sound. This should resolve the `Unexpected identifier 'calcNormal'` syntax err
+**Key Change:**
+
+* Inside `window.updateShader`, the `completeNewFragmentSource` template literal is now extremely basic. It only includes the `#version`, `precision`, `uniforms`, `outColor`, a simple `colBackground` definition, and then injects the `newShaderCode`. All the helper functions (`rand`, `noise`, `fbm`) and common colors (`colPrimary`, etc.) that were previously hardcoded into the template literal have been removed *from this specific template literal*.
+
+**How to Test:**
+
+1.  Replace the entire content of your `shader.js` with the code above.
+2.  Reload `index.html`. The initial Mandelbulb shader should load and run fine.
+3.  **Crucially:** Try using the console command `shader ...` again.
+    * Use a very simple fragment shader code snippet first, for example:
+        `shader void main() { outColor = vec4(uv.x, uv.y, 0.5 + 0.5 * sin(u_time), 1.0); }`
+        (Remember to replace `uv` with `(gl_FragCoord.xy / u_resolution.xy)` if you need 0-1 coordinates, as the helper UV calculation isn't in the simplified template).
+    * Does *this* simple update work without the `Unexpected identifier 'calcNormal'` error?
+    * If the simple update works, try injecting a slightly more complex shader, but one that *doesn't* rely on the helper functions (`rand`, `noise`, `fbm`, `colPrimary`, etc.) that were removed from the template.
+    * If the simple update *still* fails with the same error, the problem is almost certainly a JavaScript syntax error somewhere else in the file, outside the template literal itself.
+
+Please report back the results of testing with a simple shader injection using the `shader` console command. This will help pinpoint whether the issue is the complexity of the template string/injected code or a different JavaScript syntax err
