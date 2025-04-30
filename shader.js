@@ -1,160 +1,167 @@
+// Wrap everything in an Immediately Invoked Function Expression (IIFE)
+// to avoid polluting the global scope unnecessarily, except for `window.updateShader`.
 (function() {
-    "use strict";
-    // ... [WebGL setup code remains the same] ...
+    "use strict"; // Enable strict mode
 
-    // Fragment Shader - COMPLETELY UNHINGED VERSION
-    const fragmentShaderSource = `#version 300 es
-        precision highp float;
-        uniform float u_time;
-        uniform vec2 u_resolution;
-        out vec4 outColor;
+    // --- WebGL Setup and Shader Logic ---
+    // --- (Derived from sources 200-548) ---
 
-        #define TAU 6.28318530718
-        #define PHI 1.61803398875
-        #define MAX_STEPS 666
-        #define MAX_DIST 66.6
-        #define SURFACE_DIST 0.00666
-        #define ROTATE(a) mat2(cos(a), -sin(a), sin(a), cos(a))
+    const webglCanvas = document.getElementById('webglCanvas');
+    let gl = null; // Keep gl scoped within this IIFE
 
-        float hash(float n) { return fract(sin(n)*43758.5453); }
-        float noise(vec3 x) {
-            vec3 p = floor(x);
-            vec3 f = fract(x);
-            f = f*f*(3.0-2.0*f);
-            float n = p.x + p.y*157.0 + 113.0*p.z;
-            return mix(mix(mix( hash(n+0.0), hash(n+1.0),f.x),
-                       mix( hash(n+157.0), hash(n+158.0),f.x),f.y),
-                   mix(mix( hash(n+113.0), hash(n+114.0),f.x),
-                       mix( hash(n+270.0), hash(n+271.0),f.x),f.y),f.z);
+    if (!webglCanvas) {
+        console.error("WebGL Canvas element with id 'webglCanvas' not found!");
+        return; // Stop script execution if canvas isn't found
+    }
+
+    try {
+        webglCanvas.width = window.innerWidth;
+        webglCanvas.height = window.innerHeight;
+        // Try to get webgl2, fall back to webgl1
+        gl = webglCanvas.getContext('webgl2') ||
+             webglCanvas.getContext('webgl') ||
+             webglCanvas.getContext('experimental-webgl');
+
+        if (!gl) {
+            throw new Error("WebGL not supported or context creation failed.");
         }
 
-        float sdHellBulb(vec3 p) {
-            vec3 z = p * (1.0 + 0.3*sin(u_time*0.7));
-            float dr = 1.0;
-            float r = 0.0;
-            float power = 8.0 + 4.0*sin(u_time*0.3) + 2.0*noise(vec3(u_time*0.1));
-            
-            for(int i=0; i<13; i++) {
-                r = length(z);
-                if(r > 6.66) break;
-                
-                float theta = acos(z.z/r) * (power + 2.0*sin(u_time*2.0));
-                float phi = atan(z.y, z.x) * power;
-                float zr = pow(r, power-1.0);
-                dr = zr*power*dr + 1.0;
-                zr = pow(r, power);
-                
-                theta += u_time*2.0 + 3.0*noise(z*0.3 + u_time);
-                phi = phi*power + u_time*3.0;
-                
-                z = zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
-                z += p * (0.8 + 0.2*sin(u_time*0.5));
-                z = mix(z, z.yxz, smoothstep(0.3,0.7,sin(u_time*0.7)));
-            }
-            return 0.5*log(r)*r/dr * (0.7 + 0.3*noise(p*3.0 + u_time));
+        if (gl instanceof WebGL2RenderingContext) {
+            console.log("WebGL2 Context Initialized.");
+        } else {
+            console.log("WebGL1 Context Initialized. Note: Shader uses GLSL 3.00 ES features.");
         }
+    } catch (e) {
+        console.error("WebGL Initialization Error:", e);
+        // Fallback: Provide a static background color if WebGL fails
+        if (document.body) document.body.style.backgroundColor = '#050511';
+        return; // Stop script execution
+    }
 
-        float sceneSDF(vec3 p) {
-            p.xy *= ROTATE(u_time*0.3 + p.z*0.2);
-            p.yz *= ROTATE(u_time*0.4);
-            p = mod(p+2.0,4.0)-2.0;
-            
-            float bulb = sdHellBulb(p);
-            float floorDist = p.y + 2.0 - 1.5*sin(p.x*0.5 + u_time)*cos(p.z*0.3 - u_time);
-            float twist = length(p.xz) - 1.0 - 0.5*cos(u_time*2.0);
-            
-            return min(min(bulb, floorDist), twist + 0.3*noise(p*5.0 + u_time));
-        }
-
-        vec3 calcNormal(vec3 p) {
-            vec2 e = vec2(0.00666, 0);
-            return normalize(vec3(
-                sceneSDF(p+e.xyy) - sceneSDF(p-e.xyy),
-                sceneSDF(p+e.yxy) - sceneSDF(p-e.yxy),
-                sceneSDF(p+e.yyx) - sceneSDF(p-e.yyx)
-            ));
-        }
-
-        float rayMarch(vec3 ro, vec3 rd) {
-            float dO=0.0;
-            for(int i=0; i<MAX_STEPS; i++) {
-                vec3 p = ro + rd*dO;
-                float dS = sceneSDF(p);
-                if(dS < SURFACE_DIST*dO || dO > MAX_DIST) break;
-                dO += dS * mix(0.5, 1.5, noise(vec3(rd*100.0 + float(i))));
-                if(mod(dO, 3.0) < 0.1) rd.xy *= ROTATE(0.1*sin(u_time));
-            }
-            return dO;
-        }
-
+    // --- Shader Sources ---
+    // Vertex Shader (GLSL 3.00 ES)
+    const vertexShaderSource = `#version 300 es
+        precision highp float; // Precision needed in VS for GLSL 300 es
+        in vec4 a_position;
         void main() {
-            vec2 uv = (gl_FragCoord.xy*2.0 - u_resolution.xy)/min(u_resolution.x, u_resolution.y);
-            uv *= 1.0 + 0.1*sin(u_time*5.0);
-            
-            vec3 ro = vec3(3.0*cos(u_time*0.3), 2.0*sin(u_time*0.2), 3.0*sin(u_time*0.4));
-            ro += 0.5*noise(vec3(u_time*0.7));
-            vec3 rd = normalize(vec3(uv, 1.0 + 0.3*sin(u_time)));
-            
-            float distort = 0.1*sin(u_time*10.0 + uv.x*TAU);
-            rd.xy += distort;
-            rd = normalize(rd);
-            
-            float d = rayMarch(ro, rd);
-            vec3 col = vec3(0.1, 0.03, 0.1)* (1.0 - exp(-0.2*d));
-            
-            if(d < MAX_DIST) {
-                vec3 p = ro + rd*d;
-                vec3 n = calcNormal(p);
-                n = mix(n, vec3(noise(p*10.0)), 0.3);
-                
-                vec3 lightPos = vec3(10.0*sin(u_time), 10.0, 10.0*cos(u_time));
-                vec3 lightDir = normalize(lightPos - p + 2.0*noise(vec3(u_time)));
-                vec3 halo = vec3(0.3, 0.1, 0.5) * pow(max(0.0, dot(-rd, lightDir)), 2.0);
-                
-                vec3 albedo = mix(
-                    vec3(0.8, 0.1, 0.3),
-                    vec3(0.1, 0.8, 0.2),
-                    sin(p.x*3.0 + u_time)*0.5 + 0.5
-                ) * (0.9 + 0.5*noise(p*5.0));
-                
-                float flicker = step(0.9, hash(u_time*30.0));
-                vec3 lighting = albedo * (0.3 + 0.7*flicker * max(0.0, dot(n, lightDir)));
-                lighting += halo * (0.5 + 0.5*sin(u_time*30.0));
-                
-                col = mix(col, lighting, exp(-d*0.1));
-                col *= 1.0 + 0.3*sin(TAU*(dot(uv, uv)*10.0 - u_time*3.0));
-            }
-            
-            col = pow(col, vec3(1.0/2.2));
-            col += 0.02*vec3(
-                hash(uv.x*73.0 + u_time),
-                hash(uv.y*59.0 + u_time),
-                hash((uv.x+uv.y)*97.0 + u_time)
-            );
-            
-            col *= 1.0 - 0.1*length(uv);
-            col.rb *= ROTATE(0.01*sin(u_time));
-            
-            outColor = vec4(col, 1.0);
+            gl_Position = a_position; // Pass position through
         }
     `;
 
-    // ... [Remaining WebGL setup and functions stay the same] ...
-})();
+    // Fragment Shader (GLSL 3.00 ES - 20 Phases)
+    const fragmentShaderSource = `#version 300 es
+        precision highp float; // Precision qualifier required in fragment shaders
 
+        // Uniforms: Inputs from JavaScript
+        uniform float u_time;
+        uniform vec2 u_resolution;
 
+        // Output variable: Replaces gl_FragColor
+        out vec4 outColor;
 
+        // --- Constants ---
+        const float PI = 3.14159265359;
+        const float TWO_PI = 6.28318530718;
+        const int FBM_OCTAVES = 5; // Used in fbm() and updateShader()
+        const int MAX_RAYMARCH_STEPS = 48;
+        const float MAX_RAYMARCH_DIST = 12.0;
+        const int MANDELBROT_ITER = 40;
+
+        // --- Helper Functions (minified versions often used in shaders) ---
+        float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
+        float rand(float n){ return fract(sin(n) * 43758.5453123); }
+        float hash(float n) { return fract(sin(n) * 43758.5453); }
+        float noise(vec2 p) { vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); float n=i.x+i.y*57.; return mix(mix(hash(n),hash(n+1.),f.x), mix(hash(n+57.),hash(n+58.),f.x),f.y); }
+        float fbm(vec2 p) { float s=0., a=.7, f=1.; for(int i=0; i<FBM_OCTAVES; i++) { s+=noise(p*f)*a; a*=.5; f*=2.; } return s; }
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+        float snoise(vec3 v) { const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.); vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx); vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy); vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy; i=mod289(i); vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.)); float n_=1./7.; vec3 ns=n_*D.wyz-D.xzx; vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_); vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y); vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw); vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.)); vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww; vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w); vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3))); p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w; vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m; return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3))); }
+        float snoise(vec2 v) { return snoise(vec3(v, 0.0)); }
+        mat2 rotate2D(float a) { return mat2(cos(a), -sin(a), sin(a), cos(a)); }
+        float worley(vec2 p) { float md=10.; vec2 g=floor(p); for(int x=-1;x<=1;x++){ for(int y=-1;y<=1;y++){ vec2 n=g+vec2(float(x),float(y)); vec2 pt=vec2(rand(n),rand(n+vec2(7.3,3.7))); pt=.5+.5*sin(u_time*.3+TWO_PI*pt); vec2 fp=n+pt; md=min(md,length(p-fp)); }} return md; }
+        float truchetPattern(vec2 uv, float s) { uv*=s; vec2 ip=floor(uv), fp=fract(uv); float r=rand(ip), t=floor(r*2.), d; if(t==0.){d=abs(fp.x+fp.y-1.)/sqrt(2.);}else{d=abs(fp.x-fp.y)/sqrt(2.);} return smoothstep(.04,.06,abs(d-.5)); }
+        float sdSphere(vec3 p, float s) { return length(p) - s; }
+        float sdPlane(vec3 p, vec3 n, float h) { return dot(p, n) + h; }
+
+        // --- Color Definitions ---
+        vec3 colPrimary = vec3(106./255., 0., 1.);
+        vec3 colSecondary = vec3(0., 1., 204./255.);
+        vec3 colTertiary = vec3(0., 184./255., 212./255.);
+        vec3 colGreen = vec3(0.1, 0.8, 0.4);
+        vec3 colGold = vec3(0.9, 0.7, 0.1);
+        vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2);
+        vec3 colDeepRed = vec3(0.6, 0.0, 0.15);
+        vec3 colWhite = vec3(1.0);
+        vec3 colOrange = vec3(1.0, 0.5, 0.0);
+        vec3 colPink = vec3(1.0, 0.4, 0.7);
+        vec3 colBackground = vec3(5./255., 5./255., 17./255.);
+
+        // Basic color getter for CA effect
+        vec3 getColorForCA(vec2 uv, float t) { float n = fbm(uv*4. + t*.15); return mix(colPrimary, colTertiary, n); }
+
+        // --- Main Shader Logic ---
+        void main() {
+            // Normalized device coordinates, aspect corrected, origin center
+            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
+            // Original UV coordinates (0 to 1)
+            vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
+
+            float time_warp = u_time * 0.1; // Controls phase speed
+            const float TOTAL_PHASES_F = 20.0;
+            float phase = mod(time_warp, TOTAL_PHASES_F);
+            float phaseProgress = fract(phase); // Progress within current phase
+            int phaseIndex = int(floor(phase)); // Current phase index (0-19)
+
+            vec3 color = colBackground; // Start with background
+
+            // --- Phase Implementations (Condensed versions) ---
+            if (phaseIndex == 0) { float wf=.1+.05*sin(u_time*.2); wf=max(.001,wf); float z=.1/max(.01,.1-uv.y*wf+.02*fbm(uv+u_time*.05)); z=clamp(z,.1,15.); vec2 warp=uv*z; vec2 grid=abs(fract(warp*vec2(5.,3.)+u_time*.1)-.5); float line=smoothstep(.04,.05,min(grid.x,grid.y))*.6; float df=fract(z*.1+u_time*.15); vec3 bc=mix(mix(colPrimary,colTertiary,sin(u_time*.1)*.5+.5),colSecondary,sin(length(warp)*.5-u_time*.5)*.5+.5); color=mix(bc*.15,bc,line*df*1.5); }
+            else if (phaseIndex == 1) { float d=length(uv); float r=sin(d*18.-u_time*2.5)*.5+.5; r*=smoothstep(1.8,.4,d); float w=sin(uv.y*25.+u_time*1.2)*.04; vec2 wu=uv+vec2(w,sin(uv.x*15.+u_time*.8)*.03); float n=fbm(wu*3.5+u_time*.25); vec3 bc=mix(mix(colSecondary,colTertiary,r),mix(colGreen,colGold,n),.5+.5*sin(u_time*.6+d*2.)); color=mix(bc*.2,bc,r*.8+n*.6); }
+            else if (phaseIndex == 2) { vec2 r=vec2(1.,1.732), h=r*.5; vec2 a=mod(uv*2.+u_time*.1,r)-h, b=mod(uv*2.-h+u_time*.1,r)-h; vec2 gv=length(a)<length(b)?a:b; float p=sin(u_time*3.5)*.5+.5, e=sin(length(gv)*25.-u_time*3.5); e=smoothstep(-.1,.15,e)-smoothstep(.15,.4,e); float ds=fbm(uv*2.5+vec2(u_time*.15,0.)); vec3 baseC=mix(colTertiary,colGreen,ds), glowC=mix(colSecondary,colPrimary,p); color=mix(baseC*.1,glowC,e*p*1.5); float dt=abs(sin(uv.x*22.+u_time*1.1))*abs(sin(uv.y*22.-u_time*1.3)); color+=glowC*dt*.08; }
+            else if (phaseIndex == 3) { float a=atan(uv.y,uv.x), rd=length(uv); a+=.1*fbm(uv*.5+u_time*.05); float sa=a*6.+rd*8.-u_time*2.2, s=smoothstep(-.2,.2,sin(sa)); float rdd=rd+sin(a*10.+u_time*.3)*.08, b=fract(rdd*6.-u_time*.6); b=smoothstep(0.,.1,b)*smoothstep(.8,.5,b); float t=fbm(vec2(rdd*6.,a*3.)+u_time*.15); vec3 dc=mix(colPrimary,colDeepRed,sin(rdd*12.)*.5+.5), bc=mix(colGold,colSecondary,cos(a*4.)*.5+.5); color=mix(dc*.5,bc,b+t*.4); color+=bc*s*.3; }
+            else if (phaseIndex == 4) { vec2 cu=uv*mix(3.,5.,phaseProgress); float n=fbm(cu+u_time*.2), c=0.; for(float x=-1.;x<=1.;x+=1.){for(float y=-1.;y<=1.;y+=1.){vec2 nb=vec2(x,y), cc=floor(cu)+nb, pt=cc+.5+sin(u_time*.1+cc)*.3; c+=smoothstep(.4,.38,length(cu-pt));}} c=clamp(c,0.,1.); vec3 cellC=mix(colStrangeGreen,colPrimary,n); cellC=mix(cellC,colDeepRed,smoothstep(.6,.8,n)); color=mix(colBackground*.5,cellC,c*1.2); color+=fbm(uv*15.+u_time*.5)*.05; }
+            else if (phaseIndex == 5) { float t=phaseProgress; vec2 bu=floor(originalUV*mix(20.,60.,sin(u_time*2.)*.5+.5))/mix(20.,60.,sin(u_time*2.)*.5+.5); float bn=fbm(bu*5.+u_time*.5); color=mix(colPrimary,colSecondary,bn); float tl=sin(originalUV.y*10.+u_time*5.)*.5+.5, ta=smoothstep(.8,.85,tl); float ofs=ta*(rand(vec2(floor(u_time*2.),floor(originalUV.y*10.)))-.5)*.1; vec2 tu=uv+vec2(ofs*t,0.); float tn=fbm(tu*4.+u_time*.3); color=mix(color,mix(colTertiary,colDeepRed,tn),ta); float cao=(.005+.01*abs(sin(u_time*3.)))*t; vec3 cR=getColorForCA(uv+vec2(cao,0.),u_time), cB=getColorForCA(uv-vec2(cao*.5,cao*.8),u_time); color=vec3(cR.r,color.g,cB.b); color+=(rand(originalUV+fract(u_time*10.))-.5)*.15*t; }
+            else if (phaseIndex == 6) { vec2 p=uv*2.; float i=fbm(p+u_time*.3), r=abs(snoise(vec3(p*1.5,u_time*.5))); r=pow(1.-r,4.); vec3 fc=mix(colPrimary,colTertiary,smoothstep(0.,1.,i)); color=mix(colBackground*.4,fc,r*1.5); color*=1.-smoothstep(.8,1.5,length(uv)); }
+            else if (phaseIndex == 7) { vec2 p=uv*3.+vec2(u_time*.1,u_time*.2); float d=worley(p), e=1.-smoothstep(0.,.05,d), c=smoothstep(0.,.4,d); vec3 cc=mix(colStrangeGreen,colGold,c*1.2); color=mix(cc*.3,colWhite,e); }
+            else if (phaseIndex == 8) { vec2 p=rotate2D(u_time*.4)*uv; float a=atan(p.y,p.x), rd=length(p); float t=fbm(vec2(1./(rd+.1),a*2.)+u_time*.2), r=sin(rd*20.-u_time*3.)*.5+.5; vec3 tc=mix(colSecondary,colPink,smoothstep(0.,1.,t)); color=mix(colBackground,tc,(smoothstep(0.,.8,t)+r*.5)*.8); }
+            else if (phaseIndex == 9) { float s=mix(4.,8.,sin(u_time*.5)*.5+.5), p=truchetPattern(uv,s); vec2 us=uv*s; float bn=noise(floor(us)+u_time*.1); vec3 tc=mix(colPrimary,colTertiary,bn); color=mix(tc*.2,colWhite*.9,p); }
+            else if (phaseIndex == 10) { float v=sin(uv.x*3.+u_time*.8)+sin(uv.y*4.-u_time*.5+sin(uv.x*3.+u_time*.8)*.5)+sin(uv.x*uv.y*2.+u_time)+sin(sqrt(pow(uv.x+.5*sin(u_time/5.),2.)+pow(uv.y+.5*cos(u_time/3.),2.))*5.+u_time); v*=.5; vec3 pc1=mix(colDeepRed,colOrange,sin(u_time*.2)*.5+.5), pc2=mix(colPrimary,colSecondary,cos(u_time*.3)*.5+.5); color=mix(pc1,pc2,smoothstep(-.8,.8,v)); }
+            else if (phaseIndex == 11) { vec2 gu=originalUV*vec2(80.,60.), c=floor(gu); float sp=rand(c.x)*3.+1., ss=rand(c.x)*10., sps=fract(ss-u_time*sp*.1), cy=originalUV.y; float tl=.15+rand(c.x)*.1, ci=smoothstep(sps,sps+.01,cy)*(1.-smoothstep(sps+.01,sps+tl,cy)); float cv=rand(c+floor((ss-u_time*sp*.1)*10.)); vec3 rc=mix(colStrangeGreen*.5,colGreen*1.5,step(.5,cv)); color=mix(colBackground,rc,ci); }
+            else if (phaseIndex == 12) { float z=.5+pow(mod(u_time*.05,5.)+1.,2.); vec2 c=uv*1.5/z-vec2(.7,0.), zz=vec2(0.); int it=0; for(int i=0;i<MANDELBROT_ITER;i++){zz=vec2(zz.x*zz.x-zz.y*zz.y,2.*zz.x*zz.y)+c; if(dot(zz,zz)>4.)break; it++;} float m=clamp(float(it)/float(MANDELBROT_ITER),0.,1.); m=pow(m,.5); color=mix(colBackground,mix(colPrimary,colGold,m),smoothstep(0.,.1,m)); if(it==MANDELBROT_ITER)color=colBackground*.5; }
+            else if (phaseIndex == 13) { vec2 d=vec2(snoise(vec3(uv*2.,u_time*.3)),snoise(vec3(uv*2.+10.,u_time*.35)))*.15, du=uv+d; vec2 g=abs(fract(du*6.)-.5); float l=smoothstep(.03,.04,min(g.x,g.y)); float n=fbm(du*3.+u_time*.1); vec3 gc=mix(colTertiary,colPink,n); color=mix(colBackground*.5,gc,l*1.2); }
+            else if (phaseIndex == 14) { float h=snoise(vec3(uv*1.5,u_time*.2)), f=snoise(vec3(uv*3.+h*.3,u_time*.4)); float la=.785, l=clamp(.5+h*.5*cos(atan(uv.y,uv.x)-la),.2,1.); vec3 tc=mix(colGreen*.8,colGold*.6,h*.5+.5), wc=mix(colPrimary*.7,colTertiary*.9,f*.5+.5); color=mix(wc,tc*l,smoothstep(-.1,.1,h))*.8; }
+            else if (phaseIndex == 15) { vec2 p=abs(uv)*.8; float s=1.5+.5*sin(u_time*.4); for(int i=0;i<4;i++){ p=abs(p*s-1.); if(dot(p,p)>20.)break; } float r=sin(length(p)*.2*10.+u_time); color=mix(colSecondary,colPrimary,smoothstep(-.5,.5,r)); }
+            else if (phaseIndex == 16) { vec2 p=uv*2.5; float d1=worley(p), d2=worley(p+vec2(5.2,1.3)); float c=pow(1.-smoothstep(0.,.1,d1),2.)+pow(1.-smoothstep(0.,.05,d2),2.)*.5; c=clamp(c,0.,1.); float g=fbm(p*10.+u_time*.1); vec3 cc=mix(colWhite*.8,colTertiary,g); color=mix(colBackground*.8,cc,c); }
+            else if (phaseIndex == 17) { float i=.5+.5*noise(vec2(u_time*1.5,originalUV.y*5.)); float fs=floor(u_time*15.)+floor(originalUV.y*10.), f=rand(fs); i*=smoothstep(.2,.8,f); vec3 bc=mix(colPrimary,colSecondary,noise(uv*3.+u_time*.2)); float sy=fract(originalUV.y*u_resolution.y*.5), se=smoothstep(.4,.5,sy)*(1.-smoothstep(.5,.6,sy)); color=mix(bc*.5,vec3(0.),se*i*1.5); color+=(rand(originalUV+u_time)-.5)*.1*i; }
+            else if (phaseIndex == 18) { vec3 ro=vec3(0.,0.,-3.+sin(u_time*.3)), rd=normalize(vec3(uv,1.)); vec3 col=colBackground; float t=0.; for(int i=0;i<MAX_RAYMARCH_STEPS;i++){ vec3 p=ro+rd*t, sc=vec3(0.,sin(u_time*.8)*.5-.2,0.); float ds=sdSphere(p-sc,.5), dp=sdPlane(p,vec3(0.,1.,0.),1.); float d=min(ds,dp); if(d<.001*t){ vec3 hc, n; if(dp<ds){hc=colGreen*.8;n=vec3(0.,1.,0.);}else{hc=colPrimary;vec2 eps=vec2(.001,0.);n=normalize(vec3(sdSphere(p+eps.xyy-sc,.5)-sdSphere(p-eps.xyy-sc,.5),sdSphere(p+eps.yxy-sc,.5)-sdSphere(p-eps.yxy-sc,.5),sdSphere(p+eps.yyx-sc,.5)-sdSphere(p-eps.yyx-sc,.5)));} float l=max(.2,dot(n,normalize(vec3(-.7,.7,-.5)))); col=hc*l; break; } t+=d; if(t>MAX_RAYMARCH_DIST)break; } color=col; }
+            else { /* phaseIndex == 19 */ float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
+
+            // --- Global Effects ---
+            // Subtle Scanlines
+            float scanlineVal = sin(originalUV.y * u_resolution.y * 0.8 + u_time * 0.1) * 0.5 + 0.5;
+            float scanlineIntensity = 0.03 + 0.015 * sin(u_time * 0.5);
+            color = mix(color, color * (1.0 - scanlineIntensity * 0.8), smoothstep(0.3, 0.0, scanlineVal));
+            color = mix(color, color * (1.0 + scanlineIntensity * 0.5), smoothstep(0.7, 1.0, scanlineVal));
+            // Vignette
+            float vignette = smoothstep(1.5, 0.5, length(uv));
+            color *= vignette;
+
+            // Final Output (ensure alpha is 1.0)
+            outColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+        }
+    `;
 
     // --- WebGL Utility Functions ---
-    // (createShader, createProgram functions remain exactly the same as your original file)
-     function createShader(type, source) {
+    function createShader(type, source) {
         const shader = gl.createShader(type);
         if (!shader) { throw new Error(`Failed to create shader (type: ${type})`); }
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) { // [cite: 638]
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
             const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
-            const infoLog = gl.getShaderInfoLog(shader); // [cite: 638]
+            const infoLog = gl.getShaderInfoLog(shader);
             console.error(`>>> Shader compile error (${shaderType}):\n${infoLog}`);
             // Log source with line numbers for easier debugging
             const lines = source.split('\n');
@@ -167,13 +174,13 @@
     }
 
     function createProgram(vertexShader, fragmentShader) {
-        const program = gl.createProgram(); // [cite: 639]
+        const program = gl.createProgram();
         if (!program) { throw new Error("Failed to create program"); }
-        gl.attachShader(program, vertexShader); // [cite: 639]
-        gl.attachShader(program, fragmentShader); // [cite: 639]
-        gl.linkProgram(program); // [cite: 639]
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) { // [cite: 639]
-            const infoLog = gl.getProgramInfoLog(program); // [cite: 639]
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            const infoLog = gl.getProgramInfoLog(program);
             console.error('>>> Program link error:', infoLog);
             // Log info about attached shaders if linking fails
             const shaders = gl.getAttachedShaders(program);
@@ -187,14 +194,14 @@
             gl.deleteProgram(program);
             throw new Error("Program linking failed");
         }
-        // Detaching shaders after successful linking is good practice [cite: 640]
+        // Detaching shaders after successful linking is good practice
+        // but not strictly required by WebGL spec. Can sometimes help resource management.
         gl.detachShader(program, vertexShader);
         gl.detachShader(program, fragmentShader);
         return program;
     }
 
     // --- WebGL State Variables ---
-    // (program, attribute/uniform locations, buffer, animationFrameId, startTime remain the same)
     let program = null;
     let positionAttributeLocation = -1;
     let timeUniformLocation = null;
@@ -204,32 +211,31 @@
     let startTime = performance.now();
 
     // --- Initialize WebGL Program and Buffers ---
-    // (setupWebGL remains functionally the same, using the new fragmentShaderSource)
     function setupWebGL() {
         let vs = null;
         let fs = null;
         try {
-            vs = createShader(gl.VERTEX_SHADER, vertexShaderSource); // [cite: 637]
-            fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource); // [cite: 637] Uses the new fragment shader source
-            program = createProgram(vs, fs); // [cite: 26]
+            vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+            fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+            program = createProgram(vs, fs);
 
-            // Get attribute/uniform locations [cite: 27, 644]
+            // Get attribute/uniform locations (only need to do this once per program)
             positionAttributeLocation = gl.getAttribLocation(program, "a_position");
             timeUniformLocation = gl.getUniformLocation(program, "u_time");
             resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
             // Basic check if locations are valid
             if (positionAttributeLocation === -1) console.warn("Attribute 'a_position' not found in shader program.");
-            if (!timeUniformLocation) console.warn("Uniform 'u_time' not found in shader program.");
+            if (!timeUniformLocation) console.warn("Uniform 'u_time' not found in shader program."); // Uniform location is object or null
             if (!resolutionUniformLocation) console.warn("Uniform 'u_resolution' not found in shader program.");
 
-            // Create buffer for the fullscreen quad positions [cite: 642]
+            // Create buffer for the fullscreen quad positions
             positionBuffer = gl.createBuffer();
             if (!positionBuffer) throw new Error("Failed to create position buffer");
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
             // Use TRIANGLE_STRIP: (-1,1), (-1,-1), (1,1), (1,-1) covers the screen
             const positions = new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1]);
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW); // [cite: 654]
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
             return true; // Indicate successful setup
 
@@ -237,20 +243,20 @@
             console.error(">>> Failed during WebGL setup:", error);
             // Clean up partial resources if error occurred
             if (program) gl.deleteProgram(program);
-            if (vs) gl.deleteShader(vs); // [cite: 640]
-            if (fs) gl.deleteShader(fs); // [cite: 640]
+            if (vs) gl.deleteShader(vs);
+            if (fs) gl.deleteShader(fs);
             if (positionBuffer) gl.deleteBuffer(positionBuffer);
             program = null; // Ensure program is null if setup failed
             return false; // Indicate setup failure
         } finally {
             // Delete shaders after program creation (whether successful or not)
+            // as they are linked into the program.
             if (vs) gl.deleteShader(vs);
             if (fs) gl.deleteShader(fs);
         }
     }
 
     // --- Render Loop ---
-    // (render function remains functionally the same)
     function render(now) {
         if (!program) { // If program is null (setup failed or deleted), stop rendering
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -262,35 +268,44 @@
         let time = (now - startTime) * 0.001; // Time in seconds
 
         // --- Canvas Resize Check ---
+        // More efficient than resize event listener for continuous resizing
         const currentWidth = window.innerWidth;
         const currentHeight = window.innerHeight;
         if (webglCanvas.width !== currentWidth || webglCanvas.height !== currentHeight) {
             webglCanvas.width = currentWidth;
             webglCanvas.height = currentHeight;
-            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height); // Update viewport
+            // Update the WebGL viewport to match the new canvas size
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
             console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`);
         }
 
         // --- Prepare for Drawing ---
-        gl.useProgram(program); // [cite: 646]
+        // Clear might not be necessary if shader draws fullscreen opaque pixels
+        // gl.clearColor(0, 0, 0, 0); // Clear to transparent black
+        // gl.clear(gl.COLOR_BUFFER_BIT);
 
-        // --- Set up Vertex Attributes --- [cite: 27]
+        // Select the program to use
+        gl.useProgram(program);
+
+        // --- Set up Vertex Attributes ---
         if (positionAttributeLocation !== -1 && positionBuffer) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); // Bind the position buffer
             gl.enableVertexAttribArray(positionAttributeLocation);
-            gl.vertexAttribPointer( // [cite: 654]
+            // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+            gl.vertexAttribPointer(
                 positionAttributeLocation, // location
-                2,                     // size (num components per iteration, vec2)
-                gl.FLOAT,              // type
-                false,                 // normalize
-                0,                     // stride (0 = use size * sizeof(type))
-                0                      // offset (bytes from start of buffer)
+                2,         // size (num components per iteration, vec2)
+                gl.FLOAT,  // type
+                false,     // normalize
+                0,         // stride (0 = use size * sizeof(type))
+                0          // offset (bytes from start of buffer)
             );
         } else {
+            // Disable attribute if not used or buffer missing, prevents potential errors
             if (positionAttributeLocation !== -1) gl.disableVertexAttribArray(positionAttributeLocation);
         }
 
-        // --- Set Uniforms --- [cite: 645]
+        // --- Set Uniforms ---
         if (timeUniformLocation) {
            gl.uniform1f(timeUniformLocation, time);
         }
@@ -299,14 +314,14 @@
         }
 
         // --- Draw the Quad ---
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // [cite: 655]
+        // Draw 4 vertices using the bound buffer and TRIANGLE_STRIP mode
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
         // --- Request Next Frame ---
         animationFrameId = requestAnimationFrame(render);
     }
 
     // --- Function to Update Shader Dynamically ---
-    // (updateShader function remains functionally the same)
     // Expose this function to the global scope so it can be called from index.html
     window.updateShader = function(newShaderCode) {
         if (!gl) {
@@ -332,15 +347,14 @@
             out vec4 outColor;
 
             // --- Include Common Helper Functions ---
-            //const int FBM_OCTAVES = ${FBM_OCTAVES}; // Use the JS constant - Not needed if fbm isn't in the dynamic code
-            // Helper functions needed by the dynamic code (adjust as necessary)
+            const int FBM_OCTAVES = ${FBM_OCTAVES}; // Use the JS constant
             float hash(float n) { return fract(sin(n) * 43758.5453); }
             float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
-            float fbm(vec2 p) { float s=0.,a=.7,f=1.;int FBM_OCTAVES_DYNAMIC=5; for(int i=0;i<FBM_OCTAVES_DYNAMIC;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
+            float fbm(vec2 p) { float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
             float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
             // --- END Helper Functions ---
 
-            // --- Common Colors --- // Define common colors if dynamic code needs them
+            // --- Common Colors ---
             vec3 colPrimary = vec3(106./255., 0., 1.);
             vec3 colSecondary = vec3(0., 1., 204./255.);
             vec3 colTertiary = vec3(0., 184./255., 212./255.);
@@ -356,7 +370,7 @@
         let newFs = null;
         let newProgram = null;
         try {
-             // Recompile the vertex shader
+             // Recompile the vertex shader (it's simple, but good practice)
              newVs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
              // Compile the new fragment shader
              newFs = createShader(gl.FRAGMENT_SHADER, completeNewFragmentSource);
@@ -366,11 +380,17 @@
              // --- Success! Switch to the new program ---
              console.log("New shader compiled and linked successfully.");
 
-             // Stop the old animation loop
-             if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+             // Stop the old animation loop before changing the program
+             if (animationFrameId) {
+                 cancelAnimationFrame(animationFrameId);
+                 animationFrameId = null;
+             }
 
              // Delete the old program *before* assigning the new one
-             if (program) { gl.deleteProgram(program); console.log("Old program deleted."); }
+             if (program) {
+                 gl.deleteProgram(program);
+                 console.log("Old program deleted.");
+             }
              program = newProgram; // Assign the new program
 
              // Re-get all attribute and uniform locations for the *new* program
@@ -378,7 +398,7 @@
              timeUniformLocation = gl.getUniformLocation(program, "u_time");
              resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
 
-             // Optional: Check new locations
+             // Optional: Check new locations for debugging
              if (positionAttributeLocation === -1) console.warn("New program missing 'a_position' attribute.");
              if (!timeUniformLocation) console.warn("New program missing 'u_time' uniform.");
              if (!resolutionUniformLocation) console.warn("New program missing 'u_resolution' uniform.");
@@ -393,20 +413,20 @@
         } catch (e) {
              console.error('>>> Shader update failed during compile/link:', e);
              // Clean up partially created resources from the failed update attempt
-             if (newProgram) gl.deleteProgram(newProgram);
+             if (newProgram) gl.deleteProgram(newProgram); // Should be null if link failed, but check anyway
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
-             // Do NOT delete the old 'program' if the update failed
+             // Do NOT delete the old 'program' if the update failed, keep it running
              if(typeof showNotification === 'function') showNotification(`SHADER UPDATE FAILED: ${e.message}`);
 
              // If the render loop was stopped, restart it with the old program
              if (!animationFrameId && program) {
-                 console.log("Restarting render loop with previous program after update failure.");
-                 animationFrameId = requestAnimationFrame(render);
+                console.log("Restarting render loop with previous program after update failure.");
+                animationFrameId = requestAnimationFrame(render);
              }
 
         } finally {
-             // Delete the new shaders regardless of success
+             // Delete the new shaders regardless of success, as they are now linked (or failed)
              if (newVs) gl.deleteShader(newVs);
              if (newFs) gl.deleteShader(newFs);
         }
@@ -424,13 +444,17 @@
     }
 
     // --- Resize Listener ---
-    // (Resize listener remains the same)
+    // Handles canvas buffer resizing via check in render loop, but good to have listener too.
     window.addEventListener('resize', () => {
         // The actual resizing logic is handled within the render loop check
+        // This listener ensures responsiveness if the loop somehow stops temporarily
+        // and helps trigger the check on resize events.
         if (!animationFrameId && program) {
+            // If the loop isn't running but we have a program, request a frame
+            // This might happen if the tab was hidden and the loop stopped
             console.log("Resize event: Requesting animation frame.");
             animationFrameId = requestAnimationFrame(render);
         }
-    }, false);
+    }, false); // Use passive: true? Might improve scroll perf slightly if listener is heavy.
 
 })(); // Execute the IIFE
