@@ -1,3 +1,57 @@
+// Wrap everything in an Immediately Invoked Function Expression (IIFE)
+// to avoid polluting the global scope unnecessarily, except for `window.updateShader`.
+(function() {
+    "use strict"; // Enable strict mode
+
+    // --- WebGL Setup and Shader Logic ---
+    // --- (Derived from sources 200-548) ---
+
+    const webglCanvas = document.getElementById('webglCanvas');
+    let gl = null; // Keep gl scoped within this IIFE
+
+    if (!webglCanvas) {
+        console.error("WebGL Canvas element with id 'webglCanvas' not found!");
+        return; // Stop script execution if canvas isn't found
+    }
+
+    try {
+        webglCanvas.width = window.innerWidth;
+        webglCanvas.height = window.innerHeight;
+        // Try to get webgl2, fall back to webgl1
+        gl = webglCanvas.getContext('webgl2') ||
+             webglCanvas.getContext('webgl') ||
+             webglCanvas.getContext('experimental-webgl');
+
+        if (!gl) {
+            throw new Error("WebGL not supported or context creation failed.");
+        }
+
+        if (gl instanceof WebGL2RenderingContext) {
+            console.log("WebGL2 Context Initialized.");
+        } else {
+            console.log("WebGL1 Context Initialized. Note: Shader uses GLSL 3.00 ES features.");
+        }
+    } catch (e) {
+        console.error("WebGL Initialization Error:", e);
+        // Fallback: Provide a static background color if WebGL fails
+        if (document.body) document.body.style.backgroundColor = '#050511';
+        return; // Stop script execution
+    }
+
+    // --- Shader Sources ---
+    // Vertex Shader (GLSL 3.00 ES)
+    const vertexShaderSource = `#version 300 es
+        precision highp float; // Precision needed in VS for GLSL 300 es
+        in vec4 a_position;
+        void main() {
+            gl_Position = a_position; // Pass position through
+        }
+    `;
+
+
+
+
+
 (function() {
     "use strict";
     // ... [WebGL setup code remains the same] ...
