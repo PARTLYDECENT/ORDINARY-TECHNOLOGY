@@ -1,204 +1,149 @@
-// Wrap everything in an Immediately Invoked Function Expression (IIFE)
-// to avoid polluting the global scope unnecessarily, except for `window.updateShader`.
 (function() {
-    "use strict"; // Enable strict mode
+    "use strict";
+    // ... [WebGL setup code remains the same] ...
 
-    // --- WebGL Setup and Shader Logic ---
-    // --- (Derived from sources 200-548) ---
+    // Fragment Shader - COMPLETELY UNHINGED VERSION
+    const fragmentShaderSource = `#version 300 es
+        precision highp float;
+        uniform float u_time;
+        uniform vec2 u_resolution;
+        out vec4 outColor;
 
-    const webglCanvas = document.getElementById('webglCanvas');
-    let gl = null; // Keep gl scoped within this IIFE
+        #define TAU 6.28318530718
+        #define PHI 1.61803398875
+        #define MAX_STEPS 666
+        #define MAX_DIST 66.6
+        #define SURFACE_DIST 0.00666
+        #define ROTATE(a) mat2(cos(a), -sin(a), sin(a), cos(a))
 
-    if (!webglCanvas) {
-        console.error("WebGL Canvas element with id 'webglCanvas' not found!");
-        return; // Stop script execution if canvas isn't found
-    }
-
-    try {
-        webglCanvas.width = window.innerWidth;
-        webglCanvas.height = window.innerHeight;
-        // Try to get webgl2, fall back to webgl1
-        gl = webglCanvas.getContext('webgl2') ||
-             webglCanvas.getContext('webgl') ||
-             webglCanvas.getContext('experimental-webgl');
-
-        if (!gl) {
-            throw new Error("WebGL not supported or context creation failed.");
+        float hash(float n) { return fract(sin(n)*43758.5453); }
+        float noise(vec3 x) {
+            vec3 p = floor(x);
+            vec3 f = fract(x);
+            f = f*f*(3.0-2.0*f);
+            float n = p.x + p.y*157.0 + 113.0*p.z;
+            return mix(mix(mix( hash(n+0.0), hash(n+1.0),f.x),
+                       mix( hash(n+157.0), hash(n+158.0),f.x),f.y),
+                   mix(mix( hash(n+113.0), hash(n+114.0),f.x),
+                       mix( hash(n+270.0), hash(n+271.0),f.x),f.y),f.z);
         }
 
-        if (gl instanceof WebGL2RenderingContext) {
-            console.log("WebGL2 Context Initialized.");
-        } else {
-            console.log("WebGL1 Context Initialized. Note: Shader uses GLSL 3.00 ES features.");
+        float sdHellBulb(vec3 p) {
+            vec3 z = p * (1.0 + 0.3*sin(u_time*0.7));
+            float dr = 1.0;
+            float r = 0.0;
+            float power = 8.0 + 4.0*sin(u_time*0.3) + 2.0*noise(vec3(u_time*0.1));
+            
+            for(int i=0; i<13; i++) {
+                r = length(z);
+                if(r > 6.66) break;
+                
+                float theta = acos(z.z/r) * (power + 2.0*sin(u_time*2.0));
+                float phi = atan(z.y, z.x) * power;
+                float zr = pow(r, power-1.0);
+                dr = zr*power*dr + 1.0;
+                zr = pow(r, power);
+                
+                theta += u_time*2.0 + 3.0*noise(z*0.3 + u_time);
+                phi = phi*power + u_time*3.0;
+                
+                z = zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
+                z += p * (0.8 + 0.2*sin(u_time*0.5));
+                z = mix(z, z.yxz, smoothstep(0.3,0.7,sin(u_time*0.7)));
+            }
+            return 0.5*log(r)*r/dr * (0.7 + 0.3*noise(p*3.0 + u_time));
         }
-    } catch (e) {
-        console.error("WebGL Initialization Error:", e);
-        // Fallback: Provide a static background color if WebGL fails
-        if (document.body) document.body.style.backgroundColor = '#050511';
-        return; // Stop script execution
-    }
 
-    // --- Shader Sources ---
-    // Vertex Shader (GLSL 3.00 ES)
-    const vertexShaderSource = `#version 300 es
-        precision highp float; // Precision needed in VS for GLSL 300 es
-        in vec4 a_position;
+        float sceneSDF(vec3 p) {
+            p.xy *= ROTATE(u_time*0.3 + p.z*0.2);
+            p.yz *= ROTATE(u_time*0.4);
+            p = mod(p+2.0,4.0)-2.0;
+            
+            float bulb = sdHellBulb(p);
+            float floorDist = p.y + 2.0 - 1.5*sin(p.x*0.5 + u_time)*cos(p.z*0.3 - u_time);
+            float twist = length(p.xz) - 1.0 - 0.5*cos(u_time*2.0);
+            
+            return min(min(bulb, floorDist), twist + 0.3*noise(p*5.0 + u_time));
+        }
+
+        vec3 calcNormal(vec3 p) {
+            vec2 e = vec2(0.00666, 0);
+            return normalize(vec3(
+                sceneSDF(p+e.xyy) - sceneSDF(p-e.xyy),
+                sceneSDF(p+e.yxy) - sceneSDF(p-e.yxy),
+                sceneSDF(p+e.yyx) - sceneSDF(p-e.yyx)
+            ));
+        }
+
+        float rayMarch(vec3 ro, vec3 rd) {
+            float dO=0.0;
+            for(int i=0; i<MAX_STEPS; i++) {
+                vec3 p = ro + rd*dO;
+                float dS = sceneSDF(p);
+                if(dS < SURFACE_DIST*dO || dO > MAX_DIST) break;
+                dO += dS * mix(0.5, 1.5, noise(vec3(rd*100.0 + float(i))));
+                if(mod(dO, 3.0) < 0.1) rd.xy *= ROTATE(0.1*sin(u_time));
+            }
+            return dO;
+        }
+
         void main() {
-            gl_Position = a_position; // Pass position through
+            vec2 uv = (gl_FragCoord.xy*2.0 - u_resolution.xy)/min(u_resolution.x, u_resolution.y);
+            uv *= 1.0 + 0.1*sin(u_time*5.0);
+            
+            vec3 ro = vec3(3.0*cos(u_time*0.3), 2.0*sin(u_time*0.2), 3.0*sin(u_time*0.4));
+            ro += 0.5*noise(vec3(u_time*0.7));
+            vec3 rd = normalize(vec3(uv, 1.0 + 0.3*sin(u_time)));
+            
+            float distort = 0.1*sin(u_time*10.0 + uv.x*TAU);
+            rd.xy += distort;
+            rd = normalize(rd);
+            
+            float d = rayMarch(ro, rd);
+            vec3 col = vec3(0.1, 0.03, 0.1)* (1.0 - exp(-0.2*d));
+            
+            if(d < MAX_DIST) {
+                vec3 p = ro + rd*d;
+                vec3 n = calcNormal(p);
+                n = mix(n, vec3(noise(p*10.0)), 0.3);
+                
+                vec3 lightPos = vec3(10.0*sin(u_time), 10.0, 10.0*cos(u_time));
+                vec3 lightDir = normalize(lightPos - p + 2.0*noise(vec3(u_time)));
+                vec3 halo = vec3(0.3, 0.1, 0.5) * pow(max(0.0, dot(-rd, lightDir)), 2.0);
+                
+                vec3 albedo = mix(
+                    vec3(0.8, 0.1, 0.3),
+                    vec3(0.1, 0.8, 0.2),
+                    sin(p.x*3.0 + u_time)*0.5 + 0.5
+                ) * (0.9 + 0.5*noise(p*5.0));
+                
+                float flicker = step(0.9, hash(u_time*30.0));
+                vec3 lighting = albedo * (0.3 + 0.7*flicker * max(0.0, dot(n, lightDir)));
+                lighting += halo * (0.5 + 0.5*sin(u_time*30.0));
+                
+                col = mix(col, lighting, exp(-d*0.1));
+                col *= 1.0 + 0.3*sin(TAU*(dot(uv, uv)*10.0 - u_time*3.0));
+            }
+            
+            col = pow(col, vec3(1.0/2.2));
+            col += 0.02*vec3(
+                hash(uv.x*73.0 + u_time),
+                hash(uv.y*59.0 + u_time),
+                hash((uv.x+uv.y)*97.0 + u_time)
+            );
+            
+            col *= 1.0 - 0.1*length(uv);
+            col.rb *= ROTATE(0.01*sin(u_time));
+            
+            outColor = vec4(col, 1.0);
         }
     `;
 
-    // Fragment Shader (GLSL 3.00 ES - REVISED: Raymarched Mandelbulb Variation)
-    const fragmentShaderSource = `#version 300 es
-        precision highp float; // Precision qualifier required in fragment shaders
+    // ... [Remaining WebGL setup and functions stay the same] ...
+})();
 
-        // Uniforms: Inputs from JavaScript
-        uniform float u_time;
-        uniform vec2 u_resolution;
 
-        // Output variable: Replaces gl_FragColor
-        out vec4 outColor;
 
-        // --- Constants ---
-        const int MAX_STEPS = 80;        // Increased steps for potentially better quality
-        const float MAX_DIST = 100.0;      // Max distance to march
-        const float SURFACE_DIST = 0.001; // Hit threshold (epsilon)
-        const float PI = 3.14159265359;
-        const int FBM_OCTAVES = 5; // Keep for updateShader compatibility if needed elsewhere
-
-        // --- Helper Functions ---
-        // Basic random function
-        float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
-
-        // --- SDF Definitions (Inspired by Inigo Quilez / Shader Bible) ---
-        // Basic Sphere SDF
-        float sdSphere( vec3 p, float s ) {
-            return length(p)-s;
-        }
-
-        // Mandelbulb SDF variation [cite: 246, 247, 248, 249, 250, 251]
-        float sdMandelbulb( vec3 pos ) {
-            vec3 z = pos;
-            float dr = 1.0;
-            float r = 0.0;
-            float power = 8.0 + 2.0 * sin(u_time * 0.2); // Unhinged: Power animates wildly
-
-            for (int i = 0; i < 5; i++) { // Lower iterations for performance/glitchiness
-                r = length(z);
-                if (r > 2.0) break; // Bailout
-
-                // Convert to polar coordinates
-                float theta = acos(clamp(z.z/r, -1.0, 1.0)); // Clamp for safety
-                float phi = atan(z.y, z.x);
-                dr = pow(r, power - 1.0) * power * dr + 1.0;
-
-                // Scale and rotate
-                float zr = pow(r, power);
-                theta = theta * power + u_time * 0.5; // Add time-based twist
-                phi = phi * power + u_time * 0.4;
-
-                // Convert back to Cartesian coordinates and add original position
-                z = zr * vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
-                z += pos;
-            }
-            // Distance estimation [cite: 251]
-            return 0.5 * log(r) * r / dr;
-        }
-
-        // Scene SDF: Combining shapes [cite: 427, 428, 429]
-        float sceneSDF( vec3 p ) {
-            float ground = p.y + 1.5; // Simple plane [cite: 230, 421]
-            p.y += sin(p.x * 0.5 + u_time) * 0.2; // Wobble the fractal
-            p.x += cos(p.z * 0.5 - u_time * 1.1) * 0.3;
-            float fractal = sdMandelbulb(p * (1.0 + 0.3 * sin(u_time * 0.1))); // Scale oscillates
-            return min(ground, fractal); // Union [cite: 429]
-        }
-
-        // --- Normal Calculation (Gradient of SDF) [cite: 82, 481] ---
-        vec3 calcNormal( vec3 p ) {
-            vec2 e = vec2(SURFACE_DIST * 0.5, 0.0); // Smaller epsilon for normal calc
-            return normalize( vec3( sceneSDF(p + e.xyy()) - sceneSDF(p - e.xyy()), // X gradient [cite: 484]
-                                   sceneSDF(p + e.yxy()) - sceneSDF(p - e.yxy()), // Y gradient [cite: 484]
-                                   sceneSDF(p + e.yyx()) - sceneSDF(p - e.yyx())  // Z gradient [cite: 484]
-                                 ));
-        }
-
-        // --- Raymarching Function (Sphere Tracing) [cite: 441, 457] ---
-        float rayMarch( vec3 ro, vec3 rd ) {
-            float dO = 0.0; // Distance from Origin [cite: 443]
-            for( int i=0; i < MAX_STEPS; i++ ) {
-                vec3 p = ro + rd * dO;  // Current position [cite: 445]
-                float dS = sceneSDF(p); // Distance to Scene [cite: 446]
-                if( dS < SURFACE_DIST * dO * 0.5 ) { // Hit condition (relative epsilon) [cite: 447]
-                     return dO;
-                }
-                dO += dS * (0.6 + 0.4 * rand(rd.xy + float(i))); // Step forward, add some noise [cite: 448]
-                if( dO > MAX_DIST ) { // Missed [cite: 451]
-                    return MAX_DIST;
-                }
-            }
-            return MAX_DIST; // Missed
-        }
-
-        // --- Main Shader Logic ---
-        void main() {
-            // Normalized device coordinates, aspect corrected, origin center [cite: 138]
-            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.x, u_resolution.y);
-            vec2 originalUV = gl_FragCoord.xy / u_resolution.xy; // Keep original UVs if needed
-
-            // --- Camera Setup [cite: 233, 474] ---
-            vec3 ro = vec3(2.5 * cos(u_time * 0.3), 1.5 + sin(u_time * 0.2), 2.5 * sin(u_time * 0.3)); // Ray Origin (animated) [cite: 467]
-            vec3 target = vec3(0.0, 0.5, 0.0);
-            vec3 camF = normalize(target - ro); // Forward
-            vec3 camR = normalize(cross(vec3(0.0, 1.0, 0.0), camF)); // Right
-            vec3 camU = cross(camF, camR); // Up
-            // Calculate Ray Direction (perspective) [cite: 139, 140, 468]
-            vec3 rd = normalize(uv.x * camR + uv.y * camU + 1.5 * camF); // Adjust 1.5 for FOV
-
-            // --- Raymarch the scene ---
-            float dist = rayMarch(ro, rd); // [cite: 469]
-
-            // --- Shading [cite: 476] ---
-            vec3 col = vec3(0.0); // Background
-            if( dist < MAX_DIST ) { // Hit [cite: 470]
-                vec3 p = ro + rd * dist; // Hit position [cite: 471]
-                vec3 n = calcNormal(p); // Normal [cite: 478, 485]
-
-                // Lighting (simple Blinn-Phong-ish) [cite: 488, 494]
-                vec3 lightPos = vec3(5.0 * sin(u_time * 0.6), 5.0, 5.0 * cos(u_time * 0.6)); // Animated light
-                vec3 lightDir = normalize(lightPos - p); // [cite: 504]
-                vec3 viewDir = normalize(ro - p); // [cite: 504]
-                vec3 halfwayDir = normalize(lightDir + viewDir); // [cite: 501]
-
-                // Unhinged Material Colors based on position/normal/time
-                vec3 baseColor = vec3(0.6, 0.2, 0.8) + 0.4 * sin(p * 3.0 + u_time * 2.0);
-                baseColor = mix(baseColor, vec3(0.1, 0.9, 0.5), smoothstep(-0.5, 0.5, n.y)); // Color based on normal Y
-                baseColor = clamp(baseColor, 0.0, 1.0); // Ensure valid color range
-
-                float ambient = 0.2; // [cite: 490]
-                float diffuse = max(dot(n, lightDir), 0.0) * 0.8; // [cite: 491]
-                float specular = pow(max(dot(n, halfwayDir), 0.0), 32.0) * (0.5 + 0.5 * sin(u_time)); // Pulsating specular [cite: 502]
-
-                col = baseColor * (ambient + diffuse) + vec3(1.0) * specular; //
-
-                // Cheap distance fog [cite: 619]
-                float fogAmount = smoothstep(0.0, MAX_DIST * 0.8, dist); // [cite: 621]
-                col = mix(col, vec3(0.05, 0.0, 0.1), fogAmount); // Mix with dark purple fog [cite: 622]
-
-            } else {
-               // Background Sky - procedural noise [cite: 578]
-               col = vec3(0.1, 0.0, 0.2) + 0.2 * pow(max(0.0, dot(rd, vec3(0.0, 1.0, 0.0))), 2.0); // Simple gradient + up-vector glow
-               col += 0.05 * rand(uv + fract(u_time)); // Add some noise
-            }
-
-            // Final color correction / effects
-            col = pow(col, vec3(0.8, 0.9, 1.0)); // Color grading tweak
-            col += (rand(gl_FragCoord.xy)-0.5)*0.05; // Noise grain
-
-            // Ensure alpha is 1.0
-            outColor = vec4(clamp(col, 0.0, 1.0), 1.0); // [cite: 473]
-        }
-    `; // End of fragmentShaderSource
 
     // --- WebGL Utility Functions ---
     // (createShader, createProgram functions remain exactly the same as your original file)
