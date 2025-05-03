@@ -17,9 +17,8 @@ const noise = `
         float c = random(i + vec2(0.0, 1.0));
         float d = random(i + vec2(1.0, 1.0));
 
-        // Smooth interpolation (smoothstep)
+        // Smooth interpolation
         vec2 u = f * f * (3.0 - 2.0 * f);
-        // vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); // Perlin smoothstep
 
         return mix(a, b, u.x) +
                (c - a) * u.y * (1.0 - u.x) +
@@ -29,148 +28,158 @@ const noise = `
 
 // Fractional Brownian Motion (adds layers of noise)
 const fbm = `
-    #define OCTAVES 6
+    #define OCTAVES 4
     float fbm(vec2 st) {
         float value = 0.0;
         float amplitude = 0.5;
-        float frequency = 0.0; // This will be modified in the loop
+        float frequency = 1.0;
 
         for (int i = 0; i < OCTAVES; i++) {
-            frequency *= 2.0; // Double frequency - removed initial multiplication
             value += amplitude * noise(st * frequency);
-            st *= 2.0; // Double frequency for next octave
-            amplitude *= 0.5; // Halve amplitude
+            st *= 2.0;
+            amplitude *= 0.5;
+            frequency *= 2.0;
         }
         return value;
     }
 `;
 
-
-// Vertex Shader (usually stays simple for full-screen quad)
+// Vertex Shader (simple full-screen quad)
 const vsSource = `
     attribute vec4 aVertexPosition;
-    attribute vec2 aTextureCoord; // Added texture coord attribute
+    attribute vec2 aTextureCoord;
 
-    varying highp vec2 vTextureCoord; // Pass texture coord to fragment shader
+    varying highp vec2 vTextureCoord;
 
     void main(void) {
         gl_Position = aVertexPosition;
-        vTextureCoord = aTextureCoord; // Pass through the texture coordinate
+        vTextureCoord = aTextureCoord;
     }
 `;
 
-// Fragment Shader (The cool, uncanny part)
+// Fragment Shader - Backrooms/Tomb Raider uncanny style
 const fsSource = `
-    precision highp float; // Need high precision
+    precision highp float;
 
-    varying highp vec2 vTextureCoord; // Receive texture coord
+    varying highp vec2 vTextureCoord;
 
-    uniform vec2 uResolution; // Canvas resolution (width, height)
-    uniform float uTime;      // Time in seconds
-    uniform vec2 uMouse;      // Mouse coordinates (normalized 0.0 to 1.0) - Optional but cool
+    uniform vec2 uResolution;
+    uniform float uTime;
+    uniform vec2 uMouse;
 
     // Include PRNG and Noise functions
     ${prng}
     ${noise}
-    // ${fbm} // FBM function - uncomment if using
+    ${fbm}
 
-    // Function to create a rotating pattern
-    vec3 pattern(vec2 uv, float time) {
-        float angle = atan(uv.y, uv.x);
-        float radius = length(uv);
-
-        // Combine multiple frequencies of sine waves based on angle and radius, animated by time
-        float R = 0.5 + 0.5 * cos(angle * 5.0 + time * 0.5 + radius * 10.0);
-        float G = 0.5 + 0.5 * sin(angle * 6.0 - time * 0.3 + radius * 12.0);
-        float B = 0.5 + 0.5 * cos(angle * 7.0 + time * 0.2 + radius * 14.0);
-
-        // Add some noise modulation
-        float n = noise(uv * 5.0 + time * 0.1);
-        R += n * 0.2;
-        G += n * 0.15;
-        B += n * 0.25;
-
-        // Add a subtle pulsing effect based on radius
-        float pulse = 0.05 * sin(radius * 8.0 - time * 2.0);
-
-        return vec3(R, G, B) + pulse;
+    // Function to create a grid/wall pattern
+    float wallPattern(vec2 uv, float scale) {
+        vec2 grid = fract(uv * scale);
+        float lines = max(
+            smoothstep(0.05, 0.07, grid.x) * smoothstep(0.95, 0.93, grid.x),
+            smoothstep(0.05, 0.07, grid.y) * smoothstep(0.95, 0.93, grid.y)
+        );
+        return lines;
     }
 
-    // Function for grid/scanlines
-    float grid(vec2 uv, float scale, float thickness) {
-        vec2 grid_uv = fract(uv * scale);
-        float line = min(step(thickness, grid_uv.x), step(thickness, grid_uv.y));
-        return 1.0 - line; // Invert so lines are dark
+    // Create distorted lighting effect
+    float lighting(vec2 uv, float time) {
+        // Create a slow pulsing light source
+        float dist = length(uv - vec2(0.5 + sin(time * 0.2) * 0.2, 0.5 + cos(time * 0.3) * 0.1));
+        float light = smoothstep(0.8, 0.0, dist);
+        
+        // Add flickering
+        float flicker = 0.95 + 0.05 * sin(time * 10.0);
+        
+        return light * flicker;
     }
-
 
     void main(void) {
-        // Use vTextureCoord directly (it's already 0.0 to 1.0)
+        // Use texture coordinates and correct aspect ratio
         vec2 uv = vTextureCoord;
-        // Correct aspect ratio (optional but good practice)
-        // float aspect = uResolution.x / uResolution.y;
-        // vec2 uv_aspect = uv;
-        // uv_aspect.x *= aspect;
+        float aspect = uResolution.x / uResolution.y;
+        uv.x *= aspect;
+        
+        // Center coordinates (for various effects)
+        vec2 centered_uv = (uv - vec2(aspect * 0.5, 0.5)) * 2.0;
 
-        // Center UV coordinates (0,0 is center)
-        vec2 centered_uv = (vTextureCoord - 0.5) * 2.0; // Range -1.0 to 1.0
-        centered_uv.x *= uResolution.x / uResolution.y; // Aspect correction for centered coords
-
-
-        // --- Base Color ---
-        //vec3 baseColor = vec3(0.01, 0.02, 0.05); // Very dark blue base
-        vec3 baseColor = vec3(0.0, 0.0, 0.0); // Black base
-
-
-        // --- Layer 1: Complex Rotating Pattern ---
-        vec3 patternColor = pattern(centered_uv * 1.5, uTime * 0.3); // Use centered UVs for symmetry
-        patternColor *= smoothstep(1.5, 0.3, length(centered_uv)); // Fade out at edges
-
-
-        // --- Layer 2: Noise field for distortion/texture ---
-        vec2 noise_uv = uv * vec2(uResolution.x/uResolution.y, 1.0); // Aspect corrected UV for noise
-        float noiseVal = noise(noise_uv * 4.0 + uTime * 0.05);
-        noiseVal = smoothstep(0.3, 0.7, noiseVal); // Make it sharper
-
-
-        // --- Layer 3: Subtle Scanlines ---
-        float scanlineIntensity = 0.08;
-        float scanlines = mod(gl_FragCoord.y - uTime * 20.0, 3.0) / 3.0; // Moving scanlines
-        scanlines = pow(scanlines, 1.5); // Sharpen
-
-
-        // --- Combine Layers ---
-        vec3 finalColor = baseColor;
-        finalColor += patternColor * vec3(0.1, 0.4, 0.5); // Tint the pattern blue/cyan dominant
-        finalColor += noiseVal * vec3(0.05, 0.02, 0.1); // Add noise as subtle purple/blue texture
-        finalColor = mix(finalColor, baseColor, scanlines * scanlineIntensity); // Apply scanlines
-
-        // --- Glitch Effect (Occasional) ---
-        float glitchTime = mod(uTime, 10.0); // Cycle every 10 seconds
-        if (glitchTime > 9.5 && glitchTime < 9.6) { // Short glitch burst
-             if (random(uv + fract(uTime)) > 0.95) {
-                 finalColor.rg = finalColor.gr; // Swap channels
-                 finalColor.b += 0.2;
-                 finalColor.r *= 0.5;
-             }
-         }
-        if (glitchTime > 6.0 && glitchTime < 6.05) { // Horizontal shift glitch
-            float shift = (random(vec2(floor(uv.y * 20.0), uTime)) - 0.5) * 0.1;
-            vec2 shifted_uv = uv + vec2(shift, 0.0);
-            if (shifted_uv.x >= 0.0 && shifted_uv.x <= 1.0) { // Check bounds
-                 // Recalculate centered_uv for shifted pattern lookup
-                 vec2 centered_shifted_uv = (shifted_uv - 0.5) * 2.0;
-                 centered_shifted_uv.x *= uResolution.x / uResolution.y;
-                 finalColor = pattern(centered_shifted_uv * 1.5, uTime * 0.3) * vec3(0.5, 0.1, 0.2); // Use different color for glitch
-             }
-         }
-
-
-        // --- Vignette ---
-        float vignette = smoothstep(1.0, 0.4, length(centered_uv * 0.8)); // Soft vignette
-        finalColor *= vignette;
-
-
+        // --- Create a backrooms-like environment ---
+        
+        // Base color (sickly yellow-green of the backrooms)
+        vec3 backroomsYellow = vec3(0.7, 0.65, 0.3);
+        
+        // Wall pattern with slight distortion
+        vec2 distortedUV = uv;
+        distortedUV.x += sin(uv.y * 20.0 + uTime * 0.2) * 0.01;
+        distortedUV.y += cos(uv.x * 15.0 + uTime * 0.1) * 0.01;
+        
+        // Create wall tiles
+        float walls = wallPattern(distortedUV, 3.0);
+        
+        // Add some noise texture for grime/mold
+        float grime = noise(uv * 15.0) * 0.2;
+        float timeMold = fbm(uv * 4.0 + uTime * 0.05) * 0.15;
+        
+        // Lighting with flickering and shadows
+        float light = lighting(uv / vec2(aspect, 1.0), uTime);
+        
+        // Vignette effect for claustrophobic feel
+        float vignette = smoothstep(1.4, 0.2, length(centered_uv));
+        
+        // Add a water puddle effect on the floor
+        float puddle = 0.0;
+        if (uv.y < 0.4) {
+            // Distorted reflection
+            vec2 reflectionUV = vec2(uv.x, 0.8 - uv.y);
+            reflectionUV.x += sin(uv.y * 40.0 + uTime) * 0.02;
+            float reflectionWalls = wallPattern(reflectionUV, 3.0);
+            puddle = reflectionWalls * smoothstep(0.4, 0.2, uv.y) * 0.3;
+            puddle *= (0.5 + 0.5 * sin(uv.x * 30.0 + uTime)); // Ripple effect
+        }
+        
+        // Add some dust particles floating in the air
+        float dust = 0.0;
+        for (int i = 0; i < 5; i++) {
+            float t = mod(uTime * 0.1 + float(i) * 0.2, 1.0);
+            vec2 dustPos = vec2(
+                mod(random(vec2(float(i), 0.0)) + sin(uTime * 0.1 + float(i)), aspect),
+                mod(t + random(vec2(0.0, float(i))), 1.0)
+            );
+            dust += smoothstep(0.02, 0.0, length(uv - dustPos)) * 0.5;
+        }
+        
+        // Occasional shadows moving across walls (uncanny)
+        float shadow = 0.0;
+        float shadowTime = mod(uTime * 0.2, 20.0);
+        if (shadowTime > 8.0 && shadowTime < 10.0) {
+            vec2 shadowPos = vec2(mod(shadowTime - 8.0, aspect), 0.5);
+            shadow = smoothstep(0.3, 0.0, length(uv - shadowPos)) * 0.5;
+        }
+        
+        // Combine all elements
+        vec3 finalColor = backroomsYellow;
+        finalColor *= mix(0.2, 1.0, walls); // Apply wall pattern
+        finalColor -= shadow; // Apply moving shadows
+        finalColor = mix(finalColor, vec3(0.1, 0.12, 0.0), grime); // Add grime
+        finalColor = mix(finalColor, vec3(0.06, 0.15, 0.06), timeMold); // Add mold
+        finalColor += dust * vec3(1.0, 0.9, 0.7); // Add dust
+        finalColor += puddle * vec3(0.2, 0.25, 0.3); // Add water puddles
+        finalColor *= light * 1.5; // Apply lighting
+        finalColor *= vignette; // Apply vignette
+        
+        // Add scanlines for a horror/old camera effect
+        float scanline = sin(gl_FragCoord.y * 0.5 - uTime * 10.0) * 0.5 + 0.5;
+        finalColor *= 0.8 + 0.2 * scanline;
+        
+        // Occasional glitch effect
+        float glitchTime = mod(uTime, 15.0);
+        if (glitchTime > 14.0 && glitchTime < 14.2) {
+            if (random(uv + fract(uTime)) > 0.7) {
+                finalColor.rb = finalColor.br; // Swap channels
+                finalColor += vec3(0.1, 0.0, 0.1) * random(uv);
+            }
+        }
+        
         gl_FragColor = vec4(finalColor, 1.0);
     }
 `;
@@ -182,7 +191,6 @@ class ShaderBackground {
             console.error(`Canvas element with id "${canvasId}" not found.`);
             return;
         }
-        // Try to get WebGL context, fallback to experimental if needed
         this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
 
         if (!this.gl) {
@@ -195,7 +203,7 @@ class ShaderBackground {
         this.programInfo = null;
         this.buffers = null;
         this.startTime = Date.now();
-        this.mousePos = { x: 0.5, y: 0.5 }; // Normalized mouse coords
+        this.mousePos = { x: 0.5, y: 0.5 };
 
         this.init();
     }
@@ -210,19 +218,19 @@ class ShaderBackground {
             program: this.shaderProgram,
             attribLocations: {
                 vertexPosition: this.gl.getAttribLocation(this.shaderProgram, 'aVertexPosition'),
-                textureCoord: this.gl.getAttribLocation(this.shaderProgram, 'aTextureCoord'), // Get location
+                textureCoord: this.gl.getAttribLocation(this.shaderProgram, 'aTextureCoord'),
             },
             uniformLocations: {
                 resolution: this.gl.getUniformLocation(this.shaderProgram, 'uResolution'),
                 time: this.gl.getUniformLocation(this.shaderProgram, 'uTime'),
-                mouse: this.gl.getUniformLocation(this.shaderProgram, 'uMouse'), // Get location
+                mouse: this.gl.getUniformLocation(this.shaderProgram, 'uMouse'),
             },
         };
 
         this.buffers = this.initBuffers(this.gl);
         this.setupEventListeners();
-        this.resizeCanvas(); // Initial size setup
-        requestAnimationFrame(this.render.bind(this)); // Start render loop
+        this.resizeCanvas();
+        requestAnimationFrame(this.render.bind(this));
     }
 
     initShaderProgram(gl, vsSource, fsSource) {
@@ -237,9 +245,6 @@ class ShaderBackground {
 
         if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
             console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
-            gl.deleteProgram(shaderProgram);
-            gl.deleteShader(vertexShader);
-            gl.deleteShader(fragmentShader);
             return null;
         }
         return shaderProgram;
@@ -251,7 +256,7 @@ class ShaderBackground {
         gl.compileShader(shader);
 
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error(`An error occurred compiling the ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader: ${gl.getShaderInfoLog(shader)}`);
+            console.error(`An error occurred compiling the shader: ${gl.getShaderInfoLog(shader)}`);
             gl.deleteShader(shader);
             return null;
         }
@@ -270,17 +275,16 @@ class ShaderBackground {
         ];
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-        // Texture coordinate buffer (maps texture coords to screen corners)
+        // Texture coordinate buffer
         const textureCoordBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
         const textureCoordinates = [
-            0.0, 1.0, // Top-left
-            1.0, 1.0, // Top-right
-            0.0, 0.0, // Bottom-left
-            1.0, 0.0, // Bottom-right
+            0.0, 1.0,
+            1.0, 1.0,
+            0.0, 0.0,
+            1.0, 0.0,
         ];
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), gl.STATIC_DRAW);
-
 
         return {
             position: positionBuffer,
@@ -288,122 +292,87 @@ class ShaderBackground {
         };
     }
 
-     setupEventListeners() {
+    setupEventListeners() {
         window.addEventListener('resize', this.resizeCanvas.bind(this));
-        // Optional: Track mouse movement
-        // window.addEventListener('mousemove', (event) => {
-        //     this.mousePos.x = event.clientX / window.innerWidth;
-        //     this.mousePos.y = 1.0 - (event.clientY / window.innerHeight); // Flip Y coord
-        // });
+        // Track mouse movement for interactive lighting
+        this.canvas.addEventListener('mousemove', (event) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.mousePos.x = (event.clientX - rect.left) / this.canvas.width;
+            this.mousePos.y = 1.0 - (event.clientY - rect.top) / this.canvas.height;
+        });
     }
 
     resizeCanvas() {
         if (!this.gl) return;
-         // Lookup the size the browser is displaying the canvas in CSS pixels.
-        const displayWidth  = this.canvas.clientWidth;
+        const displayWidth = this.canvas.clientWidth;
         const displayHeight = this.canvas.clientHeight;
 
-        // Check if the canvas size is different.
-        if (this.canvas.width  !== displayWidth ||
-            this.canvas.height !== displayHeight) {
-            // Make the canvas the same size
-            this.canvas.width  = displayWidth;
+        if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+            this.canvas.width = displayWidth;
             this.canvas.height = displayHeight;
             this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-            console.log(`Canvas resized to: ${this.canvas.width}x${this.canvas.height}`);
         }
     }
 
-    render(timestamp) {
-         if (!this.gl || !this.programInfo || !this.buffers) {
-            requestAnimationFrame(this.render.bind(this)); // Keep trying? Or stop?
+    render() {
+        if (!this.gl || !this.programInfo || !this.buffers) {
+            requestAnimationFrame(this.render.bind(this));
             return;
-         }
+        }
 
-        const currentTime = (Date.now() - this.startTime) / 1000.0; // Time in seconds
+        const currentTime = (Date.now() - this.startTime) / 1000.0;
 
-        // Check if resize needed (might have happened between frames)
         this.resizeCanvas();
 
-        // --- Set up GL state ---
-        this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-
-        // --- Tell WebGL to use our program ---
         this.gl.useProgram(this.programInfo.program);
 
-        // --- Set Uniforms ---
+        // Set uniforms
         this.gl.uniform2f(this.programInfo.uniformLocations.resolution, this.gl.canvas.width, this.gl.canvas.height);
         this.gl.uniform1f(this.programInfo.uniformLocations.time, currentTime);
         this.gl.uniform2f(this.programInfo.uniformLocations.mouse, this.mousePos.x, this.mousePos.y);
 
+        // Position attribute
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+        this.gl.vertexAttribPointer(
+            this.programInfo.attribLocations.vertexPosition,
+            2, this.gl.FLOAT, false, 0, 0);
+        this.gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
 
-        // --- Set up Attributes ---
-        // Position Attribute
-        {
-            const numComponents = 2; // pull out 2 values per iteration
-            const type = this.gl.FLOAT; // the data is 32bit floats
-            const normalize = false; // don't normalize the data
-            const stride = 0; // 0 = move forward size * numComponents each iteration to get the next position
-            const offset = 0; // start at the beginning of the buffer
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
-            this.gl.vertexAttribPointer(
-                this.programInfo.attribLocations.vertexPosition,
-                numComponents, type, normalize, stride, offset);
-            this.gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
-        }
+        // Texture coordinate attribute
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
+        this.gl.vertexAttribPointer(
+            this.programInfo.attribLocations.textureCoord,
+            2, this.gl.FLOAT, false, 0, 0);
+        this.gl.enableVertexAttribArray(this.programInfo.attribLocations.textureCoord);
 
-         // Texture Coordinate Attribute
-         {
-            const numComponents = 2;
-            const type = this.gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
-            this.gl.vertexAttribPointer(
-                this.programInfo.attribLocations.textureCoord,
-                numComponents, type, normalize, stride, offset);
-             // Check if the attribute location is valid before enabling
-             if (this.programInfo.attribLocations.textureCoord !== -1) {
-                this.gl.enableVertexAttribArray(this.programInfo.attribLocations.textureCoord);
-             } else {
-                 //console.warn("aTextureCoord attribute not found or used in the shader.");
-             }
-        }
+        // Draw the quad
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
 
-
-        // --- Draw the Quad ---
-        const offset = 0;
-        const vertexCount = 4; // We are drawing a TRIANGLE_STRIP with 4 vertices
-        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, offset, vertexCount);
-
-        // --- Request Next Frame ---
         requestAnimationFrame(this.render.bind(this));
     }
 
     showFallback() {
-        // Add a fallback message or style if WebGL fails
         const fallback = document.createElement('div');
         fallback.style.position = 'fixed';
         fallback.style.top = '0';
         fallback.style.left = '0';
         fallback.style.width = '100%';
         fallback.style.height = '100%';
-        fallback.style.background = 'linear-gradient(to bottom right, #02000f, #0a1428)';
-        fallback.style.color = '#a0c8d8';
-        fallback.style.zIndex = '-1'; // Behind content
-        fallback.innerHTML = '<p style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-family: monospace;">WebGL failed to load. Displaying static background.</p>';
+        fallback.style.background = 'linear-gradient(to bottom, #393022, #121212)';
+        fallback.style.color = '#c8b29a';
+        fallback.style.zIndex = '-1';
+        fallback.innerHTML = '<p style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-family: monospace;">WebGL failed. Displaying static backrooms background.</p>';
         document.body.insertBefore(fallback, document.body.firstChild);
-        if (this.canvas) this.canvas.style.display = 'none'; // Hide the canvas
+        if (this.canvas) this.canvas.style.display = 'none';
     }
 }
 
-// --- Instantiate the shader ---
-// Use type="module" in the script tag in HTML
+// Export the shader
 export default new ShaderBackground('shader-canvas');
 
-// If not using modules, just run:
+// If not using modules:
 // document.addEventListener('DOMContentLoaded', () => {
 //     new ShaderBackground('shader-canvas');
 // });
