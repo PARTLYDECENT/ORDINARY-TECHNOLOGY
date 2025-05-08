@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wasteland Zombie Survival</title>
+    <title>Wasteland Zombie Survival 3D</title>
     <style>
         body { margin: 0; padding: 0; background-color: #111; overflow: hidden; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        #game-container { position: relative; }
-        #gameCanvas { border: 2px solid #444; background-color: #000; display: block; image-rendering: pixelated; cursor: crosshair; }
+        #game-container { position: relative; /* image-rendering: pixelated; affects child canvas if it were 2D */ }
+        #gameCanvas3D { display: block; cursor: crosshair; } /* Renamed for clarity */
         #hud { position: absolute; color: #fff; padding: 8px; font-size: 13px; text-align: left; top: 10px; left: 10px; background-color: rgba(0, 0, 0, 0.7); border-radius: 5px; border: 1px solid #444; z-index: 10; }
         #hud div { margin-bottom: 4px; }
         #fuel-bar { width: 90px; height: 8px; background-color: #333; margin: 3px 0; border: 1px solid #555; overflow: hidden; border-radius: 2px; display: inline-block; vertical-align: middle; }
@@ -20,12 +20,13 @@
         #controls-display { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: #bbb; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 11px; text-align: center; border: 1px solid #444; z-index: 10; white-space: nowrap; }
         #mission-text, #stats { display: none; } /* Hide placeholders */
         #weapon-display { position: absolute; bottom: 10px; right: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; }
-        #vehicle-display { position: absolute; top: 40px; left: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; display: none;} /* Added vehicle display */
+        #vehicle-display { position: absolute; top: 40px; left: 10px; color: #fff; background-color: rgba(0, 0, 0, 0.7); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; display: none;}
     </style>
 </head>
 <body>
     <div id="game-container">
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <!-- 2D Canvas is no longer primary, 3D renderer's canvas will be appended here -->
+        <!-- <canvas id="gameCanvas" width="800" height="600"></canvas> -->
         <div id="hud">
              <div id="health-line">HP: <div id="health-bar"><div id="health-level"></div></div></div>
              <div id="speed-line">SPD: <span id="speed">0</span></div>
@@ -42,140 +43,159 @@
         <div id="stats"></div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // --- Canvas and Context ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        // --- Three.js Setup ---
+        let scene, camera, renderer, clock;
+        const gameCanvasWidth = 800;
+        const gameCanvasHeight = 600;
+        let groundPlane;
+        const textureLoader = new THREE.TextureLoader();
+
+        // Object to hold Three.js meshes associated with game objects
+        const threeObjects = {
+            player: null,
+            enemies: [], // Will store { gameLogicEnemy, mesh }
+            vehicles: [], // Will store { gameLogicVehicle, mesh }
+            buildings: [],
+            trees: [],
+            obstacles: [],
+            gasStations: [],
+            projectiles: [],
+            skidMarks: [],
+            dustParticles: null, // Will be a THREE.Points object
+            explosions: [], // Array of THREE.Points objects
+            muzzleFlashes: [],
+            hitSparks: []
+        };
+
         const miniMapContainer = document.getElementById('mini-map');
         const miniMapCtx = document.createElement('canvas').getContext('2d');
         miniMapContainer.appendChild(miniMapCtx.canvas);
         miniMapCtx.canvas.width = 120; miniMapCtx.canvas.height = 120;
 
-        // --- Audio Context ---
+        // --- Audio Context --- (Kept from original)
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         let engineNoiseOscillator = null;
         let engineNoiseGain = null;
 
-        // --- Constants ---
-        // Player Ped Size
-        const PLAYER_PED_WIDTH = 6;
-        const PLAYER_PED_HEIGHT = 9;
-        // Enemy Size (Matches Player Ped)
+        // --- Constants --- (Mostly kept, some values might need 3D adjustments)
+        const PLAYER_PED_WIDTH = 0.6; // 3D units
+        const PLAYER_PED_HEIGHT = 1.8; // 3D units (human height)
         const ENEMY_WIDTH = PLAYER_PED_WIDTH;
         const ENEMY_HEIGHT = PLAYER_PED_HEIGHT;
 
-        // Projectile Constants (Only for player now)
-        const PROJECTILE_SPEED = 8;
-        const PROJECTILE_LIFESPAN = 60;
-        const PROJECTILE_DAMAGE_PISTOL = 18; // Player pistol damage to enemy
-        const PROJECTILE_DAMAGE_MACHINEGUN = 10; // Player machine gun damage to enemy
+        const PROJECTILE_SPEED = 20; // 3D units per second (needs to relate to game speed)
+        const PROJECTILE_LIFESPAN = 1.5; // Seconds
+        const PROJECTILE_DAMAGE_PISTOL = 18;
+        const PROJECTILE_DAMAGE_MACHINEGUN = 10;
 
-        const ENEMY_HEALTH = 70; // Increased health for zombies
-        const ENEMY_SPEED = 0.8; // Slower zombie speed
-        const ENEMY_CHASE_DIST = 400; // Increased chase distance
-        const ENEMY_ATTACK_DIST = 20; // Melee attack distance
-        const ENEMY_ATTACK_COOLDOWN = 60; // Frames between zombie attacks
-        const ENEMY_DAMAGE_MELEE = 8; // Damage per zombie melee hit
+        const ENEMY_HEALTH = 70;
+        const ENEMY_SPEED = 1.2; // 3D units per second
+        const ENEMY_CHASE_DIST = 25; // 3D units
+        const ENEMY_ATTACK_DIST = 1.5; // 3D units
+        const ENEMY_ATTACK_COOLDOWN = 60;
+        const ENEMY_DAMAGE_MELEE = 8;
 
-        const PLAYER_ENTER_VEHICLE_RANGE = 30;
-        const ANIM_SPEED = 8; // Slower animation for zombies
+        const PLAYER_ENTER_VEHICLE_RANGE = 3; // 3D units
+        const ANIM_SPEED = 8; // Original anim speed, adjust if needed
 
-        // Weapon Properties
         const WEAPONS = {
-            'pistol': {
-                fireRate: 10,
-                bulletSpread: 3,
-                damage: PROJECTILE_DAMAGE_PISTOL,
-                color: '#ff0' // Yellow bullets
+            'pistol': { fireRate: 10, bulletSpread: 3, damage: PROJECTILE_DAMAGE_PISTOL, color: 0xffff00 },
+            'machinegun': { fireRate: 5, bulletSpread: 8, damage: PROJECTILE_DAMAGE_MACHINEGUN, color: 0xffa500 }
+        };
+
+        const VEHICLE_TYPES = {
+            'sedan': {
+                width: 2, height: 1.5, depth: 4.0, // 3D dimensions (width, height, length/depth)
+                maxSpeed: 15, acceleration: 3, deceleration: 2, handling: 1.5, // Units/sec^2, Radians/sec
+                fuelConsumption: 0.02, color: 0x0066cc
             },
-            'machinegun': {
-                fireRate: 5, // Faster fire rate
-                bulletSpread: 8, // More spread
-                damage: PROJECTILE_DAMAGE_MACHINEGUN,
-                color: '#ffa500' // Orange bullets
+            'truck': {
+                width: 2.5, height: 2.2, depth: 5.5,
+                maxSpeed: 10, acceleration: 2, deceleration: 1, handling: 1.0,
+                fuelConsumption: 0.03, color: 0x8b4513
+            },
+            'sportsCar': {
+                width: 1.8, height: 1.3, depth: 3.8,
+                maxSpeed: 22, acceleration: 5, deceleration: 2.5, handling: 1.8,
+                fuelConsumption: 0.025, color: 0xdc143c
+            },
+            'buggy': {
+                width: 1.9, height: 1.6, depth: 3.2,
+                maxSpeed: 18, acceleration: 4, deceleration: 1.5, handling: 2.0,
+                fuelConsumption: 0.018, color: 0x9acd32
             }
         };
 
-        // Vehicle Properties
-        const VEHICLE_TYPES = {
-            'sedan': {
-                width: 20, height: 36, maxSpeed: 5, acceleration: 0.1, deceleration: 0.05, handling: 3.5, fuelConsumption: 0.02, color: '#0066cc'
-            },
-            'truck': {
-                width: 25, height: 45, maxSpeed: 3.5, acceleration: 0.07, deceleration: 0.03, handling: 2.5, fuelConsumption: 0.03, color: '#8b4513' // Brown
-            },
-            'sportsCar': {
-                width: 18, height: 34, maxSpeed: 7, acceleration: 0.15, deceleration: 0.06, handling: 4, fuelConsumption: 0.025, color: '#dc143c' // Crimson
-            },
-             'buggy': {
-                width: 18, height: 30, maxSpeed: 6, acceleration: 0.12, deceleration: 0.04, handling: 4.5, fuelConsumption: 0.018, color: '#9acd32' // YellowGreen
-             }
-        };
 
-
-        // --- Game State ---
+        // --- Game State --- (Modified to include 3D specifics like Y-up)
         const gameState = {
-            playerState: 'driving',
+            playerState: 'driving', // 'driving' or 'onFoot'
             player: {
-                x: 1500, y: 1500, speed: 0, angle: 0,
+                x: 150, z: 150, y_height: 0, // Use x, z for ground plane; y_height for vertical position if needed
+                speed: 0, angle: 0, // Angle in radians for 3D
                 fuelLevel: 100, health: 100, maxHealth: 100,
-                pedWidth: PLAYER_PED_WIDTH, pedHeight: PLAYER_PED_HEIGHT, pedSpeed: 1.5,
+                pedWidth: PLAYER_PED_WIDTH, pedHeight: PLAYER_PED_HEIGHT, pedSpeed: 2.0, // m/s
                 isMoving: false,
                 animTimer: 0, animFrame: 0,
                 animSpeed: ANIM_SPEED,
                 fireCooldown: 0,
                 currentWeapon: 'pistol',
-                hasMachineGun: false, // Player still has a machine gun for now
+                hasMachineGun: false,
                 killedEnemiesCount: 0,
-                // Current Vehicle Properties (copied from VEHICLE_TYPES when entering)
+                // Current Vehicle Properties (copied when entering)
+                // These dimensions are for 3D
                 width: VEHICLE_TYPES.sedan.width,
-                height: VEHICLE_TYPES.sedan.height,
+                vehicle_height_prop: VEHICLE_TYPES.sedan.height, // Use specific name to avoid conflict
+                depth: VEHICLE_TYPES.sedan.depth,
                 maxSpeed: VEHICLE_TYPES.sedan.maxSpeed,
                 acceleration: VEHICLE_TYPES.sedan.acceleration,
                 deceleration: VEHICLE_TYPES.sedan.deceleration,
                 handling: VEHICLE_TYPES.sedan.handling,
                 fuelConsumption: VEHICLE_TYPES.sedan.fuelConsumption,
                 color: VEHICLE_TYPES.sedan.color,
-                currentVehicleType: 'sedan' // Track current vehicle type
+                currentVehicleType: 'sedan',
+                mesh: null, // Will hold the THREE.Group for the player
+                boundingBox: new THREE.Box3()
             },
-            camera: { x: 0, y: 0, width: canvas.width, height: canvas.height },
+            // Camera object in gameState.camera might not be needed if Three.js camera is global
             controls: { up: false, down: false, left: false, right: false, handbrake: false, refuel: false, fire: false, enterExit: false, enterExitProcessed: false, switchWeapon: false, switchWeaponProcessed: false, mouseFire: false },
             world: {
-                width: 3000, height: 3000, roadWidth: 60, grassColor: '#8B8467', // Wasteland ground color
-                roadColor: '#5A5240', lineColor: '#A09888', lineWidth: 2, // Desaturated road colors
+                width: 300, height: 300, // World dimensions in 3D units
+                roadWidth: 6, grassColor: 0x8B8467,
+                roadColor: 0x5A5240, lineColor: 0xA09888, lineWidth: 0.2,
                 trees: [], buildings: [], obstacles: [], gasStations: [],
                 vehicles: [], enemies: [], projectiles: [],
-                impassableZones: [ { type: 'rocky', x: 2200, y: 2200, width: 500, height: 600, color: 'rgba(90, 80, 70, 0.6)' }, { type: 'ruins', x: 100, y: 100, width: 400, height: 500, color: 'rgba(120, 110, 100, 0.4)' } ], // Wasteland impassable zones
+                impassableZones: [ { type: 'rocky', x: 220, z: 220, width: 50, depth: 60, height: 5, color: 0x5a5046 }, { type: 'ruins', x: 10, z: 10, width: 40, depth: 50, height: 8, color: 0x786e64 } ],
                 startTime: Date.now()
             },
-            fx: { skidMarks: [], dustParticles: [], explosions: [], muzzleFlashes: [], hitSparks: [] },
-            zones: [ {name: "SCRAPYARD", x: 1000, y: 1000, radius: 600}, {name: "CAYON PASS", x: 600, y: 2200, radius: 500}, {name: "DUST FLATS", x: 2200, y: 1800, radius: 400}, {name: "BROKEN CITY", x: 2000, y: 500, radius: 350} ], // Wasteland zones
+            fx: { // These will now hold data for 3D effects
+                skidMarks: [], dustParticlesData: [], explosionsData: [], muzzleFlashesData: [], hitSparksData: []
+            },
+            zones: [ {name: "SCRAPYARD", x: 100, z: 100, radius: 60}, {name: "CAYON PASS", x: 60, z: 220, radius: 50}, {name: "DUST FLATS", x: 220, z: 180, radius: 40}, {name: "BROKEN CITY", x: 200, z: 50, radius: 35} ],
             gameOver: false
         };
 
-        // --- Roads Data (Adjusted for potential broken roads) ---
-        const roads = [
-            {x1: 0, y1: 1000, x2: gameState.world.width, y2: 1000},
-            {x1: 0, y1: 2000, x2: gameState.world.width, y2: 2000},
-            {x1: 1000, y1: 0, x2: 1000, y2: gameState.world.height},
-            {x1: 2000, y1: 0, x2: 2000, y2: gameState.world.height},
-            // Add some broken segments or less defined paths
-            {x1: 500, y1: 500, x2: 700, y2: 700},
-            {x1: 800, y1: 800, x2: 1500, y2: 1500},
-            {x1: 2500, y1: 500, x2: 2300, y2: 700},
-            {x1: 2200, y1: 800, x2: 1500, y2: 1500},
-            {x1: 500, y1: 2500, x2: 700, y2: 2300},
-            {x1: 800, y1: 2200, x2: 1500, y2: 1500},
-            {x1: 2500, y1: 2500, x2: 2300, y2: 2300},
-            {x1: 2200, y1: 2200, x2: 1500, y2: 1500},
+        const roads = [ // (x1, z1) to (x2, z2) in 3D
+            {x1: 0, z1: 100, x2: gameState.world.width, z2: 100},
+            {x1: 0, z1: 200, x2: gameState.world.width, z2: 200},
+            {x1: 100, z1: 0, x2: 100, z2: gameState.world.height},
+            {x1: 200, z1: 0, x2: 200, z2: gameState.world.height},
+            {x1: 50, z1: 50, x2: 70, z2: 70}, {x1: 80, z1: 80, x2: 150, z2: 150},
+            {x1: 250, z1: 50, x2: 230, z2: 70}, {x1: 220, z1: 80, x2: 150, z2: 150},
+            {x1: 50, z1: 250, x2: 70, z2: 230}, {x1: 80, z1: 220, x2: 150, z2: 150},
+            {x1: 250, z1: 250, x2: 230, z2: 230}, {x1: 220, z1: 220, x2: 150, z2: 150},
         ];
+        const roadTexture = createRoadTexture();
 
-
-        // --- Input Handling ---
+        // --- Input Handling --- (Largely the same, document listens to events)
         window.addEventListener('keydown', (e) => { handleKeyInput(e, true); });
         window.addEventListener('keyup', (e) => { handleKeyInput(e, false); });
-        canvas.addEventListener('mousedown', (e) => { if (e.button === 0) gameState.controls.mouseFire = true; }); // Left click
-        canvas.addEventListener('mouseup', (e) => { if (e.button === 0) gameState.controls.mouseFire = false; });
+        // Mouse fire needs re-evaluation in 3D, for now, same logic for onFoot player facing
+        document.getElementById('game-container').addEventListener('mousedown', (e) => { if (e.button === 0) gameState.controls.mouseFire = true; });
+        document.getElementById('game-container').addEventListener('mouseup', (e) => { if (e.button === 0) gameState.controls.mouseFire = false; });
+
 
         function handleKeyInput(e, isPressed) {
             const key = e.key.toLowerCase();
@@ -195,7 +215,7 @@
                         gameState.controls.enterExitProcessed = false;
                     }
                     break;
-                case 'q': // Weapon switch key
+                case 'q':
                     if (isPressed && !gameState.controls.switchWeaponProcessed) {
                          gameState.controls.switchWeapon = true;
                          gameState.controls.switchWeaponProcessed = true;
@@ -204,125 +224,154 @@
                     }
                     break;
             }
-            // Prevent default for movement and actions to stop scrolling/other browser behavior
-            if ((key === ' ' || key === 'shift' || key.startsWith('arrow') || key === 'e' || key === 'q') && isPressed) {
+            if ((key === ' ' || key === 'shift' || key.startsWith('arrow') || ['w','a','s','d','e','f','q'].includes(key)) && isPressed) {
                  e.preventDefault();
             }
         }
 
-        // --- Weapon Switching Logic ---
         function handleWeaponSwitch() {
             if (!gameState.controls.switchWeapon || gameState.playerState !== 'onFoot') return;
-
             if (gameState.player.hasMachineGun) {
-                if (gameState.player.currentWeapon === 'pistol') {
-                    gameState.player.currentWeapon = 'machinegun';
-                } else {
-                    gameState.player.currentWeapon = 'pistol';
-                }
+                gameState.player.currentWeapon = gameState.player.currentWeapon === 'pistol' ? 'machinegun' : 'pistol';
             }
-            // Update HUD
             document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`;
-
             gameState.controls.switchWeapon = false;
         }
 
-
-        // --- Enter/Exit Vehicle Logic ---
         function handleEnterExitAction() {
             if (!gameState.controls.enterExit) return;
+            const delta = clock.getDelta();
 
             if (gameState.playerState === 'driving') {
-                // Store current vehicle properties before exiting
-                const parkedCar = {
-                    x: gameState.player.x, y: gameState.player.y,
-                    width: gameState.player.width, height: gameState.player.height,
+                // Remove old player vehicle mesh
+                if (gameState.player.mesh) scene.remove(gameState.player.mesh);
+
+                const parkedCarLogic = {
+                    x: gameState.player.x, z: gameState.player.z,
+                    width: gameState.player.width, height: gameState.player.vehicle_height_prop, depth: gameState.player.depth,
                     angle: gameState.player.angle, color: gameState.player.color,
                     maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling,
                     fuelLevel: gameState.player.fuelLevel,
-                    type: gameState.player.currentVehicleType // Store vehicle type
+                    type: gameState.player.currentVehicleType,
+                    mesh: createVehicleMesh(gameState.player.currentVehicleType, gameState.player.color),
+                    boundingBox: new THREE.Box3()
                 };
-                gameState.world.vehicles.push(parkedCar);
+                parkedCarLogic.mesh.position.set(parkedCarLogic.x, parkedCarLogic.height / 2, parkedCarLogic.z);
+                parkedCarLogic.mesh.rotation.y = parkedCarLogic.angle;
+                parkedCarLogic.boundingBox.setFromObject(parkedCarLogic.mesh);
+                gameState.world.vehicles.push(parkedCarLogic);
+                threeObjects.vehicles.push(parkedCarLogic.mesh);
+                scene.add(parkedCarLogic.mesh);
 
                 gameState.playerState = 'onFoot';
-                const exitOffset = (gameState.player.width / 2) + 5 + gameState.player.pedWidth / 2;
-                const exitAngleRad = (gameState.player.angle - 90) * Math.PI / 180;
-                gameState.player.x += Math.cos(exitAngleRad) * exitOffset;
-                gameState.player.y += Math.sin(exitAngleRad) * exitOffset;
+                const exitOffset = (gameState.player.width / 2) + 0.5 + gameState.player.pedWidth / 2;
+                gameState.player.x += Math.sin(gameState.player.angle) * exitOffset;
+                gameState.player.z += Math.cos(gameState.player.angle) * exitOffset; // Player angle 0 is +Z in 3D world for car
                 gameState.player.speed = 0;
+
+                // Create pedestrian mesh
+                gameState.player.mesh = createCharacterMesh(true);
+                gameState.player.mesh.position.set(gameState.player.x, gameState.player.pedHeight / 2, gameState.player.z);
+                gameState.player.mesh.rotation.y = gameState.player.angle; // Initial orientation same as car
+                scene.add(gameState.player.mesh);
+
                 stopEngineNoise();
-                 document.getElementById('vehicle-display').style.display = 'none'; // Hide vehicle display
+                document.getElementById('vehicle-display').style.display = 'none';
             } else if (gameState.playerState === 'onFoot') {
-                let closestCar = null;
+                let closestCarTuple = null;
                 let minDistanceSq = PLAYER_ENTER_VEHICLE_RANGE * PLAYER_ENTER_VEHICLE_RANGE;
 
                 for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) {
-                    const car = gameState.world.vehicles[i];
-                    const dx = gameState.player.x - car.x;
-                    const dy = gameState.player.y - car.y;
-                    const distanceSq = dx * dx + dy * dy;
+                    const carLogic = gameState.world.vehicles[i];
+                    const dx = gameState.player.x - carLogic.x;
+                    const dz = gameState.player.z - carLogic.z;
+                    const distanceSq = dx * dx + dz * dz;
 
                     if (distanceSq < minDistanceSq) {
                         minDistanceSq = distanceSq;
-                        closestCar = car;
-                        closestCar.index = i; // Store index for removal
+                        closestCarTuple = { logic: carLogic, index: i };
                     }
                 }
 
-                if (closestCar) {
+                if (closestCarTuple) {
+                    const closestCar = closestCarTuple.logic;
+                    // Remove old player ped mesh
+                    if (gameState.player.mesh) scene.remove(gameState.player.mesh);
+                    // Remove parked car mesh from scene and tracking
+                    scene.remove(closestCar.mesh);
+                    const meshIndex = threeObjects.vehicles.indexOf(closestCar.mesh);
+                    if (meshIndex > -1) threeObjects.vehicles.splice(meshIndex, 1);
+
+
                     gameState.playerState = 'driving';
-                    // Transfer vehicle properties to player
                     gameState.player.x = closestCar.x;
-                    gameState.player.y = closestCar.y;
+                    gameState.player.z = closestCar.z;
                     gameState.player.width = closestCar.width;
-                    gameState.player.height = closestCar.height;
+                    gameState.player.vehicle_height_prop = closestCar.height;
+                    gameState.player.depth = closestCar.depth;
                     gameState.player.angle = closestCar.angle;
                     gameState.player.color = closestCar.color;
                     gameState.player.maxSpeed = closestCar.maxSpeed;
-                    gameState.player.acceleration = VEHICLE_TYPES[closestCar.type].acceleration; // Ensure correct acceleration
-                    gameState.player.deceleration = VEHICLE_TYPES[closestCar.type].deceleration; // Ensure correct deceleration
-                    gameState.player.handling = closestCar.handling;
+                    gameState.player.acceleration = VEHICLE_TYPES[closestCar.type].acceleration;
+                    gameState.player.deceleration = VEHICLE_TYPES[closestCar.type].deceleration;
+                    gameState.player.handling = VEHICLE_TYPES[closestCar.type].handling;
                     gameState.player.fuelLevel = closestCar.fuelLevel;
-                    gameState.player.fuelConsumption = VEHICLE_TYPES[closestCar.type].fuelConsumption; // Ensure correct fuel consumption
+                    gameState.player.fuelConsumption = VEHICLE_TYPES[closestCar.type].fuelConsumption;
                     gameState.player.speed = 0;
-                    gameState.player.currentVehicleType = closestCar.type; // Set current vehicle type
+                    gameState.player.currentVehicleType = closestCar.type;
 
-                    gameState.world.vehicles.splice(closestCar.index, 1); // Remove vehicle from world
+                    // Create new player vehicle mesh
+                    gameState.player.mesh = createVehicleMesh(gameState.player.currentVehicleType, gameState.player.color);
+                    gameState.player.mesh.position.set(gameState.player.x, gameState.player.vehicle_height_prop / 2, gameState.player.z);
+                    gameState.player.mesh.rotation.y = gameState.player.angle;
+                    scene.add(gameState.player.mesh);
+
+                    gameState.world.vehicles.splice(closestCarTuple.index, 1);
 
                     startEngineNoise();
-                    document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`; // Update vehicle display
-                    document.getElementById('vehicle-display').style.display = ''; // Show vehicle display
+                    document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`;
+                    document.getElementById('vehicle-display').style.display = '';
                 }
             }
             gameState.controls.enterExit = false;
         }
 
-
-        // --- Player Firing Logic ---
         function handlePlayerFiring() {
             const currentWeaponProps = WEAPONS[gameState.player.currentWeapon];
             const isFiring = (gameState.controls.fire || gameState.controls.mouseFire) && gameState.playerState === 'onFoot';
 
             if (isFiring && gameState.player.fireCooldown <= 0) {
                 const spreadRad = (Math.random() - 0.5) * currentWeaponProps.bulletSpread * (Math.PI / 180);
-                const fireAngleRad = gameState.player.angle * Math.PI / 180 + spreadRad;
-                const muzzleOffsetX = Math.sin(fireAngleRad) * (gameState.player.pedWidth / 2 + 2);
-                const muzzleOffsetY = -Math.cos(fireAngleRad) * (gameState.player.pedHeight / 2 + 2);
-                const startX = gameState.player.x + muzzleOffsetX;
-                const startY = gameState.player.y + muzzleOffsetY;
+                const fireAngleRad = gameState.player.angle + spreadRad; // Player angle is already in radians
 
-                gameState.world.projectiles.push({
-                    x: startX, y: startY,
+                // Muzzle position relative to player center
+                const muzzleOffsetX = Math.sin(fireAngleRad) * (PLAYER_PED_WIDTH / 2 + 0.2);
+                const muzzleOffsetZ = Math.cos(fireAngleRad) * (PLAYER_PED_WIDTH / 2 + 0.2); // For Z depth
+                const startX = gameState.player.x + muzzleOffsetX;
+                const startZ = gameState.player.z + muzzleOffsetZ;
+                const startY = gameState.player.pedHeight * 0.75; // Muzzle height
+
+                const projectileLogic = {
+                    x: startX, y: startY, z: startZ,
                     vx: Math.sin(fireAngleRad) * PROJECTILE_SPEED,
-                    vy: -Math.cos(fireAngleRad) * PROJECTILE_SPEED,
-                    lifespan: PROJECTILE_LIFESPAN,
+                    vy: 0, // Projectiles are horizontal for now
+                    vz: Math.cos(fireAngleRad) * PROJECTILE_SPEED,
+                    lifespan: PROJECTILE_LIFESPAN, // seconds
+                    timer: 0,
                     owner: 'player',
                     damage: currentWeaponProps.damage,
-                    color: currentWeaponProps.color
-                });
+                    color: currentWeaponProps.color,
+                    mesh: createProjectileMesh(currentWeaponProps.color),
+                    boundingBox: new THREE.Box3()
+                };
+                projectileLogic.mesh.position.set(startX, startY, startZ);
+                scene.add(projectileLogic.mesh);
+                gameState.world.projectiles.push(projectileLogic);
+                threeObjects.projectiles.push(projectileLogic.mesh);
 
-                createMuzzleFlash(startX, startY);
-                playShotSound(gameState.player.currentWeapon); // Play sound
+
+                createMuzzleFlashEffect(startX, startY, startZ); // Pass 3D coords
+                playShotSound(gameState.player.currentWeapon);
                 gameState.player.fireCooldown = currentWeaponProps.fireRate;
             }
 
@@ -331,671 +380,1538 @@
             }
         }
 
+
         // --- Game Loop ---
-        function gameLoop() { if (gameState.gameOver) { drawGameOver(); requestAnimationFrame(gameLoop); return; } handleEnterExitAction(); handleWeaponSwitch(); handlePlayerFiring(); updateGame(); renderGame(); requestAnimationFrame(gameLoop); }
+        function gameLoop() {
+            if (gameState.gameOver) {
+                drawGameOver(); // This is HTML overlay, still fine
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            const delta = clock.getDelta(); // Time since last frame in seconds
+
+            handleEnterExitAction(); // Needs delta if animations are involved
+            handleWeaponSwitch();
+            handlePlayerFiring(); // Needs delta if fire rate is time-based
+
+            updateGame(delta);
+            renderGame3D(); // New 3D render function
+            requestAnimationFrame(gameLoop);
+        }
 
         // --- Update Logic ---
-        function updateGame() { updatePlayerPosition(); updateEnemies(); updateProjectiles(); updateCamera(); updateParticlesAndEffects(); updateHUD(); checkGameOverCondition(); }
+        function updateGame(delta) { // Pass delta time
+            updatePlayerPosition(delta);
+            updateEnemies(delta);
+            updateProjectiles(delta);
+            updateCamera(); // Camera follows player mesh
+            updateParticlesAndEffects3D(delta);
+            updateHUD();
+            checkGameOverCondition();
+        }
 
-        // --- Player Update ---
-        function updatePlayerPosition() { const oldX = gameState.player.x; const oldY = gameState.player.y; if (gameState.playerState === 'driving') { updateDrivingPhysics(); checkGasStations(); updateEngineNoise(); } else if (gameState.playerState === 'onFoot') { updateWalkingPhysics(); stopEngineNoise(); } checkCollisions(oldX, oldY, gameState.player, gameState.playerState); }
-        function updateDrivingPhysics() { if (gameState.controls.up && gameState.player.fuelLevel > 0) { gameState.player.speed += gameState.player.acceleration; gameState.player.fuelLevel -= gameState.player.fuelConsumption * (0.5 + Math.abs(gameState.player.speed) / gameState.player.maxSpeed); if (Math.random() > 0.7 && Math.abs(gameState.player.speed) > 1) createDustParticle(true); } else if (gameState.controls.down) { if (gameState.player.speed > 0.1) gameState.player.speed -= gameState.player.deceleration * 3; else { gameState.player.speed -= gameState.player.acceleration / 1.5; if (gameState.player.fuelLevel > 0) gameState.player.fuelLevel -= gameState.player.fuelConsumption * 0.5; } } else { if (Math.abs(gameState.player.speed) < gameState.player.deceleration) gameState.player.speed = 0; else if (gameState.player.speed > 0) gameState.player.speed -= gameState.player.deceleration; else gameState.player.speed += gameState.player.deceleration; } if (gameState.player.speed > gameState.player.maxSpeed) gameState.player.speed = gameState.player.maxSpeed; const maxReverseSpeed = gameState.player.maxSpeed / 2; if (gameState.player.speed < -maxReverseSpeed) gameState.player.speed = -maxReverseSpeed; if (Math.abs(gameState.player.speed) > 0.5) { let steeringFactor = gameState.player.handling * (gameState.controls.handbrake ? 1.7 : 1); let speedModifier = 1.0 - (Math.abs(gameState.player.speed) / (gameState.player.maxSpeed * 1.5)); speedModifier = Math.max(0.3, speedModifier); let turnDirection = gameState.player.speed >= 0 ? 1 : -1; if (gameState.controls.left) { gameState.player.angle -= steeringFactor * speedModifier * turnDirection; if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } if (gameState.controls.right) { gameState.player.angle += steeringFactor * speedModifier * turnDirection; // Adjusted steering factor application
-                if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > gameState.player.maxSpeed / 3) createSkidMark(); } } if (gameState.controls.handbrake && Math.abs(gameState.player.speed) > 0.5) { gameState.player.speed *= 0.94; if (Math.random() > 0.4) createSkidMark(); } if (gameState.player.fuelLevel < 0) gameState.player.fuelLevel = 0; if (Math.abs(gameState.player.speed) > 0.01) { const radians = gameState.player.angle * Math.PI / 180; gameState.player.x += Math.sin(radians) * gameState.player.speed; gameState.player.y -= Math.cos(radians) * gameState.player.speed; } }
-        function updateWalkingPhysics() {
-             let moveX = 0; let moveY = 0; const speed = gameState.player.pedSpeed;
-             if (gameState.controls.up) moveY -= speed; if (gameState.controls.down) moveY += speed;
-             if (gameState.controls.left) moveX -= speed; if (gameState.controls.right) moveX += speed;
-             gameState.player.isMoving = (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01);
-             if (moveX !== 0 && moveY !== 0) { const factor = speed / Math.sqrt(moveX * moveX + moveY * moveY); moveX *= factor; moveY *= factor; }
-             if (gameState.player.isMoving) { gameState.player.angle = (Math.atan2(moveX, -moveY) * 180 / Math.PI); }
-             gameState.player.x += moveX; gameState.player.y += moveY;
-             // --- Update 4-Frame Animation ---
-             if (gameState.player.isMoving) {
-                 gameState.player.animTimer++;
-                 if (gameState.player.animTimer >= gameState.player.animSpeed) {
-                     gameState.player.animTimer = 0;
-                     gameState.player.animFrame = (gameState.player.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
+
+        function updatePlayerPosition(delta) {
+            const oldX = gameState.player.x;
+            const oldZ = gameState.player.z;
+
+            if (gameState.playerState === 'driving') {
+                updateDrivingPhysics(delta);
+                checkGasStations(delta); // Needs delta if fuel consumption is per second
+                updateEngineNoise();
+            } else if (gameState.playerState === 'onFoot') {
+                updateWalkingPhysics(delta);
+                stopEngineNoise();
+                updateCharacterAnimation(gameState.player, gameState.player.mesh);
+            }
+
+            // Update player mesh position and rotation
+            if (gameState.player.mesh) {
+                gameState.player.mesh.position.set(gameState.player.x,
+                    gameState.playerState === 'driving' ? gameState.player.vehicle_height_prop / 2 : gameState.player.pedHeight / 2,
+                    gameState.player.z);
+                gameState.player.mesh.rotation.y = gameState.player.angle;
+
+                // Update bounding box for collisions
+                gameState.player.boundingBox.setFromObject(gameState.player.mesh);
+            }
+
+            // Check collisions (pass delta if collision response depends on it)
+            const collisionResult = checkCollisions(oldX, oldZ, gameState.player, gameState.playerState);
+            if(collisionResult.collided){
+                 gameState.player.x = collisionResult.newX;
+                 gameState.player.z = collisionResult.newZ;
+                 if (gameState.player.mesh) {
+                    gameState.player.mesh.position.x = collisionResult.newX;
+                    gameState.player.mesh.position.z = collisionResult.newZ;
                  }
-             } else {
-                 gameState.player.animFrame = 0; // Idle frame
-                 gameState.player.animTimer = 0;
-             }
+            }
         }
 
-        // --- Enemy Logic (Zombie Behavior) ---
-        function spawnEnemy(x, y) {
-            gameState.world.enemies.push({
-                x: x, y: y, health: ENEMY_HEALTH, maxHealth: ENEMY_HEALTH,
+        function updateDrivingPhysics(delta) {
+            const player = gameState.player;
+            const controls = gameState.controls;
+
+            if (controls.up && player.fuelLevel > 0) {
+                player.speed += player.acceleration * delta;
+                player.fuelLevel -= player.fuelConsumption * (0.5 + Math.abs(player.speed) / player.maxSpeed) * delta * 60; // Scale factor based on original assumption of 60FPS
+                if (Math.random() > 0.7 && Math.abs(player.speed) > 1) createDustParticleEffect(true);
+            } else if (controls.down) {
+                if (player.speed > 0.1) {
+                    player.speed -= player.deceleration * 3 * delta;
+                } else {
+                    player.speed -= (player.acceleration / 1.5) * delta;
+                    if (player.fuelLevel > 0) player.fuelLevel -= player.fuelConsumption * 0.5 * delta * 60;
+                }
+            } else {
+                if (Math.abs(player.speed) < player.deceleration * delta) player.speed = 0;
+                else if (player.speed > 0) player.speed -= player.deceleration * delta;
+                else player.speed += player.deceleration * delta;
+            }
+
+            player.speed = Math.max(-player.maxSpeed / 2, Math.min(player.speed, player.maxSpeed));
+
+            if (Math.abs(player.speed) > 0.1) { // Threshold to allow turning
+                let steeringFactor = player.handling * (controls.handbrake ? 1.7 : 1.0);
+                let speedModifier = 1.0 - (Math.abs(player.speed) / (player.maxSpeed * 1.5));
+                speedModifier = Math.max(0.3, speedModifier);
+                let turnDirection = player.speed >= 0 ? 1 : -1;
+
+                if (controls.left) {
+                    player.angle += steeringFactor * speedModifier * turnDirection * delta;
+                    if (controls.handbrake && Math.abs(player.speed) > player.maxSpeed / 3) createSkidMarkEffect();
+                }
+                if (controls.right) {
+                    player.angle -= steeringFactor * speedModifier * turnDirection * delta;
+                    if (controls.handbrake && Math.abs(player.speed) > player.maxSpeed / 3) createSkidMarkEffect();
+                }
+            }
+             if (player.angle > Math.PI) player.angle -= Math.PI * 2;
+             if (player.angle < -Math.PI) player.angle += Math.PI * 2;
+
+
+            if (controls.handbrake && Math.abs(player.speed) > 0.5) {
+                player.speed *= (1 - 0.6 * delta); // More gradual braking
+                if (Math.random() > 0.4) createSkidMarkEffect();
+            }
+
+            player.fuelLevel = Math.max(0, player.fuelLevel);
+
+            if (Math.abs(player.speed) > 0.01) {
+                player.x += Math.sin(player.angle) * player.speed * delta;
+                player.z += Math.cos(player.angle) * player.speed * delta; // +Z is forward for angle 0
+            }
+        }
+
+
+        function updateWalkingPhysics(delta) {
+            const player = gameState.player;
+            const controls = gameState.controls;
+            let moveX = 0;
+            let moveZ = 0; // Z for depth in 3D
+            const currentSpeed = player.pedSpeed;
+
+            if (controls.up) moveZ += currentSpeed;
+            if (controls.down) moveZ -= currentSpeed;
+            if (controls.left) moveX -= currentSpeed;
+            if (controls.right) moveX += currentSpeed;
+
+            player.isMoving = (Math.abs(moveX) > 0.01 || Math.abs(moveZ) > 0.01);
+
+            if (moveX !== 0 || moveZ !== 0) { // Normalize for diagonal movement
+                 if (moveX !== 0 && moveZ !== 0) {
+                    const factor = currentSpeed / Math.sqrt(moveX * moveX + moveZ * moveZ);
+                    moveX *= factor;
+                    moveZ *= factor;
+                 }
+                 // Determine angle based on input relative to world, not camera
+                 player.angle = Math.atan2(moveX, moveZ); // atan2(x, z) gives angle for y-rotation
+            }
+
+
+            player.x += moveX * delta;
+            player.z += moveZ * delta;
+
+
+            // Animation timer (original logic for frame indexing)
+            if (player.isMoving) {
+                player.animTimer++;
+                if (player.animTimer >= player.animSpeed) {
+                    player.animTimer = 0;
+                    player.animFrame = (player.animFrame + 1) % 4;
+                }
+            } else {
+                player.animFrame = 0;
+                player.animTimer = 0;
+            }
+        }
+
+
+        function updateCharacterAnimation(entityLogic, entityMesh) {
+            if (!entityMesh || !entityMesh.getObjectByName) return; // Mesh not ready or not a character mesh
+
+            const leftLeg = entityMesh.getObjectByName('leftLeg');
+            const rightLeg = entityMesh.getObjectByName('rightLeg');
+            if (!leftLeg || !rightLeg) return;
+
+            const legYOffset = -entityLogic.pedHeight * 0.3; // Base Y position for legs
+            const stride = entityLogic.pedHeight * 0.15; // How far a leg moves
+
+            if (!entityLogic.isMoving) {
+                leftLeg.position.z = 0;
+                rightLeg.position.z = 0;
+                leftLeg.position.y = legYOffset;
+                rightLeg.position.y = legYOffset;
+            } else {
+                const frame = entityLogic.animFrame;
+                // Simplified: 0 & 2 are "together", 1 is left forward, 3 is right forward
+                if (frame === 0 || frame === 2) {
+                    leftLeg.position.z = 0;        rightLeg.position.z = 0;
+                    leftLeg.position.y = legYOffset; rightLeg.position.y = legYOffset;
+                } else if (frame === 1) { // Left leg forward
+                    leftLeg.position.z = stride;   rightLeg.position.z = -stride;
+                    leftLeg.position.y = legYOffset - stride * 0.2; rightLeg.position.y = legYOffset + stride * 0.1;
+
+                } else { // Frame 3: Right leg forward
+                    leftLeg.position.z = -stride;  rightLeg.position.z = stride;
+                    leftLeg.position.y = legYOffset + stride * 0.1; rightLeg.position.y = legYOffset - stride * 0.2;
+                }
+            }
+        }
+
+        function spawnEnemy(x, z) {
+            const enemyLogic = {
+                x: x, z: z, y_height: ENEMY_HEIGHT / 2,
+                health: ENEMY_HEALTH, maxHealth: ENEMY_HEALTH,
                 width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ENEMY_SPEED, angle: 0,
-                color: `hsl(100, 50%, 30%)`, // Greenish color for zombies
-                state: 'idle',
-                aiTimer: Math.random() * 120,
-                attackCooldown: ENEMY_ATTACK_COOLDOWN, // Cooldown for melee attack
-                // Animation properties (same as player)
-                isMoving: false, animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED
-            });
+                colorVal: Math.random() * 0xffffff, // Random color for the mesh
+                state: 'idle', aiTimer: Math.random() * 120, attackCooldown: ENEMY_ATTACK_COOLDOWN,
+                isMoving: false, animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED,
+                mesh: createCharacterMesh(false, Math.floor(0x66ff66 * Math.random() + 0x226622)), // Greenish hue
+                boundingBox: new THREE.Box3(),
+                healthBarMesh: createHealthBarMesh()
+            };
+            enemyLogic.mesh.position.set(x, ENEMY_HEIGHT / 2, z);
+            scene.add(enemyLogic.mesh);
+
+            // Health bar positioning
+            enemyLogic.healthBarMesh.position.set(x, ENEMY_HEIGHT + 0.3, z); // Above head
+            scene.add(enemyLogic.healthBarMesh);
+
+            gameState.world.enemies.push(enemyLogic);
+            threeObjects.enemies.push(enemyLogic.mesh); // For easy removal from scene if needed elsewhere
         }
 
-        function updateEnemies() {
+
+        function updateEnemies(delta) {
             for (let i = gameState.world.enemies.length - 1; i >= 0; i--) {
                 const enemy = gameState.world.enemies[i];
-                const oldX = enemy.x; const oldY = enemy.y;
-                const dxPlayer = gameState.player.x - enemy.x; const dyPlayer = gameState.player.y - enemy.y;
-                const distSqPlayer = dxPlayer * dxPlayer + dyPlayer * dyPlayer;
+                const oldX = enemy.x; const oldZ = enemy.z;
+
+                const dxPlayer = gameState.player.x - enemy.x;
+                const dzPlayer = gameState.player.z - enemy.z;
+                const distSqPlayer = dxPlayer * dxPlayer + dzPlayer * dzPlayer;
                 const distPlayer = Math.sqrt(distSqPlayer);
 
-                let targetAngleRad = Math.atan2(dyPlayer, dxPlayer);
-                enemy.isMoving = false; // Assume not moving initially
+                let targetAngleRad = Math.atan2(dxPlayer, dzPlayer); // Angle towards player
+                enemy.isMoving = false;
 
-                // --- State Logic ---
                 if (enemy.state === 'idle') {
-                    enemy.aiTimer--;
+                    enemy.aiTimer -= delta * 60; // Scale timer based on original 60FPS assumption
                     if (distSqPlayer < ENEMY_CHASE_DIST * ENEMY_CHASE_DIST) {
                         enemy.state = 'chasing';
                     } else if (enemy.aiTimer <= 0) {
                         enemy.aiTimer = 120 + Math.random() * 120;
                     }
                 } else if (enemy.state === 'chasing') {
-                    if (distSqPlayer > (ENEMY_CHASE_DIST + 50) * (ENEMY_CHASE_DIST + 50)) { // Lose player
+                    if (distSqPlayer > (ENEMY_CHASE_DIST + 5) * (ENEMY_CHASE_DIST + 5)) {
                         enemy.state = 'idle'; enemy.aiTimer = 60;
                     } else {
-                        // Aim towards player
-                        enemy.angle = targetAngleRad * 180 / Math.PI + 90;
-
-                        // Move towards player
-                         if (distPlayer > ENEMY_ATTACK_DIST * 0.8) { // Stop just short of attack distance
-                            enemy.x += Math.cos(targetAngleRad) * enemy.speed;
-                            enemy.y += Math.sin(targetAngleRad) * enemy.speed;
+                        enemy.angle = targetAngleRad;
+                        if (distPlayer > ENEMY_ATTACK_DIST * 0.8) {
+                            enemy.x += Math.sin(enemy.angle) * enemy.speed * delta;
+                            enemy.z += Math.cos(enemy.angle) * enemy.speed * delta;
                             enemy.isMoving = true;
-                         }
+                        }
 
-
-                        // --- Zombie Melee Attack ---
                         if (distPlayer < ENEMY_ATTACK_DIST && enemy.attackCooldown <= 0 && gameState.playerState === 'onFoot') {
-                             gameState.player.health -= ENEMY_DAMAGE_MELEE;
-                             enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
-                             console.log("Player bitten! Health:", gameState.player.health); // Log bite for debugging
-                             // Add visual/audio feedback for bite?
+                            gameState.player.health -= ENEMY_DAMAGE_MELEE;
+                            enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN / (delta * 60 || 1) ; // Time based cooldown
+                             createHitSparksEffect(gameState.player.x, gameState.player.pedHeight/2, gameState.player.z, 0xff0000); // Player hit spark
                         }
                     }
                 }
 
-                 // Update enemy animation frame (same as player)
-                 if (enemy.isMoving) {
-                     enemy.animTimer++;
-                     if (enemy.animTimer >= enemy.animSpeed) {
-                         enemy.animTimer = 0;
-                         enemy.animFrame = (enemy.animFrame + 1) % 4; // Cycle 0, 1, 2, 3
-                     }
-                 } else {
-                     enemy.animFrame = 0; // Idle frame
-                     enemy.animTimer = 0;
+                if (enemy.isMoving) {
+                    enemy.animTimer++;
+                    if (enemy.animTimer >= enemy.animSpeed) {
+                        enemy.animTimer = 0;
+                        enemy.animFrame = (enemy.animFrame + 1) % 4;
+                    }
+                } else {
+                    enemy.animFrame = 0; enemy.animTimer = 0;
+                }
+                updateCharacterAnimation(enemy, enemy.mesh);
+
+
+                if (enemy.attackCooldown > 0) enemy.attackCooldown -= delta * 60;
+
+
+                const collisionResult = checkCollisions(oldX, oldZ, enemy, 'enemy');
+                 if(collisionResult.collided){
+                    enemy.x = collisionResult.newX;
+                    enemy.z = collisionResult.newZ;
+                    if (enemy.state === 'chasing') enemy.state = 'idle'; // Stop if hit wall
                  }
 
-                // Update cooldown
-                if (enemy.attackCooldown > 0) enemy.attackCooldown--;
 
-                // Collision check for enemy
-                checkCollisions(oldX, oldY, enemy, 'enemy');
+                enemy.mesh.position.set(enemy.x, enemy.height / 2, enemy.z);
+                enemy.mesh.rotation.y = enemy.angle;
+                enemy.boundingBox.setFromObject(enemy.mesh);
 
-                // Check health
+                // Update health bar
+                enemy.healthBarMesh.position.set(enemy.x, enemy.height + 0.3, enemy.z);
+                enemy.healthBarMesh.lookAt(camera.position); // Make it face the camera
+                const healthScale = Math.max(0, enemy.health / enemy.maxHealth);
+                enemy.healthBarMesh.children[1].scale.x = healthScale; // children[1] is the green part
+                enemy.healthBarMesh.children[1].position.x = - (1 - healthScale) * 0.5; // Keep left aligned
+
+
                 if (enemy.health <= 0) {
-                    createExplosion(enemy.x, enemy.y, '#8B0000', 0.6); // Dark red explosion for death
+                    createExplosionEffect(enemy.x, enemy.height / 2, enemy.z, 0x8B0000, 0.6);
+                    scene.remove(enemy.mesh);
+                    scene.remove(enemy.healthBarMesh);
                     gameState.world.enemies.splice(i, 1);
-                    gameState.player.killedEnemiesCount++; // Increment killed enemy count
-                    // Removed machine gun drop logic
+                    // Note: threeObjects.enemies still holds reference, ideally clean this too
+                    gameState.player.killedEnemiesCount++;
                 }
             }
         }
 
-        // --- Projectile Logic (Only for player now) ---
-        function updateProjectiles() {
-             for (let i = gameState.world.projectiles.length - 1; i >= 0; i--) {
-                 const p = gameState.world.projectiles[i];
-                 // Only process player projectiles
-                 if (p.owner !== 'player') {
-                     gameState.world.projectiles.splice(i, 1); // Remove non-player projectiles (shouldn't exist now)
-                     continue;
-                 }
+        function updateProjectiles(delta) {
+            for (let i = gameState.world.projectiles.length - 1; i >= 0; i--) {
+                const p = gameState.world.projectiles[i];
+                if (p.owner !== 'player') {
+                    // Cleanup non-player projectiles (if any introduced later)
+                    scene.remove(p.mesh);
+                    gameState.world.projectiles.splice(i, 1);
+                    // Also remove from threeObjects.projectiles
+                    const meshIdx = threeObjects.projectiles.indexOf(p.mesh);
+                    if (meshIdx > -1) threeObjects.projectiles.splice(meshIdx,1);
+                    continue;
+                }
 
-                 p.x += p.vx; p.y += p.vy; p.lifespan--;
-                 let hit = false; let hitWall = false;
+                p.x += p.vx * delta;
+                p.y += p.vy * delta; // For potential vertical movement later
+                p.z += p.vz * delta;
+                p.timer += delta;
 
-                 // Collision check vs Enemies
-                 for (let j = gameState.world.enemies.length - 1; j >= 0; j--) { const enemy = gameState.world.enemies[j]; const dx = p.x - enemy.x; const dy = p.y - enemy.y; const hitRadius = Math.max(enemy.width, enemy.height) * 0.7; if (dx * dx + dy * dy < hitRadius * hitRadius) { enemy.health -= p.damage; hit = true; break; } }
+                p.mesh.position.set(p.x, p.y, p.z);
+                p.boundingBox.setFromObject(p.mesh); // Assuming projectile mesh defines its bounds
 
+                let hit = false;
+                let hitWall = false;
 
-                 // Check collision with world geometry (if not already hit)
-                 if (!hit) { const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for(const obj of worldGeometry) { if (p.x > obj.x && p.x < obj.x + obj.width && p.y > obj.y && p.y < obj.y + obj.height) { hit = true; hitWall = true; break; } } }
-                 // Check world boundaries
-                 if (p.x < 0 || p.x > gameState.world.width || p.y < 0 || p.y > gameState.world.height) { hit = true; hitWall = true; }
+                // Collision vs Enemies
+                for (let j = gameState.world.enemies.length - 1; j >= 0; j--) {
+                    const enemy = gameState.world.enemies[j];
+                    if (p.boundingBox.intersectsBox(enemy.boundingBox)) {
+                        enemy.health -= p.damage;
+                        hit = true;
+                        createExplosionEffect(p.x, p.y, p.z, p.color, 0.4); // Enemy hit splash
+                        break;
+                    }
+                }
 
-                 // Remove projectile
-                 if (p.lifespan <= 0 || hit) { if (hitWall) { createHitSparks(p.x, p.y); } else if (hit && p.owner === 'player') { createExplosion(p.x, p.y, '#ff0', 0.4); /* Enemy hit splash */ } gameState.world.projectiles.splice(i, 1); }
-             }
-         }
+                // Collision vs World Geometry
+                if (!hit) {
+                    const worldGeometry = [
+                        ...gameState.world.buildings.map(b => b.boundingBox),
+                        ...gameState.world.obstacles.map(o => o.boundingBox),
+                        ...gameState.world.impassableZones.map(iz => iz.boundingBox)
+                    ];
+                    for (const objBox of worldGeometry) {
+                        if (p.boundingBox.intersectsBox(objBox)) {
+                            hit = true;
+                            hitWall = true;
+                            break;
+                        }
+                    }
+                }
 
-        // --- Collision ---
-        function checkCollisions(oldX, oldY, entity, entityType) { const isDriving = entityType === 'driving'; const isPlayer = entityType === 'driving' || entityType === 'onFoot'; const isEnemy = entityType === 'enemy'; const pW = isDriving ? entity.width : (isPlayer ? entity.pedWidth : entity.width); const pH = isDriving ? entity.height : (isPlayer ? entity.pedHeight : entity.height); const entityRect = { x: entity.x - pW / 2, y: entity.y - pH / 2, width: pW, height: pH }; let collisionOccurred = false; let bounced = false; if (entityRect.x < 0) { entityRect.x = 0; bounced = true; } if (entityRect.y < 0) { entityRect.y = 0; bounced = true; } if (entityRect.x + pW > gameState.world.width) { entityRect.x = gameState.world.width - pW; bounced = true; } if (entityRect.y + pH > gameState.world.height) { entityRect.y = gameState.world.height - pH; bounced = true; } entity.x = entityRect.x + pW / 2; entity.y = entityRect.y + pH / 2; if (bounced && isDriving) entity.speed *= -0.4; else if (bounced && isEnemy) entity.state = 'idle'; const objects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of objects) { const objRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height }; if (isCollidingAABB(entityRect, objRect)) { collisionOccurred = true; entity.x = oldX; entity.y = oldY; if (isDriving) { entity.speed *= -0.5; createDustParticle(false); createDustParticle(false); } else if (isEnemy) { entity.state = 'idle'; } break; } } return collisionOccurred; }
-        function isCollidingAABB(rect1, rect2) { return ( rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y ); }
-        function checkGasStations() { if (gameState.playerState !== 'driving') return; if (gameState.controls.refuel) { for (const station of gameState.world.gasStations) { const dx = gameState.player.x - (station.x + station.width / 2); const dy = gameState.player.y - (station.y + station.height / 2); const distanceSq = dx * dx + dy * dy; if (distanceSq < 70 * 70) { gameState.player.fuelLevel += 1.5; if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100; break; } } } }
-        function checkLocation() { let currentZone = null; let closestDistance = Infinity; for (const zone of gameState.zones) { const dx = gameState.player.x - zone.x; const dy = gameState.player.y - zone.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance < zone.radius && distance < closestDistance) { closestDistance = distance; currentZone = zone; } } document.getElementById('location').textContent = `LOC: ${currentZone ? currentZone.name : 'WASTELAND'}`; } // Updated default location
-        function checkGameOverCondition() { if (gameState.player.health <= 0 && !gameState.gameOver) { gameState.gameOver = true; console.log("GAME OVER"); } }
+                // World boundaries
+                if (p.x < 0 || p.x > gameState.world.width || p.z < 0 || p.z > gameState.world.height) {
+                    hit = true;
+                    hitWall = true;
+                }
 
-        // --- Effects ---
-        function createSkidMark() { if (gameState.playerState !== 'driving') return; const radians = gameState.player.angle * Math.PI / 180; const wheelOffset = gameState.player.height * 0.3; gameState.fx.skidMarks.push({ x: gameState.player.x - Math.sin(radians) * wheelOffset, y: gameState.player.y + Math.cos(radians) * wheelOffset, angle: gameState.player.angle, alpha: 0.5 + Math.random() * 0.3, width: 3 + Math.abs(gameState.player.speed * 0.6), life: 250 + Math.random() * 150 }); if (gameState.fx.skidMarks.length > 200) gameState.fx.skidMarks.shift(); } // Increased life and width variation
-        function createDustParticle(isDrivingEffect = true) { const pAngle = gameState.player.angle * Math.PI / 180; const offsetDist = isDrivingEffect ? gameState.player.height / 2 : 5; const baseX = gameState.player.x - Math.sin(pAngle) * offsetDist; const baseY = gameState.player.y + Math.cos(pAngle) * offsetDist; gameState.fx.dustParticles.push({ x: baseX + (Math.random() - 0.5) * (isDrivingEffect ? 20 : 8), y: baseY + (Math.random() - 0.5) * (isDrivingEffect ? 20 : 8), size: isDrivingEffect ? 3 + Math.random() * 7 : 1.5 + Math.random() * 3, alpha: 0.5 + Math.random() * 0.3, life: 30 + Math.random() * 30, vx: (Math.random() - 0.5) * (isDrivingEffect ? 2 : 0.8), vy: (Math.random() - 0.5) * (isDrivingEffect ? 2 : 0.8) }); if (gameState.fx.dustParticles.length > 100) gameState.fx.dustParticles.shift(); } // Increased size and velocity variation
-        function createExplosion(x, y, color = '#ffa500', scale = 1.0) {
-            const particles = 20 + Math.floor(Math.random() * 15);
-            for (let i = 0; i < particles; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 1.5 + Math.random() * 4 * scale;
-                const particleColor = color; // Use provided color for explosion
-                const life = 25 + Math.random() * 25; // Define life here
-                gameState.fx.explosions.push({
-                    x: x, y: y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    size: (3 + Math.random() * 5) * scale,
-                    alpha: 0.7 + Math.random() * 0.3,
-                    life: life, // Use the defined life
-                    initialLife: life, // Store initial life
-                    color: particleColor
-                });
+                if (p.timer >= p.lifespan || hit) {
+                    if (hitWall) {
+                        createHitSparksEffect(p.x, p.y, p.z);
+                    }
+                    scene.remove(p.mesh);
+                    gameState.world.projectiles.splice(i, 1);
+                    const meshIdx = threeObjects.projectiles.indexOf(p.mesh);
+                    if (meshIdx > -1) threeObjects.projectiles.splice(meshIdx,1);
+                }
             }
-            if (gameState.fx.explosions.length > 100) gameState.fx.explosions.shift();
-        } // More particles, size, and life variation
-        function createMuzzleFlash(x, y) { gameState.fx.muzzleFlashes.push({ x: x, y: y, size: 10 + Math.random() * 8, alpha: 1.0, life: 3 }); } // Brighter, shorter life
-        function createHitSparks(x, y) { const particles = 8 + Math.floor(Math.random() * 8); for (let i = 0; i < particles; i++) { const angle = Math.random() * Math.PI * 2; const speed = 1.5 + Math.random() * 3; gameState.fx.hitSparks.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 1.5 + Math.random() * 2, alpha: 1.0, life: 15 + Math.random() * 15, color: '#ffda99' }); } } // More sparks, brighter, longer life
-        function updateParticlesAndEffects() {
-             for (let i = gameState.fx.dustParticles.length - 1; i >= 0; i--) { const p = gameState.fx.dustParticles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.98; p.vy *= 0.98; p.life--; p.alpha -= 0.03; if (p.life <= 0 || p.alpha <= 0) gameState.fx.dustParticles.splice(i, 1); } // Added slight drag
-             for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) { const s = gameState.fx.skidMarks[i]; s.alpha -= 0.002; s.life--; if (s.alpha <= 0 || s.life <= 0) gameState.fx.skidMarks.splice(i, 1); }
-             for (let i = gameState.fx.explosions.length - 1; i >= 0; i--) { const p = gameState.fx.explosions[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.97; p.vy *= 0.97; p.life--; p.alpha -= 0.04; if (p.life <= 0 || p.alpha <= 0) gameState.fx.explosions.splice(i, 1); }
-             for (let i = gameState.fx.muzzleFlashes.length - 1; i >= 0; i--) { const f = gameState.fx.muzzleFlashes[i]; f.life--; f.alpha -= 0.35; if (f.life <= 0 || f.alpha <= 0) gameState.fx.muzzleFlashes.splice(i, 1); } // Faster fade
-             for (let i = gameState.fx.hitSparks.length - 1; i >= 0; i--) { const s = gameState.fx.hitSparks[i]; s.x += s.vx; s.y += s.vy; s.vx *= 0.9; s.vy *= 0.9; s.life--; s.alpha -= 0.12; if (s.life <= 0 || s.alpha <= 0) gameState.fx.hitSparks.splice(i, 1); } // Faster drag and fade
         }
 
-        // --- Sound Functions (Basic Procedural Tones) ---
+
+        // --- Collision ---
+        function checkCollisions(oldX, oldZ, entity, entityType) {
+            const isDriving = entityType === 'driving';
+            const isPed = entityType === 'onFoot' || entityType === 'enemy';
+
+            // Use entity's current boundingBox, assuming it's updated
+            const entityBox = entity.boundingBox;
+            let collisionOccurred = false;
+            let finalX = entity.x;
+            let finalZ = entity.z;
+
+            // World boundaries (simple clamping for now)
+            const halfWidth = (entityBox.max.x - entityBox.min.x) / 2;
+            const halfDepth = (entityBox.max.z - entityBox.min.z) / 2;
+
+            if (entity.x - halfWidth < 0) { finalX = halfWidth; collisionOccurred = true;}
+            if (entity.z - halfDepth < 0) { finalZ = halfDepth; collisionOccurred = true;}
+            if (entity.x + halfWidth > gameState.world.width) { finalX = gameState.world.width - halfWidth; collisionOccurred = true;}
+            if (entity.z + halfDepth > gameState.world.height) { finalZ = gameState.world.height - halfDepth; collisionOccurred = true;}
+
+            if (collisionOccurred && isDriving) entity.speed *= -0.4;
+            else if (collisionOccurred && entityType === 'enemy') entity.state = 'idle';
+
+
+            const objectsToTest = [
+                ...gameState.world.buildings,
+                ...gameState.world.obstacles,
+                ...gameState.world.impassableZones
+            ];
+
+            // Temporarily update entity's box to its new potential position for checking
+            const tempBox = entityBox.clone(); // Use current entity box
+                                            // no need to translate, its already updated from entity.x, entity.z
+                                            // (in updatePlayer and updateEnemy BEFORE this function)
+
+
+            for (const obj of objectsToTest) {
+                 // Check X-axis collision
+                 tempBox.min.x = entity.x - halfWidth; tempBox.max.x = entity.x + halfWidth;
+                 tempBox.min.z = oldZ - halfDepth; tempBox.max.z = oldZ + halfDepth; // Keep Z old for X check
+
+                if (tempBox.intersectsBox(obj.boundingBox)) {
+                    collisionOccurred = true;
+                    finalX = oldX; // Revert X
+                    if (isDriving) entity.speed *= -0.5; // Bounce effect
+                    else if (entityType === 'enemy') entity.state = 'idle'; // Stop enemy
+                    // For player, the calling function will handle position reversion if needed
+                    // but good to signal the reversion requirement
+                    // Update tempBox to reflect reversion for Z check.
+                    tempBox.min.x = oldX - halfWidth; tempBox.max.x = oldX + halfWidth;
+                }
+
+                // Check Z-axis collision
+                tempBox.min.x = finalX - halfWidth; tempBox.max.x = finalX + halfWidth; // Use potentially reverted X
+                tempBox.min.z = entity.z - halfDepth; tempBox.max.z = entity.z + halfDepth;
+
+                if (tempBox.intersectsBox(obj.boundingBox)) {
+                    collisionOccurred = true;
+                    finalZ = oldZ; // Revert Z
+                    if (isDriving) entity.speed *= -0.5;
+                    else if (entityType === 'enemy') entity.state = 'idle';
+                }
+                if (finalX === oldX && finalZ === oldZ && collisionOccurred) break; // Full stop if reverted on both axes due to one object
+            }
+            return { collided: collisionOccurred, newX: finalX, newZ: finalZ };
+        }
+
+
+        function checkGasStations(delta) {
+            if (gameState.playerState !== 'driving' || !gameState.controls.refuel) return;
+            for (const station of gameState.world.gasStations) {
+                const dx = gameState.player.x - (station.x + station.width / 2);
+                const dz = gameState.player.z - (station.z + station.depth / 2); // Use depth for Z
+                const distanceSq = dx * dx + dz * dz;
+                // Station effective radius, somewhat larger than its visual box
+                const stationInteractionRadius = Math.max(station.width, station.depth) * 1.5;
+                if (distanceSq < stationInteractionRadius * stationInteractionRadius) {
+                    gameState.player.fuelLevel += 1.5 * delta * 60; // Rate of refueling
+                    if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100;
+                    break;
+                }
+            }
+        }
+
+        function checkLocation() {
+            let currentZone = null; let closestDistance = Infinity;
+            for (const zone of gameState.zones) {
+                const dx = gameState.player.x - zone.x;
+                const dz = gameState.player.z - zone.z; // Z for 3D
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                if (distance < zone.radius && distance < closestDistance) {
+                    closestDistance = distance; currentZone = zone;
+                }
+            }
+            document.getElementById('location').textContent = `LOC: ${currentZone ? currentZone.name : 'WASTELAND'}`;
+        }
+        function checkGameOverCondition() { if (gameState.player.health <= 0 && !gameState.gameOver) { gameState.gameOver = true; stopEngineNoise(); } }
+
+        // --- Effects ---
+        function createSkidMarkEffect() {
+            if (gameState.playerState !== 'driving' || !gameState.player.mesh) return;
+            // Skid mark position slightly behind one of the rear wheels
+            const skidWidth = 0.2;
+            const skidLength = 1.5 + Math.abs(gameState.player.speed * 0.05);
+            const rearAxleOffset = -gameState.player.depth * 0.4; // Offset from car center to rear axle
+            const wheelTrackOffset = gameState.player.width * 0.4 * (Math.random() > 0.5 ? 1 : -1); // Left or right wheel
+
+            const localSkidPos = new THREE.Vector3(wheelTrackOffset, 0.01, rearAxleOffset); // Slight Y offset to avoid z-fighting
+            const worldSkidPos = localSkidPos.applyMatrix4(gameState.player.mesh.matrixWorld);
+
+            const skidGeo = new THREE.PlaneGeometry(skidWidth, skidLength);
+            const skidMat = new THREE.MeshBasicMaterial({
+                color: 0x111111,
+                transparent: true,
+                opacity: 0.4 + Math.random() * 0.2,
+                side: THREE.DoubleSide
+            });
+            const skidMesh = new THREE.Mesh(skidGeo, skidMat);
+            skidMesh.position.copy(worldSkidPos);
+            skidMesh.rotation.x = -Math.PI / 2; // Align with ground
+            skidMesh.rotation.z = gameState.player.angle + Math.PI/2; // Orient with car. Note: Car's Y rotation is player.angle
+
+
+            scene.add(skidMesh);
+            gameState.fx.skidMarks.push({ mesh: skidMesh, life: 150 + Math.random() * 100, initialOpacity: skidMat.opacity }); // Life in frames
+
+            if (gameState.fx.skidMarks.length > 50) { // Limit total skid marks
+                const oldest = gameState.fx.skidMarks.shift();
+                scene.remove(oldest.mesh);
+                oldest.mesh.geometry.dispose();
+                oldest.mesh.material.dispose();
+            }
+        }
+
+
+        function createDustParticleEffect(isDrivingEffect = true) {
+            if (!gameState.player.mesh) return;
+
+            const particleCount = isDrivingEffect ? 5 : 2;
+            const basePos = new THREE.Vector3();
+            gameState.player.mesh.getWorldPosition(basePos); // Get world position of player/vehicle center
+
+            // Offset particles slightly behind if driving
+            if (isDrivingEffect) {
+                const backwardOffset = new THREE.Vector3(0,0, -gameState.player.depth * 0.6).applyQuaternion(gameState.player.mesh.quaternion);
+                basePos.add(backwardOffset);
+            }
+            basePos.y = 0.2; // Dust rises from ground
+
+            for (let i = 0; i < particleCount; i++) {
+                gameState.fx.dustParticlesData.push({
+                    position: new THREE.Vector3(
+                        basePos.x + (Math.random() - 0.5) * (isDrivingEffect ? 1.5 : 0.5),
+                        basePos.y + (Math.random() - 0.5) * 0.3,
+                        basePos.z + (Math.random() - 0.5) * (isDrivingEffect ? 1.5 : 0.5)
+                    ),
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * (isDrivingEffect ? 0.5 : 0.2),
+                        Math.random() * 0.5 + 0.1, // Upwards
+                        (Math.random() - 0.5) * (isDrivingEffect ? 0.5 : 0.2)
+                    ),
+                    alpha: 0.5 + Math.random() * 0.3,
+                    life: 20 + Math.random() * 20, // frames
+                    size: isDrivingEffect ? 0.2 + Math.random() * 0.5 : 0.1 + Math.random() * 0.2,
+                    color: new THREE.Color(0xA08C6E) // Wasteland dust color
+                });
+            }
+            if (gameState.fx.dustParticlesData.length > 200) { // Limit total particles
+                gameState.fx.dustParticlesData.splice(0, gameState.fx.dustParticlesData.length - 200);
+            }
+            updateDustParticlesMesh();
+        }
+
+
+        function createExplosionEffect(x, y, z, color = 0xffa500, scale = 1.0) {
+             const particleCount = 15 + Math.floor(Math.random() * 10);
+             const explosionData = { particles: [], life: 30 + Math.random() * 30, initialLife: 0 }; // frames
+             explosionData.initialLife = explosionData.life;
+
+             for (let i = 0; i < particleCount; i++) {
+                 const angle = Math.random() * Math.PI * 2;
+                 const elevation = (Math.random() - 0.5) * Math.PI; // Spread in 3D
+                 const speed = (0.5 + Math.random() * 2) * scale;
+                 explosionData.particles.push({
+                     position: new THREE.Vector3(x, y, z),
+                     velocity: new THREE.Vector3(
+                         Math.cos(angle) * Math.cos(elevation) * speed,
+                         Math.sin(elevation) * speed,
+                         Math.sin(angle) * Math.cos(elevation) * speed
+                     ),
+                     alpha: 0.7 + Math.random() * 0.3,
+                     size: (0.1 + Math.random() * 0.3) * scale,
+                     color: new THREE.Color(color)
+                 });
+             }
+             gameState.fx.explosionsData.push(explosionData);
+             if (gameState.fx.explosionsData.length > 20) { // Max concurrent explosions
+                 gameState.fx.explosionsData.shift();
+             }
+             updateExplosionParticlesMesh(); // This will manage one THREE.Points for all explosions
+        }
+
+
+        function createMuzzleFlashEffect(x, y, z) {
+            const flash = {
+                position: new THREE.Vector3(x, y, z),
+                size: 0.8 + Math.random() * 0.5,
+                alpha: 1.0,
+                life: 2, // Very short life in frames
+                color: new THREE.Color(0xffdc96)
+            };
+            gameState.fx.muzzleFlashesData.push(flash);
+            if (gameState.fx.muzzleFlashesData.length > 10) {
+                gameState.fx.muzzleFlashesData.shift();
+            }
+            updateMuzzleFlashMesh();
+        }
+
+
+        function createHitSparksEffect(x, y, z, color = 0xffda99) {
+            const particleCount = 5 + Math.floor(Math.random() * 5);
+             for (let i = 0; i < particleCount; i++) {
+                 const angle = Math.random() * Math.PI * 2;
+                 const elevation = (Math.random() - 0.5) * Math.PI;
+                 const speed = 0.8 + Math.random() * 1.5;
+                 gameState.fx.hitSparksData.push({
+                     position: new THREE.Vector3(x, y, z),
+                     velocity: new THREE.Vector3(
+                         Math.cos(angle) * Math.cos(elevation) * speed,
+                         Math.sin(elevation) * speed,
+                         Math.sin(angle) * Math.cos(elevation) * speed
+                     ),
+                     alpha: 1.0,
+                     life: 10 + Math.random() * 10, // frames
+                     size: 0.05 + Math.random() * 0.1,
+                     color: new THREE.Color(color)
+                 });
+             }
+             if (gameState.fx.hitSparksData.length > 100) {
+                 gameState.fx.hitSparksData.splice(0, gameState.fx.hitSparksData.length - 100);
+             }
+             updateHitSparksMesh();
+        }
+
+
+        function updateParticlesAndEffects3D(delta) {
+            const deltaFrames = delta * 60; // Approximate frames passed
+
+            // Skid Marks
+            for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) {
+                const skid = gameState.fx.skidMarks[i];
+                skid.life -= deltaFrames;
+                skid.mesh.material.opacity = skid.initialOpacity * (skid.life / (150 + 80)); // Fade out
+                if (skid.life <= 0 || skid.mesh.material.opacity <= 0) {
+                    scene.remove(skid.mesh);
+                    skid.mesh.geometry.dispose();
+                    skid.mesh.material.dispose();
+                    gameState.fx.skidMarks.splice(i, 1);
+                }
+            }
+            // Dust, Explosions, MuzzleFlashes, HitSparks call their respective update mesh functions
+            // These functions will handle their own particle data updates and mesh rebuilds
+            updateDustParticlesMesh(delta);
+            updateExplosionParticlesMesh(delta);
+            updateMuzzleFlashMesh(delta);
+            updateHitSparksMesh(delta);
+        }
+
+
+        // Functions to update THREE.Points meshes (called from updateParticlesAndEffects3D)
+        function updatePointSystem(pointsDataArray, pointsMeshName, delta, defaultSize = 0.1, dragFactor = 0.98, gravityFactor = 0.0) {
+            const positions = [];
+            const colors = [];
+            const sizes = [];
+
+            for (let i = pointsDataArray.length - 1; i >= 0; i--) {
+                const p = pointsDataArray[i];
+                p.position.addScaledVector(p.velocity, delta);
+                p.velocity.multiplyScalar(Math.pow(dragFactor, delta*60));
+                if(gravityFactor !== 0) p.velocity.y -= gravityFactor * delta;
+
+
+                p.life -= delta * 60; // Assuming 60fps base for life
+                p.alpha -= 0.03 * delta * 60; // Fade rate
+
+                if (p.life <= 0 || p.alpha <= 0) {
+                    pointsDataArray.splice(i, 1);
+                } else {
+                    positions.push(p.position.x, p.position.y, p.position.z);
+                    colors.push(p.color.r, p.color.g, p.color.b);
+                    sizes.push(p.size * (p.alpha > 0 ? p.alpha : 0)); // Scale size by alpha for fadeout
+                }
+            }
+
+            let mesh = threeObjects[pointsMeshName];
+            if (!mesh && positions.length > 0) { // Create mesh if it doesn't exist
+                const geometry = new THREE.BufferGeometry();
+                const material = new THREE.PointsMaterial({
+                    size: defaultSize,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 1, // Opacity is handled by alpha in color/size
+                    sizeAttenuation: true,
+                    // map: createCircleTexture(), // Optional: use a texture for rounder particles
+                    // depthWrite: false, // If transparency issues
+                    // blending: THREE.AdditiveBlending // For bright effects like sparks
+                });
+                mesh = new THREE.Points(geometry, material);
+                threeObjects[pointsMeshName] = mesh;
+                scene.add(mesh);
+            }
+
+            if (mesh) {
+                if (positions.length === 0) { // No particles, hide mesh
+                    mesh.visible = false;
+                } else {
+                    mesh.visible = true;
+                    mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                    mesh.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                    mesh.geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1)); // Custom attribute for shader
+                    mesh.geometry.attributes.position.needsUpdate = true;
+                    mesh.geometry.attributes.color.needsUpdate = true;
+                    mesh.geometry.attributes.size.needsUpdate = true; // If using custom shader for size
+
+                    // For PointsMaterial standard size handling, update material.size if it's uniform,
+                    // or ensure sizeAttenuation correctly uses 'size' attribute if you have a custom shader.
+                    // If not using a custom shader for size, you may need to remove the 'size' attribute
+                    // or manage particle sizes differently. Standard PointsMaterial has one 'size' for all points.
+                    // To have per-particle size without custom shader, one would typically create separate
+                    // THREE.Points objects or use sprites. Here, we use the attribute, assuming it can be leveraged
+                    // or easily adapted for a custom shader if needed. For default PointsMaterial, it might not show varied sizes directly.
+                }
+            }
+        }
+        function createCircleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.beginPath();
+            context.arc(32, 32, 30, 0, 2 * Math.PI);
+            context.fillStyle = 'white';
+            context.fill();
+            return new THREE.CanvasTexture(canvas);
+        }
+
+
+        function updateDustParticlesMesh(delta) {
+            updatePointSystem(gameState.fx.dustParticlesData, 'dustParticles', delta, 0.2, 0.96, 0.02);
+        }
+
+        function updateExplosionParticlesMesh(delta) {
+             // Explosions have sub-arrays of particles, this needs a different approach
+             // than a single points system, or merge all into one system
+             // For simplicity, let's combine them, but manage individual explosion lifespans:
+             const allExplosionParticles = [];
+             for (let i = gameState.fx.explosionsData.length - 1; i >= 0; i--) {
+                 const expl = gameState.fx.explosionsData[i];
+                 expl.life -= delta * 60;
+                 if (expl.life <= 0) {
+                     gameState.fx.explosionsData.splice(i, 1);
+                     continue;
+                 }
+                 for (const p of expl.particles) {
+                     // p already contains position, velocity, alpha, size, color
+                     allExplosionParticles.push(p); // Add individual particles
+                 }
+             }
+             updatePointSystem(allExplosionParticles, 'explosions', delta, 0.3, 0.97, 0.05);
+        }
+
+        function updateMuzzleFlashMesh(delta) {
+            updatePointSystem(gameState.fx.muzzleFlashesData, 'muzzleFlashes', delta, 0.8, 1.0, 0); // No drag, no gravity
+        }
+
+        function updateHitSparksMesh(delta) {
+            updatePointSystem(gameState.fx.hitSparksData, 'hitSparks', delta, 0.08, 0.90, 0.1);
+        }
+
+
+        // --- Sound Functions (Basic Procedural Tones) --- (Kept original)
+        function playShotSound(weaponType) { /* ... original code ... */ }
+        function startEngineNoise() { /* ... original code ... */ }
+        function updateEngineNoise() { /* ... original code ... */ }
+        function stopEngineNoise() { /* ... original code ... */ }
+        // Re-paste sound functions because they were large and identical
         function playShotSound(weaponType) {
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
 
-            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Start at low volume
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
 
             if (weaponType === 'pistol') {
                 oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1); // Quick fade
+                oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
             } else if (weaponType === 'machinegun') {
                  oscillator.type = 'square';
-                 oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
-                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05); // Faster fade
+                 oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
             }
-
 
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-
             oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.15); // Stop after a short time
+            oscillator.stop(audioContext.currentTime + 0.15);
         }
-
         function startEngineNoise() {
              if (!engineNoiseOscillator) {
                  engineNoiseOscillator = audioContext.createOscillator();
                  engineNoiseGain = audioContext.createGain();
-
-                 engineNoiseOscillator.type = 'sawtooth'; // Sawtooth wave for a richer sound
-                 engineNoiseOscillator.frequency.setValueAtTime(100, audioContext.currentTime); // Base frequency
-                 engineNoiseGain.gain.setValueAtTime(0.05, audioContext.currentTime); // Low initial volume
-
+                 engineNoiseOscillator.type = 'sawtooth';
+                 engineNoiseOscillator.frequency.setValueAtTime(100, audioContext.currentTime);
+                 engineNoiseGain.gain.setValueAtTime(0.05, audioContext.currentTime);
                  engineNoiseOscillator.connect(engineNoiseGain);
                  engineNoiseGain.connect(audioContext.destination);
-
                  engineNoiseOscillator.start();
              }
         }
-
         function updateEngineNoise() {
-             if (engineNoiseOscillator) {
-                 // Vary frequency and volume based on speed
+             if (engineNoiseOscillator && gameState.playerState === 'driving') {
                  const speedFactor = Math.abs(gameState.player.speed) / gameState.player.maxSpeed;
-                 const frequency = 100 + speedFactor * 200; // Frequency increases with speed
-                 const volume = 0.05 + speedFactor * 0.1; // Volume increases with speed
-
+                 const frequency = 100 + speedFactor * 200;
+                 const volume = 0.05 + speedFactor * 0.1;
                  engineNoiseOscillator.frequency.linearRampToValueAtTime(frequency, audioContext.currentTime + 0.1);
                  engineNoiseGain.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.1);
              }
         }
-
         function stopEngineNoise() {
              if (engineNoiseOscillator) {
-                 engineNoiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5); // Fade out
-                 engineNoiseOscillator.stop(audioContext.currentTime + 0.5); // Stop after fade
-                 engineNoiseOscillator = null;
-                 engineNoiseGain = null;
+                 engineNoiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+                 engineNoiseOscillator.stop(audioContext.currentTime + 0.5);
+                 engineNoiseOscillator = null; engineNoiseGain = null;
              }
         }
 
 
         // --- Camera ---
-        function updateCamera() { const targetX = gameState.player.x - canvas.width / 2; const targetY = gameState.player.y - canvas.height / 2; const lerpFactor = 0.1; gameState.camera.x += (targetX - gameState.camera.x) * lerpFactor; gameState.camera.y += (targetY - gameState.camera.y) * lerpFactor; gameState.camera.x = Math.max(0, Math.min(gameState.camera.x, gameState.world.width - canvas.width)); gameState.camera.y = Math.max(0, Math.min(gameState.camera.y, gameState.world.height - canvas.height)); }
-        // --- HUD Update ---
+        function updateCamera() {
+            if (!gameState.player.mesh) return;
+            const playerPosition = new THREE.Vector3();
+            gameState.player.mesh.getWorldPosition(playerPosition);
+
+            // Desired camera offset based on player state and orientation
+            let offset;
+            let lookAtTarget = playerPosition.clone();
+
+            if (gameState.playerState === 'driving') {
+                offset = new THREE.Vector3(0, 8, -12); // Higher and further back for cars
+            } else { // onFoot
+                offset = new THREE.Vector3(0, 6, -7);  // Closer for pedestrian view
+            }
+
+            // Apply player's rotation to the offset vector
+            const rotatedOffset = offset.clone().applyQuaternion(gameState.player.mesh.quaternion);
+            const desiredCameraPosition = playerPosition.clone().add(rotatedOffset);
+
+            // Smoothly interpolate camera position
+            camera.position.lerp(desiredCameraPosition, 0.1);
+
+            // Smoothly interpolate lookAt target (e.g., a point slightly in front of the player)
+            const forwardLookOffset = new THREE.Vector3(0, 1, gameState.playerState === 'driving' ? 3 : 1);
+            const rotatedLookOffset = forwardLookOffset.applyQuaternion(gameState.player.mesh.quaternion);
+            const desiredLookAt = playerPosition.clone().add(rotatedLookOffset);
+
+            // It's common to have camera.target be a Vector3 you lerp, then call camera.lookAt(camera.target)
+            // For simplicity here, just lerping the target point for lookAt directly.
+            const currentLookAt = new THREE.Vector3(); // Need a persistent variable if you want to lerp this too.
+                                                      // For now, look directly or with simple lerp:
+            const lerpedLookAtTarget = lookAtTarget.lerp(desiredLookAt, 0.1);
+            camera.lookAt(lerpedLookAtTarget);
+
+
+            // Prevent camera from going below ground (simple y clamping)
+            if (camera.position.y < 0.5) {
+                camera.position.y = 0.5;
+            }
+        }
+
+
+        // --- HUD Update --- (Original logic mostly applies)
         function updateHUD() {
              document.getElementById('health-level').style.width = `${Math.max(0, (gameState.player.health / gameState.player.maxHealth) * 100)}%`;
              const showDrivingUI = gameState.playerState === 'driving';
              document.getElementById('speed-line').style.display = showDrivingUI ? '' : 'none';
              document.getElementById('fuel-line').style.display = showDrivingUI ? '' : 'none';
-             document.getElementById('weapon-display').style.display = gameState.playerState === 'onFoot' ? '' : 'none'; // Show weapon only on foot
-             document.getElementById('vehicle-display').style.display = showDrivingUI ? '' : 'none'; // Show vehicle display only when driving
-
+             document.getElementById('weapon-display').style.display = gameState.playerState === 'onFoot' ? '' : 'none';
+             document.getElementById('vehicle-display').style.display = showDrivingUI ? '' : 'none';
 
              if (showDrivingUI) {
-                 document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 20));
+                 document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 5)); // Adjusted factor for m/s
                  document.getElementById('fuel-level').style.width = `${Math.max(0, gameState.player.fuelLevel)}%`;
-                 document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`; // Update vehicle display
+                 document.getElementById('vehicle-display').textContent = `VEHICLE: ${gameState.player.currentVehicleType.toUpperCase()}`;
              }
-             checkLocation();
+             checkLocation(); // Uses player.x, player.z which are updated
              document.getElementById('enemies-left').textContent = gameState.world.enemies.length;
-             document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`; // Ensure weapon display is updated
+             document.getElementById('weapon-display').textContent = `WEAPON: ${gameState.player.currentWeapon.toUpperCase()}`;
         }
 
         // --- Rendering ---
-        function renderGame() {
-            ctx.fillStyle = gameState.world.grassColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.save();
-            ctx.translate(-gameState.camera.x, -gameState.camera.y);
-
-            drawImpassableZones();
-            drawRoads();
-            drawBuildings();
-            drawTrees();
-            drawObstacles();
-            drawGasStations();
-            drawSkidMarks(); // Draw skid marks before vehicles/characters
-            drawDustParticles(); // Draw dust before characters
-
-            drawVehicles();
-            drawEnemies(); // Draw enemies before player
-            drawPlayer();
-
-            drawExplosions();
-            drawHitSparks();
-            drawProjectiles();
-            drawMuzzleFlashes();
-
-
-            ctx.restore();
-            drawMiniMap();
+        function renderGame3D() {
+            renderer.render(scene, camera);
+            drawMiniMap(); // Still draw 2D minimap
         }
 
-        // --- Drawing Functions ---
-        function drawImpassableZones() { gameState.world.impassableZones.forEach(zone => { if (zone.x + zone.width < gameState.camera.x || zone.x > gameState.camera.x + canvas.width || zone.y + zone.height < gameState.camera.y || zone.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = zone.color; ctx.fillRect(zone.x, zone.y, zone.width, zone.height); }); }
-        function drawRoads() { roads.forEach(road => { const x1 = road.x1, y1 = road.y1, x2 = road.x2, y2 = road.y2; const midX = (x1+x2)/2, midY = (y1+y2)/2; const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2); if (midX + length < gameState.camera.x || midX - length > gameState.camera.x + canvas.width || midY + length > gameState.camera.y + canvas.height || midY - length < gameState.camera.y) return; // Corrected culling check
-            const angle = Math.atan2(y2 - y1, x2 - x1); ctx.save(); ctx.translate(x1, y1); ctx.rotate(angle); ctx.fillStyle = gameState.world.roadColor; ctx.fillRect(0, -gameState.world.roadWidth / 2, length, gameState.world.roadWidth); ctx.fillStyle = gameState.world.lineColor; // Draw a broken line
-            const segmentLength = 10; const gapLength = 10; let currentPos = 0; while(currentPos < length) { ctx.fillRect(currentPos, -gameState.world.lineWidth / 2, segmentLength, gameState.world.lineWidth); currentPos += segmentLength + gapLength; } ctx.restore(); }); } // Modified road drawing for broken lines
-        function drawBuildings() { gameState.world.buildings.forEach(b => { if (b.x + b.width < gameState.camera.x || b.x > gameState.camera.x + canvas.width || b.y + b.height < gameState.camera.y || b.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.width, b.height); ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Darker windows
-            for (let wy = b.y + 8; wy < b.y + b.height - 8; wy += 20) { for (let wx = b.x + 8; wx < b.x + b.width - 8; wx += 20) { ctx.fillRect(wx, wy, 10, 10); } } }); } // Adjusted window size and spacing
-        function drawTrees() { gameState.world.trees.forEach(t => { if (t.x + t.radius < gameState.camera.x || t.x - t.radius > gameState.camera.x + canvas.width || t.y + t.radius < gameState.camera.y || t.y - t.radius > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#8B4513'; // Brown trunk
-            ctx.fillRect(t.x - t.radius * 0.2, t.y - t.radius * 0.1, t.radius * 0.4, t.radius * 0.6); ctx.fillStyle = t.color; ctx.beginPath(); // Draw a more scraggly top
-            const numSpikes = 8 + Math.random() * 4; const spikeLength = t.radius * (0.8 + Math.random() * 0.4); for(let i = 0; i < numSpikes; i++) { const angle = (i / numSpikes) * Math.PI * 2; const innerRadius = t.radius * 0.5; const outerRadius = t.radius * (0.8 + Math.random() * 0.4); const x = t.x + Math.cos(angle) * outerRadius; const y = t.y - t.radius * 0.4 + Math.sin(angle) * outerRadius; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.closePath(); ctx.fill(); }); } // Modified tree drawing for wasteland look
-        function drawObstacles() { gameState.world.obstacles.forEach(o => { if (o.x + o.width < gameState.camera.x || o.x > gameState.camera.x + canvas.width || o.y + o.height < gameState.camera.y || o.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#777'; ctx.fillRect(o.x, o.y, o.width, o.height); }); }
-        function drawGasStations() { gameState.world.gasStations.forEach(s => { if (s.x + s.width < gameState.camera.x || s.x > gameState.camera.x + canvas.width || s.y + s.height < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = '#666'; ctx.fillRect(s.x - 5, s.y - 5, s.width + 10, s.height + 10); ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.width, s.height); ctx.fillStyle = '#fff'; ctx.font = '24px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⛽', s.x + s.width / 2, s.y + s.height / 2); }); }
-        function drawVehicles() { gameState.world.vehicles.forEach(car => { const CULL_MARGIN = Math.max(car.width, car.height) * 1.5; if (car.x + CULL_MARGIN < gameState.camera.x || car.x - CULL_MARGIN > gameState.camera.x + canvas.width || car.y + CULL_MARGIN < gameState.camera.y || car.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
-            // Draw shadow
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.beginPath();
-            ctx.ellipse(car.x + 5, car.y + 5, car.width * 0.7, car.height * 0.7, 0, 0, Math.PI * 2);
-            ctx.fill();
+        // --- Drawing Functions for 3D Meshes (Creation) ---
+        function createCharacterMesh(isPlayer, color = 0x3498db) {
+            const group = new THREE.Group();
+            const headRadius = PLAYER_PED_WIDTH * 0.3;
+            const bodyHeight = PLAYER_PED_HEIGHT * 0.5;
+            const legHeight = PLAYER_PED_HEIGHT * 0.4;
+            const legWidth = PLAYER_PED_WIDTH * 0.4;
 
-            ctx.save();
-            ctx.translate(car.x, car.y);
-            ctx.rotate(car.angle * Math.PI / 180);
+            const bodyGeo = new THREE.BoxGeometry(PLAYER_PED_WIDTH, bodyHeight, PLAYER_PED_WIDTH * 0.8);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: isPlayer ? 0x3498db : color });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            bodyMesh.position.y = 0; // Centered, will be adjusted by group
+            group.add(bodyMesh);
 
-            // Draw different car shapes based on type
-            const carW = car.width;
-            const carH = car.height;
-            ctx.fillStyle = car.color;
+            const headGeo = new THREE.SphereGeometry(headRadius, 16, 16);
+            const headMat = new THREE.MeshLambertMaterial({ color: isPlayer ? 0x2980b9 : new THREE.Color(color).multiplyScalar(0.8) });
+            const headMesh = new THREE.Mesh(headGeo, headMat);
+            headMesh.position.y = bodyHeight / 2 + headRadius * 0.8;
+            group.add(headMesh);
 
-            if (car.type === 'sedan') {
-                 ctx.fillRect(-carW / 2, -carH / 2, carW, carH);
-                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
-                 ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8);
-                 ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9);
-                 ctx.fillStyle = '#1a1a1a'; // Wheels
-                 const wheelW = 4, wheelH = 8;
-                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
-                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
-            } else if (car.type === 'truck') {
-                 ctx.fillRect(-carW / 2, -carH / 2, carW, carH * 0.6); // Cabin
-                 ctx.fillRect(-carW / 2 + 2, -carH / 2 + carH * 0.6, carW - 4, carH * 0.4); // Bed
-                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
-                 ctx.fillRect(-carW / 2 + 4, -carH / 2 + 4, carW - 8, 8);
-                  ctx.fillStyle = '#1a1a1a'; // Wheels
-                 const wheelW = 5, wheelH = 10;
-                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
-                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
-                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
-                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
-            } else if (car.type === 'sportsCar') {
-                 ctx.beginPath(); // Sleeker shape
-                 ctx.moveTo(-carW / 2, 0);
-                 ctx.lineTo(-carW / 2 + 5, -carH / 2);
-                 ctx.lineTo(carW / 2 - 5, -carH / 2);
-                 ctx.lineTo(carW / 2, 0);
-                 ctx.lineTo(carW / 2 - 5, carH / 2);
-                 ctx.lineTo(-carW / 2 + 5, carH / 2);
-                 ctx.closePath();
-                 ctx.fill();
-                 ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
-                 ctx.fillRect(-carW / 2 + 8, -carH / 2 + 4, carW - 16, 6);
-                 ctx.fillRect(-carW / 2 + 8, carH / 2 - 10, carW - 16, 6);
-                  ctx.fillStyle = '#1a1a1a'; // Wheels
-                 const wheelW = 3, wheelH = 7;
-                 ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
-                 ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
-                 ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
-                 ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
-            } else if (car.type === 'buggy') {
-                      ctx.fillRect(-carW / 2, -carH / 2 + carH * 0.2, carW, carH * 0.8); // Main body
-                      ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Roll cage
-                      ctx.fillRect(-carW / 2 + 2, -carH / 2, carW - 4, carH * 0.3);
-                       ctx.fillStyle = '#1a1a1a'; // Wheels
-                      const wheelW = 5, wheelH = 10;
-                      ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                      ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                      ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
-                      ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
-                 }
+            const legMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const leftLegGeo = new THREE.BoxGeometry(legWidth, legHeight, legWidth * 0.8);
+            const leftLegMesh = new THREE.Mesh(leftLegGeo, legMat);
+            leftLegMesh.name = "leftLeg";
+            leftLegMesh.position.set(-PLAYER_PED_WIDTH * 0.25, -bodyHeight/2 + legHeight/2 -PLAYER_PED_HEIGHT*0.1 , 0); // Initial pose
+            group.add(leftLegMesh);
+
+            const rightLegGeo = new THREE.BoxGeometry(legWidth, legHeight, legWidth * 0.8);
+            const rightLegMesh = new THREE.Mesh(rightLegGeo, legMat);
+            rightLegMesh.name = "rightLeg";
+            rightLegMesh.position.set(PLAYER_PED_WIDTH * 0.25, -bodyHeight/2 + legHeight/2 -PLAYER_PED_HEIGHT*0.1, 0); // Initial pose
+            group.add(rightLegMesh);
+
+             // Shadow plane
+            const shadowGeo = new THREE.PlaneGeometry(PLAYER_PED_WIDTH * 1.2, PLAYER_PED_WIDTH * 1.2);
+            const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
+            const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+            shadowMesh.rotation.x = -Math.PI / 2;
+            shadowMesh.position.y = -PLAYER_PED_HEIGHT / 2 + 0.01; // Slightly above ground for the character group
+            group.add(shadowMesh);
 
 
-            ctx.restore();
-        }); }
-        function drawSkidMarks() { gameState.fx.skidMarks.forEach(skid => { const CULL_MARGIN = skid.width * 2; if (skid.x + CULL_MARGIN < gameState.camera.x || skid.x - CULL_MARGIN > gameState.camera.x + canvas.width || skid.y + CULL_MARGIN < gameState.camera.y || skid.y - CULL_MARGIN > gameState.camera.y + canvas.height) return; ctx.save(); ctx.translate(skid.x, skid.y); ctx.rotate(skid.angle * Math.PI / 180); ctx.fillStyle = `rgba(0, 0, 0, ${skid.alpha * 0.6})`; ctx.fillRect(-skid.width / 2, -1.5, skid.width, 3); ctx.restore(); }); }
-        function drawDustParticles() { gameState.fx.dustParticles.forEach(p => { const CULL_MARGIN = p.size * 2; if (p.x + CULL_MARGIN < gameState.camera.x || p.x - CULL_MARGIN > gameState.camera.x + canvas.width || p.y + CULL_MARGIN < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(160, 140, 110, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }); }
-        function drawExplosions() {
-            gameState.fx.explosions.forEach(p => {
-                if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return;
-                ctx.fillStyle = `rgba(${parseInt(p.color.substring(1, 3), 16)}, ${parseInt(p.color.substring(3, 5), 16)}, ${parseInt(p.color.substring(5, 7), 16)}, ${p.alpha})`; // Use color from particle data
-                ctx.beginPath();
-                // Calculate radius based on elapsed life
-                const elapsedLife = p.initialLife - p.life;
-                const expansionFactor = elapsedLife * 0.08; // Controls how fast it expands
-                const currentRadius = p.size * (1 + expansionFactor);
-                // Ensure radius is never negative or too small
-                ctx.arc(p.x, p.y, Math.max(0.1, currentRadius), 0, Math.PI * 2);
-                ctx.fill();
+            return group;
+        }
+        function createVehicleMesh(type, color) {
+            const props = VEHICLE_TYPES[type];
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshLambertMaterial({ color: color });
+
+            // Main body
+            const bodyGeo = new THREE.BoxGeometry(props.width, props.height, props.depth);
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            group.add(bodyMesh);
+
+            // Simple cabin for sedans/trucks
+            if (type === 'sedan' || type === 'truck' || type === 'sportsCar') {
+                const cabinHeight = props.height * 0.6;
+                const cabinWidth = props.width * 0.8;
+                const cabinDepth = props.depth * (type === 'truck' ? 0.4 : 0.5);
+                const cabinGeo = new THREE.BoxGeometry(cabinWidth, cabinHeight, cabinDepth);
+                const cabinMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color).offsetHSL(0,0,0.1) }); // Slightly lighter/darker
+                const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+                cabinMesh.position.y = props.height / 2 - cabinHeight / 2 +0.1; // On top of main body
+                cabinMesh.position.z = props.depth * (type === 'truck' ? 0.25 : 0.1); // Shifted forward
+                group.add(cabinMesh);
+
+                // Windows (simple dark planes or boxes)
+                const windowMat = new THREE.MeshBasicMaterial({color: 0x111122, transparent: true, opacity: 0.5});
+                const windshieldGeo = new THREE.BoxGeometry(cabinWidth*0.9, cabinHeight*0.7, 0.1);
+                const windshield = new THREE.Mesh(windshieldGeo, windowMat);
+                windshield.position.set(cabinMesh.position.x, cabinMesh.position.y, cabinMesh.position.z + cabinDepth/2);
+                windshield.rotation.x = -0.3; // Slanted
+                group.add(windshield);
+            }
+            if (type === 'buggy'){
+                const rollCageMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
+                const barGeo = new THREE.CylinderGeometry(0.05, 0.05, props.depth*0.8, 6);
+
+                const topFrontBar = new THREE.Mesh(barGeo, rollCageMat);
+                topFrontBar.position.set(0, props.height * 0.8, props.depth * 0.1);
+                topFrontBar.scale.x = props.width / (props.depth * 0.8); // Hacky way to get width from length
+                topFrontBar.rotation.z = Math.PI/2;
+
+                const barGeoSide = new THREE.CylinderGeometry(0.05, 0.05, props.height, 6);
+                const leftBar = new THREE.Mesh(barGeoSide, rollCageMat);
+                leftBar.position.set(-props.width/2 *0.8, props.height*0.3, 0);
+                leftBar.rotation.z = 0.3;
+                group.add(leftBar);
+                const rightBar = leftBar.clone();
+                rightBar.position.x *= -1;
+                rightBar.rotation.z *= -1;
+                group.add(rightBar);
+
+
+                group.add(topFrontBar);
+            }
+
+
+            // Wheels
+            const wheelRadius = Math.min(props.width, props.height) * 0.3;
+            const wheelWidth = wheelRadius * 0.5;
+            const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelWidth, 16);
+            const wheelMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+            const wheelPositions = [
+                new THREE.Vector3(props.width / 2 + wheelWidth/2, -props.height/2 + wheelRadius, props.depth / 2 * 0.7), // Front-Right
+                new THREE.Vector3(-props.width / 2 - wheelWidth/2, -props.height/2+ wheelRadius, props.depth / 2 * 0.7), // Front-Left
+                new THREE.Vector3(props.width / 2+ wheelWidth/2, -props.height/2+ wheelRadius, -props.depth / 2 * 0.7), // Rear-Right
+                new THREE.Vector3(-props.width / 2- wheelWidth/2, -props.height/2+ wheelRadius, -props.depth / 2 * 0.7)  // Rear-Left
+            ];
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.position.copy(pos);
+                wheel.rotation.z = Math.PI / 2; // Orient cylinder to roll along Z axis of car
+                group.add(wheel);
             });
+
+            // Shadow plane
+            const shadowGeo = new THREE.PlaneGeometry(props.width * 1.2, props.depth * 1.2);
+            const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 });
+            const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+            shadowMesh.rotation.x = -Math.PI / 2;
+            shadowMesh.position.y = -props.height / 2 + 0.01; // Slightly above ground for the vehicle group
+            group.add(shadowMesh);
+
+
+            return group;
         }
-        function drawProjectiles() { gameState.world.projectiles.forEach(p => { if (p.x < gameState.camera.x || p.x > gameState.camera.x + canvas.width || p.y < gameState.camera.y || p.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); }); }
-        function drawMuzzleFlashes() { gameState.fx.muzzleFlashes.forEach(f => { if (f.x < gameState.camera.x || f.x > gameState.camera.x + canvas.width || f.y < gameState.camera.y || f.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, 220, 150, ${f.alpha})`; ctx.beginPath(); for (let i = 0; i < 10; i++) { const radius = (i % 2 === 0) ? f.size : f.size / 2; const angle = i * Math.PI / 5; ctx.lineTo(f.x + radius * Math.cos(angle), f.y + radius * Math.sin(angle)); } ctx.closePath(); ctx.fill(); }); }
-        function drawHitSparks() { gameState.fx.hitSparks.forEach(s => { if (s.x < gameState.camera.x || s.x > gameState.camera.x + canvas.width || s.y < gameState.camera.y || s.y > gameState.camera.y + canvas.height) return; ctx.fillStyle = `rgba(255, 200, 100, ${s.alpha})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill(); }); }
+        function createProjectileMesh(color) {
+            const geo = new THREE.SphereGeometry(0.1, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+            return new THREE.Mesh(geo, mat);
+        }
+        function createHealthBarMesh() {
+            const group = new THREE.Group();
+            const barWidth = 1; const barHeight = 0.1;
 
-        // Draw Player / Enemy (Shared logic for 4-frame animation)
-        function drawCharacter(entity, isPlayer) {
-            const width = isPlayer ? entity.pedWidth : entity.width;
-            const height = isPlayer ? entity.pedHeight : entity.height;
-            const bodyHeight = height * 0.6;
-            const legHeight = height * 0.4;
-            const legWidth = width / 2 - 0.5; // Small gap
-            const headRadius = width / 3.5;
-            const legY = -height / 2 + bodyHeight;
+            const backgroundGeo = new THREE.PlaneGeometry(barWidth, barHeight);
+            const backgroundMat = new THREE.MeshBasicMaterial({ color: 0x500000, side: THREE.DoubleSide });
+            const backgroundMesh = new THREE.Mesh(backgroundGeo, backgroundMat);
+            group.add(backgroundMesh);
 
-            // Draw shadow
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            const healthGeo = new THREE.PlaneGeometry(barWidth, barHeight);
+            const healthMat = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide });
+            const healthMesh = new THREE.Mesh(healthGeo, healthMat);
+            healthMesh.position.z = 0.01; // Slightly in front to avoid z-fighting
+            group.add(healthMesh);
+            return group;
+        }
+
+
+        function createRoadTexture() {
+            const canvas = document.createElement('canvas');
+            const size = 128; // Texture size
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = `#${gameState.world.roadColor.toString(16).padStart(6,'0')}`;
+            ctx.fillRect(0, 0, size, size);
+
+            // Dashed line
+            ctx.strokeStyle = `#${gameState.world.lineColor.toString(16).padStart(6,'0')}`;
+            ctx.lineWidth = gameState.world.lineWidth * (size / gameState.world.roadWidth) * 3; // Scale line width
+            ctx.setLineDash([15, 15]); // Dashes
             ctx.beginPath();
-            ctx.ellipse(0 + 3, 0 + 3, width * 0.8, height * 0.6, 0, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(size / 2, 0);
+            ctx.lineTo(size / 2, size);
+            ctx.stroke();
 
-            // Torso
-            ctx.fillStyle = isPlayer ? '#3498db' : entity.color; // Player blue, enemy varied
-            ctx.fillRect(-width / 2, -height / 2, width, bodyHeight);
-
-            // Head
-            ctx.fillStyle = isPlayer ? '#2980b9' : `hsl(${parseInt(entity.color.substring(4, entity.color.indexOf(',')))}, 50%, 25%)`; // Darker, less saturated for zombie
-            ctx.beginPath();
-            ctx.arc(0, -height / 2 + headRadius * 0.8, headRadius, 0, Math.PI * 2); // Slightly lower head
-            ctx.fill();
-
-            // Legs (Animated)
-            ctx.fillStyle = '#555'; // Grey pants for all
-            const frame = entity.animFrame;
-
-            // Define leg shapes/positions for each frame (relative to entity center)
-            // [leftX, leftY, leftW, leftH, rightX, rightY, rightW, rightH]
-             const legPos = [
-                 // Frame 0: Idle / Mid-stride 1
-                 [-width / 2 + 0.25, legY, legWidth, legHeight * 0.95,   0.25, legY, legWidth, legHeight * 0.95],
-                 // Frame 1: Left forward
-                 [-width / 2 + 0.5, legY, legWidth, legHeight,           0, legY + 1, legWidth * 0.9, legHeight * 0.8], // Adjusted for more distinct legs
-                 // Frame 2: Idle / Mid-stride 2
-                 [-width / 2 + 0.25, legY, legWidth, legHeight * 0.95,   0.25, legY, legWidth, legHeight * 0.95],
-                 // Frame 3: Right forward
-                 [-width / 2 + 0, legY + 1, legWidth * 0.9, legHeight * 0.8,   0.5, legY, legWidth, legHeight] // Adjusted for more distinct legs
-             ];
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
 
 
-            if (!entity.isMoving) {
-                // Idle Stance (Frame 0 slightly modified)
-                ctx.fillRect(-width / 2 + 0.5, legY, width - 1, legHeight);
+
+        function drawMiniMap() { /* ... original, but use entity.x, entity.z ... */
+            const mapScaleX = miniMapCtx.canvas.width / gameState.world.width;
+            const mapScaleZ = miniMapCtx.canvas.height / gameState.world.height; // Use height for Z scale if world not square
+
+            miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height);
+
+            // Impassable Zones
+            gameState.world.impassableZones.forEach(zone => {
+                miniMapCtx.fillStyle = `#${zone.color.toString(16).padStart(6,'0')}${Math.floor(0.6*255).toString(16).padStart(2,'0')}`; // Original uses rgba string
+                miniMapCtx.fillRect(zone.x * mapScaleX, zone.z * mapScaleZ, zone.width * mapScaleX, zone.depth * mapScaleZ);
+            });
+
+            // Roads
+            miniMapCtx.strokeStyle = `#${gameState.world.lineColor.toString(16).padStart(6,'0')}`;
+            miniMapCtx.lineWidth = 1.5;
+            roads.forEach(road => {
+                miniMapCtx.beginPath();
+                miniMapCtx.moveTo(road.x1 * mapScaleX, road.z1 * mapScaleZ);
+                miniMapCtx.lineTo(road.x2 * mapScaleX, road.z2 * mapScaleZ);
+                miniMapCtx.stroke();
+            });
+
+            // Gas Stations
+            miniMapCtx.fillStyle = '#ff3333';
+            gameState.world.gasStations.forEach(s => {
+                miniMapCtx.fillRect(s.x * mapScaleX - 1.5, s.z * mapScaleZ - 1.5, 3, 3);
+            });
+
+            // Parked Vehicles
+            miniMapCtx.fillStyle = '#aaa';
+            gameState.world.vehicles.forEach(car => { // these are logic objects
+                miniMapCtx.fillRect(car.x * mapScaleX - 1, car.z * mapScaleZ - 1, 2, 2);
+            });
+
+            // Enemies
+            miniMapCtx.fillStyle = '#008000';
+            gameState.world.enemies.forEach(e => { // these are logic objects
+                miniMapCtx.fillRect(e.x * mapScaleX -1, e.z * mapScaleZ -1, 2, 2);
+            });
+
+            // Player
+            const playerMapX = gameState.player.x * mapScaleX;
+            const playerMapZ = gameState.player.z * mapScaleZ;
+            miniMapCtx.fillStyle = gameState.playerState === 'driving' ? '#0f0' : '#ff0';
+            if (gameState.playerState === 'driving') {
+                miniMapCtx.beginPath();
+                miniMapCtx.arc(playerMapX, playerMapZ, 2.5, 0, Math.PI * 2);
+                miniMapCtx.fill();
             } else {
-                // Walking Frames
-                 const currentLegs = legPos[frame];
-                 // Draw Left Leg
-                 ctx.fillRect(currentLegs[0], currentLegs[1], currentLegs[2], currentLegs[3]);
-                 // Draw Right Leg
-                 ctx.fillRect(currentLegs[4], currentLegs[5], currentLegs[6], currentLegs[7]);
+                miniMapCtx.fillRect(playerMapX - 1, playerMapZ - 1, 2, 2);
+            }
+
+            // Player direction (angle 0 is +Z)
+            const dirLen = 4;
+            miniMapCtx.strokeStyle = miniMapCtx.fillStyle;
+            miniMapCtx.lineWidth = 1;
+            miniMapCtx.beginPath();
+            miniMapCtx.moveTo(playerMapX, playerMapZ);
+            miniMapCtx.lineTo(playerMapX + Math.sin(gameState.player.angle) * dirLen,
+                              playerMapZ + Math.cos(gameState.player.angle) * dirLen);
+            miniMapCtx.stroke();
+
+            // Camera view frustum approximation (very simplified)
+            const camFOVRadians = camera.fov * (Math.PI / 180);
+            const camAspect = camera.aspect;
+            // This is very rough. A proper frustum projection is more complex.
+            const viewWidthAtPlayer = 2 * (camera.position.y / Math.cos(camera.rotation.x)) * Math.tan(camFOVRadians / 2) * camAspect /2 ; // Estimate on ground plane
+            const viewDepthAtPlayer = viewWidthAtPlayer / camAspect / 2;
+
+            // Position of what camera is looking at (roughly)
+            const lookVec = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+            const distToGround = camera.position.y / Math.max(0.01, -lookVec.y); // project to y=0
+            const cameraFocusMapX = (camera.position.x + lookVec.x * distToGround) * mapScaleX;
+            const cameraFocusMapZ = (camera.position.z + lookVec.z * distToGround) * mapScaleZ;
+
+
+            miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            miniMapCtx.lineWidth = 1;
+            // Simplified view rect center at player, size based on original logic's canvas dimensions scaled.
+            const miniCamWidth = gameCanvasWidth/gameState.world.width * miniMapCtx.canvas.width /10; // Example scale
+            const miniCamHeight = gameCanvasHeight/gameState.world.height * miniMapCtx.canvas.height /10; // Example scale
+
+            miniMapCtx.strokeRect(
+                 playerMapX - miniCamWidth/2,
+                 playerMapZ - miniCamHeight/2,
+                 miniCamWidth,
+                 miniCamHeight
+            );
+        }
+        function drawGameOver() { /* Original is fine for HTML overlay */
+            const gameContainer = document.getElementById('game-container');
+            let gameOverDiv = document.getElementById('game-over-screen');
+            if (!gameOverDiv) {
+                gameOverDiv = document.createElement('div');
+                gameOverDiv.id = 'game-over-screen';
+                gameOverDiv.style.position = 'absolute';
+                gameOverDiv.style.top = '0';
+                gameOverDiv.style.left = '0';
+                gameOverDiv.style.width = '100%';
+                gameOverDiv.style.height = '100%';
+                gameOverDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                gameOverDiv.style.color = 'red';
+                gameOverDiv.style.display = 'flex';
+                gameOverDiv.style.flexDirection = 'column';
+                gameOverDiv.style.justifyContent = 'center';
+                gameOverDiv.style.alignItems = 'center';
+                gameOverDiv.style.fontFamily = "'Courier New', monospace";
+                gameOverDiv.style.zIndex = '100';
+                gameOverDiv.innerHTML = `
+                    <div style="font-size: 40px;">GAME OVER</div>
+                    <div style="font-size: 20px; color: white; margin-top: 20px;">Refresh to Restart</div>
+                    <div style="font-size: 16px; color: white; margin-top: 10px;">Enemies Killed: ${gameState.player.killedEnemiesCount}</div>
+                `;
+                gameContainer.appendChild(gameOverDiv);
             }
         }
 
-        function drawEnemies() {
-            gameState.world.enemies.forEach(enemy => {
-                 const CULL_MARGIN = Math.max(enemy.width, enemy.height) * 1.5;
-                 if (enemy.x + CULL_MARGIN < gameState.camera.x || enemy.x - CULL_MARGIN > gameState.camera.x + canvas.width || enemy.y + CULL_MARGIN < gameState.camera.y || enemy.y - CULL_MARGIN > gameState.camera.y + canvas.height) return;
-
-                ctx.save();
-                ctx.translate(enemy.x, enemy.y);
-                ctx.rotate(enemy.angle * Math.PI / 180);
-                drawCharacter(enemy, false); // Use shared drawing function
-                ctx.restore();
-
-                // Health bar
-                const barWidth = 20; const barHeight = 3; const barX = enemy.x - barWidth / 2; const barY = enemy.y - enemy.height / 2 - 8;
-                ctx.fillStyle = '#500'; ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = '#f33'; ctx.fillRect(barX, barY, barWidth * (enemy.health / enemy.maxHealth), barHeight);
-            });
-        }
-
-        function drawPlayer() {
-            ctx.save();
-            ctx.translate(gameState.player.x, gameState.player.y);
-            ctx.rotate(gameState.player.angle * Math.PI / 180);
-            if (gameState.playerState === 'driving') {
-                // Draw shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.beginPath();
-                ctx.ellipse(0 + 5, 0 + 5, gameState.player.width * 0.7, gameState.player.height * 0.7, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Draw player's current vehicle based on type
-                 const carW = gameState.player.width;
-                 const carH = gameState.player.height;
-                 ctx.fillStyle = gameState.player.color;
-
-                 if (gameState.player.currentVehicleType === 'sedan') {
-                      ctx.fillRect(-carW / 2, -carH / 2, carW, carH);
-                      ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
-                      ctx.fillRect(-carW / 2 + 3, -carH / 2 + 3, carW - 6, 8);
-                      ctx.fillRect(-carW / 2 + 3, carH / 2 - 12, carW - 6, 9);
-                      ctx.fillStyle = '#1a1a1a'; // Wheels
-                      const wheelW = 4, wheelH = 8;
-                      ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                      ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                      ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
-                      ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 13, wheelW, wheelH);
-                 } else if (gameState.player.currentVehicleType === 'truck') {
-                     ctx.fillRect(-carW / 2, -carH / 2, carW, carH * 0.6); // Cabin
-                     ctx.fillRect(-carW / 2 + 2, -carH / 2 + carH * 0.6, carW - 4, carH * 0.4); // Bed
-                     ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
-                     ctx.fillRect(-carW / 2 + 4, -carH / 2 + 4, carW - 8, 8);
-                      ctx.fillStyle = '#1a1a1a'; // Wheels
-                     const wheelW = 5, wheelH = 10;
-                     ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
-                     ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 8, wheelW, wheelH);
-                     ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
-                     ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 18, wheelW, wheelH);
-                 } else if (gameState.player.currentVehicleType === 'sportsCar') {
-                     ctx.beginPath(); // Sleeker shape
-                     ctx.moveTo(-carW / 2, 0);
-                     ctx.lineTo(-carW / 2 + 5, -carH / 2);
-                     ctx.lineTo(carW / 2 - 5, -carH / 2);
-                     ctx.lineTo(carW / 2, 0);
-                     ctx.lineTo(carW / 2 - 5, carH / 2);
-                     ctx.lineTo(-carW / 2 + 5, carH / 2);
-                     ctx.closePath();
-                     ctx.fill();
-                     ctx.fillStyle = 'rgba(153, 204, 255, 0.7)'; // Windows
-                     ctx.fillRect(-carW / 2 + 8, -carH / 2 + 4, carW - 16, 6);
-                     ctx.fillRect(-carW / 2 + 8, carH / 2 - 10, carW - 16, 6);
-                      ctx.fillStyle = '#1a1a1a'; // Wheels
-                     const wheelW = 3, wheelH = 7;
-                     ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
-                     ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 4, wheelW, wheelH);
-                     ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
-                     ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 11, wheelW, wheelH);
-                 } else if (gameState.player.currentVehicleType === 'buggy') {
-                      ctx.fillRect(-carW / 2, -carH / 2 + carH * 0.2, carW, carH * 0.8); // Main body
-                      ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Roll cage
-                      ctx.fillRect(-carW / 2 + 2, -carH / 2, carW - 4, carH * 0.3);
-                       ctx.fillStyle = '#1a1a1a'; // Wheels
-                      const wheelW = 5, wheelH = 10;
-                      ctx.fillRect(-carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                      ctx.fillRect(carW / 2 - wheelW/2, -carH / 2 + 5, wheelW, wheelH);
-                      ctx.fillRect(-carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
-                      ctx.fillRect(carW / 2 - wheelW/2, carH / 2 - 15, wheelW, wheelH);
-                 }
-
-             }
-             else {
-                 drawCharacter(gameState.player, true); // Use shared drawing function
-             }
-            ctx.restore();
-        }
-        function drawMiniMap() { const mapScale = miniMapCtx.canvas.width / gameState.world.width; miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)'; miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height); gameState.world.impassableZones.forEach(zone => { miniMapCtx.fillStyle = zone.color; miniMapCtx.fillRect(zone.x * mapScale, zone.y * mapScale, zone.width * mapScale, zone.height * mapScale); }); miniMapCtx.strokeStyle = '#666'; miniMapCtx.lineWidth = 1.5; roads.forEach(road => { miniMapCtx.beginPath(); miniMapCtx.moveTo(road.x1 * mapScale, road.y1 * mapScale); miniMapCtx.lineTo(road.x2 * mapScale, road.y2 * mapScale); miniMapCtx.stroke(); }); miniMapCtx.fillStyle = '#ff3333'; gameState.world.gasStations.forEach(s => { miniMapCtx.fillRect(s.x * mapScale - 1.5, s.y * mapScale - 1.5, 3, 3); }); miniMapCtx.fillStyle = '#aaa'; gameState.world.vehicles.forEach(car => { miniMapCtx.fillRect(car.x * mapScale - 1, car.y * mapScale - 1, 2, 2); }); miniMapCtx.fillStyle = '#008000'; gameState.world.enemies.forEach(e => { miniMapCtx.fillRect(e.x*mapScale -1, e.y*mapScale-1, 2, 2); }); const playerMapX = gameState.player.x * mapScale; const playerMapY = gameState.player.y * mapScale; if (gameState.playerState === 'driving') { miniMapCtx.fillStyle = '#0f0'; miniMapCtx.beginPath(); miniMapCtx.arc(playerMapX, playerMapY, 2.5, 0, Math.PI * 2); miniMapCtx.fill(); } else { miniMapCtx.fillStyle = '#ff0'; miniMapCtx.fillRect(playerMapX - 1, playerMapY - 1, 2, 2); } const angleRad = gameState.player.angle * Math.PI / 180; const dirLen = 4; miniMapCtx.strokeStyle = miniMapCtx.fillStyle; miniMapCtx.lineWidth = 1; miniMapCtx.beginPath(); miniMapCtx.moveTo(playerMapX, playerMapY); miniMapCtx.lineTo(playerMapX + Math.sin(angleRad) * dirLen, playerMapY - Math.cos(angleRad) * dirLen); miniMapCtx.stroke(); miniMapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; miniMapCtx.lineWidth = 1; miniMapCtx.strokeRect(
-                 gameState.camera.x * mapScale, gameState.camera.y * mapScale, gameState.camera.width * mapScale, gameState.camera.height * mapScale ); }
-        function drawGameOver() { ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.font = "40px 'Courier New', monospace"; ctx.fillStyle = "red"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20); ctx.font = "20px 'Courier New', monospace"; ctx.fillStyle = "white"; ctx.fillText("Refresh to Restart", canvas.width / 2, canvas.height / 2 + 20); }
 
         // --- Initialization & Utilities ---
-        function initGame() { console.log("Initializing Game..."); createWorldElements(); initializeWorldObjects(); spawnInitialEnemies(30); spawnVehicles(10); updateHUD(); window.addEventListener('resize', handleResize); handleResize(); gameLoop(); console.log("Game Loop Started."); } // Spawn more enemies (zombies) and vehicles
-        function createWorldElements() {
-             // Wasteland trees (more sparse, different colors)
-             for (let i = 0; i < 100; i++) {
-                 gameState.world.trees.push({
-                     x: Math.random() * gameState.world.width,
-                     y: Math.random() * gameState.world.height,
-                     radius: 5 + Math.random() * 8, // Smaller trees
-                     color: `hsl(${60 + Math.random() * 30}, ${40 + Math.random() * 20}%, ${20 + Math.random() * 15}%)` // Brownish/yellowish
-                 });
-             }
-             // Wasteland buildings (fewer, more desaturated)
-             for (let i = 0; i < 20; i++) {
-                 gameState.world.buildings.push({
-                     x: Math.random() * gameState.world.width,
-                     y: Math.random() * gameState.world.height,
-                     width: 50 + Math.random() * 80, // Slightly smaller buildings
-                     height: 50 + Math.random() * 80,
-                     color: `hsl(${30 + Math.random() * 20}, ${10 + Math.random() * 10}%, ${40 + Math.random() * 20}%)` // Greyish/brownish
-                 });
-             }
-             // Wasteland obstacles (rocks, debris)
-             for (let i = 0; i < 100; i++) {
-                 gameState.world.obstacles.push({
-                     x: Math.random() * gameState.world.width,
-                     y: Math.random() * gameState.world.height,
-                     width: 15 + Math.random() * 25, // Larger obstacles
-                     height: 15 + Math.random() * 25,
-                     color: '#555' // Grey rocks
-                 });
-             }
-             // Gas stations (same as before)
-             for (let i = 0; i < 5; i++) {
-                 gameState.world.gasStations.push({ x: 400 + Math.random() * (gameState.world.width - 800), y: 400 + Math.random() * (gameState.world.height - 800), width: 50, height: 60, color: '#c00' });
-             }
-        }
-        function initializeWorldObjects() {
-             const validTrees = []; gameState.world.trees.forEach(tree => { if (!isOnRoad(tree.x, tree.y, tree.radius * 1.5)) { validTrees.push(tree); } }); gameState.world.trees = validTrees.slice(0, 100); // Limit trees
-             const validBuildings = []; gameState.world.buildings.forEach(b => { if (!isOnRoad(b.x + b.width/2, b.y + b.height/2, Math.max(b.width, b.height) * 0.7)) { validBuildings.push(b); } }); gameState.world.buildings = validBuildings.slice(0, 20); // Limit buildings
-             const validObstacles = []; gameState.world.obstacles.forEach(o => { if (!isOnRoad(o.x + o.width/2, o.y + o.height/2, Math.max(o.width, o.height))) { validObstacles.push(o); } }); gameState.world.obstacles = validObstacles.slice(0, 100); // Limit obstacles
-             console.log(`World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`);
-        }
-        function isOnRoad(x, y, buffer) { for (const road of roads) { const dx = road.x2 - road.x1, dy = road.y2 - road.y1; const lenSq = dx*dx + dy*dy; if (lenSq === 0) continue; let t = ((x - road.x1) * dx + (y - road.y1) * dy) / lenSq; t = Math.max(0, Math.min(1, t)); const closestX = road.x1 + t * dx; const closestY = road.y1 + t * dy; const distSq = (x - closestX)**2 + (y - closestY)**2; if (distSq < (gameState.world.roadWidth / 2 + buffer)**2) return true; } return false; }
-        function spawnInitialEnemies(count) { let spawned = 0; let attempts = 0; while (spawned < count && attempts < count * 10) { attempts++; const x = Math.random() * gameState.world.width; const y = Math.random() * gameState.world.height; const dx = x - gameState.player.x; const dy = y - gameState.player.y; if (dx*dx + dy*dy < 500*500) continue; if (isOnRoad(x, y, 20)) continue; let inObject = false; const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones]; for (const obj of worldGeometry) { if (x > obj.x && x < obj.x + obj.width && y > obj.y && y < obj.y + obj.height) { inObject = true; break; } } if (inObject) continue; spawnEnemy(x, y); spawned++; } console.log(`Spawned ${spawned} enemies.`); }
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(gameState.world.grassColor); // Wasteland color
+            scene.fog = new THREE.Fog(gameState.world.grassColor, 50, 150); // Fog params: color, near, far
 
-        // --- Spawn Vehicles ---
-        function spawnVehicles(count) {
-            let spawned = 0;
-            let attempts = 0;
-            const vehicleTypes = Object.keys(VEHICLE_TYPES);
+            camera = new THREE.PerspectiveCamera(75, gameCanvasWidth / gameCanvasHeight, 0.1, 1000);
+            // Initial camera position (will be updated to follow player)
+            camera.position.set(gameState.player.x, 20, gameState.player.z + 30);
+            camera.lookAt(gameState.player.x, 0, gameState.player.z);
 
-            while (spawned < count && attempts < count * 20) { // More attempts for vehicles
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(gameCanvasWidth, gameCanvasHeight);
+            // Set pixelated look (optional, may reduce quality)
+            // renderer.setPixelRatio(window.devicePixelRatio / 2); // Render at lower res
+            // renderer.domElement.style.width = gameCanvasWidth + "px";
+            // renderer.domElement.style.height = gameCanvasHeight + "px";
+            // renderer.domElement.style.imageRendering = "pixelated"; // CSS property
+            document.getElementById('game-container').appendChild(renderer.domElement);
+            renderer.domElement.id = "gameCanvas3D"; // Assign an ID
+
+            clock = new THREE.Clock();
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xcccccc, 0.6); // Soft ambient light
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(30, 50, 20); // Angled sun light
+            directionalLight.castShadow = false; // Shadows are complex, disabled for now
+            scene.add(directionalLight);
+
+            // Ground Plane
+            const groundGeometry = new THREE.PlaneGeometry(gameState.world.width, gameState.world.height);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: gameState.world.grassColor });
+            groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+            groundPlane.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+            groundPlane.position.y = 0; // At the base of the world
+            scene.add(groundPlane);
+        }
+
+        function initGame() {
+            console.log("Initializing Game (3D)...");
+            initThreeJS(); // Initialize Three.js components first
+
+            // Player mesh needs to be created based on initial state
+            if (gameState.playerState === 'driving') {
+                gameState.player.mesh = createVehicleMesh(gameState.player.currentVehicleType, gameState.player.color);
+                gameState.player.mesh.position.set(gameState.player.x, VEHICLE_TYPES[gameState.player.currentVehicleType].height / 2, gameState.player.z);
+            } else { // onFoot
+                gameState.player.mesh = createCharacterMesh(true);
+                gameState.player.mesh.position.set(gameState.player.x, PLAYER_PED_HEIGHT / 2, gameState.player.z);
+            }
+            gameState.player.mesh.rotation.y = gameState.player.angle;
+            scene.add(gameState.player.mesh);
+            gameState.player.boundingBox.setFromObject(gameState.player.mesh); // Initial bounding box
+
+
+            createWorldElements3D(); // Create 3D representations of world objects
+            initializeWorldObjects3D(); // Additional setup if needed (e.g. non-road checks not really needed if generation is smart)
+
+            spawnInitialEnemies(30); // Spawns enemies with 3D meshes
+            spawnVehicles(10);    // Spawns vehicles with 3D meshes
+
+            updateHUD(); // Initial HUD update
+            window.addEventListener('resize', handleResize);
+            handleResize(); // Initial sizing
+            if (gameState.playerState === 'driving') startEngineNoise(); // Start engine if driving initially
+            gameLoop();
+            console.log("Game Loop Started.");
+        }
+
+
+        function createWorldElements3D() {
+            // Roads (as textured planes)
+            roads.forEach(roadData => {
+                const dx = roadData.x2 - roadData.x1;
+                const dz = roadData.z2 - roadData.z1;
+                const length = Math.sqrt(dx * dx + dz * dz);
+                if (length === 0) return;
+
+                const roadGeo = new THREE.PlaneGeometry(gameState.world.roadWidth, length);
+                //const roadMat = new THREE.MeshLambertMaterial({ color: gameState.world.roadColor });
+                const roadMat = new THREE.MeshLambertMaterial({ map: roadTexture, color: gameState.world.roadColor });
+                roadMat.map.repeat.set(1, length / gameState.world.roadWidth); // Repeat texture along length
+
+
+                const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+                roadMesh.rotation.x = -Math.PI / 2;
+                roadMesh.position.set(roadData.x1 + dx / 2, 0.01, roadData.z1 + dz / 2); // Midpoint, slightly above ground
+                roadMesh.rotation.z = -Math.atan2(dz, dx) + Math.PI/2; // Align with road direction (Plane's length is along its local Y)
+                scene.add(roadMesh);
+            });
+
+            // Buildings
+            for (let i = 0; i < 20; i++) {
+                const width = 5 + Math.random() * 8; // 3D units
+                const depth = 5 + Math.random() * 8;
+                const height = 8 + Math.random() * 12;
+                const x = Math.random() * gameState.world.width;
+                const z = Math.random() * gameState.world.height;
+                const color = (Math.random() * 0.5 + 0.2) * 0xffffff; // Greyish random
+
+                const geo = new THREE.BoxGeometry(width, height, depth);
+                const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(Math.random()*0.1+0.05, 0.1, Math.random()*0.3+0.3) });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, height / 2, z); // Centered on ground
+                const buildingLogic = {x, z, width, depth, height, color, mesh, boundingBox: new THREE.Box3().setFromObject(mesh)};
+
+                if(!isOnRoad3D(buildingLogic.boundingBox)) { // Basic check
+                    scene.add(mesh);
+                    gameState.world.buildings.push(buildingLogic);
+                }
+            }
+
+            // Trees (simple cylinders and spheres)
+            for (let i = 0; i < 100; i++) {
+                const trunkRadius = 0.2 + Math.random() * 0.3;
+                const trunkHeight = 2 + Math.random() * 3;
+                const leavesRadius = trunkRadius * (3 + Math.random() * 2);
+                const x = Math.random() * gameState.world.width;
+                const z = Math.random() * gameState.world.height;
+
+                const group = new THREE.Group();
+                const trunkGeo = new THREE.CylinderGeometry(trunkRadius*0.7, trunkRadius, trunkHeight, 8);
+                const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown
+                const trunkMesh = new THREE.Mesh(trunkGeo, trunkMat);
+                trunkMesh.position.y = trunkHeight / 2;
+                group.add(trunkMesh);
+
+                const leavesGeo = new THREE.SphereGeometry(leavesRadius, 8, 6); // Low poly sphere
+                const leavesMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(0.2 + Math.random()*0.15, 0.5, Math.random()*0.2+0.2) }); // Greenish
+                const leavesMesh = new THREE.Mesh(leavesGeo, leavesMat);
+                leavesMesh.position.y = trunkHeight + leavesRadius * 0.6;
+                group.add(leavesMesh);
+
+                group.position.set(x, 0, z);
+                const treeLogic = {x, z, trunkRadius, trunkHeight, leavesRadius, mesh: group, boundingBox: new THREE.Box3().setFromObject(group)};
+
+                 if(!isOnRoad3D(treeLogic.boundingBox)) {
+                    scene.add(group);
+                    gameState.world.trees.push(treeLogic);
+                 }
+            }
+
+
+            // Obstacles (rocks)
+            for (let i = 0; i < 100; i++) {
+                const size = 0.5 + Math.random() * 1.5; // Average size
+                const x = Math.random() * gameState.world.width;
+                const z = Math.random() * gameState.world.height;
+
+                const geo = new THREE.DodecahedronGeometry(size, 0); // Irregular shape
+                const mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, size / 2, z);
+                mesh.rotation.set(Math.random() * Math.PI,Math.random() * Math.PI,Math.random() * Math.PI);
+                const obsLogic = {x,z,width:size,depth:size,height:size, mesh, boundingBox: new THREE.Box3().setFromObject(mesh)};
+                if(!isOnRoad3D(obsLogic.boundingBox)) {
+                    scene.add(mesh);
+                    gameState.world.obstacles.push(obsLogic);
+                }
+            }
+
+            // Gas Stations
+            for (let i = 0; i < 5; i++) {
+                const width = 4, depth = 5, height = 3;
+                const x = 40 + Math.random() * (gameState.world.width - 80);
+                const z = 40 + Math.random() * (gameState.world.height - 80);
+
+                const geo = new THREE.BoxGeometry(width, height, depth);
+                const mat = new THREE.MeshLambertMaterial({ color: 0xcc0000 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x + width/2, height / 2, z + depth/2); // Original code used top-left anchors
+                const stationLogic = {x, z, width, depth, height, color: 0xcc0000, mesh, boundingBox: new THREE.Box3().setFromObject(mesh)};
+                // Ensure not on road before adding. AABB of mesh vs road AABBs
+                // Simplified: no check, gas stations might be on roads. Fine for wasteland.
+                scene.add(mesh);
+                gameState.world.gasStations.push(stationLogic);
+
+                // Add a little pump
+                const pumpGeo = new THREE.BoxGeometry(0.5,1.2,0.5);
+                const pumpMat = new THREE.MeshLambertMaterial({color:0x990000});
+                const pumpMesh = new THREE.Mesh(pumpGeo,pumpMat);
+                pumpMesh.position.set(x+width/2 - width*0.3, 1.2/2, z+depth/2 + depth*0.6); // In front
+                scene.add(pumpMesh);
+                // Note: this pump isn't part of gasStation boundingBox used in refuel check
+            }
+            // Impassable zones (visual representation)
+            gameState.world.impassableZones.forEach(zoneData => {
+                 const geo = new THREE.BoxGeometry(zoneData.width, zoneData.height, zoneData.depth);
+                 const mat = new THREE.MeshLambertMaterial({ color: zoneData.color, transparent: true, opacity: 0.4 });
+                 const mesh = new THREE.Mesh(geo, mat);
+                 mesh.position.set(zoneData.x + zoneData.width/2, zoneData.height/2, zoneData.z + zoneData.depth/2);
+                 scene.add(mesh);
+                 zoneData.mesh = mesh; // Store mesh
+                 zoneData.boundingBox = new THREE.Box3().setFromObject(mesh); // Store BB
+            });
+
+        }
+        function isOnRoad3D(objectBoundingBox, buffer = 1.0) {
+             for (const roadData of roads) {
+                 const dx = roadData.x2 - roadData.x1;
+                 const dz = roadData.z2 - roadData.z1;
+                 const length = Math.sqrt(dx*dx + dz*dz);
+                 if (length === 0) continue;
+
+                 // Create a bounding box for the road segment
+                 const roadCenterX = roadData.x1 + dx / 2;
+                 const roadCenterZ = roadData.z1 + dz / 2;
+                 const angle = Math.atan2(dz, dx);
+
+                 // Create a temporary box geometry for the road (not added to scene)
+                 const roadBox = new THREE.Box3();
+                 // This is tricky because Box3 is axis-aligned.
+                 // A simple AABB for the road overall. For more precision, OBB vs AABB needed.
+                 const minX = Math.min(roadData.x1, roadData.x2) - gameState.world.roadWidth / 2 - buffer;
+                 const maxX = Math.max(roadData.x1, roadData.x2) + gameState.world.roadWidth / 2 + buffer;
+                 const minZ = Math.min(roadData.z1, roadData.z2) - gameState.world.roadWidth / 2 - buffer;
+                 const maxZ = Math.max(roadData.z1, roadData.z2) + gameState.world.roadWidth / 2 + buffer;
+                 roadBox.set(new THREE.Vector3(minX, -1, minZ), new THREE.Vector3(maxX, 1, maxZ)); // Y irrelevant
+
+                 if (objectBoundingBox.intersectsBox(roadBox)) {
+                     return true; // Overlaps with the road's broader AABB
+                 }
+             }
+             return false;
+        }
+
+
+        function initializeWorldObjects3D() {
+            console.log(`3D World Initialized: ${gameState.world.trees.length} Trees, ${gameState.world.buildings.length} Buildings, ${gameState.world.obstacles.length} Obstacles`);
+        }
+
+
+        function spawnInitialEnemies(count) {
+            let spawned = 0; let attempts = 0;
+            while (spawned < count && attempts < count * 10) {
                 attempts++;
                 const x = Math.random() * gameState.world.width;
-                const y = Math.random() * gameState.world.height;
-
-                // Avoid spawning too close to the player's initial position
+                const z = Math.random() * gameState.world.height; // Z in 3D
                 const dx = x - gameState.player.x;
-                const dy = y - gameState.player.y;
-                if (dx * dx + dy * dy < 300 * 300) continue; // Spawn further away
+                const dz = z - gameState.player.z; // Z in 3D
+                if (dx*dx + dz*dz < 50*50) continue; // Min spawn dist (3D units)
 
-                // Avoid spawning on impassable zones or too close to other objects
+                const enemyTestBB = new THREE.Box3( // Approximate BB for test spawn location
+                    new THREE.Vector3(x - ENEMY_WIDTH/2, 0, z - ENEMY_WIDTH/2),
+                    new THREE.Vector3(x + ENEMY_WIDTH/2, ENEMY_HEIGHT, z + ENEMY_WIDTH/2)
+                );
+
+                if (isOnRoad3D(enemyTestBB, ENEMY_WIDTH)) continue;
+
                 let inObject = false;
-                const worldGeometry = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
-                for (const obj of worldGeometry) {
-                    // Simple AABB check with a buffer
-                    const buffer = 30; // Give some space around objects
-                    if (x > obj.x - buffer && x < obj.x + obj.width + buffer &&
-                        y > obj.y - buffer && y < obj.y + obj.height + buffer) {
-                        inObject = true;
-                        break;
+                const staticObjects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
+                for (const obj of staticObjects) {
+                    if (enemyTestBB.intersectsBox(obj.boundingBox)) {
+                        inObject = true; break;
                     }
                 }
                 if (inObject) continue;
 
-                // Select a random vehicle type
+                spawnEnemy(x, z);
+                spawned++;
+            }
+            console.log(`Spawned ${spawned} enemies.`);
+        }
+
+
+        function spawnVehicles(count) {
+            let spawned = 0; let attempts = 0;
+            const vehicleTypes = Object.keys(VEHICLE_TYPES);
+            while (spawned < count && attempts < count * 20) {
+                attempts++;
+                const x = Math.random() * gameState.world.width;
+                const z = Math.random() * gameState.world.height;
+                const dx = x - gameState.player.x;
+                const dz = z - gameState.player.z;
+                if (dx * dx + dz * dz < 30 * 30) continue; // Spawn further
+
                 const randomVehicleType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
                 const vehicleProps = VEHICLE_TYPES[randomVehicleType];
 
-                // Create the vehicle object
-                gameState.world.vehicles.push({
-                    x: x, y: y,
-                    width: vehicleProps.width,
-                    height: vehicleProps.height,
-                    angle: Math.random() * 360, // Random initial angle
-                    color: vehicleProps.color,
-                    maxSpeed: vehicleProps.maxSpeed,
-                    acceleration: vehicleProps.acceleration,
-                    deceleration: vehicleProps.deceleration,
-                    handling: vehicleProps.handling,
-                    fuelConsumption: vehicleProps.fuelConsumption,
-                    fuelLevel: 100, // Start with full fuel
-                    type: randomVehicleType // Store the type
-                });
+                const vehicleMesh = createVehicleMesh(randomVehicleType, vehicleProps.color);
+                vehicleMesh.position.set(x, vehicleProps.height / 2, z);
+                vehicleMesh.rotation.y = Math.random() * Math.PI * 2;
+                const vehicleBB = new THREE.Box3().setFromObject(vehicleMesh);
 
+
+                let inObject = false;
+                const staticObjects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
+                for (const obj of staticObjects) {
+                    if (vehicleBB.intersectsBox(obj.boundingBox)) { inObject = true; break; }
+                }
+                if (isOnRoad3D(vehicleBB, vehicleProps.width)) {
+                    //Allow spawn on road for vehicles
+                } else if(inObject) {
+                    continue; //Don't spawn in other objects if not on road
+                }
+
+
+                const vehicleLogic = {
+                    x: x, z: z,
+                    width: vehicleProps.width, height: vehicleProps.height, depth: vehicleProps.depth,
+                    angle: vehicleMesh.rotation.y, color: vehicleProps.color,
+                    maxSpeed: vehicleProps.maxSpeed, acceleration: vehicleProps.acceleration,
+                    deceleration: vehicleProps.deceleration, handling: vehicleProps.handling,
+                    fuelConsumption: vehicleProps.fuelConsumption, fuelLevel: 100,
+                    type: randomVehicleType,
+                    mesh: vehicleMesh,
+                    boundingBox: vehicleBB
+                };
+
+                gameState.world.vehicles.push(vehicleLogic);
+                threeObjects.vehicles.push(vehicleMesh); // Track the mesh
+                scene.add(vehicleMesh);
                 spawned++;
             }
             console.log(`Spawned ${spawned} vehicles.`);
         }
 
 
-        function handleResize() { const gameContainer = document.getElementById('game-container'); const windowWidth = window.innerWidth; const windowHeight = window.innerHeight; const aspectRatio = canvas.width / canvas.height; let newWidth = windowWidth * 0.98; let newHeight = newWidth / aspectRatio; if (newHeight > windowHeight * 0.98) { newHeight = windowHeight * 0.98; newWidth = newHeight * aspectRatio; } gameContainer.style.width = `${newWidth}px`; gameContainer.style.height = `${newHeight}px`; }
+        function handleResize() {
+            const gameContainer = document.getElementById('game-container');
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            // Keep original canvas aspect ratio for 3D view
+            const aspectRatio = gameCanvasWidth / gameCanvasHeight;
 
-        // --- Start Game ---
+            let newWidth = windowWidth * 0.98;
+            let newHeight = newWidth / aspectRatio;
+            if (newHeight > windowHeight * 0.98) {
+                newHeight = windowHeight * 0.98;
+                newWidth = newHeight * aspectRatio;
+            }
+            gameContainer.style.width = `${newWidth}px`;
+            gameContainer.style.height = `${newHeight}px`;
+
+            // Renderer size should match its canvas element style size for sharp picture
+            // but game internal dimensions (gameCanvasWidth/Height) define the world scale on screen
+            if(renderer && camera){
+                // Update renderer size for drawing buffer
+                renderer.setSize(newWidth, newHeight); // Use the actual display size
+                // If you want to maintain internal resolution fixed and just scale output:
+                // renderer.setSize(gameCanvasWidth, gameCanvasHeight);
+                // renderer.domElement.style.width = `${newWidth}px`;
+                // renderer.domElement.style.height = `${newHeight}px`;
+
+                camera.aspect = newWidth / newHeight; // Use newWidth/newHeight for aspect
+                camera.updateProjectionMatrix();
+            }
+        }
+
         window.onload = initGame;
-
     </script>
 </body>
 </html>
