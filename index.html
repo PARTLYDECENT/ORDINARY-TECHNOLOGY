@@ -432,24 +432,23 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
 
 
 
-
 <script>
   // --- Advanced Morphing Nodes Network System ---
   function createMorphingNodes() {
     const container = document.getElementById('particles');
-    if (!container) { 
-      console.error("Node container not found!"); 
-      return; 
+    if (!container) {
+      console.error("Node container not found!");
+      return;
     }
     container.innerHTML = ''; // Clear existing
 
     // Configuration
-    const baseNodeCount = 50;
+    const baseNodeCount = 70; // Increased slightly for better word definition
     const highPerfMultiplier = 1.5;
-    const lowPerfMultiplier = 0.6;
+    const lowPerfMultiplier = 0.5; // Adjusted for word clarity
     const isHighPerformance = window.innerWidth > 1024 && !navigator.userAgent.includes("Mobi");
     const isLowPerformance = window.innerWidth < 768 || navigator.userAgent.includes("Mobi");
-    const connectionThreshold = isLowPerformance ? 100 : (isHighPerformance ? 200 : 150);
+    const connectionThreshold = isLowPerformance ? 80 : (isHighPerformance ? 180 : 120); // Adjusted for potentially denser letter forms
 
     let nodeCount = baseNodeCount;
     if (isHighPerformance) { nodeCount = Math.floor(baseNodeCount * highPerfMultiplier); }
@@ -478,226 +477,298 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
     canvas.width = container.offsetWidth;
     canvas.height = container.offsetHeight;
     container.appendChild(canvas);
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     // Node storage
     const nodes = [];
+
+    // --- START: Letter Definition and Positioning Logic ---
+    const letterDefinitions = {
+        'O': [
+            {x: 0.3, y: 0.0}, {x: 0.5, y: 0.0}, {x: 0.7, y: 0.0},
+            {x: 0.1, y: 0.2}, {x: 0.9, y: 0.2},
+            {x: 0.0, y: 0.4}, {x: 1.0, y: 0.4},
+            {x: 0.0, y: 0.6}, {x: 1.0, y: 0.6},
+            {x: 0.1, y: 0.8}, {x: 0.9, y: 0.8},
+            {x: 0.3, y: 1.0}, {x: 0.5, y: 1.0}, {x: 0.7, y: 1.0}
+        ],
+        'R': [
+            {x: 0.0, y: 0.0}, {x: 0.0, y: 0.2}, {x: 0.0, y: 0.4}, {x: 0.0, y: 0.6}, {x: 0.0, y: 0.8}, {x: 0.0, y: 1.0}, // Spine
+            {x: 0.2, y: 0.0}, {x: 0.5, y: 0.0}, {x: 0.7, y: 0.0}, // Top bar
+            {x: 0.9, y: 0.15}, {x: 0.9, y: 0.35},               // Curve connector
+            {x: 0.7, y: 0.5}, {x: 0.4, y: 0.5},                 // Mid-arm
+            {x: 0.5, y: 0.7}, {x: 0.8, y: 1.0}                  // Leg
+        ],
+        'D': [
+            {x: 0.0, y: 0.0}, {x: 0.0, y: 0.2}, {x: 0.0, y: 0.4}, {x: 0.0, y: 0.6}, {x: 0.0, y: 0.8}, {x: 0.0, y: 1.0}, // Spine
+            {x: 0.2, y: 0.0}, {x: 0.4, y: 0.0},                 // Top bar
+            {x: 0.7, y: 0.1}, {x: 0.9, y: 0.3}, {x: 0.9, y: 0.7}, {x: 0.7, y: 0.9}, // Curve
+            {x: 0.4, y: 1.0}, {x: 0.2, y: 1.0}                  // Bottom bar
+        ],
+        'I': [
+            {x: 0.2, y: 0.0}, {x: 0.5, y: 0.0}, {x: 0.8, y: 0.0}, // Top bar
+            {x: 0.5, y: 0.2}, {x: 0.5, y: 0.4}, {x: 0.5, y: 0.6}, {x: 0.5, y: 0.8}, // Stem
+            {x: 0.2, y: 1.0}, {x: 0.5, y: 1.0}, {x: 0.8, y: 1.0}  // Bottom bar
+        ],
+        'N': [
+            {x: 0.0, y: 0.0}, {x: 0.0, y: 0.25}, {x: 0.0, y: 0.5}, {x: 0.0, y: 0.75}, {x: 0.0, y: 1.0}, // Left
+            {x: 0.25, y: 0.25}, {x: 0.5, y: 0.5}, {x: 0.75, y: 0.75},                                  // Diagonal
+            {x: 1.0, y: 0.0}, {x: 1.0, y: 0.25}, {x: 1.0, y: 0.5}, {x: 1.0, y: 0.75}, {x: 1.0, y: 1.0}  // Right
+        ],
+        'A': [
+            {x: 0.5, y: 0.0}, {x: 0.4, y: 0.1}, {x: 0.6, y: 0.1}, // Peak
+            {x: 0.25, y: 0.5}, {x: 0.75, y: 0.5},                 // Midpoints of legs
+            {x: 0.1, y: 0.9}, {x: 0.0, y: 1.0},                   // Left foot
+            {x: 0.9, y: 0.9}, {x: 1.0, y: 1.0},                   // Right foot
+            {x: 0.3, y: 0.6}, {x: 0.5, y: 0.6}, {x: 0.7, y: 0.6}   // Crossbar
+        ],
+        'Y': [
+            {x: 0.0, y: 0.0}, {x: 0.2, y: 0.2}, {x: 0.4, y: 0.4}, // Top-left arm
+            {x: 1.0, y: 0.0}, {x: 0.8, y: 0.2}, {x: 0.6, y: 0.4}, // Top-right arm
+            {x: 0.5, y: 0.5},{x: 0.5, y: 0.7}, {x: 0.5, y: 1.0}   // Stem
+        ]
+    };
+
+    const word = "ORDINARY";
+    const allWordPoints = [];
+    const numLetters = word.length;
+
+    const totalCanvasWidthPercent = 90; // Use 90% of canvas width for the word
+    const totalCanvasHeightPercent = 100;
+
+    const wordPaddingPercent = (100 - totalCanvasWidthPercent) / 2; // Padding on each side
+
+    // Adjusted letter height and vertical positioning
+    const letterHeightPercent = 35; // Percentage height of letters
+    const wordTopOffsetPercent = (totalCanvasHeightPercent - letterHeightPercent) / 2.5; // Adjust for better centering
+
+    const letterSpacingPercent = 2; // Spacing between letters as percentage of total canvas width
+
+    const totalLetterSpaceAllocated = totalCanvasWidthPercent - ((numLetters - 1) * letterSpacingPercent);
+    const letterWidthPercent = totalLetterSpaceAllocated / numLetters;
     
+    const jitterStrengthPercent = 0.75; // Percentage of canvas for jitter (e.g., 0.75 means +/- 0.75% canvas jitter)
+
+
+    for (let i = 0; i < numLetters; i++) {
+        const char = word[i].toUpperCase(); // Ensure character is uppercase for definition lookup
+        const letterDef = letterDefinitions[char];
+        if (letterDef) {
+            const letterGlobalStartXPercent = wordPaddingPercent + i * (letterWidthPercent + letterSpacingPercent);
+            letterDef.forEach(point => {
+                allWordPoints.push({
+                    // Calculate global X, Y percentages for the canvas
+                    x: letterGlobalStartXPercent + point.x * letterWidthPercent,
+                    y: wordTopOffsetPercent + point.y * letterHeightPercent,
+                });
+            });
+        }
+    }
+    // --- END: Letter Definition and Positioning Logic ---
+
     // Node Creation Loop
     for (let i = 0; i < nodeCount; i++) {
       const node = document.createElement('div');
       node.classList.add('node');
-      
-      // Node appearance
+
       const isHub = Math.random() > 0.85;
       const sizeMultiplier = isHub ? 2 : (Math.random() > 0.7 ? 1.5 : 1);
       const size = (Math.random() * 5 + 3) * sizeMultiplier;
-      
-      // Position (ensure within container)
-      const posX = Math.random() * 96 + 2; // 2% to 98%
-      const posY = Math.random() * 96 + 2; // 2% to 98%
-      
+
+      let posX, posY;
+      if (allWordPoints.length > 0) {
+          const pointIndex = i % allWordPoints.length;
+          const targetPoint = allWordPoints[pointIndex];
+          
+          posX = targetPoint.x + (Math.random() - 0.5) * jitterStrengthPercent * 2;
+          posY = targetPoint.y + (Math.random() - 0.5) * jitterStrengthPercent * 2;
+
+          // Clamp to canvas boundaries (e.g., 1% to 99%) to prevent nodes getting stuck at very edges
+          posX = Math.max(1, Math.min(99, posX));
+          posY = Math.max(1, Math.min(99, posY));
+      } else {
+          // Fallback to random if no points (e.g., empty word or error)
+          posX = Math.random() * 96 + 2;
+          posY = Math.random() * 96 + 2;
+      }
+
       node.style.width = `${size}px`;
       node.style.height = `${size}px`;
       node.style.left = `${posX}%`;
       node.style.top = `${posY}%`;
       node.style.position = 'absolute';
       node.style.borderRadius = Math.random() > 0.3 ? '50%' : `${Math.floor(Math.random() * 40 + 20)}%`;
-      
-      // Color
+
       let color;
       if (Math.random() > 0.4) {
         color = themeColors[Math.floor(Math.random() * themeColors.length)];
       } else {
         const hue = Math.random() * 360;
-        const saturation = 70 + Math.random() * 30; // 70-100%
-        const lightness = 55 + Math.random() * 15;  // 55-70%
+        const saturation = 70 + Math.random() * 30;
+        const lightness = 55 + Math.random() * 15;
         color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
       }
       node.style.background = color;
-      
-      // Visual effects
-      const baseOpacity = isHub ? 0.9 : (Math.random() * 0.5 + 0.3); // 0.3 to 0.8
+
+      const baseOpacity = isHub ? 0.9 : (Math.random() * 0.5 + 0.3);
       node.style.opacity = baseOpacity;
       node.style.boxShadow = isHub ? `0 0 ${Math.floor(size*1.5)}px ${color}` : '';
-      
+
       if (Math.random() > 0.7 && !isLowPerformance) {
         node.style.filter = `blur(${Math.random()}px)`;
       }
-      
+
       container.appendChild(node);
 
-      // Store node data for connections and animations
       const nodeData = {
         element: node,
-        x: posX,
+        x: posX, // Store the initial percentage-based position
         y: posY,
         size: size,
         color: color,
         isHub: isHub,
         baseOpacity: baseOpacity,
-        velocityX: (Math.random() - 0.5) * 0.05, // slow drift
-        velocityY: (Math.random() - 0.5) * 0.05,
+        velocityX: (Math.random() - 0.5) * 0.03, // Reduced velocity slightly
+        velocityY: (Math.random() - 0.5) * 0.03,
         connections: []
       };
-      
+
       nodes.push(nodeData);
-      
-      // Morphing animation using Web Animations API
       animateNodeMorphing(node, nodeData);
     }
-    
+
     // Connection and movement animation loop
     function animateNodes() {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Reset all connections
-      nodes.forEach(node => {
-        node.connections = [];
-      });
-      
-      // Calculate distances and create connections
+      nodes.forEach(node => { node.connections = []; });
+
       for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
-        
-        // Move node
+
         nodeA.x += nodeA.velocityX;
         nodeA.y += nodeA.velocityY;
-        
-        // Bounce off walls
-        if (nodeA.x < 2 || nodeA.x > 98) {
+
+        // Bounce off walls (using 1% and 99% as boundaries due to jitter and initial placement)
+        if (nodeA.x < 1 || nodeA.x > 99 - (nodeA.size / canvas.width * 100) ) { // Consider node size for right/bottom boundary
           nodeA.velocityX *= -1;
-          nodeA.x = Math.max(2, Math.min(98, nodeA.x));
+          nodeA.x = Math.max(1, Math.min(99 - (nodeA.size / canvas.width * 100), nodeA.x));
         }
-        if (nodeA.y < 2 || nodeA.y > 98) {
+        if (nodeA.y < 1 || nodeA.y > 99 - (nodeA.size / canvas.height * 100) ) { // Consider node size for right/bottom boundary
           nodeA.velocityY *= -1;
-          nodeA.y = Math.max(2, Math.min(98, nodeA.y));
+          nodeA.y = Math.max(1, Math.min(99 - (nodeA.size / canvas.height * 100), nodeA.y));
         }
-        
-        // Update position
+
         nodeA.element.style.left = `${nodeA.x}%`;
         nodeA.element.style.top = `${nodeA.y}%`;
-        
-        // Find connections
+
         for (let j = i + 1; j < nodes.length; j++) {
           const nodeB = nodes[j];
+          const dx_percent = nodeA.x - nodeB.x;
+          const dy_percent = nodeA.y - nodeB.y;
           
-          // Simple distance calculation (percentage-based)
-          const dx = Math.abs(nodeA.x - nodeB.x) * canvas.width / 100;
-          const dy = Math.abs(nodeA.y - nodeB.y) * canvas.height / 100;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          // Connect if within threshold (and not too many connections)
-          const connectionLimit = nodeA.isHub || nodeB.isHub ? 8 : 3;
-          if (distance < connectionThreshold && 
-              nodeA.connections.length < connectionLimit && 
+          // Convert percentage distance to pixel distance for accuracy
+          const dx_pixel = dx_percent * canvas.width / 100;
+          const dy_pixel = dy_percent * canvas.height / 100;
+          const distance = Math.sqrt(dx_pixel * dx_pixel + dy_pixel * dy_pixel);
+
+          const connectionLimit = nodeA.isHub || nodeB.isHub ? 8 : 4; // Slightly increased limit
+          if (distance < connectionThreshold &&
+              nodeA.connections.length < connectionLimit &&
               nodeB.connections.length < connectionLimit) {
-            
+
             nodeA.connections.push(nodeB);
             nodeB.connections.push(nodeA);
-            
-            // Draw connection
-            const alpha = Math.max(0.05, 1 - (distance / connectionThreshold)) * 
+
+            const alpha = Math.max(0.05, 1 - (distance / connectionThreshold)) *
                           Math.min(nodeA.baseOpacity, nodeB.baseOpacity) * 0.8;
-            
-            // Calculate actual pixel positions
+
             const x1 = nodeA.x * canvas.width / 100;
             const y1 = nodeA.y * canvas.height / 100;
             const x2 = nodeB.x * canvas.width / 100;
             const y2 = nodeB.y * canvas.height / 100;
-            
-            // Draw line
+
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
-            ctx.strokeStyle = `rgba(${getRGBValues(nodeA.color)}, ${alpha})`;
-            ctx.lineWidth = Math.min(nodeA.size, nodeB.size) * 0.2;
+            // Use a blend of both node colors or a fixed theme color for connections for consistency
+            const avgRGB = getAverageRGB(getRGBValues(nodeA.color), getRGBValues(nodeB.color));
+            ctx.strokeStyle = `rgba(${avgRGB}, ${alpha})`;
+            // ctx.strokeStyle = `rgba(${getRGBValues(themeColors[0])}, ${alpha * 0.7})`; // Alternative: use primary theme color
+            ctx.lineWidth = Math.min(nodeA.size, nodeB.size) * 0.15; // Thinner lines
             ctx.stroke();
           }
         }
       }
-      
       requestAnimationFrame(animateNodes);
     }
-    
     animateNodes();
   }
-  
+
   // Helper to extract RGB values from various color formats
   function getRGBValues(color) {
-    // For CSS variables
     if (color.startsWith('var(--rgb-')) {
       return color.replace('var(--rgb-', '').replace(')', '');
     }
-    
-    // For rgba
     if (color.startsWith('rgba')) {
       const match = color.match(/rgba\(([^)]+)\)/);
-      if (match && match[1]) {
-        return match[1].split(',').slice(0, 3).join(',');
-      }
+      if (match && match[1]) { return match[1].split(',').slice(0, 3).join(','); }
     }
-    
-    // For hex, hsl, etc. use a temporary element
+     if (color.startsWith('rgb')) { // Added to handle simple rgb()
+      const match = color.match(/rgb\(([^)]+)\)/);
+      if (match && match[1]) { return match[1]; }
+    }
+
+
     const temp = document.createElement('div');
-    temp.style.color = color;
-    document.body.appendChild(temp);
+    temp.style.color = color; // Handles CSS variables like var(--primary) by resolving them
+    document.body.appendChild(temp); // Must be in DOM to compute style
     const computedColor = getComputedStyle(temp).color;
     document.body.removeChild(temp);
-    
+
     const rgbMatch = computedColor.match(/rgb\(([^)]+)\)/);
     if (rgbMatch && rgbMatch[1]) {
       return rgbMatch[1];
     }
-    
-    return '255, 255, 255'; // Default to white
+    return '255,255,255'; // Default to white if parsing fails
   }
-  
+
+  // Helper to average two RGB strings
+  function getAverageRGB(rgb1Str, rgb2Str) {
+      const rgb1 = rgb1Str.split(',').map(Number);
+      const rgb2 = rgb2Str.split(',').map(Number);
+      const avgRgb = rgb1.map((c, i) => Math.floor((c + rgb2[i]) / 2));
+      return avgRgb.join(',');
+  }
+
+
   // Node morphing animation
   function animateNodeMorphing(node, nodeData) {
-    const duration = Math.random() * 8000 + 4000; // 4-12 seconds
-    
+    const duration = Math.random() * 8000 + 4000;
     const morphKeyframes = [
-      { 
-        transform: 'scale(1) rotate(0deg)',
-        opacity: nodeData.baseOpacity
-      },
-      { 
-        transform: `scale(${0.8 + Math.random() * 0.5}) rotate(${(Math.random() - 0.5) * 20}deg)`,
-        opacity: nodeData.baseOpacity * (0.7 + Math.random() * 0.6),
-        offset: 0.5
-      },
-      { 
-        transform: 'scale(1) rotate(0deg)',
-        opacity: nodeData.baseOpacity
-      }
+      { transform: 'scale(1) rotate(0deg)', opacity: nodeData.baseOpacity },
+      { transform: `scale(${0.8 + Math.random() * 0.5}) rotate(${(Math.random() - 0.5) * 20}deg)`, opacity: nodeData.baseOpacity * (0.7 + Math.random() * 0.6), offset: 0.5 },
+      { transform: 'scale(1) rotate(0deg)', opacity: nodeData.baseOpacity }
     ];
-    
     const morphOptions = {
       duration: duration,
       iterations: Infinity,
       easing: 'ease-in-out',
       direction: Math.random() > 0.5 ? 'alternate' : 'normal'
     };
-    
     node.animate(morphKeyframes, morphOptions);
-    
-    // For hub nodes, add a pulse effect
+
     if (nodeData.isHub) {
       const pulseKeyframes = [
         { boxShadow: `0 0 ${Math.floor(nodeData.size*0.8)}px ${nodeData.color}` },
         { boxShadow: `0 0 ${Math.floor(nodeData.size*2.5)}px ${nodeData.color}` },
         { boxShadow: `0 0 ${Math.floor(nodeData.size*0.8)}px ${nodeData.color}` }
       ];
-      
       const pulseOptions = {
-        duration: Math.random() * 3000 + 2000, // 2-5 seconds
+        duration: Math.random() * 3000 + 2000,
         iterations: Infinity,
         easing: 'ease-in-out'
       };
-      
       node.animate(pulseKeyframes, pulseOptions);
     }
   }
@@ -709,58 +780,61 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
     console.error("Error initializing morphing nodes:", error);
   }
 
-  // Handle resize and visibility
   let nodeResizeTimer = null;
-  
   function setupNodeTimers() {
     if (nodeResizeTimer) clearTimeout(nodeResizeTimer);
 
     window.addEventListener('resize', () => {
       clearTimeout(nodeResizeTimer);
       nodeResizeTimer = setTimeout(() => {
-        try { 
-          createMorphingNodes(); 
-        } catch (error) { 
-          console.error("Error recreating nodes on resize:", error); 
+        try {
+          // Check if canvas exists and update its dimensions BEFORE recreating nodes
+          const oldCanvas = document.getElementById('node-connections');
+          if (oldCanvas && oldCanvas.parentElement) {
+             oldCanvas.width = oldCanvas.parentElement.offsetWidth;
+             oldCanvas.height = oldCanvas.parentElement.offsetHeight;
+          }
+          createMorphingNodes();
+        } catch (error) {
+          console.error("Error recreating nodes on resize:", error);
         }
-      }, 300); // Debounce resize
+      }, 300);
     });
-    
-    // Update canvas size on window resize
-    window.addEventListener('resize', () => {
-      const canvas = document.getElementById('node-connections');
-      if (canvas) {
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-      }
-    });
+
+    // No need for separate canvas resize listener as createMorphingNodes handles new canvas size
   }
-  
-  // Additional CSS for nodes
+
   const style = document.createElement('style');
   style.textContent = `
     #particles {
-      position: relative;
+      position: relative; /* Ensure this is set for absolute positioning of canvas/nodes */
       overflow: hidden;
-      min-height: 300px;
+      min-height: 300px; /* Or whatever your container height is */
+      /* background-color: #1a1a2e; */ /* Example background, set your own */
     }
     .node {
       position: absolute;
       border-radius: 50%;
-      transition: transform 0.2s;
-      will-change: transform, opacity;
-      pointer-events: none;
-      z-index: 2;
+      transition: transform 0.2s; /* Base transition for smoothness if needed */
+      will-change: transform, opacity; /* Optimize animations */
+      pointer-events: none; /* Nodes should not interfere with mouse events */
+      z-index: 2; /* Nodes above canvas lines */
+    }
+    #node-connections { /* Canvas for lines */
+        display: block; /* Make sure canvas behaves as a block */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1; /* Lines behind nodes */
+        pointer-events: none;
     }
   `;
   document.head.appendChild(style);
-  
-  setupNodeTimers(); // Initial setup
+
+  setupNodeTimers();
 </script>
-
-
-
-
 
 
 
