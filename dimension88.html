@@ -1,1985 +1,460 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xenoscape Drifter: Anomaly Purge</title>
+    <title>Mars Base Simulation - Habitat Upgrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; padding: 0; background-color: #0a0510; overflow: hidden; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        #game-container { position: relative; /* image-rendering: pixelated; affects child canvas if it were 2D */ }
-        #gameCanvas3D { display: block; cursor: crosshair; } /* Renamed for clarity */
-        #hud { position: absolute; color: #00ffff; padding: 8px; font-size: 13px; text-align: left; top: 10px; left: 10px; background-color: rgba(20, 0, 30, 0.75); border-radius: 5px; border: 1px solid #400060; z-index: 10; }
-        #hud div { margin-bottom: 4px; }
-        #fuel-bar { width: 90px; height: 8px; background-color: #330033; margin: 3px 0; border: 1px solid #550055; overflow: hidden; border-radius: 2px; display: inline-block; vertical-align: middle; }
-        #fuel-level { height: 100%; background-color: #cc00ff; width: 100%; transition: width 0.5s ease-out; }
-        #health-bar { width: 90px; height: 8px; background-color: #400000; margin: 3px 0; border: 1px solid #600000; overflow: hidden; border-radius: 2px; display: inline-block; vertical-align: middle; }
-        #health-level { height: 100%; background-color: #00ccff; width: 100%; transition: width 0.2s linear; }
-        #location { margin-top: 4px; }
-        #mini-map { position: absolute; top: 10px; right: 10px; width: 120px; height: 120px; background-color: rgba(10, 0, 20, 0.8); border: 1px solid #400060; border-radius: 5px; z-index: 10; overflow: hidden; }
-        #mini-map canvas { display: block; }
-        #controls-display { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: #aaaaff; background-color: rgba(20, 0, 30, 0.75); padding: 4px 8px; border-radius: 5px; font-size: 11px; text-align: center; border: 1px solid #400060; z-index: 10; white-space: nowrap; }
-        #mission-text, #stats { display: none; } /* Hide placeholders */
-        #weapon-display { position: absolute; bottom: 10px; right: 10px; color: #00ffff; background-color: rgba(20, 0, 30, 0.75); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; border: 1px solid #400060;}
-        #vehicle-display { position: absolute; top: 40px; left: 10px; color: #00ffff; background-color: rgba(20, 0, 30, 0.75); padding: 4px 8px; border-radius: 5px; font-size: 13px; z-index: 10; display: none; border: 1px solid #400060;}
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #D2B48C; /* Tan background */
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        #simulation-canvas {
+            display: block;
+            width: 100%;
+            max-width: 1000px; /* Limit max width */
+            height: 60vh; /* Responsive height */
+            background-color: #f8c8a0; /* Martian-like background for canvas area */
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 2px solid #8B4513; /* Saddle Brown border */
+            cursor: pointer; /* Change cursor to pointer for interaction */
+        }
+        .ui-panel {
+            background-color: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            font-size: 0.875rem; /* text-sm */
+        }
+        .log-panel {
+             background-color: rgba(230, 230, 230, 0.9); /* Light gray */
+        }
+        .top-ui {
+             z-index: 10;
+             position: relative;
+        }
+        .game-status-panel {
+             background-color: rgba(210, 230, 255, 0.9); /* Light blue panel */
+             border: 1px solid #90cdf4;
+        }
     </style>
 </head>
-<body>
-    <div id="game-container">
-        <div id="hud">
-             <div id="health-line">CORE: <div id="health-bar"><div id="health-level"></div></div></div>
-             <div id="speed-line">VEL: <span id="speed">0</span></div>
-             <div id="fuel-line">X-CELL: <div id="fuel-bar"><div id="fuel-level"></div></div></div>
-             <div id="location">SECTOR: UNKNOWN</div>
-             <div id="enemy-count">ANOMALIES: <span id="enemies-left">0</span></div>
-         </div>
-         <div id="mini-map"></div>
-         <div id="controls-display">
-             WASD/Arrows: Navigate | E: Interface | F: Recharge | SPACE: Inertial Damp | SHIFT/Click: Activate Emitter | Q: Cycle Emitter
-         </div>
-        <div id="weapon-display">EMITTER: PULSE</div>
-        <div id="vehicle-display">DRIFTER: NONE</div>
-        <div id="mission-text"></div>
-        <div id="stats"></div>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 class="text-3xl font-bold text-red-900 mb-4 top-ui">Mars Base Alpha - Resource Collection</h1>
+
+    <div class="w-full max-w-4xl flex flex-col items-center">
+
+        <canvas id="simulation-canvas" class="mb-4"></canvas>
+
+        <div class="w-full grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 top-ui">
+             <div id="weather-indicator" class="ui-panel col-span-1">
+                <h3 class="font-semibold mb-1 text-center border-b pb-1">Environment</h3>
+                <p><strong>Temp:</strong> <span id="temperature">-60</span>°C</p>
+                <p><strong>Wind:</strong> <span id="wind-speed">15</span> kph</p>
+                <p><strong>Status:</strong> <span id="weather-status" class="font-semibold text-green-700">Clear</span></p>
+                 <p><strong>Power:</strong> <span id="base-power">100</span>%</p>
+            </div>
+
+             <div id="game-status" class="ui-panel game-status-panel col-span-1">
+                 <h3 class="font-semibold mb-1 text-center border-b pb-1">Operations</h3>
+                <p><strong>Holding:</strong> <span id="holding-status" class="font-medium text-gray-700">Idle</span></p>
+                <p><strong>Iron Panels:</strong> <span id="iron-panels-count" class="font-bold text-blue-800">0</span></p>
+                <p><strong>Habitat Status:</strong> <span id="habitat-status" class="font-medium text-gray-700">Standard</span></p> </div>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center sm:justify-end space-y-2 sm:space-y-0 sm:space-x-4 col-span-1">
+                <button id="advance-time-btn" class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition duration-200">Advance Time (1 Sol)</button>
+                <button id="toggle-storm-btn" class="w-full sm:w-auto px-4 py-2 bg-orange-600 text-white rounded-lg shadow hover:bg-orange-700 transition duration-200">Toggle Dust Storm</button>
+            </div>
+        </div>
+
+        <div id="message-log" class="ui-panel log-panel w-full h-24 overflow-y-auto text-sm top-ui">
+            <p>Simulation started. Collect 5 Iron Panels to upgrade the habitat!</p>
+        </div>
     </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        // --- Three.js Setup ---
-        let scene, camera, renderer, clock;
-        const gameCanvasWidth = 800;
-        const gameCanvasHeight = 600;
-        let groundPlane;
-        const textureLoader = new THREE.TextureLoader();
-
-        const threeObjects = {
-            player: null,
-            enemies: [],
-            vehicles: [],
-            buildings: [],
-            trees: [], // Renamed to flora, but variable kept for simplicity
-            obstacles: [],
-            gasStations: [], // Renamed to energyPylons, variable kept
-            projectiles: [],
-            skidMarks: [], // Renamed to energyTrails
-            dustParticles: null, // Renamed to xenoSpores
-            explosions: [],
-            muzzleFlashes: [], // Renamed to emitterFlashes
-            hitSparks: [] // Renamed to ichorSplats
-        };
-
-        const miniMapContainer = document.getElementById('mini-map');
-        const miniMapCtx = document.createElement('canvas').getContext('2d');
-        miniMapContainer.appendChild(miniMapCtx.canvas);
-        miniMapCtx.canvas.width = 120; miniMapCtx.canvas.height = 120;
-
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        let engineNoiseOscillator = null;
-        let engineNoiseGain = null;
-
-        const PLAYER_PED_WIDTH = 0.7; // Slightly wider for alien physiology
-        const PLAYER_PED_HEIGHT = 2.0; // Slightly taller
-        const ENEMY_WIDTH = 0.8; // Anomalies might be amorphous
-        const ENEMY_HEIGHT = 1.5; // Variable height
-
-        const PROJECTILE_SPEED = 25;
-        const PROJECTILE_LIFESPAN = 1.8;
-        const PROJECTILE_DAMAGE_PULSE = 20;
-        const PROJECTILE_DAMAGE_SHARD = 12;
-
-        const ENEMY_HEALTH = 80;
-        const ENEMY_SPEED = 1.0; // Slower, more deliberate
-        const ENEMY_CHASE_DIST = 30;
-        const ENEMY_ATTACK_DIST = 1.8;
-        const ENEMY_ATTACK_COOLDOWN = 70;
-        const ENEMY_DAMAGE_MELEE = 10;
-
-        const PLAYER_ENTER_VEHICLE_RANGE = 3.5;
-        const ANIM_SPEED = 7;
-
-        const WEAPONS = {
-            'pulse_emitter': { fireRate: 12, bulletSpread: 2, damage: PROJECTILE_DAMAGE_PULSE, color: 0x00ffff }, // Cyan
-            'shard_disruptor': { fireRate: 4, bulletSpread: 6, damage: PROJECTILE_DAMAGE_SHARD, color: 0xff00ff } // Magenta
-        };
-
-        const VEHICLE_TYPES = {
-            'phase_skimmer': { // Was sedan
-                width: 2.2, height: 1.4, depth: 4.2,
-                maxSpeed: 18, acceleration: 3.5, deceleration: 2.2, handling: 1.6,
-                fuelConsumption: 0.018, color: 0x6A0DAD // Deep Purple
-            },
-            'quasar_hauler': { // Was truck
-                width: 2.8, height: 2.5, depth: 6.0,
-                maxSpeed: 12, acceleration: 2.2, deceleration: 1.2, handling: 0.9,
-                fuelConsumption: 0.028, color: 0x8B4513 // SaddleBrown (alien industrial)
-            },
-            'void_striker': { // Was sportsCar
-                width: 2.0, height: 1.2, depth: 4.5,
-                maxSpeed: 25, acceleration: 5.5, deceleration: 2.8, handling: 1.9,
-                fuelConsumption: 0.022, color: 0x00CED1 // DarkTurquoise
-            },
-            'dune_wraith': { // Was buggy
-                width: 2.1, height: 1.8, depth: 3.5,
-                maxSpeed: 20, acceleration: 4.5, deceleration: 1.8, handling: 2.2,
-                fuelConsumption: 0.015, color: 0x556B2F // DarkOliveGreen
-            }
-        };
-
-        const gameState = {
-            playerState: 'driving',
-            player: {
-                x: 150, z: 150, y_height: 0,
-                speed: 0, angle: 0,
-                fuelLevel: 100, health: 100, maxHealth: 100,
-                pedWidth: PLAYER_PED_WIDTH, pedHeight: PLAYER_PED_HEIGHT, pedSpeed: 2.2,
-                isMoving: false,
-                animTimer: 0, animFrame: 0,
-                animSpeed: ANIM_SPEED,
-                fireCooldown: 0,
-                currentWeapon: 'pulse_emitter',
-                hasMachineGun: false, // Renamed to hasShardDisruptor internally
-                killedEnemiesCount: 0,
-                width: VEHICLE_TYPES.phase_skimmer.width,
-                vehicle_height_prop: VEHICLE_TYPES.phase_skimmer.height,
-                depth: VEHICLE_TYPES.phase_skimmer.depth,
-                maxSpeed: VEHICLE_TYPES.phase_skimmer.maxSpeed,
-                acceleration: VEHICLE_TYPES.phase_skimmer.acceleration,
-                deceleration: VEHICLE_TYPES.phase_skimmer.deceleration,
-                handling: VEHICLE_TYPES.phase_skimmer.handling,
-                fuelConsumption: VEHICLE_TYPES.phase_skimmer.fuelConsumption,
-                color: VEHICLE_TYPES.phase_skimmer.color,
-                currentVehicleType: 'phase_skimmer',
-                mesh: null,
-                boundingBox: new THREE.Box3()
-            },
-            controls: { up: false, down: false, left: false, right: false, handbrake: false, refuel: false, fire: false, enterExit: false, enterExitProcessed: false, switchWeapon: false, switchWeaponProcessed: false, mouseFire: false },
-            world: {
-                width: 300, height: 300,
-                roadWidth: 7, // Wider alien pathways
-                grassColor: 0x1a0a2a, // Deep violet-blue ground
-                roadColor: 0x301040, // Darker purple-grey roads
-                lineColor: 0x9900FF, // Bright purple glowing lines
-                lineWidth: 0.3, // Thicker lines
-                trees: [], buildings: [], obstacles: [], gasStations: [],
-                vehicles: [], enemies: [], projectiles: [],
-                impassableZones: [ { type: 'crystal_formation', x: 220, z: 220, width: 50, depth: 60, height: 10, color: 0x7030A0 }, { type: 'ancient_ruins', x: 10, z: 10, width: 40, depth: 50, height: 12, color: 0x4A4A70 } ],
-                startTime: Date.now()
-            },
-            fx: {
-                skidMarks: [], dustParticlesData: [], explosionsData: [], muzzleFlashesData: [], hitSparksData: []
-            },
-            zones: [
-                {name: "KRYLLIDIAN NESTS", x: 100, z: 100, radius: 60},
-                {name: "CRYSTAL SPIRES", x: 60, z: 220, radius: 50},
-                {name: "XENOFORM PLAINS", x: 220, z: 180, radius: 40},
-                {name: "ANCIENT MYCELIA", x: 200, z: 50, radius: 35}
-            ],
-            gameOver: false
-        };
-
-        const roads = [ // (x1, z1) to (x2, z2) in 3D
-            {x1: 0, z1: 100, x2: gameState.world.width, z2: 100},
-            {x1: 0, z1: 200, x2: gameState.world.width, z2: 200},
-            {x1: 100, z1: 0, x2: 100, z2: gameState.world.height},
-            {x1: 200, z1: 0, x2: 200, z2: gameState.world.height},
-            {x1: 50, z1: 50, x2: 70, z2: 70}, {x1: 80, z1: 80, x2: 150, z2: 150},
-            {x1: 250, z1: 50, x2: 230, z2: 70}, {x1: 220, z1: 80, x2: 150, z2: 150},
-            {x1: 50, z1: 250, x2: 70, z2: 230}, {x1: 80, z1: 220, x2: 150, z2: 150},
-            {x1: 250, z1: 250, x2: 230, z2: 230}, {x1: 220, z1: 220, x2: 150, z2: 150},
-        ];
-        const roadTexture = createRoadTexture();
-
-
-        window.addEventListener('keydown', (e) => { handleKeyInput(e, true); });
-        window.addEventListener('keyup', (e) => { handleKeyInput(e, false); });
-        document.getElementById('game-container').addEventListener('mousedown', (e) => { if (e.button === 0) gameState.controls.mouseFire = true; });
-        document.getElementById('game-container').addEventListener('mouseup', (e) => { if (e.button === 0) gameState.controls.mouseFire = false; });
-
-
-        function handleKeyInput(e, isPressed) {
-            const key = e.key.toLowerCase();
-            switch(key) {
-                case 'arrowup': case 'w': gameState.controls.up = isPressed; break;
-                case 'arrowdown': case 's': gameState.controls.down = isPressed; break;
-                case 'arrowleft': case 'a': gameState.controls.left = isPressed; break;
-                case 'arrowright': case 'd': gameState.controls.right = isPressed; break;
-                case ' ': gameState.controls.handbrake = isPressed; break;
-                case 'f': gameState.controls.refuel = isPressed; break;
-                case 'shift': gameState.controls.fire = isPressed; break;
-                case 'e':
-                    if (isPressed && !gameState.controls.enterExitProcessed) {
-                        gameState.controls.enterExit = true;
-                        gameState.controls.enterExitProcessed = true;
-                    } else if (!isPressed) {
-                        gameState.controls.enterExitProcessed = false;
-                    }
-                    break;
-                case 'q':
-                    if (isPressed && !gameState.controls.switchWeaponProcessed) {
-                         gameState.controls.switchWeapon = true;
-                         gameState.controls.switchWeaponProcessed = true;
-                    } else if (!isPressed) {
-                         gameState.controls.switchWeaponProcessed = false;
-                    }
-                    break;
-            }
-            if ((key === ' ' || key === 'shift' || key.startsWith('arrow') || ['w','a','s','d','e','f','q'].includes(key)) && isPressed) {
-                 e.preventDefault();
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
             }
         }
-
-        function handleWeaponSwitch() {
-            if (!gameState.controls.switchWeapon || gameState.playerState !== 'onFoot') return;
-            if (gameState.player.hasMachineGun) { // Internally still 'hasMachineGun'
-                gameState.player.currentWeapon = gameState.player.currentWeapon === 'pulse_emitter' ? 'shard_disruptor' : 'pulse_emitter';
-            }
-            document.getElementById('weapon-display').textContent = `EMITTER: ${gameState.player.currentWeapon.replace('_emitter','').replace('_disruptor','').toUpperCase()}`;
-            gameState.controls.switchWeapon = false;
-        }
-
-        function handleEnterExitAction() {
-            if (!gameState.controls.enterExit) return;
-            const delta = clock.getDelta();
-
-            if (gameState.playerState === 'driving') {
-                if (gameState.player.mesh) scene.remove(gameState.player.mesh);
-
-                const parkedCarLogic = {
-                    x: gameState.player.x, z: gameState.player.z,
-                    width: gameState.player.width, height: gameState.player.vehicle_height_prop, depth: gameState.player.depth,
-                    angle: gameState.player.angle, color: gameState.player.color,
-                    maxSpeed: gameState.player.maxSpeed, handling: gameState.player.handling,
-                    fuelLevel: gameState.player.fuelLevel,
-                    type: gameState.player.currentVehicleType,
-                    mesh: createVehicleMesh(gameState.player.currentVehicleType, gameState.player.color),
-                    boundingBox: new THREE.Box3()
-                };
-                parkedCarLogic.mesh.position.set(parkedCarLogic.x, parkedCarLogic.height / 2, parkedCarLogic.z);
-                parkedCarLogic.mesh.rotation.y = parkedCarLogic.angle;
-                parkedCarLogic.boundingBox.setFromObject(parkedCarLogic.mesh);
-                gameState.world.vehicles.push(parkedCarLogic);
-                threeObjects.vehicles.push(parkedCarLogic.mesh);
-                scene.add(parkedCarLogic.mesh);
-
-                gameState.playerState = 'onFoot';
-                const exitOffset = (gameState.player.width / 2) + 0.5 + gameState.player.pedWidth / 2;
-                gameState.player.x += Math.sin(gameState.player.angle) * exitOffset;
-                gameState.player.z += Math.cos(gameState.player.angle) * exitOffset;
-                gameState.player.speed = 0;
-
-                gameState.player.mesh = createCharacterMesh(true); // Player is type true
-                gameState.player.mesh.position.set(gameState.player.x, gameState.player.pedHeight / 2, gameState.player.z);
-                gameState.player.mesh.rotation.y = gameState.player.angle;
-                scene.add(gameState.player.mesh);
-
-                stopEngineNoise();
-                document.getElementById('vehicle-display').style.display = 'none';
-            } else if (gameState.playerState === 'onFoot') {
-                let closestCarTuple = null;
-                let minDistanceSq = PLAYER_ENTER_VEHICLE_RANGE * PLAYER_ENTER_VEHICLE_RANGE;
-
-                for (let i = gameState.world.vehicles.length - 1; i >= 0; i--) {
-                    const carLogic = gameState.world.vehicles[i];
-                    const dx = gameState.player.x - carLogic.x;
-                    const dz = gameState.player.z - carLogic.z;
-                    const distanceSq = dx * dx + dz * dz;
-
-                    if (distanceSq < minDistanceSq) {
-                        minDistanceSq = distanceSq;
-                        closestCarTuple = { logic: carLogic, index: i };
-                    }
-                }
-
-                if (closestCarTuple) {
-                    const closestCar = closestCarTuple.logic;
-                    if (gameState.player.mesh) scene.remove(gameState.player.mesh);
-                    scene.remove(closestCar.mesh);
-                    const meshIndex = threeObjects.vehicles.indexOf(closestCar.mesh);
-                    if (meshIndex > -1) threeObjects.vehicles.splice(meshIndex, 1);
-
-                    gameState.playerState = 'driving';
-                    gameState.player.x = closestCar.x;
-                    gameState.player.z = closestCar.z;
-                    gameState.player.width = closestCar.width;
-                    gameState.player.vehicle_height_prop = closestCar.height;
-                    gameState.player.depth = closestCar.depth;
-                    gameState.player.angle = closestCar.angle;
-                    gameState.player.color = closestCar.color;
-                    gameState.player.maxSpeed = closestCar.maxSpeed;
-                    gameState.player.acceleration = VEHICLE_TYPES[closestCar.type].acceleration;
-                    gameState.player.deceleration = VEHICLE_TYPES[closestCar.type].deceleration;
-                    gameState.player.handling = VEHICLE_TYPES[closestCar.type].handling;
-                    gameState.player.fuelLevel = closestCar.fuelLevel;
-                    gameState.player.fuelConsumption = VEHICLE_TYPES[closestCar.type].fuelConsumption;
-                    gameState.player.speed = 0;
-                    gameState.player.currentVehicleType = closestCar.type;
-
-                    gameState.player.mesh = createVehicleMesh(gameState.player.currentVehicleType, gameState.player.color);
-                    gameState.player.mesh.position.set(gameState.player.x, gameState.player.vehicle_height_prop / 2, gameState.player.z);
-                    gameState.player.mesh.rotation.y = gameState.player.angle;
-                    scene.add(gameState.player.mesh);
-
-                    gameState.world.vehicles.splice(closestCarTuple.index, 1);
-
-                    startEngineNoise();
-                    document.getElementById('vehicle-display').textContent = `DRIFTER: ${gameState.player.currentVehicleType.replace(/_/g, ' ').toUpperCase()}`;
-                    document.getElementById('vehicle-display').style.display = '';
-                }
-            }
-            gameState.controls.enterExit = false;
-        }
-
-        function handlePlayerFiring() {
-            const currentWeaponProps = WEAPONS[gameState.player.currentWeapon];
-            const isFiring = (gameState.controls.fire || gameState.controls.mouseFire) && gameState.playerState === 'onFoot';
-
-            if (isFiring && gameState.player.fireCooldown <= 0) {
-                const spreadRad = (Math.random() - 0.5) * currentWeaponProps.bulletSpread * (Math.PI / 180);
-                const fireAngleRad = gameState.player.angle + spreadRad;
-
-                const muzzleOffsetX = Math.sin(fireAngleRad) * (PLAYER_PED_WIDTH / 2 + 0.3); // Emitter further out
-                const muzzleOffsetZ = Math.cos(fireAngleRad) * (PLAYER_PED_WIDTH / 2 + 0.3);
-                const startX = gameState.player.x + muzzleOffsetX;
-                const startZ = gameState.player.z + muzzleOffsetZ;
-                const startY = gameState.player.pedHeight * 0.7; // Emitter height
-
-                const projectileLogic = {
-                    x: startX, y: startY, z: startZ,
-                    vx: Math.sin(fireAngleRad) * PROJECTILE_SPEED,
-                    vy: 0,
-                    vz: Math.cos(fireAngleRad) * PROJECTILE_SPEED,
-                    lifespan: PROJECTILE_LIFESPAN,
-                    timer: 0,
-                    owner: 'player',
-                    damage: currentWeaponProps.damage,
-                    color: currentWeaponProps.color,
-                    mesh: createProjectileMesh(currentWeaponProps.color),
-                    boundingBox: new THREE.Box3()
-                };
-                projectileLogic.mesh.position.set(startX, startY, startZ);
-                // Orient projectile
-                projectileLogic.mesh.lookAt(startX + projectileLogic.vx, startY, startZ + projectileLogic.vz);
-                scene.add(projectileLogic.mesh);
-                gameState.world.projectiles.push(projectileLogic);
-                threeObjects.projectiles.push(projectileLogic.mesh);
-
-                createMuzzleFlashEffect(startX, startY, startZ, currentWeaponProps.color); // Emitter flash
-                playShotSound(gameState.player.currentWeapon);
-                gameState.player.fireCooldown = currentWeaponProps.fireRate;
-            }
-
-            if (gameState.player.fireCooldown > 0) {
-                gameState.player.fireCooldown--;
-            }
-        }
-
-
-        function gameLoop() {
-            if (gameState.gameOver) {
-                drawGameOver();
-                requestAnimationFrame(gameLoop);
-                return;
-            }
-            const delta = clock.getDelta();
-
-            handleEnterExitAction();
-            handleWeaponSwitch();
-            handlePlayerFiring();
-
-            updateGame(delta);
-            renderGame3D();
-            requestAnimationFrame(gameLoop);
-        }
-
-        function updateGame(delta) {
-            updatePlayerPosition(delta);
-            updateEnemies(delta);
-            updateProjectiles(delta);
-            updateCamera();
-            updateParticlesAndEffects3D(delta);
-            updateHUD();
-            checkGameOverCondition();
-        }
-
-        function updatePlayerPosition(delta) {
-            const oldX = gameState.player.x;
-            const oldZ = gameState.player.z;
-
-            if (gameState.playerState === 'driving') {
-                updateDrivingPhysics(delta);
-                checkGasStations(delta); // Check Energy Pylons
-                updateEngineNoise(); // Update Drifter hum
-            } else if (gameState.playerState === 'onFoot') {
-                updateWalkingPhysics(delta);
-                stopEngineNoise();
-                updateCharacterAnimation(gameState.player, gameState.player.mesh);
-            }
-
-            if (gameState.player.mesh) {
-                gameState.player.mesh.position.set(gameState.player.x,
-                    gameState.playerState === 'driving' ? gameState.player.vehicle_height_prop / 2 : gameState.player.pedHeight / 2,
-                    gameState.player.z);
-                gameState.player.mesh.rotation.y = gameState.player.angle;
-                gameState.player.boundingBox.setFromObject(gameState.player.mesh);
-            }
-
-            const collisionResult = checkCollisions(oldX, oldZ, gameState.player, gameState.playerState);
-            if(collisionResult.collided){
-                 gameState.player.x = collisionResult.newX;
-                 gameState.player.z = collisionResult.newZ;
-                 if (gameState.player.mesh) {
-                    gameState.player.mesh.position.x = collisionResult.newX;
-                    gameState.player.mesh.position.z = collisionResult.newZ;
-                 }
-            }
-        }
-
-        function updateDrivingPhysics(delta) {
-            const player = gameState.player;
-            const controls = gameState.controls;
-
-            if (controls.up && player.fuelLevel > 0) {
-                player.speed += player.acceleration * delta;
-                player.fuelLevel -= player.fuelConsumption * (0.5 + Math.abs(player.speed) / player.maxSpeed) * delta * 60;
-                if (Math.random() > 0.6 && Math.abs(player.speed) > 1) createDustParticleEffect(true); // Xeno Spores
-            } else if (controls.down) {
-                if (player.speed > 0.1) {
-                    player.speed -= player.deceleration * 3 * delta;
-                } else {
-                    player.speed -= (player.acceleration / 1.5) * delta;
-                    if (player.fuelLevel > 0) player.fuelLevel -= player.fuelConsumption * 0.5 * delta * 60;
-                }
-            } else {
-                if (Math.abs(player.speed) < player.deceleration * delta) player.speed = 0;
-                else if (player.speed > 0) player.speed -= player.deceleration * delta;
-                else player.speed += player.deceleration * delta;
-            }
-
-            player.speed = Math.max(-player.maxSpeed / 2, Math.min(player.speed, player.maxSpeed));
-
-            if (Math.abs(player.speed) > 0.1) {
-                let steeringFactor = player.handling * (controls.handbrake ? 1.8 : 1.0); // Inertial dampener bonus
-                let speedModifier = 1.0 - (Math.abs(player.speed) / (player.maxSpeed * 1.5));
-                speedModifier = Math.max(0.25, speedModifier); // More responsive turning at speed
-                let turnDirection = player.speed >= 0 ? 1 : -1;
-
-                if (controls.left) {
-                    player.angle += steeringFactor * speedModifier * turnDirection * delta;
-                    if (controls.handbrake && Math.abs(player.speed) > player.maxSpeed / 3) createSkidMarkEffect(); // Energy Trail
-                }
-                if (controls.right) {
-                    player.angle -= steeringFactor * speedModifier * turnDirection * delta;
-                    if (controls.handbrake && Math.abs(player.speed) > player.maxSpeed / 3) createSkidMarkEffect(); // Energy Trail
-                }
-            }
-             if (player.angle > Math.PI) player.angle -= Math.PI * 2;
-             if (player.angle < -Math.PI) player.angle += Math.PI * 2;
-
-            if (controls.handbrake && Math.abs(player.speed) > 0.5) { // Inertial Dampener
-                player.speed *= (1 - 0.65 * delta);
-                if (Math.random() > 0.3) createSkidMarkEffect(); // More frequent trails when damping
-            }
-
-            player.fuelLevel = Math.max(0, player.fuelLevel);
-
-            if (Math.abs(player.speed) > 0.01) {
-                player.x += Math.sin(player.angle) * player.speed * delta;
-                player.z += Math.cos(player.angle) * player.speed * delta;
-            }
-        }
-
-        function updateWalkingPhysics(delta) {
-            const player = gameState.player;
-            const controls = gameState.controls;
-            let moveX = 0; let moveZ = 0;
-            const currentSpeed = player.pedSpeed;
-
-            if (controls.up) moveZ += currentSpeed;
-            if (controls.down) moveZ -= currentSpeed;
-            if (controls.left) moveX -= currentSpeed;
-            if (controls.right) moveX += currentSpeed;
-
-            player.isMoving = (Math.abs(moveX) > 0.01 || Math.abs(moveZ) > 0.01);
-
-            if (moveX !== 0 || moveZ !== 0) {
-                 if (moveX !== 0 && moveZ !== 0) {
-                    const factor = currentSpeed / Math.sqrt(moveX * moveX + moveZ * moveZ);
-                    moveX *= factor; moveZ *= factor;
-                 }
-                 player.angle = Math.atan2(moveX, moveZ);
-            }
-
-            player.x += moveX * delta;
-            player.z += moveZ * delta;
-
-            if (player.isMoving) {
-                player.animTimer++;
-                if (player.animTimer >= player.animSpeed) {
-                    player.animTimer = 0;
-                    player.animFrame = (player.animFrame + 1) % 4; // Alien gait might have different frames
-                }
-            } else {
-                player.animFrame = 0; player.animTimer = 0;
-            }
-        }
-
-        function updateCharacterAnimation(entityLogic, entityMesh) {
-            if (!entityMesh || !entityMesh.getObjectByName) return;
-
-            const leftLeg = entityMesh.getObjectByName('leftLeg');
-            const rightLeg = entityMesh.getObjectByName('rightLeg');
-            // For anomalies, might have different limb names or more limbs
-            const limb1 = entityMesh.getObjectByName('limb1');
-            const limb2 = entityMesh.getObjectByName('limb2');
-            const limb3 = entityMesh.getObjectByName('limb3');
-            const limb4 = entityMesh.getObjectByName('limb4');
-
-
-            if (leftLeg && rightLeg) { // Player-like animation
-                const legYOffset = -entityLogic.pedHeight * 0.35;
-                const stride = entityLogic.pedHeight * 0.18;
-
-                if (!entityLogic.isMoving) {
-                    leftLeg.position.z = 0; rightLeg.position.z = 0;
-                    leftLeg.position.y = legYOffset; rightLeg.position.y = legYOffset;
-                } else {
-                    const frame = entityLogic.animFrame;
-                    const sway = Math.sin(Date.now() * 0.01 * entityLogic.animSpeed) * stride * 0.3;
-                    if (frame === 0 || frame === 2) {
-                        leftLeg.position.z = sway;        rightLeg.position.z = -sway;
-                        leftLeg.position.y = legYOffset; rightLeg.position.y = legYOffset;
-                    } else if (frame === 1) {
-                        leftLeg.position.z = stride;   rightLeg.position.z = -stride + sway;
-                        leftLeg.position.y = legYOffset - stride * 0.2; rightLeg.position.y = legYOffset + stride * 0.1;
-                    } else {
-                        leftLeg.position.z = -stride + sway;  rightLeg.position.z = stride;
-                        leftLeg.position.y = legYOffset + stride * 0.1; rightLeg.position.y = legYOffset - stride * 0.2;
-                    }
-                }
-            } else if (limb1 && limb2 && limb3 && limb4) { // Anomaly animation (example)
-                const baseRotSpeed = 0.05 * entityLogic.animSpeed * (entityLogic.isMoving ? 2 : 1);
-                const time = Date.now() * 0.001;
-                limb1.rotation.x = Math.sin(time * baseRotSpeed + 0) * 0.8;
-                limb1.rotation.z = Math.cos(time * baseRotSpeed * 1.2 + 0.5) * 0.6;
-                limb2.rotation.x = Math.sin(time * baseRotSpeed + Math.PI/2) * 0.8;
-                limb2.rotation.z = Math.cos(time * baseRotSpeed * 1.2 + Math.PI/2 + 0.5) * 0.6;
-                limb3.rotation.x = Math.sin(time * baseRotSpeed + Math.PI) * 0.8;
-                limb3.rotation.z = Math.cos(time * baseRotSpeed * 1.2 + Math.PI + 0.5) * 0.6;
-                limb4.rotation.x = Math.sin(time * baseRotSpeed + 3*Math.PI/2) * 0.8;
-                limb4.rotation.z = Math.cos(time * baseRotSpeed * 1.2 + 3*Math.PI/2 + 0.5) * 0.6;
-
-                const bodyCore = entityMesh.getObjectByName('bodyCore');
-                if (bodyCore) {
-                    bodyCore.rotation.y += 0.01 * (entityLogic.isMoving ? 2:1);
-                    bodyCore.scale.setScalar(1 + Math.sin(time * baseRotSpeed * 0.5) * 0.05);
-                }
-            }
-        }
-
-        function spawnEnemy(x, z) { // Spawn Anomaly
-            const enemyLogic = {
-                x: x, z: z, y_height: ENEMY_HEIGHT / 2,
-                health: ENEMY_HEALTH, maxHealth: ENEMY_HEALTH,
-                width: ENEMY_WIDTH, height: ENEMY_HEIGHT, speed: ENEMY_SPEED, angle: 0,
-                // colorVal: new THREE.Color().setHSL(0.3 + Math.random() * 0.1, 0.7, 0.4).getHex(), // Sickly green hues
-                state: 'idle', aiTimer: Math.random() * 120, attackCooldown: ENEMY_ATTACK_COOLDOWN,
-                isMoving: false, animTimer: 0, animFrame: 0, animSpeed: ANIM_SPEED * 0.8, // Anomalies animate differently
-                mesh: createCharacterMesh(false), // Anomaly is type false
-                boundingBox: new THREE.Box3(),
-                healthBarMesh: createHealthBarMesh(true) // True for enemy health bar (red)
-            };
-            enemyLogic.mesh.position.set(x, ENEMY_HEIGHT / 2, z);
-            scene.add(enemyLogic.mesh);
-
-            enemyLogic.healthBarMesh.position.set(x, ENEMY_HEIGHT + 0.4, z);
-            scene.add(enemyLogic.healthBarMesh);
-
-            gameState.world.enemies.push(enemyLogic);
-            threeObjects.enemies.push(enemyLogic.mesh);
-        }
-
-        function updateEnemies(delta) { // Update Anomalies
-            for (let i = gameState.world.enemies.length - 1; i >= 0; i--) {
-                const enemy = gameState.world.enemies[i];
-                const oldX = enemy.x; const oldZ = enemy.z;
-
-                const dxPlayer = gameState.player.x - enemy.x;
-                const dzPlayer = gameState.player.z - enemy.z;
-                const distSqPlayer = dxPlayer * dxPlayer + dzPlayer * dzPlayer;
-                const distPlayer = Math.sqrt(distSqPlayer);
-
-                let targetAngleRad = Math.atan2(dxPlayer, dzPlayer);
-                enemy.isMoving = false;
-
-                if (enemy.state === 'idle') {
-                    enemy.aiTimer -= delta * 60;
-                    if (distSqPlayer < ENEMY_CHASE_DIST * ENEMY_CHASE_DIST) {
-                        enemy.state = 'chasing';
-                    } else if (enemy.aiTimer <= 0) {
-                        enemy.aiTimer = 120 + Math.random() * 120;
-                    }
-                } else if (enemy.state === 'chasing') {
-                    if (distSqPlayer > (ENEMY_CHASE_DIST + 5) * (ENEMY_CHASE_DIST + 5)) {
-                        enemy.state = 'idle'; enemy.aiTimer = 60;
-                    } else {
-                        enemy.angle = targetAngleRad; // Anomalies might not "face" traditionally but good for movement vector
-                        if (distPlayer > ENEMY_ATTACK_DIST * 0.8) {
-                            enemy.x += Math.sin(enemy.angle) * enemy.speed * delta;
-                            enemy.z += Math.cos(enemy.angle) * enemy.speed * delta;
-                            enemy.isMoving = true;
-                        }
-
-                        if (distPlayer < ENEMY_ATTACK_DIST && enemy.attackCooldown <= 0 && gameState.playerState === 'onFoot') {
-                            gameState.player.health -= ENEMY_DAMAGE_MELEE;
-                            enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN / (delta * 60 || 1) ;
-                             createHitSparksEffect(gameState.player.x, gameState.player.pedHeight/2, gameState.player.z, 0xff3333); // Player hit, red energy
-                        }
-                    }
-                }
-                // Anomalies might always "animate"
-                enemy.animTimer++;
-                if (enemy.animTimer >= enemy.animSpeed) {
-                    enemy.animTimer = 0;
-                    enemy.animFrame = (enemy.animFrame + 1) % 4; // Or use for different animation states
-                }
-                updateCharacterAnimation(enemy, enemy.mesh);
-
-                if (enemy.attackCooldown > 0) enemy.attackCooldown -= delta * 60;
-
-                const collisionResult = checkCollisions(oldX, oldZ, enemy, 'enemy');
-                 if(collisionResult.collided){
-                    enemy.x = collisionResult.newX;
-                    enemy.z = collisionResult.newZ;
-                    if (enemy.state === 'chasing') enemy.state = 'idle';
-                 }
-
-                enemy.mesh.position.set(enemy.x, enemy.height / 2, enemy.z);
-                // enemy.mesh.rotation.y = enemy.angle; // Anomalies might not rotate this way, their body might "look" via internal animation
-                enemy.boundingBox.setFromObject(enemy.mesh);
-
-                enemy.healthBarMesh.position.set(enemy.x, enemy.height + 0.4, enemy.z);
-                enemy.healthBarMesh.lookAt(camera.position);
-                const healthScale = Math.max(0, enemy.health / enemy.maxHealth);
-                enemy.healthBarMesh.children[1].scale.x = healthScale;
-                enemy.healthBarMesh.children[1].position.x = - (1 - healthScale) * 0.5;
-
-
-                if (enemy.health <= 0) {
-                    createExplosionEffect(enemy.x, enemy.height / 2, enemy.z, 0x7700FF, 0.7); // Violet Anomaly death
-                    scene.remove(enemy.mesh);
-                    scene.remove(enemy.healthBarMesh);
-                    gameState.world.enemies.splice(i, 1);
-                    gameState.player.killedEnemiesCount++;
-                }
-            }
-        }
-
-        function updateProjectiles(delta) {
-            for (let i = gameState.world.projectiles.length - 1; i >= 0; i--) {
-                const p = gameState.world.projectiles[i];
-                if (p.owner !== 'player') {
-                    scene.remove(p.mesh);
-                    gameState.world.projectiles.splice(i, 1);
-                    const meshIdx = threeObjects.projectiles.indexOf(p.mesh);
-                    if (meshIdx > -1) threeObjects.projectiles.splice(meshIdx,1);
-                    continue;
-                }
-
-                p.x += p.vx * delta;
-                p.y += p.vy * delta;
-                p.z += p.vz * delta;
-                p.timer += delta;
-
-                p.mesh.position.set(p.x, p.y, p.z);
-                // Bounding box for capsule needs to be calculated based on its orientation if precise.
-                // For now, simple sphere-like BB.
-                if(!p.mesh.userData.bbHelper) p.mesh.userData.bbHelper = new THREE.Box3().setFromObject(p.mesh);
-                p.boundingBox.copy(p.mesh.userData.bbHelper).applyMatrix4(p.mesh.matrixWorld);
-
-
-                let hit = false;
-                let hitWall = false;
-
-                for (let j = gameState.world.enemies.length - 1; j >= 0; j--) {
-                    const enemy = gameState.world.enemies[j];
-                    if (p.boundingBox.intersectsBox(enemy.boundingBox)) {
-                        enemy.health -= p.damage;
-                        hit = true;
-                        createExplosionEffect(p.x, p.y, p.z, p.color, 0.5); // Anomaly hit splash
-                        break;
-                    }
-                }
-
-                if (!hit) {
-                    const worldGeometry = [
-                        ...gameState.world.buildings.map(b => b.boundingBox),
-                        ...gameState.world.obstacles.map(o => o.boundingBox),
-                        ...gameState.world.impassableZones.map(iz => iz.boundingBox)
-                    ];
-                    for (const objBox of worldGeometry) {
-                        if (p.boundingBox.intersectsBox(objBox)) {
-                            hit = true;
-                            hitWall = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (p.x < 0 || p.x > gameState.world.width || p.z < 0 || p.z > gameState.world.height) {
-                    hit = true;
-                    hitWall = true;
-                }
-
-                if (p.timer >= p.lifespan || hit) {
-                    if (hitWall) {
-                        createHitSparksEffect(p.x, p.y, p.z, 0x00AAAA); // Wall hit, cyan energy discharge
-                    }
-                    scene.remove(p.mesh);
-                    gameState.world.projectiles.splice(i, 1);
-                    const meshIdx = threeObjects.projectiles.indexOf(p.mesh);
-                    if (meshIdx > -1) threeObjects.projectiles.splice(meshIdx,1);
-                }
-            }
-        }
-
-        function checkCollisions(oldX, oldZ, entity, entityType) {
-            const isDriving = entityType === 'driving';
-            const entityBox = entity.boundingBox;
-            let collisionOccurred = false;
-            let finalX = entity.x;
-            let finalZ = entity.z;
-
-            const halfWidth = (entityBox.max.x - entityBox.min.x) / 2;
-            const halfDepth = (entityBox.max.z - entityBox.min.z) / 2;
-
-            if (entity.x - halfWidth < 0) { finalX = halfWidth; collisionOccurred = true;}
-            if (entity.z - halfDepth < 0) { finalZ = halfDepth; collisionOccurred = true;}
-            if (entity.x + halfWidth > gameState.world.width) { finalX = gameState.world.width - halfWidth; collisionOccurred = true;}
-            if (entity.z + halfDepth > gameState.world.height) { finalZ = gameState.world.height - halfDepth; collisionOccurred = true;}
-
-            if (collisionOccurred && isDriving) entity.speed *= -0.5; // Energy shield deflection
-            else if (collisionOccurred && entityType === 'enemy') entity.state = 'idle';
-
-
-            const objectsToTest = [
-                ...gameState.world.buildings,
-                ...gameState.world.obstacles,
-                ...gameState.world.impassableZones
-            ];
-            const tempBox = entityBox.clone();
-
-            for (const obj of objectsToTest) {
-                 tempBox.min.x = entity.x - halfWidth; tempBox.max.x = entity.x + halfWidth;
-                 tempBox.min.z = oldZ - halfDepth; tempBox.max.z = oldZ + halfDepth;
-
-                if (tempBox.intersectsBox(obj.boundingBox)) {
-                    collisionOccurred = true;
-                    finalX = oldX;
-                    if (isDriving) entity.speed *= -0.6;
-                    else if (entityType === 'enemy') entity.state = 'idle';
-                    tempBox.min.x = oldX - halfWidth; tempBox.max.x = oldX + halfWidth;
-                }
-
-                tempBox.min.x = finalX - halfWidth; tempBox.max.x = finalX + halfWidth;
-                tempBox.min.z = entity.z - halfDepth; tempBox.max.z = entity.z + halfDepth;
-
-                if (tempBox.intersectsBox(obj.boundingBox)) {
-                    collisionOccurred = true;
-                    finalZ = oldZ;
-                    if (isDriving) entity.speed *= -0.6;
-                    else if (entityType === 'enemy') entity.state = 'idle';
-                }
-                if (finalX === oldX && finalZ === oldZ && collisionOccurred) break;
-            }
-            return { collided: collisionOccurred, newX: finalX, newZ: finalZ };
-        }
-
-        function checkGasStations(delta) { // Check Energy Pylons
-            if (gameState.playerState !== 'driving' || !gameState.controls.refuel) return;
-            for (const station of gameState.world.gasStations) {
-                const dx = gameState.player.x - (station.x + station.width / 2);
-                const dz = gameState.player.z - (station.z + station.depth / 2);
-                const distanceSq = dx * dx + dz * dz;
-                const stationInteractionRadius = Math.max(station.width, station.depth) * 1.8; // Larger interaction field
-                if (distanceSq < stationInteractionRadius * stationInteractionRadius) {
-                    gameState.player.fuelLevel += 2.0 * delta * 60; // Faster recharge
-                    if (gameState.player.fuelLevel > 100) gameState.player.fuelLevel = 100;
-                    break;
-                }
-            }
-        }
-
-        function checkLocation() {
-            let currentZone = null; let closestDistance = Infinity;
-            for (const zone of gameState.zones) {
-                const dx = gameState.player.x - zone.x;
-                const dz = gameState.player.z - zone.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
-                if (distance < zone.radius && distance < closestDistance) {
-                    closestDistance = distance; currentZone = zone;
-                }
-            }
-            document.getElementById('location').textContent = `SECTOR: ${currentZone ? currentZone.name : 'UNCHARTED VOID'}`;
-        }
-        function checkGameOverCondition() { if (gameState.player.health <= 0 && !gameState.gameOver) { gameState.gameOver = true; stopEngineNoise(); } }
-
-        function createSkidMarkEffect() { // Create Energy Trail
-            if (gameState.playerState !== 'driving' || !gameState.player.mesh) return;
-            const trailWidth = 0.3;
-            const trailLength = 1.8 + Math.abs(gameState.player.speed * 0.06);
-            const rearAxleOffset = -gameState.player.depth * 0.45;
-            const emitterOffset = gameState.player.width * 0.35 * (Math.random() > 0.5 ? 1 : -1);
-
-            const localTrailPos = new THREE.Vector3(emitterOffset, 0.02, rearAxleOffset); // Slightly above ground
-            const worldTrailPos = localTrailPos.applyMatrix4(gameState.player.mesh.matrixWorld);
-
-            const trailGeo = new THREE.PlaneGeometry(trailWidth, trailLength);
-            const trailMat = new THREE.MeshBasicMaterial({
-                color: 0x00FF88, // Glowing teal
-                transparent: true,
-                opacity: 0.5 + Math.random() * 0.3,
-                side: THREE.DoubleSide,
-                blending: THREE.AdditiveBlending // Make it glow
-            });
-            const trailMesh = new THREE.Mesh(trailGeo, trailMat);
-            trailMesh.position.copy(worldTrailPos);
-            trailMesh.rotation.x = -Math.PI / 2;
-            trailMesh.rotation.z = gameState.player.angle + Math.PI/2;
-
-            scene.add(trailMesh);
-            gameState.fx.skidMarks.push({ mesh: trailMesh, life: 120 + Math.random() * 80, initialOpacity: trailMat.opacity });
-
-            if (gameState.fx.skidMarks.length > 40) {
-                const oldest = gameState.fx.skidMarks.shift();
-                scene.remove(oldest.mesh);
-                oldest.mesh.geometry.dispose();
-                oldest.mesh.material.dispose();
-            }
-        }
-
-        function createDustParticleEffect(isDrivingEffect = true) { // Create Xeno Spores
-            if (!gameState.player.mesh) return;
-            const particleCount = isDrivingEffect ? 6 : 3;
-            const basePos = new THREE.Vector3();
-            gameState.player.mesh.getWorldPosition(basePos);
-
-            if (isDrivingEffect) {
-                const backwardOffset = new THREE.Vector3(0,0, -gameState.player.depth * 0.5).applyQuaternion(gameState.player.mesh.quaternion);
-                basePos.add(backwardOffset);
-            }
-            basePos.y = 0.3;
-
-            for (let i = 0; i < particleCount; i++) {
-                gameState.fx.dustParticlesData.push({
-                    position: new THREE.Vector3(
-                        basePos.x + (Math.random() - 0.5) * (isDrivingEffect ? 1.8 : 0.6),
-                        basePos.y + (Math.random() - 0.5) * 0.4,
-                        basePos.z + (Math.random() - 0.5) * (isDrivingEffect ? 1.8 : 0.6)
-                    ),
-                    velocity: new THREE.Vector3(
-                        (Math.random() - 0.5) * (isDrivingEffect ? 0.4 : 0.15),
-                        Math.random() * 0.6 + 0.15, // More floaty
-                        (Math.random() - 0.5) * (isDrivingEffect ? 0.4 : 0.15)
-                    ),
-                    alpha: 0.6 + Math.random() * 0.3,
-                    life: 25 + Math.random() * 25,
-                    size: isDrivingEffect ? 0.25 + Math.random() * 0.6 : 0.15 + Math.random() * 0.3,
-                    color: Math.random() > 0.5 ? new THREE.Color(0xAA44FF) : new THREE.Color(0x44FFAA) // Purple or Cyan spores
-                });
-            }
-            if (gameState.fx.dustParticlesData.length > 180) {
-                gameState.fx.dustParticlesData.splice(0, gameState.fx.dustParticlesData.length - 180);
-            }
-            updateDustParticlesMesh();
-        }
-
-        function createExplosionEffect(x, y, z, color = 0x7700FF, scale = 1.0) { // Alien Explosion
-             const particleCount = 20 + Math.floor(Math.random() * 12);
-             const explosionData = { particles: [], life: 35 + Math.random() * 35, initialLife: 0 };
-             explosionData.initialLife = explosionData.life;
-
-             for (let i = 0; i < particleCount; i++) {
-                 const angle = Math.random() * Math.PI * 2;
-                 const elevation = (Math.random() - 0.5) * Math.PI;
-                 const speed = (0.6 + Math.random() * 2.5) * scale;
-                 explosionData.particles.push({
-                     position: new THREE.Vector3(x, y, z),
-                     velocity: new THREE.Vector3(
-                         Math.cos(angle) * Math.cos(elevation) * speed,
-                         Math.sin(elevation) * speed * (1 + Math.random()*0.5), // More vertical spread
-                         Math.sin(angle) * Math.cos(elevation) * speed
-                     ),
-                     alpha: 0.8 + Math.random() * 0.2,
-                     size: (0.15 + Math.random() * 0.4) * scale,
-                     color: new THREE.Color(color).offsetHSL(0, Math.random()*0.2 - 0.1, Math.random()*0.2 - 0.1) // Slight color variation
-                 });
-             }
-             gameState.fx.explosionsData.push(explosionData);
-             if (gameState.fx.explosionsData.length > 15) {
-                 gameState.fx.explosionsData.shift();
-             }
-             updateExplosionParticlesMesh();
-        }
-
-        function createMuzzleFlashEffect(x, y, z, color = 0xBBFFFF) { // Emitter Flash
-            const flash = {
-                position: new THREE.Vector3(x, y, z),
-                size: 0.9 + Math.random() * 0.6,
-                alpha: 1.0,
-                life: 2.5, // Slightly longer for energy effect
-                color: new THREE.Color(color)
-            };
-            gameState.fx.muzzleFlashesData.push(flash);
-            if (gameState.fx.muzzleFlashesData.length > 8) {
-                gameState.fx.muzzleFlashesData.shift();
-            }
-            updateMuzzleFlashMesh();
-        }
-
-        function createHitSparksEffect(x, y, z, color = 0x00CC00) { // Ichor Splatter / Energy Discharge
-            const particleCount = 6 + Math.floor(Math.random() * 6);
-             for (let i = 0; i < particleCount; i++) {
-                 const angle = Math.random() * Math.PI * 2;
-                 const elevation = (Math.random() - 0.5) * Math.PI * 0.8; // Less vertical than explosion
-                 const speed = 0.7 + Math.random() * 1.2;
-                 gameState.fx.hitSparksData.push({
-                     position: new THREE.Vector3(x, y, z),
-                     velocity: new THREE.Vector3(
-                         Math.cos(angle) * Math.cos(elevation) * speed,
-                         Math.sin(elevation) * speed + (Math.random()*0.3), // Slight upward pop
-                         Math.sin(angle) * Math.cos(elevation) * speed
-                     ),
-                     alpha: 1.0,
-                     life: 12 + Math.random() * 12,
-                     size: 0.08 + Math.random() * 0.12,
-                     color: new THREE.Color(color)
-                 });
-             }
-             if (gameState.fx.hitSparksData.length > 80) {
-                 gameState.fx.hitSparksData.splice(0, gameState.fx.hitSparksData.length - 80);
-             }
-             updateHitSparksMesh();
-        }
-
-        function updateParticlesAndEffects3D(delta) {
-            const deltaFrames = delta * 60;
-
-            for (let i = gameState.fx.skidMarks.length - 1; i >= 0; i--) { // Energy Trails
-                const trail = gameState.fx.skidMarks[i];
-                trail.life -= deltaFrames;
-                trail.mesh.material.opacity = trail.initialOpacity * (trail.life / (120 + 70));
-                if (trail.life <= 0 || trail.mesh.material.opacity <= 0.01) {
-                    scene.remove(trail.mesh);
-                    trail.mesh.geometry.dispose();
-                    trail.mesh.material.dispose();
-                    gameState.fx.skidMarks.splice(i, 1);
-                }
-            }
-            updateDustParticlesMesh(delta);
-            updateExplosionParticlesMesh(delta);
-            updateMuzzleFlashMesh(delta);
-            updateHitSparksMesh(delta);
-        }
-
-        function updatePointSystem(pointsDataArray, pointsMeshName, delta, defaultSize = 0.1, dragFactor = 0.98, gravityFactor = 0.0, additiveBlending = false) {
-            const positions = [];
-            const colors = [];
-            const sizes = [];
-
-            for (let i = pointsDataArray.length - 1; i >= 0; i--) {
-                const p = pointsDataArray[i];
-                p.position.addScaledVector(p.velocity, delta);
-                p.velocity.multiplyScalar(Math.pow(dragFactor, delta*60));
-                if(gravityFactor !== 0) p.velocity.y -= gravityFactor * delta;
-
-                p.life -= delta * 60;
-                p.alpha -= (1 / (p.initialLife || 20)) * delta * 60; // Fade relative to initial life or a default
-
-                if (p.life <= 0 || p.alpha <= 0) {
-                    pointsDataArray.splice(i, 1);
-                } else {
-                    positions.push(p.position.x, p.position.y, p.position.z);
-                    colors.push(p.color.r, p.color.g, p.color.b);
-                    sizes.push(p.size * Math.max(0, p.alpha));
-                }
-            }
-
-            let mesh = threeObjects[pointsMeshName];
-            if (!mesh && positions.length > 0) {
-                const geometry = new THREE.BufferGeometry();
-                const material = new THREE.PointsMaterial({
-                    size: defaultSize, // This is a fallback if 'size' attribute isn't used by shader
-                    vertexColors: true,
-                    transparent: true,
-                    opacity: 1,
-                    sizeAttenuation: true,
-                    map: createCircleTexture(),
-                    depthWrite: !additiveBlending, // If additive, often don't write to depth
-                    blending: additiveBlending ? THREE.AdditiveBlending : THREE.NormalBlending
-                });
-                mesh = new THREE.Points(geometry, material);
-                // Custom shader needed for per-particle size with PointsMaterial or use THREE.Sprite for each
-                // For now, this setup will work but all points of *this* system will be `defaultSize` unless a custom shader reads 'size' attribute
-                // Hack: we can use the `size` attribute to scale the geometry if we manage particles as individual meshes/sprites, not ideal for many.
-                // For Points, rely on sizeAttenuation and the global material.size. The 'size' attribute is mostly for custom shaders.
-                // However, passing it won't break; it just might not be used by default PointsMaterial for per-particle sizing.
-                threeObjects[pointsMeshName] = mesh;
-                scene.add(mesh);
-            }
-
-            if (mesh) {
-                if (positions.length === 0) {
-                    mesh.visible = false;
-                } else {
-                    mesh.visible = true;
-                    mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-                    mesh.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-                    mesh.geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1)); // For custom shader or if PointsMaterial uses it in future
-                    mesh.geometry.attributes.position.needsUpdate = true;
-                    mesh.geometry.attributes.color.needsUpdate = true;
-                    mesh.geometry.attributes.size.needsUpdate = true;
-                }
-            }
-        }
-        function createCircleTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64; canvas.height = 64;
-            const context = canvas.getContext('2d');
-            context.beginPath();
-            context.arc(32, 32, 30, 0, 2 * Math.PI);
-            context.fillStyle = 'white'; // The color will come from vertexColors
-            context.fill();
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.needsUpdate = true;
-            return texture;
-        }
-
-        function updateDustParticlesMesh(delta) { // Xeno Spores
-            updatePointSystem(gameState.fx.dustParticlesData, 'dustParticles', delta, 0.3, 0.95, 0.015, true);
-        }
-
-        function updateExplosionParticlesMesh(delta) { // Alien Explosions
-             const allExplosionParticles = [];
-             for (let i = gameState.fx.explosionsData.length - 1; i >= 0; i--) {
-                 const expl = gameState.fx.explosionsData[i];
-                 expl.life -= delta * 60;
-                 if (expl.life <= 0) {
-                     gameState.fx.explosionsData.splice(i, 1);
-                     continue;
-                 }
-                 for (const p of expl.particles) {
-                     p.initialLife = expl.initialLife; // Ensure particle knows its parent explosion's lifespan for fading
-                     allExplosionParticles.push(p);
-                 }
-             }
-             updatePointSystem(allExplosionParticles, 'explosions', delta, 0.4, 0.96, 0.04, true);
-        }
-
-        function updateMuzzleFlashMesh(delta) { // Emitter Flashes
-            updatePointSystem(gameState.fx.muzzleFlashesData, 'muzzleFlashes', delta, 1.0, 1.0, 0, true);
-        }
-
-        function updateHitSparksMesh(delta) { // Ichor Splatter / Discharge
-            updatePointSystem(gameState.fx.hitSparksData, 'hitSparks', delta, 0.1, 0.88, 0.12, true);
-        }
-
-        function playShotSound(weaponType) {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            gainNode.gain.setValueAtTime(0.08, audioContext.currentTime); // Slightly quieter
-
-            if (weaponType === 'pulse_emitter') {
-                oscillator.type = 'triangle'; // Softer, more sci-fi pulse
-                oscillator.frequency.setValueAtTime(660, audioContext.currentTime); // Higher pitch
-                oscillator.frequency.exponentialRampToValueAtTime(330, audioContext.currentTime + 0.08);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.12);
-            } else if (weaponType === 'shard_disruptor') {
-                 oscillator.type = 'sawtooth'; // Harsher, more disruptive
-                 oscillator.frequency.setValueAtTime(550, audioContext.currentTime);
-                 oscillator.frequency.linearRampToValueAtTime(990, audioContext.currentTime + 0.03);
-                 gainNode.gain.setValueAtTime(0.06, audioContext.currentTime);
-                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.06);
-            }
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.15);
-        }
-        function startEngineNoise() { // Drifter Hum
-             if (!engineNoiseOscillator) {
-                 engineNoiseOscillator = audioContext.createOscillator();
-                 engineNoiseGain = audioContext.createGain();
-                 engineNoiseOscillator.type = 'sine'; // Smoother hum
-                 const baseFreq = 60;
-                 engineNoiseOscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
-
-                 // Add a subtle higher harmonic for complexity
-                 const harmonicOsc = audioContext.createOscillator();
-                 harmonicOsc.type = 'sawtooth';
-                 harmonicOsc.frequency.setValueAtTime(baseFreq * 3, audioContext.currentTime);
-                 const harmonicGain = audioContext.createGain();
-                 harmonicGain.gain.setValueAtTime(0.005, audioContext.currentTime); // Very subtle
-
-                 engineNoiseGain.gain.setValueAtTime(0.04, audioContext.currentTime);
-                 engineNoiseOscillator.connect(engineNoiseGain);
-                 harmonicOsc.connect(harmonicGain);
-                 harmonicGain.connect(engineNoiseGain); // Mix harmonic into main gain
-
-                 engineNoiseGain.connect(audioContext.destination);
-                 engineNoiseOscillator.start();
-                 harmonicOsc.start();
-                 engineNoiseOscillator.userData = { harmonic: harmonicOsc, harmonicGain: harmonicGain }; // Store for update/stop
-             }
-        }
-        function updateEngineNoise() { // Drifter Hum Update
-             if (engineNoiseOscillator && gameState.playerState === 'driving') {
-                 const speedFactor = Math.abs(gameState.player.speed) / gameState.player.maxSpeed;
-                 const baseFreq = 60;
-                 const frequency = baseFreq + speedFactor * 120; // More pitch variation
-                 const volume = 0.03 + speedFactor * 0.08; // Wider volume range
-                 engineNoiseOscillator.frequency.linearRampToValueAtTime(frequency, audioContext.currentTime + 0.1);
-                 if(engineNoiseOscillator.userData && engineNoiseOscillator.userData.harmonic) {
-                     engineNoiseOscillator.userData.harmonic.frequency.linearRampToValueAtTime(frequency * 3, audioContext.currentTime + 0.1);
-                     engineNoiseOscillator.userData.harmonicGain.gain.linearRampToValueAtTime(0.005 + speedFactor * 0.01, audioContext.currentTime + 0.1);
-                 }
-                 engineNoiseGain.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.1);
-             }
-        }
-        function stopEngineNoise() {
-             if (engineNoiseOscillator) {
-                 engineNoiseGain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.6);
-                 engineNoiseOscillator.stop(audioContext.currentTime + 0.6);
-                 if(engineNoiseOscillator.userData && engineNoiseOscillator.userData.harmonic) {
-                    engineNoiseOscillator.userData.harmonic.stop(audioContext.currentTime + 0.6);
-                 }
-                 engineNoiseOscillator = null; engineNoiseGain = null;
-             }
-        }
-
-        function updateCamera() {
-            if (!gameState.player.mesh) return;
-            const playerPosition = new THREE.Vector3();
-            gameState.player.mesh.getWorldPosition(playerPosition);
-
-            let offset;
-            let lookAtTarget = playerPosition.clone();
-
-            if (gameState.playerState === 'driving') {
-                offset = new THREE.Vector3(0, 9, -14); // Slightly higher/further for alien drifters
-            } else {
-                offset = new THREE.Vector3(0, 7, -8);
-            }
-
-            const rotatedOffset = offset.clone().applyQuaternion(gameState.player.mesh.quaternion);
-            const desiredCameraPosition = playerPosition.clone().add(rotatedOffset);
-            camera.position.lerp(desiredCameraPosition, 0.08); // Smoother lerp
-
-            const forwardLookOffset = new THREE.Vector3(0, 1.2, gameState.playerState === 'driving' ? 3.5 : 1.5);
-            const rotatedLookOffset = forwardLookOffset.applyQuaternion(gameState.player.mesh.quaternion);
-            const desiredLookAt = playerPosition.clone().add(rotatedLookOffset);
-
-            // Create a persistent vector for camera target to lerp towards
-            if (!camera.userData.lookAtLerpTarget) camera.userData.lookAtLerpTarget = desiredLookAt.clone();
-            camera.userData.lookAtLerpTarget.lerp(desiredLookAt, 0.08);
-            camera.lookAt(camera.userData.lookAtLerpTarget);
-
-            if (camera.position.y < 0.6) camera.position.y = 0.6;
-        }
-
-        function updateHUD() {
-             document.getElementById('health-level').style.width = `${Math.max(0, (gameState.player.health / gameState.player.maxHealth) * 100)}%`;
-             const showDrivingUI = gameState.playerState === 'driving';
-             document.getElementById('speed-line').style.display = showDrivingUI ? '' : 'none';
-             document.getElementById('fuel-line').style.display = showDrivingUI ? '' : 'none';
-             document.getElementById('weapon-display').style.display = gameState.playerState === 'onFoot' ? '' : 'none';
-             document.getElementById('vehicle-display').style.display = showDrivingUI ? '' : 'none';
-
-             if (showDrivingUI) {
-                 document.getElementById('speed').textContent = Math.abs(Math.round(gameState.player.speed * 4.5)); // Alien speed units
-                 document.getElementById('fuel-level').style.width = `${Math.max(0, gameState.player.fuelLevel)}%`;
-                 document.getElementById('vehicle-display').textContent = `DRIFTER: ${gameState.player.currentVehicleType.replace(/_/g, ' ').toUpperCase()}`;
-             }
-             checkLocation();
-             document.getElementById('enemies-left').textContent = gameState.world.enemies.length;
-             document.getElementById('weapon-display').textContent = `EMITTER: ${gameState.player.currentWeapon.replace('_emitter','').replace('_disruptor','').toUpperCase()}`;
-        }
-
-        function renderGame3D() {
-            renderer.render(scene, camera);
-            drawMiniMap();
-        }
-
-        function createCharacterMesh(isPlayerType, colorOverride = null) { // True for Player, False for Anomaly
-            const group = new THREE.Group();
-
-            if (isPlayerType) { // Player (Xenoscape Drifter)
-                const bodyMat = new THREE.MeshLambertMaterial({ color: 0x777799 }); // Metallic lavender
-                const accentMat = new THREE.MeshPhongMaterial({ color: 0x00FFFF, emissive: 0x008888, shininess: 80 }); // Cyan accent
-
-                // Torso
-                const torsoGeo = new THREE.BoxGeometry(PLAYER_PED_WIDTH * 0.8, PLAYER_PED_HEIGHT * 0.45, PLAYER_PED_WIDTH * 0.5);
-                const torsoMesh = new THREE.Mesh(torsoGeo, bodyMat);
-                torsoMesh.position.y = 0; // Group center
-                group.add(torsoMesh);
-
-
-
-
-
-// Original problematic line:
-// const headGeo = new THREE.CapsuleGeometry(PLAYER_PED_WIDTH * 0.25, PLAYER_PED_HEIGHT * 0.1, 4, 8);
-
-let headGeo;
-
-if (typeof THREE.CapsuleGeometry === 'function') { // Check if CapsuleGeometry constructor exists
-    headGeo = new THREE.CapsuleGeometry(PLAYER_PED_WIDTH * 0.25, PLAYER_PED_HEIGHT * 0.1, 4, 8);
-} else {
-    // Fallback if THREE.CapsuleGeometry is not available
-    // console.warn can be noisy if called many times, you might have already seen this warning from vehicle creation.
-    // You could add a more specific warning or a flag to only show it once.
-    // console.warn("THREE.CapsuleGeometry not found. Using BoxGeometry as fallback for character head.");
-
-    const radius = PLAYER_PED_WIDTH * 0.25;
-    const cylinderLength = PLAYER_PED_HEIGHT * 0.1;
-
-    // Dimensions for a BoxGeometry that approximates the capsule:
-    // Width and Depth of the box will be the diameter of the capsule.
-    // Height of the box will be the total length of the capsule (cylinder part + two hemispherical caps).
-    const boxWidth = 2 * radius;
-    const boxHeight = cylinderLength + (2 * radius); // Total length of the standing capsule
-    const boxDepth = 2 * radius;
-
-    headGeo = new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth);
-}
-
-const headMesh = new THREE.Mesh(headGeo, accentMat);
-headMesh.position.y = PLAYER_PED_HEIGHT * 0.225 + PLAYER_PED_HEIGHT * 0.05; // Top of torso + half head height (this might need adjustment if fallback box has different pivot)
-headMesh.rotation.z = Math.PI / 2; // Orient capsule (or its box approximation) horizontally
-group.add(headMesh);
-                // Legs
-                const legGeo = new THREE.CylinderGeometry(PLAYER_PED_WIDTH * 0.12, PLAYER_PED_WIDTH * 0.1, PLAYER_PED_HEIGHT * 0.5, 6);
-                const leftLegMesh = new THREE.Mesh(legGeo, bodyMat);
-                leftLegMesh.name = "leftLeg";
-                leftLegMesh.position.set(-PLAYER_PED_WIDTH * 0.25, -PLAYER_PED_HEIGHT * 0.225 - PLAYER_PED_HEIGHT * 0.05, 0);
-                group.add(leftLegMesh);
-
-                const rightLegMesh = new THREE.Mesh(legGeo, bodyMat);
-                rightLegMesh.name = "rightLeg";
-                rightLegMesh.position.set(PLAYER_PED_WIDTH * 0.25, -PLAYER_PED_HEIGHT * 0.225 - PLAYER_PED_HEIGHT * 0.05, 0);
-                group.add(rightLegMesh);
-
-            } else { // Anomaly (Enemy)
-                const coreMat = new THREE.MeshPhongMaterial({ color: 0xFF5555, emissive: 0xAA2222, shininess: 50 }); // Pulsing red core
-                const limbMat = new THREE.MeshLambertMaterial({ color: 0x55AA55 }); // Sickly green limbs
-
-                // Central Core - a slightly distorted sphere or icosahedron
-                const coreGeo = new THREE.IcosahedronGeometry(ENEMY_WIDTH * 0.4, 0);
-                const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-                coreMesh.name = "bodyCore";
-                coreMesh.position.y = ENEMY_HEIGHT * 0.1; // Slightly elevated core
-                group.add(coreMesh);
-
-                // Tentacle-like Limbs
-                const numLimbs = 4 + Math.floor(Math.random()*3); // 4 to 6 limbs
-                const limbLength = ENEMY_HEIGHT * (0.4 + Math.random()*0.2);
-                const limbRadius = ENEMY_WIDTH * (0.08 + Math.random()*0.04);
-
-                for(let i=0; i<numLimbs; i++){
-                    const limbGeo = new THREE.CylinderGeometry(limbRadius*0.5, limbRadius, limbLength, 5);
-                    const limb = new THREE.Mesh(limbGeo, limbMat);
-                    const angle = (i / numLimbs) * Math.PI * 2 + (Math.random()-0.5)*0.5;
-                    const spread = ENEMY_WIDTH * 0.3;
-                    limb.position.set(Math.cos(angle) * spread, coreMesh.position.y - limbLength * 0.3, Math.sin(angle) * spread);
-                    limb.rotation.x = Math.PI/2 - (Math.random()-0.5)*0.8; // Angle them outwards/downwards
-                    limb.rotation.z = angle + (Math.random()-0.5)*0.8;
-                    limb.name = "limb" + (i+1);
-                    group.add(limb);
-                }
-            }
-
-            // Shadow plane (common for both)
-            const shadowGeo = new THREE.PlaneGeometry( (isPlayerType? PLAYER_PED_WIDTH : ENEMY_WIDTH) * 1.5, (isPlayerType? PLAYER_PED_WIDTH : ENEMY_WIDTH) * 1.5);
-            const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
-            const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-            shadowMesh.rotation.x = -Math.PI / 2;
-            shadowMesh.position.y = -(isPlayerType ? PLAYER_PED_HEIGHT : ENEMY_HEIGHT) / 2 + 0.01;
-            group.add(shadowMesh);
-
-            return group;
-        }
-
-        function createVehicleMesh(type, color) {
-            const props = VEHICLE_TYPES[type];
-            const group = new THREE.Group();
-            const bodyMat = new THREE.MeshPhongMaterial({ color: color, shininess: 40 });
-            const accentMat = new THREE.MeshPhongMaterial({ color: new THREE.Color(color).offsetHSL(0, 0.1, 0.15), shininess: 60 });
-            const energyMat = new THREE.MeshBasicMaterial({ color: 0x00FFFF, transparent:true, opacity:0.7, blending: THREE.AdditiveBlending}); // Hover pad glow
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Main Body
-let bodyGeo;
-if (type === 'phase_skimmer' || type === 'void_striker') { // Sleeker
-    if (THREE.CapsuleGeometry) { // Check if constructor exists
-        bodyGeo = new THREE.CapsuleGeometry(props.width/2, props.depth - props.width, 8, 16);
-        bodyGeo.rotateX(Math.PI/2);
-    } else {
-        // Fallback if THREE.CapsuleGeometry is not available
-        console.warn("THREE.CapsuleGeometry not found. Using BoxGeometry as fallback for sleek vehicles.");
-        // You might want a different fallback, e.g., a box that's more capsule-like in proportion
-        // For example, props.width for height and width, and props.depth for depth.
-        const radius = props.width / 2;
-        const cylinderLength = props.depth - props.width;
-        // Approximate with a box: width, height of capsule diameter, depth of capsule total length
-        bodyGeo = new THREE.BoxGeometry(props.width, props.width, props.depth);
-        // No rotation needed for box if aligned this way
-    }
-} else { // Boxier
-    bodyGeo = new THREE.BoxGeometry(props.width, props.height * 0.8, props.depth);
-}
-const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-bodyMesh.position.y = props.height * 0.1; // Raise body slightly for hover pads
-group.add(bodyMesh);
-
-
-
-
-
-
-
-
-            // Cabin/Cockpit
-            const cabinHeight = props.height * (type === 'quasar_hauler' ? 0.4 : 0.5);
-            const cabinWidth = props.width * (type === 'quasar_hauler' ? 0.6 : 0.7);
-            const cabinDepth = props.depth * (type === 'quasar_hauler' ? 0.3 : 0.4);
-            let cabinGeo;
-             if (type === 'void_striker') cabinGeo = new THREE.SphereGeometry(cabinWidth/1.5, 8,6); // Bubble cockpit
-             else cabinGeo = new THREE.BoxGeometry(cabinWidth, cabinHeight, cabinDepth);
-
-            const cabinMesh = new THREE.Mesh(cabinGeo, accentMat);
-            cabinMesh.position.y = bodyMesh.position.y + (props.height * 0.8 / 2) + cabinHeight / 2 - (type === 'void_striker' ? cabinHeight*0.2 : 0);
-            cabinMesh.position.z = props.depth * (type === 'quasar_hauler' ? 0.3 : (type === 'void_striker' ? 0.15 : 0.05));
-            group.add(cabinMesh);
-
-            // Windows (dark emissive panels)
-            const windowMat = new THREE.MeshPhongMaterial({color: 0x112233, emissive:0x001122, transparent: true, opacity: 0.8});
-            if (type !== 'dune_wraith' && type !== 'void_striker') { // Dune Wraith is open, Striker has bubble
-                const windshieldGeo = new THREE.PlaneGeometry(cabinWidth*0.8, cabinHeight*0.6);
-                const windshield = new THREE.Mesh(windshieldGeo, windowMat);
-                windshield.position.set(cabinMesh.position.x, cabinMesh.position.y, cabinMesh.position.z + cabinDepth/2 + 0.01);
-                windshield.rotation.x = -0.35;
-                group.add(windshield);
-            }
-
-
-            // Hover Pads (replaces wheels)
-            const padRadius = Math.min(props.width, props.height) * 0.35;
-            const padHeight = padRadius * 0.2; // Flatter
-            const padGeo = new THREE.CylinderGeometry(padRadius, padRadius * 0.8, padHeight, 12);
-            const padMat = new THREE.MeshPhongMaterial({ color: 0x333344, shininess:20 });
-
-            const padPositions = [ // Adjusted for hover pads under the vehicle
-                new THREE.Vector3(props.width/2 * 0.7, -props.height/2 + padHeight*2, props.depth/2 * 0.65),
-                new THREE.Vector3(-props.width/2 * 0.7, -props.height/2 + padHeight*2, props.depth/2 * 0.65),
-                new THREE.Vector3(props.width/2 * 0.7, -props.height/2 + padHeight*2, -props.depth/2 * 0.65),
-                new THREE.Vector3(-props.width/2 * 0.7, -props.height/2 + padHeight*2, -props.depth/2 * 0.65)
-            ];
-            padPositions.forEach(pos => {
-                const pad = new THREE.Mesh(padGeo, padMat);
-                pad.position.copy(pos);
-                // pad.rotation.x = Math.PI / 2; // If flat discs, otherwise upright cylinders fine
-                group.add(pad);
-
-                const glowGeo = new THREE.CylinderGeometry(padRadius*1.1, padRadius*0.9, padHeight*0.5,12);
-                const glowMesh = new THREE.Mesh(glowGeo, energyMat);
-                glowMesh.position.copy(pos);
-                glowMesh.position.y -= padHeight*0.4; // Glow slightly below pad
-                group.add(glowMesh);
-            });
-
-            // Specific details for Dune Wraith (open frame)
-            if (type === 'dune_wraith') {
-                const frameMat = new THREE.MeshLambertMaterial({ color: 0x444455 });
-                const tubeRadius = 0.06;
-                // Simplified frame: two longitudinal tubes
-                const sideTubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, props.depth * 0.9, 6);
-                const leftTube = new THREE.Mesh(sideTubeGeo, frameMat);
-                leftTube.rotation.x = Math.PI / 2;
-                leftTube.position.set(-props.width/2 * 0.8, props.height * 0.1, 0);
-                group.add(leftTube);
-                const rightTube = leftTube.clone();
-                rightTube.position.x *= -1;
-                group.add(rightTube);
-            }
-
-
-            const shadowGeo = new THREE.PlaneGeometry(props.width * 1.1, props.depth * 1.1);
-            const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite:false });
-            const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-            shadowMesh.rotation.x = -Math.PI / 2;
-            shadowMesh.position.y = -props.height / 2 + 0.02; // Grounded shadow
-            group.add(shadowMesh);
-
-            return group;
-        }
-        function createProjectileMesh(color) {
-    let geo; // Declare geo outside the if/else
-
-    if (typeof THREE.CapsuleGeometry === 'function') {
-        // Original intended geometry
-        geo = new THREE.CapsuleGeometry(0.08, 0.35, 4, 8); // Shard-like
-    } else {
-        // Fallback if THREE.CapsuleGeometry is not available
-        // console.warn("THREE.CapsuleGeometry not found. Using CylinderGeometry as fallback for projectiles."); // Optional: warning
-
-        const radius = 0.08;
-        const capsuleCylindricalPartLength = 0.35;
-        // Total length of the capsule = cylindrical part + 2 * radius (for the two caps)
-        const totalCapsuleLength = capsuleCylindricalPartLength + (2 * radius);
-
-        // Using CylinderGeometry as a fallback
-        // Parameters: radiusTop, radiusBottom, height, radialSegments
-        geo = new THREE.CylinderGeometry(radius, radius, totalCapsuleLength, 8);
-    }
-
-    const mat = new THREE.MeshPhongMaterial({ color: color, emissive: new THREE.Color(color).multiplyScalar(0.5), shininess: 90 });
-    const mesh = new THREE.Mesh(geo, mat);
-
-    // Comment from original code:
-    // Capsule geometry is Y-up by default, projectiles fly along their local Z
-    // mesh.rotation.x = Math.PI / 2; // if needed, depends on how velocity is applied
-
-    // This rotation logic (if you uncomment it) will apply to either the Capsule or Cylinder,
-    // as both are Y-up by default.
-
-    return mesh;
-}
-        
-        function createHealthBarMesh(isEnemy = false) { // True for enemy (red), false for player (cyan)
-            const group = new THREE.Group();
-            const barWidth = 1.2; const barHeight = 0.12;
-
-            const backgroundMat = new THREE.MeshBasicMaterial({ color: isEnemy ? 0x600000 : 0x003040, side: THREE.DoubleSide }); // Dark red for enemy, dark cyan for player (if ever used)
-            const backgroundMesh = new THREE.Mesh(new THREE.PlaneGeometry(barWidth, barHeight), backgroundMat);
-            group.add(backgroundMesh);
-
-            const healthMat = new THREE.MeshBasicMaterial({ color: isEnemy ? 0xff3333 : 0x00ccff, side: THREE.DoubleSide });
-            const healthMesh = new THREE.Mesh(new THREE.PlaneGeometry(barWidth, barHeight), healthMat);
-            healthMesh.position.z = 0.01;
-            group.add(healthMesh);
-            return group;
-        }
-
-        function createRoadTexture() {
-            const canvas = document.createElement('canvas');
-            const size = 128;
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = `#${gameState.world.roadColor.toString(16).padStart(6,'0')}`;
-            ctx.fillRect(0, 0, size, size);
-
-            // Solid glowing line
-            ctx.strokeStyle = `#${gameState.world.lineColor.toString(16).padStart(6,'0')}`;
-            ctx.lineWidth = gameState.world.lineWidth * (size / gameState.world.roadWidth) * 4; // Thicker glowing line
-            ctx.shadowColor = `#${gameState.world.lineColor.toString(16).padStart(6,'0')}`;
-            ctx.shadowBlur = 8;
-            ctx.beginPath();
-            ctx.moveTo(size / 2, 0);
-            ctx.lineTo(size / 2, size);
-            ctx.stroke();
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.needsUpdate = true;
-            return texture;
-        }
-
-        function drawMiniMap() {
-            const mapScaleX = miniMapCtx.canvas.width / gameState.world.width;
-            const mapScaleZ = miniMapCtx.canvas.height / gameState.world.height;
-
-            miniMapCtx.fillStyle = 'rgba(10, 0, 20, 0.85)'; // Darker purple, less transparent
-            miniMapCtx.fillRect(0, 0, miniMapCtx.canvas.width, miniMapCtx.canvas.height);
-
-            gameState.world.impassableZones.forEach(zone => {
-                miniMapCtx.fillStyle = `#${zone.color.toString(16).padStart(6,'0')}99`;
-                miniMapCtx.fillRect(zone.x * mapScaleX, zone.z * mapScaleZ, zone.width * mapScaleX, zone.depth * mapScaleZ);
-            });
-
-            miniMapCtx.strokeStyle = `#${gameState.world.lineColor.toString(16).padStart(6,'0')}AA`;
-            miniMapCtx.lineWidth = 2.0; // Thicker road lines on map
-            roads.forEach(road => {
-                miniMapCtx.beginPath();
-                miniMapCtx.moveTo(road.x1 * mapScaleX, road.z1 * mapScaleZ);
-                miniMapCtx.lineTo(road.x2 * mapScaleX, road.z2 * mapScaleZ);
-                miniMapCtx.stroke();
-            });
-
-            miniMapCtx.fillStyle = '#FFCC00'; // Energy Pylon color (was gas station red)
-            gameState.world.gasStations.forEach(s => {
-                miniMapCtx.fillRect(s.x * mapScaleX - 2, s.z * mapScaleZ - 2, 4, 4);
-            });
-
-            miniMapCtx.fillStyle = '#8888CC'; // Parked Drifters color
-            gameState.world.vehicles.forEach(car => {
-                miniMapCtx.fillRect(car.x * mapScaleX - 1.5, car.z * mapScaleZ - 1.5, 3, 3);
-            });
-
-            miniMapCtx.fillStyle = '#55AA55'; // Anomalies color
-            gameState.world.enemies.forEach(e => {
-                miniMapCtx.beginPath();
-                miniMapCtx.arc(e.x*mapScaleX, e.z*mapScaleZ, 2, 0, Math.PI*2);
-                miniMapCtx.fill();
-            });
-
-            const playerMapX = gameState.player.x * mapScaleX;
-            const playerMapZ = gameState.player.z * mapScaleZ;
-            miniMapCtx.fillStyle = gameState.playerState === 'driving' ? '#00FF00' : '#FFFF00'; // Bright Green for Drifter, Yellow for onFoot
-            if (gameState.playerState === 'driving') {
-                miniMapCtx.beginPath();
-                miniMapCtx.arc(playerMapX, playerMapZ, 3, 0, Math.PI * 2);
-                miniMapCtx.fill();
-            } else {
-                miniMapCtx.fillRect(playerMapX - 1.5, playerMapZ - 1.5, 3, 3);
-            }
-
-            const dirLen = 5;
-            miniMapCtx.strokeStyle = miniMapCtx.fillStyle;
-            miniMapCtx.lineWidth = 1.5;
-            miniMapCtx.beginPath();
-            miniMapCtx.moveTo(playerMapX, playerMapZ);
-            miniMapCtx.lineTo(playerMapX + Math.sin(gameState.player.angle) * dirLen,
-                              playerMapZ + Math.cos(gameState.player.angle) * dirLen);
-            miniMapCtx.stroke();
-
-            // Simplified frustum
-             miniMapCtx.strokeStyle = 'rgba(200, 200, 255, 0.4)';
-             const miniCamWidth = gameCanvasWidth/gameState.world.width * miniMapCtx.canvas.width /12;
-             const miniCamHeight = gameCanvasHeight/gameState.world.height * miniMapCtx.canvas.height /12;
-             miniMapCtx.strokeRect(playerMapX - miniCamWidth/2, playerMapZ - miniCamHeight/2, miniCamWidth, miniCamHeight);
-        }
-        function drawGameOver() {
-            const gameContainer = document.getElementById('game-container');
-            let gameOverDiv = document.getElementById('game-over-screen');
-            if (!gameOverDiv) {
-                gameOverDiv = document.createElement('div');
-                gameOverDiv.id = 'game-over-screen';
-                gameOverDiv.style.position = 'absolute';
-                gameOverDiv.style.top = '0'; gameOverDiv.style.left = '0';
-                gameOverDiv.style.width = '100%'; gameOverDiv.style.height = '100%';
-                gameOverDiv.style.backgroundColor = 'rgba(10,0,20,0.8)'; // Darker purple
-                gameOverDiv.style.color = '#FF3333'; // Bright Red
-                gameOverDiv.style.display = 'flex'; gameOverDiv.style.flexDirection = 'column';
-                gameOverDiv.style.justifyContent = 'center'; gameOverDiv.style.alignItems = 'center';
-                gameOverDiv.style.fontFamily = "'Courier New', monospace";
-                gameOverDiv.style.zIndex = '100';
-                gameOverDiv.innerHTML = `
-                    <div style="font-size: 40px; text-shadow: 0 0 10px #FF0000;">CONNECTION SEVERED</div>
-                    <div style="font-size: 20px; color: #CCAAFF; margin-top: 20px;">Re-initialize sequence (Refresh)</div>
-                    <div style="font-size: 16px; color: #CCAAFF; margin-top: 10px;">Anomalies Neutralized: ${gameState.player.killedEnemiesCount}</div>
-                `;
-                gameContainer.appendChild(gameOverDiv);
-            }
-        }
-
-        function initThreeJS() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(gameState.world.grassColor);
-            scene.fog = new THREE.Fog(gameState.world.grassColor, 30, 120); // Denser fog
-
-            camera = new THREE.PerspectiveCamera(70, gameCanvasWidth / gameCanvasHeight, 0.1, 1000); // Slightly narrower FOV
-            camera.position.set(gameState.player.x, 25, gameState.player.z + 35);
-            camera.lookAt(gameState.player.x, 0, gameState.player.z);
-            camera.userData = {}; // For storing camera specific lerp targets
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(gameCanvasWidth, gameCanvasHeight);
-            document.getElementById('game-container').appendChild(renderer.domElement);
-            renderer.domElement.id = "gameCanvas3D";
-
-            clock = new THREE.Clock();
-
-            const ambientLight = new THREE.AmbientLight(0x7755AA, 0.7); // Purplish ambient
-            scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xAACCFF, 0.9); // Cool directional
-            directionalLight.position.set(40, 60, 30);
-            scene.add(directionalLight);
-            // Optional: Point light for more localized highlights, e.g. a dim "moon"
-            const pointLight = new THREE.PointLight(0x553377, 0.5, 200);
-            pointLight.position.set(-50, 80, -50);
-            scene.add(pointLight);
-
-
-            const groundGeometry = new THREE.PlaneGeometry(gameState.world.width, gameState.world.height);
-            const groundMaterial = new THREE.MeshLambertMaterial({ color: gameState.world.grassColor });
-            groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-            groundPlane.rotation.x = -Math.PI / 2;
-            groundPlane.position.y = 0;
-            scene.add(groundPlane);
-        }
-
-        function initGame() {
-            console.log("Initializing Xenoscape Drifter...");
-            initThreeJS();
-
-            if (gameState.playerState === 'driving') {
-                gameState.player.mesh = createVehicleMesh(gameState.player.currentVehicleType, gameState.player.color);
-                gameState.player.mesh.position.set(gameState.player.x, VEHICLE_TYPES[gameState.player.currentVehicleType].height / 2, gameState.player.z);
-            } else {
-                gameState.player.mesh = createCharacterMesh(true);
-                gameState.player.mesh.position.set(gameState.player.x, PLAYER_PED_HEIGHT / 2, gameState.player.z);
-            }
-            gameState.player.mesh.rotation.y = gameState.player.angle;
-            scene.add(gameState.player.mesh);
-            gameState.player.boundingBox.setFromObject(gameState.player.mesh);
-
-            // This will get the Shard Disruptor by default for testing
-            gameState.player.hasMachineGun = true;
-
-
-            createWorldElements3D();
-            initializeWorldObjects3D();
-
-            spawnInitialEnemies(35); // More anomalies
-            spawnVehicles(12);    // More drifters
-
-            updateHUD();
-            window.addEventListener('resize', handleResize);
-            handleResize();
-            if (gameState.playerState === 'driving') startEngineNoise();
-            gameLoop();
-            console.log("Xenoscape simulation active.");
-        }
-
-        function createWorldElements3D() {
-            // Roads (Alien Pathways)
-            roads.forEach(roadData => {
-                const dx = roadData.x2 - roadData.x1;
-                const dz = roadData.z2 - roadData.z1;
-                const length = Math.sqrt(dx * dx + dz * dz);
-                if (length === 0) return;
-
-                const roadGeo = new THREE.PlaneGeometry(gameState.world.roadWidth, length);
-                const roadMat = new THREE.MeshLambertMaterial({ map: roadTexture, color: gameState.world.roadColor });
-                roadMat.map.repeat.set(1, Math.max(1, Math.floor(length / (gameState.world.roadWidth*2)))); // Texture repeat based on length vs width ratio
-
-                const roadMesh = new THREE.Mesh(roadGeo, roadMat);
-                roadMesh.rotation.x = -Math.PI / 2;
-                roadMesh.position.set(roadData.x1 + dx / 2, 0.015, roadData.z1 + dz / 2); // Slightly more elevated
-                roadMesh.rotation.z = -Math.atan2(dz, dx) + Math.PI/2;
-                scene.add(roadMesh);
-            });
-
-            // Alien Structures (Buildings)
-            for (let i = 0; i < 25; i++) { // More structures
-                const type = Math.floor(Math.random() * 3);
-                let structureMesh;
-                let height, baseWidth, baseDepth;
-
-                switch(type) {
-                    case 0: // Spire
-                        baseWidth = 2 + Math.random() * 4;
-                        height = 10 + Math.random() * 15;
-                        structureMesh = new THREE.Mesh(
-                            new THREE.ConeGeometry(baseWidth, height, 5 + Math.floor(Math.random()*4)),
-                            new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(0.6 + Math.random()*0.1, 0.3, Math.random()*0.2+0.15), shininess: 10 }) // Blues/Purples
-                        );
-                        baseDepth = baseWidth;
-                        break;
-                    case 1: // Crystalline Cluster
-                        baseWidth = 4 + Math.random() * 6;
-                        baseDepth = baseWidth;
-                        height = 6 + Math.random() * 8;
-                        structureMesh = new THREE.Group();
-                        for(let j=0; j<3+Math.random()*4; j++){
-                            const shardHeight = height * (0.5 + Math.random()*0.5);
-                            const shard = new THREE.Mesh(
-                                new THREE.CylinderGeometry(0.1 + Math.random()*0.3, 0.3+Math.random()*0.5, shardHeight, 3+Math.floor(Math.random()*3)),
-                                new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(0.7 + Math.random()*0.2, 0.5, Math.random()*0.3+0.4), shininess:60, transparent:true, opacity:0.7+Math.random()*0.2 }) // Lighter crystals
-                            );
-                            shard.position.set((Math.random()-0.5)*baseWidth*0.6, shardHeight/2 - height/3, (Math.random()-0.5)*baseDepth*0.6);
-                            shard.rotation.set((Math.random()-0.5)*0.5, Math.random()*Math.PI*2, (Math.random()-0.5)*0.5);
-                            structureMesh.add(shard);
-                        }
-                        break;
-                    case 2: // Organic Mound/Pod
-                        baseWidth = 5 + Math.random() * 10;
-                        baseDepth = baseWidth * (0.7 + Math.random()*0.6);
-                        height = 4 + Math.random() * 6;
-                        structureMesh = new THREE.Mesh(
-                            new THREE.SphereGeometry(baseWidth/2, 10, 7), // Low poly sphere
-                            new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(0.1 + Math.random()*0.1, 0.2, Math.random()*0.15+0.1) }) // Browns/Greens
-                        );
-                        structureMesh.scale.y = height / baseWidth; // Squish/stretch sphere
-                        break;
-                }
-                const x = Math.random() * gameState.world.width;
-                const z = Math.random() * gameState.world.height;
-                structureMesh.position.set(x, height / 2, z);
-                const buildingLogic = {x, z, width:baseWidth, depth:baseDepth, height, mesh: structureMesh, boundingBox: new THREE.Box3().setFromObject(structureMesh)};
-
-                if(!isOnRoad3D(buildingLogic.boundingBox,2.0)) {
-                    scene.add(structureMesh);
-                    gameState.world.buildings.push(buildingLogic);
-                }
-            }
-
-            // Alien Flora (Trees)
-            for (let i = 0; i < 120; i++) { // More flora
-                const x = Math.random() * gameState.world.width;
-                const z = Math.random() * gameState.world.height;
-                const group = new THREE.Group();
-
-                const trunkHeight = 1.5 + Math.random() * 4;
-                const trunkRadius = 0.15 + Math.random() * 0.25;
-                const trunkGeo = new THREE.CylinderGeometry(trunkRadius*0.6, trunkRadius, trunkHeight, 5); // Angled trunk
-                const trunkMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(0.8, 0.2, 0.1 + Math.random()*0.1) }); // Dark purplish/brown
-                const trunkMesh = new THREE.Mesh(trunkGeo, trunkMat);
-                trunkMesh.position.y = trunkHeight / 2;
-                group.add(trunkMesh);
-
-                const numOrbs = 2 + Math.floor(Math.random()*4);
-                for(let j=0; j<numOrbs; j++){
-                    const orbRadius = trunkRadius * (2 + Math.random() * 3);
-                    const orbGeo = new THREE.IcosahedronGeometry(orbRadius, 0); // Crystalline orbs
-                    const orbMat = new THREE.MeshPhongMaterial({
-                        color: Math.random() > 0.5 ? 0x33FF99 : 0xFF33CC, // Glowing green or pink
-                        emissive: Math.random() > 0.5 ? 0x11AA66 : 0xAA1188,
-                        shininess: 70, transparent: true, opacity: 0.6 + Math.random()*0.3
-                    });
-                    const orbMesh = new THREE.Mesh(orbGeo, orbMat);
-                    orbMesh.position.y = trunkHeight + (Math.random()-0.5)*orbRadius*0.5;
-                    orbMesh.position.x = (Math.random()-0.5)*orbRadius*0.8;
-                    orbMesh.position.z = (Math.random()-0.5)*orbRadius*0.8;
-                    group.add(orbMesh);
-                }
-
-                group.position.set(x, 0, z);
-                const treeLogic = {x, z, trunkRadius, trunkHeight, mesh: group, boundingBox: new THREE.Box3().setFromObject(group)};
-                 if(!isOnRoad3D(treeLogic.boundingBox, 1.0)) {
-                    scene.add(group);
-                    gameState.world.trees.push(treeLogic);
-                 }
-            }
-
-            // Alien Obstacles (Crystals/Formations)
-            for (let i = 0; i < 150; i++) { // More obstacles
-                const size = 0.6 + Math.random() * 1.8;
-                const x = Math.random() * gameState.world.width;
-                const z = Math.random() * gameState.world.height;
-
-                const geo = Math.random() > 0.5 ? new THREE.DodecahedronGeometry(size, 0) : new THREE.IcosahedronGeometry(size,0);
-                const mat = new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(0.65, 0.1, 0.2 + Math.random()*0.15), shininess: 5 }); // Dark slate blue/purple
-                const mesh = new THREE.Mesh(geo, mat);
-                mesh.position.set(x, size / 2 - (Math.random()*size*0.2), z); // Some slightly buried
-                mesh.rotation.set(Math.random() * Math.PI,Math.random() * Math.PI,Math.random() * Math.PI);
-                const obsLogic = {x,z,width:size,depth:size,height:size, mesh, boundingBox: new THREE.Box3().setFromObject(mesh)};
-                if(!isOnRoad3D(obsLogic.boundingBox, 0.5)) {
-                    scene.add(mesh);
-                    gameState.world.obstacles.push(obsLogic);
-                }
-            }
-
-            // Energy Pylons (Gas Stations)
-            for (let i = 0; i < 6; i++) {
-                const pylonHeight = 4 + Math.random()*3;
-                const pylonRadius = 0.3 + Math.random()*0.2;
-                const x = 40 + Math.random() * (gameState.world.width - 80);
-                const z = 40 + Math.random() * (gameState.world.height - 80);
-
-                const group = new THREE.Group();
-                const pylonGeo = new THREE.CylinderGeometry(pylonRadius*0.8, pylonRadius, pylonHeight, 7);
-                const pylonMat = new THREE.MeshPhongMaterial({color: 0x666688, shininess:30}); // Metallic blue-grey
-                const pylonMesh = new THREE.Mesh(pylonGeo, pylonMat);
-                pylonMesh.position.y = pylonHeight/2;
-                group.add(pylonMesh);
-
-                const energyOrbGeo = new THREE.SphereGeometry(pylonRadius*2.5, 8,6);
-                const energyOrbMat = new THREE.MeshPhongMaterial({
-                    color:0xFFCC00, emissive:0xEEAA00, transparent:true, opacity:0.8, shininess:80
-                });
-                const energyOrbMesh = new THREE.Mesh(energyOrbGeo, energyOrbMat);
-                energyOrbMesh.position.y = pylonHeight + pylonRadius*1.5;
-                group.add(energyOrbMesh);
-
-                group.position.set(x,0,z); // Group is positioned at base
-                const stationLogic = {x, z, width: pylonRadius*3, depth: pylonRadius*3, height: pylonHeight + pylonRadius*3, mesh:group, boundingBox: new THREE.Box3().setFromObject(group)};
-                scene.add(group);
-                gameState.world.gasStations.push(stationLogic);
-            }
-
-            gameState.world.impassableZones.forEach(zoneData => {
-                 const geo = new THREE.BoxGeometry(zoneData.width, zoneData.height, zoneData.depth);
-                 const mat = new THREE.MeshLambertMaterial({ color: zoneData.color, transparent: true, opacity: 0.3 }); // More subtle
-                 const mesh = new THREE.Mesh(geo, mat);
-                 mesh.position.set(zoneData.x + zoneData.width/2, zoneData.height/2, zoneData.z + zoneData.depth/2);
-                 scene.add(mesh);
-                 zoneData.mesh = mesh;
-                 zoneData.boundingBox = new THREE.Box3().setFromObject(mesh);
-            });
-        }
-        function isOnRoad3D(objectBoundingBox, buffer = 1.0) {
-             for (const roadData of roads) {
-                 const dx = roadData.x2 - roadData.x1;
-                 const dz = roadData.z2 - roadData.z1;
-                 const length = Math.sqrt(dx*dx + dz*dz);
-                 if (length === 0) continue;
-
-                 const roadCenterX = roadData.x1 + dx / 2;
-                 const roadCenterZ = roadData.z1 + dz / 2;
-
-                 // Create an AABB for the road segment (conservative check)
-                 const roadBuffer = gameState.world.roadWidth / 2 + buffer;
-                 const minX = Math.min(roadData.x1, roadData.x2) - roadBuffer;
-                 const maxX = Math.max(roadData.x1, roadData.x2) + roadBuffer;
-                 const minZ = Math.min(roadData.z1, roadData.z2) - roadBuffer;
-                 const maxZ = Math.max(roadData.z1, roadData.z2) + roadBuffer;
-                 const roadBox = new THREE.Box3(new THREE.Vector3(minX, -1, minZ), new THREE.Vector3(maxX, 1, maxZ));
-
-                 if (objectBoundingBox.intersectsBox(roadBox)) {
-                    // More precise check for point inside rotated rectangle would be better, but this is usually ok for spawning
-                    // For simplicity, if AABBs intersect, assume it might be on the road.
-                     return true;
-                 }
-             }
-             return false;
-        }
-
-        function initializeWorldObjects3D() {
-            console.log(`Xenoscape Populated: ${gameState.world.trees.length} Flora, ${gameState.world.buildings.length} Structures, ${gameState.world.obstacles.length} Formations`);
-        }
-
-        function spawnInitialEnemies(count) { // Spawn Anomalies
-            let spawned = 0; let attempts = 0;
-            while (spawned < count && attempts < count * 10) {
-                attempts++;
-                const x = Math.random() * gameState.world.width;
-                const z = Math.random() * gameState.world.height;
-                const dx = x - gameState.player.x;
-                const dz = z - gameState.player.z;
-                if (dx*dx + dz*dz < 60*60) continue; // Spawn further from player
-
-                const enemyTestBB = new THREE.Box3(
-                    new THREE.Vector3(x - ENEMY_WIDTH, 0, z - ENEMY_WIDTH), // Wider test box for amorphous anomalies
-                    new THREE.Vector3(x + ENEMY_WIDTH, ENEMY_HEIGHT, z + ENEMY_WIDTH)
-                );
-
-                if (isOnRoad3D(enemyTestBB, ENEMY_WIDTH*1.5)) continue; // Keep anomalies off roads
-
-                let inObject = false;
-                const staticObjects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
-                for (const obj of staticObjects) {
-                    if (enemyTestBB.intersectsBox(obj.boundingBox)) {
-                        inObject = true; break;
-                    }
-                }
-                if (inObject) continue;
-
-                spawnEnemy(x, z);
-                spawned++;
-            }
-            console.log(`Spawned ${spawned} anomalies.`);
-        }
-
-        function spawnVehicles(count) { // Spawn Drifters
-            let spawned = 0; let attempts = 0;
-            const vehicleTypes = Object.keys(VEHICLE_TYPES);
-            while (spawned < count && attempts < count * 20) {
-                attempts++;
-                const x = Math.random() * gameState.world.width;
-                const z = Math.random() * gameState.world.height;
-                const dx = x - gameState.player.x;
-                const dz = z - gameState.player.z;
-                if (dx * dx + dz * dz < 40 * 40) continue;
-
-                const randomVehicleType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
-                const vehicleProps = VEHICLE_TYPES[randomVehicleType];
-
-                const vehicleMesh = createVehicleMesh(randomVehicleType, vehicleProps.color);
-                vehicleMesh.position.set(x, vehicleProps.height / 2, z);
-                vehicleMesh.rotation.y = Math.random() * Math.PI * 2;
-                const vehicleBB = new THREE.Box3().setFromObject(vehicleMesh);
-
-                let inObject = false;
-                const staticObjects = [...gameState.world.buildings, ...gameState.world.obstacles, ...gameState.world.impassableZones];
-                for (const obj of staticObjects) {
-                    if (vehicleBB.intersectsBox(obj.boundingBox)) { inObject = true; break; }
-                }
-                if (!isOnRoad3D(vehicleBB, vehicleProps.width * 0.8) && inObject) { // Prefer roads, but allow off-road if not in object
-                    continue;
-                }
-
-                const vehicleLogic = {
-                    x: x, z: z,
-                    width: vehicleProps.width, height: vehicleProps.height, depth: vehicleProps.depth,
-                    angle: vehicleMesh.rotation.y, color: vehicleProps.color,
-                    maxSpeed: vehicleProps.maxSpeed, acceleration: vehicleProps.acceleration,
-                    deceleration: vehicleProps.deceleration, handling: vehicleProps.handling,
-                    fuelConsumption: vehicleProps.fuelConsumption, fuelLevel: 70 + Math.random()*30, // Varied fuel
-                    type: randomVehicleType,
-                    mesh: vehicleMesh,
-                    boundingBox: vehicleBB
-                };
-
-                gameState.world.vehicles.push(vehicleLogic);
-                threeObjects.vehicles.push(vehicleMesh);
-                scene.add(vehicleMesh);
-                spawned++;
-            }
-            console.log(`Spawned ${spawned} derelict drifters.`);
-        }
-
-        function handleResize() {
-            const gameContainer = document.getElementById('game-container');
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            const aspectRatio = gameCanvasWidth / gameCanvasHeight;
-
-            let newWidth = windowWidth * 0.98;
-            let newHeight = newWidth / aspectRatio;
-            if (newHeight > windowHeight * 0.98) {
-                newHeight = windowHeight * 0.98;
-                newWidth = newHeight * aspectRatio;
-            }
-            gameContainer.style.width = `${newWidth}px`;
-            gameContainer.style.height = `${newHeight}px`;
-
-            if(renderer && camera){
-                renderer.setSize(newWidth, newHeight);
-                camera.aspect = newWidth / newHeight;
-                camera.updateProjectionMatrix();
-            }
-        }
-
-        window.onload = initGame;
     </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- DOM Elements ---
+        const temperatureDisplay = document.getElementById('temperature');
+        const windSpeedDisplay = document.getElementById('wind-speed');
+        const weatherStatusDisplay = document.getElementById('weather-status');
+        const powerDisplay = document.getElementById('base-power');
+        const holdingStatusDisplay = document.getElementById('holding-status');
+        const ironPanelsCountDisplay = document.getElementById('iron-panels-count');
+        const habitatStatusDisplay = document.getElementById('habitat-status'); // New UI element
+        const advanceTimeBtn = document.getElementById('advance-time-btn');
+        const toggleStormBtn = document.getElementById('toggle-storm-btn');
+        const messageLog = document.getElementById('message-log');
+        const canvas = document.getElementById('simulation-canvas');
+
+        // --- Simulation & Game State ---
+        let currentSol = 1;
+        let currentTemperature = -60;
+        let currentWindSpeed = 15;
+        let isDustStormActive = false;
+        let basePower = 100;
+        let easterEggFound = false;
+        let isHoldingDirt = false;
+        let ironPanelsCount = 0;
+        let isHabitatUpgraded = false; // Track habitat upgrade status
+
+        // --- Three.js Setup ---
+        let scene, camera, renderer, controls, ground, habitat, rover, commsTower, landingPad, hopperMachine;
+        let reactors = [];
+        let radiators = [];
+        let pipes = [];
+        let powerCable, powerCableStartPos, powerCableEndPos; // Store cable positions
+        let habitatWindows = []; // Array to hold window meshes
+        let ambientLight, directionalLight;
+        let easterEggObject = null;
+        let activeEffects = [];
+        const marsColor = 0xaa5533;
+        const clearFog = new THREE.Fog(0xD2B48C, 100, 300);
+        const stormFog = new THREE.Fog(marsColor, 10, 80);
+        const clock = new THREE.Clock();
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // --- Constants ---
+        const HABITAT_UPGRADE_COST = 5;
+        const GROUND_OFFSET = 0.2; // How high objects sit above the logical ground plane
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf8c8a0);
+            scene.fog = clearFog;
+
+            camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            camera.position.set(0, 45, 70);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight.position.set(50, 80, 30);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = 500;
+            directionalLight.shadow.camera.left = -150; directionalLight.shadow.camera.right = 150;
+            directionalLight.shadow.camera.top = 150; directionalLight.shadow.camera.bottom = -150;
+            directionalLight.shadow.bias = -0.0005;
+            scene.add(directionalLight);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; controls.dampingFactor = 0.05; controls.screenSpacePanning = false;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; controls.minDistance = 10; controls.maxDistance = 200;
+            controls.target.set(0, 0, 0); controls.update();
+
+            // --- Create 3D Objects ---
+            createGround();
+            createHabitat(); // Creates initial habitat and windows
+            createReactors();
+            createRadiators();
+            createPiping();
+            createPowerCable(); // Creates initial power cable
+            createRover();
+            createCommsTower();
+            createLandingPad();
+            createHopperMachine();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            renderer.domElement.addEventListener('click', onClick, false);
+            onWindowResize();
+        }
+
+        // --- Object Creation Functions ---
+        function createGround() {
+            const groundSize = 300; const segments = 50;
+            const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, segments, segments);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: marsColor, roughness: 0.95, metalness: 0.1 });
+            // Terrain undulations
+            const vertices = groundGeometry.attributes.position;
+            const craterCenters = [ new THREE.Vector2(50, 30), new THREE.Vector2(-40, -50), new THREE.Vector2(-80, 20), new THREE.Vector2(10, -70) ];
+            const craterRadii = [30, 40, 25, 35]; const craterDepths = [3, 5, 2.5, 4];
+            for (let i = 0; i < vertices.count; i++) { const x = vertices.getX(i); const y = vertices.getY(i); let zOffset = (Math.sin(x * 0.1) + Math.cos(y * 0.08)) * 0.3; for(let j = 0; j < craterCenters.length; j++) { const dx = x - craterCenters[j].x; const dy = y - craterCenters[j].y; const distSq = dx * dx + dy * dy; const radiusSq = craterRadii[j] * craterRadii[j]; if (distSq < radiusSq) { const normalizedDist = Math.sqrt(distSq) / craterRadii[j]; zOffset -= craterDepths[j] * (1 - normalizedDist * normalizedDist); } } vertices.setZ(i, zOffset); }
+            groundGeometry.computeVertexNormals();
+            ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; ground.name = "MartianGround";
+            scene.add(ground);
+        }
+
+        function createHabitat() {
+            const habitatSize = 10; const habitatHeight = 6;
+            const habitatGeometry = new THREE.BoxGeometry(habitatSize, habitatHeight, habitatSize);
+            const habitatMaterial = new THREE.MeshStandardMaterial({ color: 0xb7510e, roughness: 0.7, metalness: 0.3 });
+            habitat = new THREE.Mesh(habitatGeometry, habitatMaterial);
+            habitat.position.set(-15, habitatHeight / 2 + GROUND_OFFSET, 0);
+            habitat.castShadow = true; habitat.receiveShadow = true; habitat.name = "Habitat";
+            scene.add(habitat);
+            createHabitatWindows(habitatSize, habitatHeight, habitat.position); // Create initial windows
+        }
+
+        function createHabitatWindows(currentSizeX, currentHeight, currentPos) {
+            // Clear existing windows first
+            habitatWindows.forEach(win => scene.remove(win));
+            habitatWindows = [];
+
+            const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.7 });
+            // Adjust window size based on habitat size (simple scaling)
+            const scaleFactor = currentSizeX / 10; // Base size is 10
+            const windowWidth = 3 * scaleFactor;
+            const windowHeight = 2; // Keep height constant for now
+            const windowDepth = 0.1;
+            const windowOffset = 0.05;
+            const windowY = currentPos.y; // Center vertically
+
+            // +/- X faces
+            const windowXGeo = new THREE.BoxGeometry(windowDepth, windowHeight, windowWidth);
+            const windowX = new THREE.Mesh(windowXGeo, windowMaterial);
+            windowX.position.set(currentPos.x + currentSizeX / 2 + windowOffset, windowY, currentPos.z);
+            scene.add(windowX); habitatWindows.push(windowX);
+            const windowNegX = new THREE.Mesh(windowXGeo, windowMaterial);
+            windowNegX.position.set(currentPos.x - currentSizeX / 2 - windowOffset, windowY, currentPos.z);
+            scene.add(windowNegX); habitatWindows.push(windowNegX);
+
+            // +/- Z faces (adjust width based on scale)
+            const currentSizeZ = habitat.scale.z * 10; // Get current Z size
+            const windowZWidth = 3 * (currentSizeZ / 10);
+            const windowZGeo = new THREE.BoxGeometry(windowZWidth, windowHeight, windowDepth);
+            const windowZ = new THREE.Mesh(windowZGeo, windowMaterial);
+            windowZ.position.set(currentPos.x, windowY, currentPos.z + currentSizeZ / 2 + windowOffset);
+            scene.add(windowZ); habitatWindows.push(windowZ);
+            const windowNegZ = new THREE.Mesh(windowZGeo, windowMaterial);
+            windowNegZ.position.set(currentPos.x, windowY, currentPos.z - currentSizeZ / 2 - windowOffset);
+            scene.add(windowNegZ); habitatWindows.push(windowNegZ);
+        }
+
+        function createReactors() {
+            const reactorRadius = 2; const reactorHeight = 5; const reactorBaseHeight = reactorHeight / 2 + GROUND_OFFSET;
+            const reactorGeometry = new THREE.CylinderGeometry(reactorRadius, reactorRadius, reactorHeight, 32);
+            const reactorMaterial = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.3, metalness: 0.5 });
+            const reactorPositions = [ new THREE.Vector3(20, reactorBaseHeight, -5), new THREE.Vector3(20, reactorBaseHeight, 5), new THREE.Vector3(28, reactorBaseHeight, 0) ];
+            reactors = reactorPositions.map((pos, index) => { const reactor = new THREE.Mesh(reactorGeometry, reactorMaterial); reactor.position.copy(pos); reactor.castShadow = true; reactor.receiveShadow = true; reactor.name = `NuclearReactor_${index}`; scene.add(reactor); return reactor; });
+            // Manifold
+            const manifoldHeight = 1; const manifoldStartY = reactorBaseHeight + reactorHeight / 2 - manifoldHeight / 2; const manifoldMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.4 }); const manifoldGeo1 = new THREE.BoxGeometry(reactorRadius * 2, manifoldHeight, 10 + reactorRadius * 2); const manifold1 = new THREE.Mesh(manifoldGeo1, manifoldMaterial); manifold1.position.set(20, manifoldStartY, 0); manifold1.castShadow = true; scene.add(manifold1); const manifoldGeo2 = new THREE.BoxGeometry(8 + reactorRadius, manifoldHeight, reactorRadius * 2); const manifold2 = new THREE.Mesh(manifoldGeo2, manifoldMaterial); manifold2.position.set(24 + reactorRadius / 2, manifoldStartY, 0); manifold2.castShadow = true; scene.add(manifold2);
+        }
+
+        function createRadiators() {
+             const radiatorWidth = 15; const radiatorHeight = 1; const radiatorDepth = 8; const radiatorBaseHeight = radiatorHeight / 2 + GROUND_OFFSET; const radiatorGeometry = new THREE.BoxGeometry(radiatorWidth, radiatorHeight, radiatorDepth); const radiatorMaterial = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.8, metalness: 0.1 }); const radiatorPositions = [ new THREE.Vector3(60, radiatorBaseHeight, -10), new THREE.Vector3(60, radiatorBaseHeight, 10) ]; radiators = radiatorPositions.map(pos => { const radiator = new THREE.Mesh(radiatorGeometry, radiatorMaterial); radiator.position.copy(pos); radiator.castShadow = true; radiator.receiveShadow = true; scene.add(radiator); return radiator; });
+        }
+
+        function createPiping() {
+            const pipeRadius = 0.3; const pipeMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4 }); const pipeBaseHeight = 1.5;
+            // Manifold to Radiator Junction
+            const pipeStart1 = new THREE.Vector3(28 + reactors[0].geometry.parameters.radiusTop, pipeBaseHeight, 0); // Use reactor radius
+            const pipeEnd1 = new THREE.Vector3(50, pipeBaseHeight, 0);
+            pipes.push(createPipeMesh(pipeStart1, pipeEnd1, pipeRadius, pipeMaterial, scene));
+            // Junction to Radiators
+            const pipeStart2 = pipeEnd1.clone(); const pipeEnd2 = radiators[0].position.clone().setY(pipeBaseHeight);
+            pipes.push(createPipeMesh(pipeStart2, pipeEnd2, pipeRadius, pipeMaterial, scene));
+            const pipeStart3 = pipeEnd1.clone(); const pipeEnd3 = radiators[1].position.clone().setY(pipeBaseHeight);
+            pipes.push(createPipeMesh(pipeStart3, pipeEnd3, pipeRadius, pipeMaterial, scene));
+        }
+
+        function createPowerCable() {
+            const cableRadius = 0.2; const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+            // Store start/end positions for potential updates
+            powerCableStartPos = new THREE.Vector3(20 - reactors[0].geometry.parameters.radiusTop, 1.0, 0); // Near manifold base
+            powerCableEndPos = habitat.position.clone().setX(habitat.position.x - (habitat.geometry.parameters.width * habitat.scale.x) / 2 - 0.5).setY(1.0); // Connect to side of habitat (consider scale)
+            powerCable = createPipeMesh(powerCableStartPos, powerCableEndPos, cableRadius, cableMaterial, scene);
+            powerCable.name = "PowerCable";
+        }
+
+        function createRover() { const roverGeometry = new THREE.BoxGeometry(3, 1.5, 2); const roverMaterial = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.6 }); rover = new THREE.Mesh(roverGeometry, roverMaterial); rover.position.set(0, 0.75 + GROUND_OFFSET, 20); rover.castShadow = true; rover.name = "MarsRover"; scene.add(rover); }
+        function createCommsTower() { const towerBaseGeo = new THREE.CylinderGeometry(0.5, 0.5, 8, 16); const towerMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4 }); const towerBaseHeight = 4 + GROUND_OFFSET; commsTower = new THREE.Mesh(towerBaseGeo, towerMaterial); commsTower.position.set(-10, towerBaseHeight, 15); commsTower.castShadow = true; scene.add(commsTower); const towerTopGeo = new THREE.SphereGeometry(1, 16, 8); const towerTop = new THREE.Mesh(towerTopGeo, towerMaterial); towerTop.position.set(-10, towerBaseHeight + 4.5, 15); towerTop.castShadow = true; scene.add(towerTop); }
+        function createLandingPad() { const landingPadRadius = 12; const landingPadHeight = 0.5; const landingPadGeo = new THREE.CylinderGeometry(landingPadRadius, landingPadRadius, landingPadHeight, 32); const landingPadMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 }); landingPad = new THREE.Mesh(landingPadGeo, landingPadMaterial); landingPad.position.set(-50, landingPadHeight / 2 + 0.1, 30); landingPad.receiveShadow = true; landingPad.castShadow = true; scene.add(landingPad); const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 }); const points = []; const circleRadius = landingPadRadius * 0.8; for (let i = 0; i <= 64; i++) { const angle = (i / 64) * Math.PI * 2; points.push(new THREE.Vector3(Math.cos(angle) * circleRadius, landingPadHeight / 2 + 0.05, Math.sin(angle) * circleRadius)); } const circleGeometry = new THREE.BufferGeometry().setFromPoints(points); const landingCircle = new THREE.Line(circleGeometry, lineMaterial); landingCircle.position.copy(landingPad.position); scene.add(landingCircle); }
+        function createHopperMachine() {
+            const hopperGroup = new THREE.Group(); hopperGroup.name = "HopperMachine";
+            const hopperBaseSize = 4; const hopperBaseHeight = 2;
+            const hopperBaseGeo = new THREE.BoxGeometry(hopperBaseSize, hopperBaseHeight, hopperBaseSize);
+            const hopperMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.6, metalness: 0.4 });
+            const hopperBase = new THREE.Mesh(hopperBaseGeo, hopperMaterial);
+            hopperBase.castShadow = true; hopperBase.receiveShadow = true;
+            hopperBase.position.y = hopperBaseHeight / 2 + GROUND_OFFSET;
+            hopperGroup.add(hopperBase);
+            const funnelTopRadius = 2.5; const funnelBottomRadius = 0.5; const funnelHeight = 2;
+            const funnelGeo = new THREE.CylinderGeometry(funnelTopRadius, funnelBottomRadius, funnelHeight, 32);
+            const funnel = new THREE.Mesh(funnelGeo, hopperMaterial);
+            funnel.castShadow = true; funnel.position.y = hopperBaseHeight + funnelHeight / 2;
+            hopperGroup.add(funnel);
+            hopperGroup.position.set(-15, 0, -10); scene.add(hopperGroup); hopperMachine = hopperGroup;
+        }
+
+        // Helper function to create pipes/cables (returns mesh)
+        function createPipeMesh(startVec, endVec, radius, material, scene) {
+            const distance = startVec.distanceTo(endVec);
+            const geometry = new THREE.CylinderGeometry(radius, radius, distance, 16);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.lerpVectors(startVec, endVec, 0.5);
+            // Orientation calculation using Quaternion
+            const quaternion = new THREE.Quaternion();
+            const direction = new THREE.Vector3().subVectors(endVec, startVec).normalize();
+            const cylinderUp = new THREE.Vector3(0, 1, 0); // Default cylinder orientation
+            quaternion.setFromUnitVectors(cylinderUp, direction);
+            mesh.setRotationFromQuaternion(quaternion);
+
+            mesh.castShadow = true;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        // Window Resize (unchanged)
+        function onWindowResize() { const container = canvas.parentElement; const width = container ? container.clientWidth : window.innerWidth; const aspectRatioHeight = width * (9 / 16); const viewportHeightLimited = window.innerHeight * 0.65; const height = Math.min(aspectRatioHeight, viewportHeightLimited); canvas.style.height = `${height}px`; canvas.style.width = `${width}px`; if (camera && renderer) { camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height); } }
+
+        // --- Click Handling ---
+        function onClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                let clickedObject = intersects[0].object;
+                let objectName = clickedObject.name;
+                while (!objectName && clickedObject.parent) { clickedObject = clickedObject.parent; objectName = clickedObject.name; } // Traverse up
+
+                console.log("Clicked:", objectName);
+
+                if (objectName === "MartianGround") {
+                    if (!isHoldingDirt) { isHoldingDirt = true; logMessage("Collected Martian soil sample."); updateUIDisplay(); }
+                    else { logMessage("Already holding soil. Find the hopper!"); }
+                }
+                else if (objectName === "HopperMachine") {
+                    if (isHoldingDirt) {
+                        isHoldingDirt = false;
+                        ironPanelsCount++;
+                        logMessage(`Processing soil... Produced 1 Iron Panel (Total: ${ironPanelsCount}).`);
+                        triggerProcessingEffect(clickedObject.position);
+                        // Check for upgrade condition
+                        if (ironPanelsCount >= HABITAT_UPGRADE_COST && !isHabitatUpgraded) {
+                            upgradeHabitat();
+                        }
+                        updateUIDisplay(); // Update UI after potential upgrade
+                    } else { logMessage("Hopper ready. Collect some soil first!"); }
+                }
+                else if (objectName === "MarsRover" && !easterEggFound) { triggerEasterEgg(clickedObject.position); easterEggFound = true; }
+                else if (objectName.startsWith("NuclearReactor")) { triggerSteamEffect(clickedObject); }
+            }
+        }
+
+        // --- Habitat Upgrade ---
+        function upgradeHabitat() {
+            if (isHabitatUpgraded || ironPanelsCount < HABITAT_UPGRADE_COST) return; // Safety check
+
+            logMessage(`Spending ${HABITAT_UPGRADE_COST} Iron Panels to upgrade habitat...`);
+            ironPanelsCount -= HABITAT_UPGRADE_COST;
+            isHabitatUpgraded = true;
+
+            // 1. Scale the habitat mesh (Double Width and Length)
+            habitat.scale.set(2, 1, 2);
+            // Adjust Y position slightly if needed (though scale Y is 1, base offset remains)
+            // habitat.position.y = (habitat.geometry.parameters.height * habitat.scale.y) / 2 + GROUND_OFFSET;
+
+            // 2. Recreate windows for the new size
+            const newSizeX = habitat.geometry.parameters.width * habitat.scale.x;
+            const newHeight = habitat.geometry.parameters.height * habitat.scale.y;
+            createHabitatWindows(newSizeX, newHeight, habitat.position);
+
+            // 3. Update Power Cable Connection Point
+            // Remove old cable
+            if (powerCable) scene.remove(powerCable);
+            // Recalculate end position based on new scaled width
+            powerCableEndPos = habitat.position.clone().setX(habitat.position.x - newSizeX / 2 - 0.5).setY(1.0);
+            // Create new cable mesh
+            const cableRadius = 0.2; const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+            powerCable = createPipeMesh(powerCableStartPos, powerCableEndPos, cableRadius, cableMaterial, scene);
+             powerCable.name = "PowerCable";
+
+
+            logMessage("Habitat upgraded successfully!");
+            updateUIDisplay(); // Update UI immediately after upgrade logic
+        }
+
+
+        // --- Easter Egg Effect Function ---
+        function triggerEasterEgg(roverPosition) { logMessage("Hey! You found something... unusual."); const eggGeometry = new THREE.SphereGeometry(0.5, 16, 16); const eggMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x228822, roughness: 0.5 }); easterEggObject = new THREE.Mesh(eggGeometry, eggMaterial); easterEggObject.castShadow = true; easterEggObject.position.set(roverPosition.x + 2, 0.5 + GROUND_OFFSET, roverPosition.z); scene.add(easterEggObject); setTimeout(() => { if (easterEggObject) { scene.remove(easterEggObject); easterEggObject = null; logMessage("The strange object vanished..."); } }, 10000); }
+
+        // --- Particle Effects ---
+        function createParticleEffect(config) { const particleCount = config.count; const particles = new THREE.BufferGeometry(); const positions = new Float32Array(particleCount * 3); const velocities = new Float32Array(particleCount * 3); const lifetimes = new Float32Array(particleCount); const centerPos = config.position; const velConf = config.velocity; for (let i = 0; i < particleCount; i++) { const i3 = i * 3; positions[i3] = centerPos.x + (Math.random() - 0.5) * 0.5; positions[i3 + 1] = centerPos.y + Math.random() * 0.2; positions[i3 + 2] = centerPos.z + (Math.random() - 0.5) * 0.5; velocities[i3] = velConf.x[0] + Math.random() * (velConf.x[1] - velConf.x[0]); velocities[i3 + 1] = velConf.y[0] + Math.random() * (velConf.y[1] - velConf.y[0]); velocities[i3 + 2] = velConf.z[0] + Math.random() * (velConf.z[1] - velConf.z[0]); lifetimes[i] = config.particleLifetime[0] + Math.random() * (config.particleLifetime[1] - config.particleLifetime[0]); } particles.setAttribute('position', new THREE.BufferAttribute(positions, 3)); particles.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3)); particles.setAttribute('lifetime', new THREE.BufferAttribute(lifetimes, 1)); const particleMaterial = new THREE.PointsMaterial({ color: config.color, size: config.size, transparent: true, opacity: 0.8, sizeAttenuation: true, depthWrite: false }); const particleSystem = new THREE.Points(particles, particleMaterial); particleSystem.userData.startTime = clock.getElapsedTime(); particleSystem.userData.maxLifetime = config.systemLifetime; particleSystem.userData.gravity = config.gravity; scene.add(particleSystem); activeEffects.push(particleSystem); }
+        function triggerSteamEffect(reactorMesh) { logMessage(`Reactor ${reactorMesh.name} venting...`); const reactorTopY = reactorMesh.position.y + reactorMesh.geometry.parameters.height / 2; createParticleEffect({ position: new THREE.Vector3(reactorMesh.position.x, reactorTopY, reactorMesh.position.z), count: 50, color: 0xffffff, size: 0.2, particleLifetime: [1.0, 2.0], systemLifetime: 2.0, velocity: { x: [-0.5, 0.5], y: [2, 4], z: [-0.5, 0.5] }, gravity: 1.5 }); }
+        function triggerProcessingEffect(hopperPosition) { logMessage("Hopper processing..."); const effectY = hopperPosition.y + 2.5; createParticleEffect({ position: new THREE.Vector3(hopperPosition.x, effectY, hopperPosition.z), count: 80, color: 0xccaa88, size: 0.25, particleLifetime: [0.8, 1.8], systemLifetime: 1.8, velocity: { x: [-1.5, 1.5], y: [0.5, 2.5], z: [-1.5, 1.5] }, gravity: 1.0 }); }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if (easterEggObject) { easterEggObject.position.y = 0.7 + Math.sin(Date.now() * 0.002) * 0.2; } // Easter egg bobbing
+            // Update Active Particle Effects
+            const effectsToRemove = [];
+            activeEffects.forEach((system, index) => { const geometry = system.geometry; const positions = geometry.attributes.position.array; const velocities = geometry.attributes.velocity.array; const lifetimes = geometry.attributes.lifetime.array; const material = system.material; const elapsedTime = clock.getElapsedTime() - system.userData.startTime; const gravity = system.userData.gravity; let activeParticles = 0; for (let i = 0; i < positions.length / 3; i++) { const i3 = i * 3; const particleLifetime = lifetimes[i]; if (elapsedTime < particleLifetime) { positions[i3] += velocities[i3] * delta; positions[i3 + 1] += velocities[i3 + 1] * delta; positions[i3 + 2] += velocities[i3 + 2] * delta; velocities[i3 + 1] -= gravity * delta; material.opacity = Math.max(0, 0.8 * (1 - (elapsedTime / particleLifetime))); activeParticles++; } else { positions[i3 + 1] = -1000; } } geometry.attributes.position.needsUpdate = true; if (activeParticles === 0 || elapsedTime > system.userData.maxLifetime) { effectsToRemove.push(index); } });
+            // Remove completed effects
+            for (let i = effectsToRemove.length - 1; i >= 0; i--) { const indexToRemove = effectsToRemove[i]; const systemToRemove = activeEffects[indexToRemove]; scene.remove(systemToRemove); systemToRemove.geometry.dispose(); systemToRemove.material.dispose(); activeEffects.splice(indexToRemove, 1); }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Simulation Logic ---
+        function logMessage(message) { const p = document.createElement('p'); if (message.includes("Weather update") || message.includes("Advancing time") || message.includes("fluctuated")) { p.textContent = `Sol ${currentSol}: ${message}`; } else { p.textContent = message; } messageLog.appendChild(p); messageLog.scrollTop = messageLog.scrollHeight; }
+        function updateUIDisplay() {
+            temperatureDisplay.textContent = currentTemperature; windSpeedDisplay.textContent = currentWindSpeed; powerDisplay.textContent = Math.round(basePower);
+            if (isDustStormActive) { weatherStatusDisplay.textContent = 'Dust Storm'; weatherStatusDisplay.className = 'font-semibold text-red-700'; scene.fog = stormFog; ambientLight.intensity = 0.2; directionalLight.intensity = 0.3; directionalLight.color.set(marsColor); scene.background.set(marsColor); }
+            else { weatherStatusDisplay.textContent = 'Clear'; weatherStatusDisplay.className = 'font-semibold text-green-700'; scene.fog = clearFog; ambientLight.intensity = 0.7; directionalLight.intensity = 1.5; directionalLight.color.set(0xffffff); scene.background.set(0xf8c8a0); }
+            holdingStatusDisplay.textContent = isHoldingDirt ? 'Martian Soil' : 'Idle'; holdingStatusDisplay.className = isHoldingDirt ? 'font-bold text-yellow-700' : 'font-medium text-gray-700';
+            ironPanelsCountDisplay.textContent = ironPanelsCount;
+            // Update Habitat Status UI
+            habitatStatusDisplay.textContent = isHabitatUpgraded ? 'Upgraded' : 'Standard';
+            habitatStatusDisplay.className = isHabitatUpgraded ? 'font-bold text-green-700' : 'font-medium text-gray-700';
+        }
+        function simulateWeather() { currentTemperature += Math.floor(Math.random() * 21) - 10; currentTemperature = Math.max(-120, Math.min(0, currentTemperature)); currentWindSpeed += Math.floor(Math.random() * 11) - 5; currentWindSpeed = Math.max(5, currentWindSpeed); const stormChance = Math.random(); if (!isDustStormActive && stormChance < 0.1 && currentWindSpeed > 50) { isDustStormActive = true; currentWindSpeed = Math.max(80, currentWindSpeed + Math.floor(Math.random() * 50)); logMessage('Warning! A dust storm has started.'); } else if (isDustStormActive && stormChance < 0.3) { isDustStormActive = false; currentWindSpeed = Math.max(15, currentWindSpeed - Math.floor(Math.random() * 40)); logMessage('The dust storm has subsided.'); } else if (isDustStormActive) { currentWindSpeed += Math.floor(Math.random() * 21) - 10; currentWindSpeed = Math.max(60, currentWindSpeed); logMessage('Dust storm continues. Visibility low.'); } currentWindSpeed = Math.min(150, currentWindSpeed); const powerConsumed = 5 + Math.random() * 5; const powerGenerated = 10 * reactors.length; basePower += (powerGenerated - powerConsumed); if (Math.random() < 0.05) { const fluctuation = (Math.random() - 0.5) * 10; basePower += fluctuation; logMessage(`Reactor output fluctuated by ${fluctuation.toFixed(1)}%.`); } basePower = Math.max(0, Math.min(100, basePower)); logMessage(`Weather update: Temp ${currentTemperature}°C, Wind ${currentWindSpeed} kph. Base Power: ${Math.round(basePower)}%.`); updateUIDisplay(); }
+
+        // --- Event Listeners (Buttons) ---
+        advanceTimeBtn.addEventListener('click', () => { currentSol++; logMessage(`Advancing time to Sol ${currentSol}.`); simulateWeather(); });
+        toggleStormBtn.addEventListener('click', () => { isDustStormActive = !isDustStormActive; if (isDustStormActive) { logMessage('Manual Override: Dust storm initiated.'); currentWindSpeed = Math.max(80, currentWindSpeed + 30); } else { logMessage('Manual Override: Dust storm cleared.'); currentWindSpeed = Math.max(15, currentWindSpeed - 30); } updateUIDisplay(); });
+
+        // --- Initial Setup ---
+        window.onload = () => {
+            try {
+                initThree();
+                logMessage(`Simulation initialized at Sol ${currentSol}. Collect ${HABITAT_UPGRADE_COST} Iron Panels to upgrade habitat.`);
+                updateUIDisplay();
+                animate();
+            } catch (error) {
+                console.error("Error initializing simulation:", error);
+                logMessage("Error initializing 3D simulation. Check console.");
+                const errorP = document.createElement('p'); errorP.textContent = `Initialization Error: ${error.message}`; errorP.style.color = 'red'; messageLog.appendChild(errorP);
+            }
+        };
+
+    </script>
+
 </body>
 </html>
