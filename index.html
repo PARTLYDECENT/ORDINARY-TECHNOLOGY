@@ -431,8 +431,71 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+
+
+
+
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
 <script>
-  // --- Advanced Morphing Nodes Network System with "ORDINARY" Pattern ---
+  // --- Advanced Morphing Nodes Network System with "ORDINARY" Pattern (Enhanced) ---
+
+  // Define mouseData globally or within a scope accessible by interaction handlers and animation loop
+  let enhancedMouseData = { x: null, y: null, radius: 150, strength: 0.15 }; // strength adjusted for visual impact
+
   function createMorphingNodes() {
     const container = document.getElementById('particles');
     if (!container) { 
@@ -473,9 +536,10 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
     canvas.style.height = '100%';
     canvas.style.pointerEvents = 'none';
     canvas.style.zIndex = '1';
-    canvas.width = container.offsetWidth;
-    canvas.height = container.offsetHeight;
+    // Set canvas dimensions after it's in the DOM to ensure offsetWidth/Height are correct
     container.appendChild(canvas);
+    canvas.width = container.offsetWidth;
+    canvas.height = container.offsetHeight; 
     
     const ctx = canvas.getContext('2d');
     
@@ -485,99 +549,103 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
     // Create "ORDINARY" letter nodes first
     const letters = "ORDINARY";
     const lettersCount = letters.length;
-    const letterWidth = container.offsetWidth * 0.8 / lettersCount;
-    const letterStartX = container.offsetWidth * 0.1;
-    const letterY = container.offsetHeight * 0.5;
+    const letterWidth = canvas.width * 0.8 / lettersCount; // Use canvas.width for consistency
+    const letterStartX = canvas.width * 0.1;
+    const letterY = canvas.height * 0.5;
     const letterNodeCount = 5; // Nodes per letter
     
     for (let i = 0; i < lettersCount; i++) {
       const letter = letters[i];
-      // Get letter path points
       const letterPoints = getLetterPoints(letter, 
                                           letterStartX + i * letterWidth, 
                                           letterY, 
                                           letterWidth * 0.8, 
-                                          container.offsetHeight * 0.4);
+                                          canvas.height * 0.4);
       
-      // Create nodes along letter path
       for (let j = 0; j < letterNodeCount; j++) {
         const pointIndex = Math.floor(j * letterPoints.length / letterNodeCount);
         const point = letterPoints[pointIndex];
         
-        // Convert absolute position to percentage
-        const posX = point.x / container.offsetWidth * 100;
-        const posY = point.y / container.offsetHeight * 100;
+        const posX = point.x / canvas.width * 100;
+        const posY = point.y / canvas.height * 100;
         
-        // Create node with special properties
-        createNode(posX, posY, true, nodes, container, themeColors);
+        createNode(posX, posY, true, nodes, container, themeColors, canvas);
       }
     }
     
-    // Create remaining random nodes
     const remainingNodes = nodeCount - (lettersCount * letterNodeCount);
     for (let i = 0; i < remainingNodes; i++) {
-      const posX = Math.random() * 96 + 2; // 2% to 98%
-      const posY = Math.random() * 96 + 2; // 2% to 98%
-      createNode(posX, posY, false, nodes, container, themeColors);
+      const posX = Math.random() * 96 + 2; 
+      const posY = Math.random() * 96 + 2; 
+      createNode(posX, posY, false, nodes, container, themeColors, canvas);
     }
     
-    // Connection and movement animation loop
+    // Setup mouse listeners for interaction
+    setupMouseInteraction(container);
+
     function animateNodes() {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      nodes.forEach(node => node.connections = []);
       
-      // Reset all connections
-      nodes.forEach(node => {
-        node.connections = [];
-      });
-      
-      // Calculate distances and create connections
       for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
         
-        // Move node (letter nodes move less)
+        // --- Mouse Interaction ---
+        if (enhancedMouseData.x !== null && enhancedMouseData.y !== null) {
+            const nodePixelX = nodeA.x * canvas.width / 100;
+            const nodePixelY = nodeA.y * canvas.height / 100;
+            const dxToMouse = nodePixelX - enhancedMouseData.x;
+            const dyToMouse = nodePixelY - enhancedMouseData.y;
+            const distanceToMouse = Math.sqrt(dxToMouse * dxToMouse + dyToMouse * dyToMouse);
+
+            if (distanceToMouse < enhancedMouseData.radius) {
+                const force = (enhancedMouseData.radius - distanceToMouse) / enhancedMouseData.radius;
+                const repelFactor = force * enhancedMouseData.strength;
+                const agility = nodeA.isLetter ? 0.2 : 1.0; // Letters are less affected
+
+                nodeA.velocityX += (dxToMouse / distanceToMouse) * repelFactor * agility;
+                nodeA.velocityY += (dyToMouse / distanceToMouse) * repelFactor * agility;
+            }
+        }
+        
         nodeA.x += nodeA.velocityX * (nodeA.isLetter ? 0.3 : 1);
         nodeA.y += nodeA.velocityY * (nodeA.isLetter ? 0.3 : 1);
         
-        // Bounce off walls with different behaviors for letter nodes
+        // Dampen velocity (friction)
+        nodeA.velocityX *= 0.96; 
+        nodeA.velocityY *= 0.96;
+
         if (nodeA.x < 2 || nodeA.x > 98) {
-          nodeA.velocityX *= -1;
+          nodeA.velocityX *= -1.1; // Slight boost on bounce
           nodeA.x = Math.max(2, Math.min(98, nodeA.x));
-          // Letter nodes try to drift back toward their original position
-          if (nodeA.isLetter) {
-            nodeA.velocityX += (nodeA.originalX - nodeA.x) * 0.01;
-          }
+          if (nodeA.isLetter) nodeA.velocityX += (nodeA.originalX - nodeA.x) * 0.015;
         }
         if (nodeA.y < 2 || nodeA.y > 98) {
-          nodeA.velocityY *= -1;
+          nodeA.velocityY *= -1.1; // Slight boost on bounce
           nodeA.y = Math.max(2, Math.min(98, nodeA.y));
-          // Letter nodes try to drift back toward their original position
-          if (nodeA.isLetter) {
-            nodeA.velocityY += (nodeA.originalY - nodeA.y) * 0.01;
-          }
+          if (nodeA.isLetter) nodeA.velocityY += (nodeA.originalY - nodeA.y) * 0.015;
         }
         
-        // Letter nodes always try to return to original position slowly
         if (nodeA.isLetter) {
-          nodeA.velocityX += (nodeA.originalX - nodeA.x) * 0.002;
-          nodeA.velocityY += (nodeA.originalY - nodeA.y) * 0.002;
+          nodeA.velocityX += (nodeA.originalX - nodeA.x) * 0.0025; // Slightly stronger pull to origin
+          nodeA.velocityY += (nodeA.originalY - nodeA.y) * 0.0025;
         }
+
+        // Cap max velocity to prevent extreme speeds from mouse interaction
+        const maxSpeed = nodeA.isLetter ? 0.2 : 0.5;
+        nodeA.velocityX = Math.max(-maxSpeed, Math.min(maxSpeed, nodeA.velocityX));
+        nodeA.velocityY = Math.max(-maxSpeed, Math.min(maxSpeed, nodeA.velocityY));
         
-        // Update position
         nodeA.element.style.left = `${nodeA.x}%`;
         nodeA.element.style.top = `${nodeA.y}%`;
         
-        // Find connections
         for (let j = i + 1; j < nodes.length; j++) {
           const nodeB = nodes[j];
-          
-          // Simple distance calculation (percentage-based)
           const dx = Math.abs(nodeA.x - nodeB.x) * canvas.width / 100;
           const dy = Math.abs(nodeA.y - nodeB.y) * canvas.height / 100;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
-          // Connect if within threshold (and not too many connections)
-          const connectionLimit = nodeA.isHub || nodeB.isHub ? 8 : 3;
+          const connectionLimit = nodeA.isHub || nodeB.isHub ? 8 : (nodeA.isLetter || nodeB.isLetter ? 5 : 3);
           if (distance < connectionThreshold && 
               nodeA.connections.length < connectionLimit && 
               nodeB.connections.length < connectionLimit) {
@@ -585,291 +653,179 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
             nodeA.connections.push(nodeB);
             nodeB.connections.push(nodeA);
             
-            // Draw connection
             const alpha = Math.max(0.05, 1 - (distance / connectionThreshold)) * 
-                          Math.min(nodeA.baseOpacity, nodeB.baseOpacity) * 0.8;
+                          Math.min(nodeA.baseOpacity, nodeB.baseOpacity) * 0.9; // Slightly increased base connection alpha
             
-            // Calculate actual pixel positions
             const x1 = nodeA.x * canvas.width / 100;
             const y1 = nodeA.y * canvas.height / 100;
             const x2 = nodeB.x * canvas.width / 100;
             const y2 = nodeB.y * canvas.height / 100;
             
-            // Draw line
+            // --- Glowing Connection Lines ---
+            const glowIntensity = (nodeA.isHub || nodeB.isHub || nodeA.isLetter || nodeB.isLetter) ? 10 : 5;
+            ctx.shadowBlur = glowIntensity;
+            // Use the average color or one of the node's resolved color for the glow
+            ctx.shadowColor = `rgba(${nodeA.resolvedRgbColor}, ${alpha * 0.7})`; 
+
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
-            ctx.strokeStyle = `rgba(${getRGBValues(nodeA.color)}, ${alpha})`;
-            ctx.lineWidth = Math.min(nodeA.size, nodeB.size) * 0.2;
+            // Use resolved RGB for stroke style for consistency
+            ctx.strokeStyle = `rgba(${nodeA.resolvedRgbColor}, ${alpha})`; 
+            ctx.lineWidth = Math.max(0.5, Math.min(nodeA.size, nodeB.size) * 0.25); // Slightly thicker base lines
             ctx.stroke();
+
+            // Reset shadow for next line or drawing operation IMPORTANT
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
           }
         }
       }
-      
       requestAnimationFrame(animateNodes);
     }
-    
     animateNodes();
   }
   
-  // Create a single node
-  function createNode(posX, posY, isLetter, nodes, container, themeColors) {
+  function createNode(posX, posY, isLetter, nodes, container, themeColors, canvasRef) { // Pass canvas for dimensions
     const node = document.createElement('div');
     node.classList.add('node');
     
-    // Node appearance
     const isHub = Math.random() > 0.85 || isLetter;
-    const sizeMultiplier = isLetter ? 2.5 : (isHub ? 2 : (Math.random() > 0.7 ? 1.5 : 1));
-    const size = (Math.random() * 5 + 3) * sizeMultiplier;
+    const sizeMultiplier = isLetter ? 2.8 : (isHub ? 2.2 : (Math.random() > 0.7 ? 1.6 : 1));
+    const size = (Math.random() * 5 + 3) * sizeMultiplier; // Slightly larger nodes on average
     
     node.style.width = `${size}px`;
     node.style.height = `${size}px`;
     node.style.left = `${posX}%`;
     node.style.top = `${posY}%`;
     node.style.position = 'absolute';
-    node.style.borderRadius = Math.random() > 0.3 ? '50%' : `${Math.floor(Math.random() * 40 + 20)}%`;
+    node.style.borderRadius = Math.random() > 0.2 ? '50%' : `${Math.floor(Math.random() * 30 + 20)}%`;
     
-    // Color - letter nodes get special treatment
     let color;
     if (isLetter) {
-      color = themeColors[Math.floor(Math.random() * 3)]; // Use primary colors for letters
-    } else if (Math.random() > 0.4) {
+      color = themeColors[Math.floor(Math.random() * 3)]; 
+    } else if (Math.random() > 0.35) { // Higher chance of theme color
       color = themeColors[Math.floor(Math.random() * themeColors.length)];
     } else {
       const hue = Math.random() * 360;
-      const saturation = 70 + Math.random() * 30; // 70-100%
-      const lightness = 55 + Math.random() * 15;  // 55-70%
+      const saturation = 75 + Math.random() * 25; 
+      const lightness = 60 + Math.random() * 15;  
       color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
     node.style.background = color;
     
-    // Visual effects
-    const baseOpacity = isLetter ? 0.95 : (isHub ? 0.9 : (Math.random() * 0.5 + 0.3));
+    const baseOpacity = isLetter ? 0.98 : (isHub ? 0.92 : (Math.random() * 0.55 + 0.35));
     node.style.opacity = baseOpacity;
-    node.style.boxShadow = isLetter || isHub ? `0 0 ${Math.floor(size*1.5)}px ${color}` : '';
+    
+    const resolvedRgbColor = getRGBValues(color); // Get resolved RGB for animations
+    node.style.boxShadow = isLetter || isHub ? `0 0 ${Math.floor(size*1.3)}px rgba(${resolvedRgbColor}, ${baseOpacity * 0.7})` : '';
     
     container.appendChild(node);
 
-    // Store node data
     const nodeData = {
       element: node,
-      x: posX,
-      y: posY,
-      originalX: posX, // For letter nodes to return to position
-      originalY: posY,
-      size: size,
-      color: color,
-      isHub: isHub,
-      isLetter: isLetter,
-      baseOpacity: baseOpacity,
-      velocityX: (Math.random() - 0.5) * (isLetter ? 0.02 : 0.05),
-      velocityY: (Math.random() - 0.5) * (isLetter ? 0.02 : 0.05),
+      x: posX, y: posY,
+      originalX: posX, originalY: posY,
+      size: size, color: color, resolvedRgbColor: resolvedRgbColor, // Store resolved color
+      isHub: isHub, isLetter: isLetter, baseOpacity: baseOpacity,
+      velocityX: (Math.random() - 0.5) * (isLetter ? 0.015 : 0.04), // Slightly slower base speeds
+      velocityY: (Math.random() - 0.5) * (isLetter ? 0.015 : 0.04),
       connections: []
     };
-    
     nodes.push(nodeData);
-    
-    // Morphing animation
     animateNodeMorphing(node, nodeData);
-    
     return nodeData;
   }
   
-  // Helper to extract RGB values from various color formats
-  function getRGBValues(color) {
-    // For CSS variables
-    if (color.startsWith('var(--rgb-')) {
-      return color.replace('var(--rgb-', '').replace(')', '');
+  function getRGBValues(colorStr) {
+    if (colorStr.startsWith('var(--rgb-')) {
+      return colorStr.replace('var(--rgb-', '').replace(')', '');
+    }
+    if (colorStr.startsWith('rgba')) {
+      const match = colorStr.match(/rgba\(([^)]+)\)/);
+      if (match && match[1]) return match[1].split(',').slice(0, 3).join(',');
+    }
+    if (colorStr.startsWith('rgb')) { // Handle rgb() directly as well
+        const match = colorStr.match(/rgb\(([^)]+)\)/);
+        if (match && match[1]) return match[1].split(',').slice(0, 3).join(',');
     }
     
-    // For rgba
-    if (color.startsWith('rgba')) {
-      const match = color.match(/rgba\(([^)]+)\)/);
-      if (match && match[1]) {
-        return match[1].split(',').slice(0, 3).join(',');
-      }
-    }
-    
-    // For hex, hsl, etc. use a temporary element
     const temp = document.createElement('div');
-    temp.style.color = color;
-    document.body.appendChild(temp);
+    temp.style.color = colorStr;
+    document.body.appendChild(temp); // Element must be in DOM for getComputedStyle
     const computedColor = getComputedStyle(temp).color;
     document.body.removeChild(temp);
     
     const rgbMatch = computedColor.match(/rgb\(([^)]+)\)/);
-    if (rgbMatch && rgbMatch[1]) {
-      return rgbMatch[1];
-    }
-    
-    return '255, 255, 255'; // Default to white
+    return (rgbMatch && rgbMatch[1]) ? rgbMatch[1] : '255,255,255';
   }
   
-  // Get points that form a letter
-  function getLetterPoints(letter, x, y, width, height) {
+  function getLetterPoints(letter, x, y, width, height) { // Unchanged from original
     const points = [];
-    const lineCount = 10; // Number of points per line segment
-    
-    // Simple point calculations for each letter
+    const lineCount = 10;
     switch(letter) {
-      case 'O':
-        for (let i = 0; i <= 20; i++) {
-          const angle = (i / 20) * Math.PI * 2;
-          points.push({ 
-            x: x + width/2 + Math.cos(angle) * width/2,
-            y: y + Math.sin(angle) * height/2
-          });
-        }
-        break;
-      case 'R':
-        // Vertical line
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ x: x, y: y - height/2 + i * height/lineCount });
-        }
-        // Arc top
-        for (let i = 0; i <= lineCount/2; i++) {
-          const angle = (i / (lineCount/2)) * Math.PI;
-          points.push({ 
-            x: x + Math.sin(angle) * width/2,
-            y: y - height/4 - Math.cos(angle) * height/4
-          });
-        }
-        // Diagonal leg
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ 
-            x: x + width/2 - i * width/2/lineCount,
-            y: y + i * height/2/lineCount
-          });
-        }
-        break;
-      case 'D':
-        // Vertical line
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ x: x, y: y - height/2 + i * height/lineCount });
-        }
-        // Arc
-        for (let i = 0; i <= lineCount; i++) {
-          const angle = (i / lineCount) * Math.PI;
-          points.push({ 
-            x: x + Math.sin(angle) * width/2,
-            y: y - Math.cos(angle) * height/2
-          });
-        }
-        break;
-      case 'I':
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ x: x, y: y - height/2 + i * height/lineCount });
-        }
-        break;
-      case 'N':
-        // Left vertical
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ x: x - width/3, y: y - height/2 + i * height/lineCount });
-        }
-        // Diagonal
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ 
-            x: x - width/3 + i * 2*width/3/lineCount,
-            y: y + height/2 - i * height/lineCount
-          });
-        }
-        // Right vertical
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ x: x + width/3, y: y - height/2 + i * height/lineCount });
-        }
-        break;
-      case 'A':
-        // Left diagonal
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ 
-            x: x - width/2 + i * width/2/lineCount,
-            y: y + height/2 - i * height/lineCount
-          });
-        }
-        // Right diagonal
-        for (let i = 0; i <= lineCount; i++) {
-          points.push({ 
-            x: x + i * width/2/lineCount,
-            y: y - height/2 + i * height/lineCount
-          });
-        }
-        // Middle bar
-        for (let i = 0; i <= lineCount/2; i++) {
-          points.push({ 
-            x: x - width/4 + i * width/2/(lineCount/2),
-            y: y 
-          });
-        }
-        break;
-      case 'Y':
-        // Left arm
-        for (let i = 0; i <= lineCount/2; i++) {
-          points.push({ 
-            x: x - width/2 + i * width/2/(lineCount/2),
-            y: y - height/2 + i * height/2/(lineCount/2)
-          });
-        }
-        // Right arm
-        for (let i = 0; i <= lineCount/2; i++) {
-          points.push({ 
-            x: x + width/2 - i * width/2/(lineCount/2),
-            y: y - height/2 + i * height/2/(lineCount/2)
-          });
-        }
-        // Stem
-        for (let i = 0; i <= lineCount/2; i++) {
-          points.push({ x: x, y: y + i * height/2/(lineCount/2) });
-        }
-        break;
+      case 'O': for (let i = 0; i <= 20; i++) { const angle = (i / 20) * Math.PI * 2; points.push({ x: x + width/2 + Math.cos(angle) * width/2, y: y + Math.sin(angle) * height/2 }); } break;
+      case 'R': for (let i = 0; i <= lineCount; i++) points.push({ x: x, y: y - height/2 + i * height/lineCount }); for (let i = 0; i <= lineCount/2; i++) { const angle = (i / (lineCount/2)) * Math.PI; points.push({ x: x + Math.sin(angle) * width/2, y: y - height/4 - Math.cos(angle) * height/4 }); } for (let i = 0; i <= lineCount; i++) points.push({ x: x + width/2 - i * width/2/lineCount, y: y + i * height/2/lineCount }); break;
+      case 'D': for (let i = 0; i <= lineCount; i++) points.push({ x: x, y: y - height/2 + i * height/lineCount }); for (let i = 0; i <= lineCount; i++) { const angle = (i / lineCount) * Math.PI; points.push({ x: x + Math.sin(angle) * width/2, y: y - Math.cos(angle) * height/2 }); } break;
+      case 'I': for (let i = 0; i <= lineCount; i++) points.push({ x: x, y: y - height/2 + i * height/lineCount }); break;
+      case 'N': for (let i = 0; i <= lineCount; i++) points.push({ x: x - width/3, y: y - height/2 + i * height/lineCount }); for (let i = 0; i <= lineCount; i++) points.push({ x: x - width/3 + i * 2*width/3/lineCount, y: y + height/2 - i * height/lineCount }); for (let i = 0; i <= lineCount; i++) points.push({ x: x + width/3, y: y - height/2 + i * height/lineCount }); break;
+      case 'A': for (let i = 0; i <= lineCount; i++) points.push({ x: x - width/2 + i * width/2/lineCount, y: y + height/2 - i * height/lineCount }); for (let i = 0; i <= lineCount; i++) points.push({ x: x + i * width/2/lineCount, y: y - height/2 + i * height/lineCount }); for (let i = 0; i <= lineCount/2; i++) points.push({ x: x - width/4 + i * width/2/(lineCount/2), y: y }); break;
+      case 'Y': for (let i = 0; i <= lineCount/2; i++) points.push({ x: x - width/2 + i * width/2/(lineCount/2), y: y - height/2 + i * height/2/(lineCount/2) }); for (let i = 0; i <= lineCount/2; i++) points.push({ x: x + width/2 - i * width/2/(lineCount/2), y: y - height/2 + i * height/2/(lineCount/2) }); for (let i = 0; i <= lineCount/2; i++) points.push({ x: x, y: y + i * height/2/(lineCount/2) }); break;
     }
     return points;
   }
   
-  // Node morphing animation
   function animateNodeMorphing(node, nodeData) {
-    const duration = Math.random() * 8000 + 4000; // 4-12 seconds
-    
+    const duration = Math.random() * 7000 + 5000; // Slightly longer average morph
     const morphKeyframes = [
-      { 
-        transform: 'scale(1) rotate(0deg)',
-        opacity: nodeData.baseOpacity
-      },
-      { 
-        transform: `scale(${0.8 + Math.random() * 0.5}) rotate(${(Math.random() - 0.5) * 20}deg)`,
-        opacity: nodeData.baseOpacity * (0.7 + Math.random() * 0.6),
-        offset: 0.5
-      },
-      { 
-        transform: 'scale(1) rotate(0deg)',
-        opacity: nodeData.baseOpacity
-      }
+      { transform: 'scale(1) rotate(0deg)', opacity: nodeData.baseOpacity },
+      { transform: `scale(${0.75 + Math.random() * 0.6}) rotate(${(Math.random() - 0.5) * 25}deg)`, opacity: nodeData.baseOpacity * (0.65 + Math.random() * 0.5), offset: 0.5 },
+      { transform: 'scale(1) rotate(0deg)', opacity: nodeData.baseOpacity }
     ];
-    
-    const morphOptions = {
-      duration: duration,
-      iterations: Infinity,
-      easing: 'ease-in-out',
-      direction: Math.random() > 0.5 ? 'alternate' : 'normal'
-    };
-    
+    const morphOptions = { duration: duration, iterations: Infinity, easing: 'cubic-bezier(0.45, 0.05, 0.55, 0.95)', direction: Math.random() > 0.5 ? 'alternate' : 'normal' };
     node.animate(morphKeyframes, morphOptions);
     
-    // For special nodes, add a pulse effect
     if (nodeData.isHub || nodeData.isLetter) {
+      // --- Enhanced Pulse Effect ---
+      const basePulseSize = Math.floor(nodeData.size * 0.6);
+      const peakPulseSize = Math.floor(nodeData.size * (nodeData.isLetter ? 2.8 : 2.0)); // Adjusted intensity
+      const baseShadowColor = `rgba(${nodeData.resolvedRgbColor}, ${Math.min(0.7, nodeData.baseOpacity * 0.7)})`;
+      const peakShadowColor = `rgba(${nodeData.resolvedRgbColor}, ${Math.min(0.9, nodeData.baseOpacity + 0.1)})`;
+
       const pulseKeyframes = [
-        { boxShadow: `0 0 ${Math.floor(nodeData.size*0.8)}px ${nodeData.color}` },
-        { boxShadow: `0 0 ${Math.floor(nodeData.size*2.5)}px ${nodeData.color}` },
-        { boxShadow: `0 0 ${Math.floor(nodeData.size*0.8)}px ${nodeData.color}` }
+        { boxShadow: `0 0 ${basePulseSize}px ${baseShadowColor}`, offset: 0 },
+        { boxShadow: `0 0 ${peakPulseSize}px ${peakShadowColor}`, offset: 0.15 }, // Quicker peak
+        { boxShadow: `0 0 ${Math.floor(peakPulseSize * 0.4)}px ${baseShadowColor}`, offset: 0.5 },
+        { boxShadow: `0 0 ${basePulseSize}px ${baseShadowColor}`, offset: 1.0 }
       ];
-      
-      const pulseOptions = {
-        duration: Math.random() * 3000 + 2000, // 2-5 seconds
-        iterations: Infinity,
-        easing: 'ease-in-out'
-      };
-      
+      const pulseOptions = { duration: Math.random() * 2200 + 1800, iterations: Infinity, easing: 'cubic-bezier(0.33, 0, 0.67, 1)'};
       node.animate(pulseKeyframes, pulseOptions);
     }
+  }
+
+  // --- Mouse Interaction Setup ---
+  function setupMouseInteraction(interactionElement) {
+    interactionElement.addEventListener('mousemove', (event) => {
+        const rect = interactionElement.getBoundingClientRect();
+        enhancedMouseData.x = event.clientX - rect.left;
+        enhancedMouseData.y = event.clientY - rect.top;
+    }, { passive: true });
+    interactionElement.addEventListener('mouseleave', () => {
+        enhancedMouseData.x = null;
+        enhancedMouseData.y = null;
+    });
+    // Optional: Add touch support for mobile if desired
+    interactionElement.addEventListener('touchmove', (event) => {
+        if (event.touches.length > 0) {
+            const rect = interactionElement.getBoundingClientRect();
+            enhancedMouseData.x = event.touches[0].clientX - rect.left;
+            enhancedMouseData.y = event.touches[0].clientY - rect.top;
+        }
+    }, { passive: true });
+    interactionElement.addEventListener('touchend', () => {
+        enhancedMouseData.x = null;
+        enhancedMouseData.y = null;
+    });
   }
 
   // --- Initialize and Refresh Nodes ---
@@ -879,9 +835,7 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
     console.error("Error initializing morphing nodes:", error);
   }
 
-  // Handle resize and visibility
   let nodeResizeTimer = null;
-  
   function setupNodeTimers() {
     if (nodeResizeTimer) clearTimeout(nodeResizeTimer);
 
@@ -889,43 +843,51 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
       clearTimeout(nodeResizeTimer);
       nodeResizeTimer = setTimeout(() => {
         try { 
+          // Before recreating, ensure mouse data related to old container is cleared or updated if necessary
+          // In this case, createMorphingNodes clears and recreates everything, so it's fine.
           createMorphingNodes(); 
         } catch (error) { 
           console.error("Error recreating nodes on resize:", error); 
         }
-      }, 300); // Debounce resize
+      }, 350); // Slightly longer debounce
     });
     
-    // Update canvas size on window resize
+    // This immediate canvas resize is good, but createMorphingNodes will also set it.
+    // Can be kept for responsiveness if createMorphingNodes is delayed (e.g., by debounce)
     window.addEventListener('resize', () => {
       const canvas = document.getElementById('node-connections');
-      if (canvas) {
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
+      const container = document.getElementById('particles');
+      if (canvas && container) { // Check container too, as canvas is child
+        canvas.width = container.offsetWidth;
+        canvas.height = container.offsetHeight;
       }
     });
   }
   
-  // Additional CSS for nodes
   const style = document.createElement('style');
   style.textContent = `
     #particles {
       position: relative;
       overflow: hidden;
-      min-height: 300px;
+      min-height: 300px; /* Ensure container has a minimum size */
+      /* touch-action: none; Might be useful if adding touch interactions to prevent scrolling */
     }
     .node {
       position: absolute;
       border-radius: 50%;
-      transition: transform 0.2s;
-      will-change: transform, opacity;
+      transition: transform 0.2s ease-out, opacity 0.2s ease-out; /* Smoother direct style transitions */
+      will-change: transform, opacity, box-shadow;
       pointer-events: none;
       z-index: 2;
     }
+    /* Ensure canvas is below nodes if nodes have complex interactions or hover states you want to keep */
+    #node-connections { 
+        z-index: 1; 
+    } 
   `;
   document.head.appendChild(style);
   
-  setupNodeTimers(); // Initial setup
+  setupNodeTimers();
 </script>
 
 
@@ -934,6 +896,65 @@ By combining **on-package HBM**, **CXL.mem pooling**, **hUMA page-table unificat
 
 
 
+
+
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////PARTCICLE-SIMULATORY_ORIGIN-////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+/////////////////////////////////////////////////////sCRIPTS----SCRIPTS-----SCRIPTS------SCRIPTS///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
 
 
   
