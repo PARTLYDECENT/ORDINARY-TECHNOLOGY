@@ -48,7 +48,8 @@
         }
     `;
 
-    // Fragment Shader (GLSL 3.00 ES - 20 Phases)
+    // Fragment Shader (GLSL 3.00 ES - 30 Phases)
+    // Added 10 more phases (20-29) including one marked "// ordinary".
     const fragmentShaderSource = `#version 300 es
         precision highp float; // Precision qualifier required in fragment shaders
 
@@ -66,6 +67,7 @@
         const int MAX_RAYMARCH_STEPS = 48;
         const float MAX_RAYMARCH_DIST = 12.0;
         const int MANDELBROT_ITER = 40;
+        const float TOTAL_PHASES_F = 30.0; // <<< UPDATED TO 30 PHASES
 
         // --- Helper Functions (minified versions often used in shaders) ---
         float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
@@ -86,17 +88,23 @@
         float sdPlane(vec3 p, vec3 n, float h) { return dot(p, n) + h; }
 
         // --- Color Definitions ---
-        vec3 colPrimary = vec3(106./255., 0., 1.);
-        vec3 colSecondary = vec3(0., 1., 204./255.);
-        vec3 colTertiary = vec3(0., 184./255., 212./255.);
-        vec3 colGreen = vec3(0.1, 0.8, 0.4);
-        vec3 colGold = vec3(0.9, 0.7, 0.1);
-        vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2);
-        vec3 colDeepRed = vec3(0.6, 0.0, 0.15);
-        vec3 colWhite = vec3(1.0);
-        vec3 colOrange = vec3(1.0, 0.5, 0.0);
-        vec3 colPink = vec3(1.0, 0.4, 0.7);
-        vec3 colBackground = vec3(5./255., 5./255., 17./255.);
+        vec3 colPrimary = vec3(106./255., 0., 1.); // Purple/Blue
+        vec3 colSecondary = vec3(0., 1., 204./255.); // Cyan
+        vec3 colTertiary = vec3(0., 184./255., 212./255.); // Turquoise
+        vec3 colGreen = vec3(0.1, 0.8, 0.4); // Vibrant Green
+        vec3 colGold = vec3(0.9, 0.7, 0.1); // Gold/Yellow
+        vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2); // Darker Green
+        vec3 colDeepRed = vec3(0.6, 0.0, 0.15); // Maroon
+        vec3 colWhite = vec3(1.0); // White
+        vec3 colOrange = vec3(1.0, 0.5, 0.0); // Orange
+        vec3 colPink = vec3(1.0, 0.4, 0.7); // Pink
+        vec3 colSkyBlue = vec3(0.5, 0.7, 1.0); // Light Blue
+        vec3 colLimeGreen = vec3(0.7, 1.0, 0.0); // Lime Green
+        vec3 colDarkGrey = vec3(0.2, 0.2, 0.2); // Dark Grey
+        vec3 colElectricBlue = vec3(0.2, 0.6, 1.0); // Electric Blue
+        vec3 colSoftPurple = vec3(0.6, 0.4, 0.8); // Soft Purple
+
+        vec3 colBackground = vec3(5./255., 5./255., 17./255.); // Dark Background
 
         // Basic color getter for CA effect
         vec3 getColorForCA(vec2 uv, float t) { float n = fbm(uv*4. + t*.15); return mix(colPrimary, colTertiary, n); }
@@ -109,10 +117,9 @@
             vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
 
             float time_warp = u_time * 0.1; // Controls phase speed
-            const float TOTAL_PHASES_F = 20.0;
             float phase = mod(time_warp, TOTAL_PHASES_F);
             float phaseProgress = fract(phase); // Progress within current phase
-            int phaseIndex = int(floor(phase)); // Current phase index (0-19)
+            int phaseIndex = int(floor(phase)); // Current phase index (0-29)
 
             vec3 color = colBackground; // Start with background
 
@@ -125,7 +132,7 @@
             else if (phaseIndex == 5) { float t=phaseProgress; vec2 bu=floor(originalUV*mix(20.,60.,sin(u_time*2.)*.5+.5))/mix(20.,60.,sin(u_time*2.)*.5+.5); float bn=fbm(bu*5.+u_time*.5); color=mix(colPrimary,colSecondary,bn); float tl=sin(originalUV.y*10.+u_time*5.)*.5+.5, ta=smoothstep(.8,.85,tl); float ofs=ta*(rand(vec2(floor(u_time*2.),floor(originalUV.y*10.)))-.5)*.1; vec2 tu=uv+vec2(ofs*t,0.); float tn=fbm(tu*4.+u_time*.3); color=mix(color,mix(colTertiary,colDeepRed,tn),ta); float cao=(.005+.01*abs(sin(u_time*3.)))*t; vec3 cR=getColorForCA(uv+vec2(cao,0.),u_time), cB=getColorForCA(uv-vec2(cao*.5,cao*.8),u_time); color=vec3(cR.r,color.g,cB.b); color+=(rand(originalUV+fract(u_time*10.))-.5)*.15*t; }
             else if (phaseIndex == 6) { vec2 p=uv*2.; float i=fbm(p+u_time*.3), r=abs(snoise(vec3(p*1.5,u_time*.5))); r=pow(1.-r,4.); vec3 fc=mix(colPrimary,colTertiary,smoothstep(0.,1.,i)); color=mix(colBackground*.4,fc,r*1.5); color*=1.-smoothstep(.8,1.5,length(uv)); }
             else if (phaseIndex == 7) { vec2 p=uv*3.+vec2(u_time*.1,u_time*.2); float d=worley(p), e=1.-smoothstep(0.,.05,d), c=smoothstep(0.,.4,d); vec3 cc=mix(colStrangeGreen,colGold,c*1.2); color=mix(cc*.3,colWhite,e); }
-            else if (phaseIndex == 8) { vec2 p=rotate2D(u_time*.4)*uv; float a=atan(p.y,p.x), rd=length(p); float t=fbm(vec2(1./(rd+.1),a*2.)+u_time*.2), r=sin(rd*20.-u_time*3.)*.5+.5; vec3 tc=mix(colSecondary,colPink,smoothstep(0.,1.,t)); color=mix(colBackground,tc,(smoothstep(0.,.8,t)+r*.5)*.8); }
+            else if (phaseIndex == 8) { vec2 p=rotate2D(u_time*.4)*uv; float a=atan(p.y,p.x), rd=length(p); float t=fbm(vec2(1./(rd+.1),a*2.)+u_time*.2), r=sin(rd*20.-u_time*3.)*.5+.5; vec3 tc=mix(colSecondary,colPink,smoothstep(0.,1.,t)); color=mix(colBackground,(tc*(smoothstep(0.,.8,t)+r*.5)*.8),1.); } // Removed background mix factor for stronger effect
             else if (phaseIndex == 9) { float s=mix(4.,8.,sin(u_time*.5)*.5+.5), p=truchetPattern(uv,s); vec2 us=uv*s; float bn=noise(floor(us)+u_time*.1); vec3 tc=mix(colPrimary,colTertiary,bn); color=mix(tc*.2,colWhite*.9,p); }
             else if (phaseIndex == 10) { float v=sin(uv.x*3.+u_time*.8)+sin(uv.y*4.-u_time*.5+sin(uv.x*3.+u_time*.8)*.5)+sin(uv.x*uv.y*2.+u_time)+sin(sqrt(pow(uv.x+.5*sin(u_time/5.),2.)+pow(uv.y+.5*cos(u_time/3.),2.))*5.+u_time); v*=.5; vec3 pc1=mix(colDeepRed,colOrange,sin(u_time*.2)*.5+.5), pc2=mix(colPrimary,colSecondary,cos(u_time*.3)*.5+.5); color=mix(pc1,pc2,smoothstep(-.8,.8,v)); }
             else if (phaseIndex == 11) { vec2 gu=originalUV*vec2(80.,60.), c=floor(gu); float sp=rand(c.x)*3.+1., ss=rand(c.x)*10., sps=fract(ss-u_time*sp*.1), cy=originalUV.y; float tl=.15+rand(c.x)*.1, ci=smoothstep(sps,sps+.01,cy)*(1.-smoothstep(sps+.01,sps+tl,cy)); float cv=rand(c+floor((ss-u_time*sp*.1)*10.)); vec3 rc=mix(colStrangeGreen*.5,colGreen*1.5,step(.5,cv)); color=mix(colBackground,rc,ci); }
@@ -136,7 +143,72 @@
             else if (phaseIndex == 16) { vec2 p=uv*2.5; float d1=worley(p), d2=worley(p+vec2(5.2,1.3)); float c=pow(1.-smoothstep(0.,.1,d1),2.)+pow(1.-smoothstep(0.,.05,d2),2.)*.5; c=clamp(c,0.,1.); float g=fbm(p*10.+u_time*.1); vec3 cc=mix(colWhite*.8,colTertiary,g); color=mix(colBackground*.8,cc,c); }
             else if (phaseIndex == 17) { float i=.5+.5*noise(vec2(u_time*1.5,originalUV.y*5.)); float fs=floor(u_time*15.)+floor(originalUV.y*10.), f=rand(fs); i*=smoothstep(.2,.8,f); vec3 bc=mix(colPrimary,colSecondary,noise(uv*3.+u_time*.2)); float sy=fract(originalUV.y*u_resolution.y*.5), se=smoothstep(.4,.5,sy)*(1.-smoothstep(.5,.6,sy)); color=mix(bc*.5,vec3(0.),se*i*1.5); color+=(rand(originalUV+u_time)-.5)*.1*i; }
             else if (phaseIndex == 18) { vec3 ro=vec3(0.,0.,-3.+sin(u_time*.3)), rd=normalize(vec3(uv,1.)); vec3 col=colBackground; float t=0.; for(int i=0;i<MAX_RAYMARCH_STEPS;i++){ vec3 p=ro+rd*t, sc=vec3(0.,sin(u_time*.8)*.5-.2,0.); float ds=sdSphere(p-sc,.5), dp=sdPlane(p,vec3(0.,1.,0.),1.); float d=min(ds,dp); if(d<.001*t){ vec3 hc, n; if(dp<ds){hc=colGreen*.8;n=vec3(0.,1.,0.);}else{hc=colPrimary;vec2 eps=vec2(.001,0.);n=normalize(vec3(sdSphere(p+eps.xyy-sc,.5)-sdSphere(p-eps.xyy-sc,.5),sdSphere(p+eps.yxy-sc,.5)-sdSphere(p-eps.yxy-sc,.5),sdSphere(p+eps.yyx-sc,.5)-sdSphere(p-eps.yyx-sc,.5)));} float l=max(.2,dot(n,normalize(vec3(-.7,.7,-.5)))); col=hc*l; break; } t+=d; if(t>MAX_RAYMARCH_DIST)break; } color=col; }
-            else { /* phaseIndex == 19 */ float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
+            else if (phaseIndex == 19) { float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
+
+            // --- New Phases (20-29) ---
+            else if (phaseIndex == 20) { // Simple pulsing grid
+                 vec2 gv = abs(fract(uv * (10.0 + 5.0 * sin(u_time * 0.5))) - 0.5);
+                 float gridLine = smoothstep(0.02, 0.03, min(gv.x, gv.y));
+                 vec3 gridColor = mix(colTertiary, colElectricBlue, sin(u_time * 0.8) * 0.5 + 0.5);
+                 color = mix(colBackground, gridColor, gridLine * 1.5);
+            }
+            else if (phaseIndex == 21) { // Radial noise with color mix
+                 float rd = length(uv);
+                 float n = fbm(uv * 5.0 + u_time * 0.2);
+                 vec3 noiseColor = mix(colPrimary, colSoftPurple, n);
+                 color = mix(colBackground, noiseColor, smoothstep(0.0, 1.0, rd * 0.8) * (n * 0.5 + 0.5));
+            }
+            else if (phaseIndex == 22) { // Circular wave pattern
+                 float wave = sin(length(uv) * 20.0 - u_time * 4.0) * 0.5 + 0.5;
+                 vec3 waveColor = mix(colSecondary, colLimeGreen, wave);
+                 color = mix(colBackground, waveColor, smoothstep(0.0, 0.8, wave));
+            }
+            else if (phaseIndex == 23) { // Simple horizontal bars
+                 float bars = sin(uv.y * 20.0 + u_time * 3.0) * 0.5 + 0.5;
+                 vec3 barColor = mix(colPrimary, colTertiary, bars);
+                 color = mix(colBackground, barColor, smoothstep(0.3, 0.7, bars));
+            }
+            else if (phaseIndex == 24) { // Diagonal lines with shift
+                 vec2 d_uv = uv;
+                 d_uv.x += d_uv.y * 0.5 + u_time * 0.2;
+                 float lines = fract(d_uv.x * 8.0) * 2.0 - 1.0;
+                 lines = smoothstep(0.9, 1.0, abs(lines));
+                 vec3 lineColor = mix(colGold, colOrange, sin(u_time * 0.7) * 0.5 + 0.5);
+                 color = mix(colBackground, lineColor, lines);
+            }
+            else if (phaseIndex == 25) { // ordinary - A simple static gradient for testing
+                 // ordinary
+                 color = mix(colBackground, colDarkGrey, length(uv) * 0.5);
+            }
+            else if (phaseIndex == 26) { // Cellular automata effect with color cycling
+                 float cellScale = mix(15.0, 30.0, sin(u_time * 0.4) * 0.5 + 0.5);
+                 vec2 cu = floor(originalUV * cellScale) / cellScale;
+                 float cellState = rand(cu + floor(u_time * 5.0));
+                 vec3 cellColor = mix(colPrimary, colTertiary, cellState);
+                 color = mix(colBackground * 0.8, cellColor, smoothstep(0.3, 0.7, cellState));
+            }
+            else if (phaseIndex == 27) { // Swirling noise pattern
+                 vec2 p = rotate2D(u_time * 0.5) * uv * (2.0 + 1.0 * cos(u_time * 0.3));
+                 float n = snoise(vec3(p, u_time * 0.1));
+                 vec3 noiseColor = mix(colDeepRed, colOrange, smoothstep(-0.5, 0.5, n));
+                 color = mix(colBackground * 0.7, noiseColor, (n * 0.5 + 0.5) * 1.2);
+            }
+            else if (phaseIndex == 28) { // Concentric pulsating circles
+                 float rd = length(uv);
+                 float pulse = sin((rd - u_time * 0.6) * 15.0) * 0.5 + 0.5;
+                 pulse = smoothstep(0.8, 1.0, pulse);
+                 vec3 circleColor = mix(colWhite, colSkyBlue, sin(u_time * 1.0) * 0.5 + 0.5);
+                 color = mix(colBackground, circleColor, pulse);
+            }
+            else { /* phaseIndex == 29 */ // Plasma-like fbm distortion
+                 vec2 pu = uv * 4.0;
+                 pu.x += sin(u_time * 0.5 + pu.y * 0.8) * 0.5;
+                 pu.y += cos(u_time * 0.6 + pu.x * 0.7) * 0.5;
+                 float n = fbm(pu + u_time * 0.3);
+                 vec3 plasmaColor = mix(colPrimary, colPink, smoothstep(0.2, 0.8, n));
+                 color = mix(colBackground, plasmaColor, n);
+            }
+
 
             // --- Global Effects ---
             // Subtle Scanlines
@@ -294,11 +366,11 @@
             // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
             gl.vertexAttribPointer(
                 positionAttributeLocation, // location
-                2,         // size (num components per iteration, vec2)
-                gl.FLOAT,  // type
-                false,     // normalize
-                0,         // stride (0 = use size * sizeof(type))
-                0          // offset (bytes from start of buffer)
+                2,           // size (num components per iteration, vec2)
+                gl.FLOAT,    // type
+                false,       // normalize
+                0,           // stride (0 = use size * sizeof(type))
+                0            // offset (bytes from start of buffer)
             );
         } else {
             // Disable attribute if not used or buffer missing, prevents potential errors
@@ -340,31 +412,44 @@
         }
 
         // Construct the full source for the new fragment shader, including essential parts
-         const completeNewFragmentSource = `#version 300 es
-            precision highp float;
-            uniform float u_time;
-            uniform vec2 u_resolution;
-            out vec4 outColor;
+          const completeNewFragmentSource = `#version 300 es
+             precision highp float;
+             uniform float u_time;
+             uniform vec2 u_resolution;
+             out vec4 outColor;
 
-            // --- Include Common Helper Functions ---
-            const int FBM_OCTAVES = ${FBM_OCTAVES}; // Use the JS constant
-            float hash(float n) { return fract(sin(n) * 43758.5453); }
-            float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
-            float fbm(vec2 p) { float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
-            float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
-            // --- END Helper Functions ---
+             // --- Include Common Helper Functions ---
+             const int FBM_OCTAVES = ${FBM_OCTAVES}; // Use the JS constant
+             float hash(float n) { return fract(sin(n) * 43758.5453); }
+             float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
+             float fbm(vec2 p) { float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
+             float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
+             // --- END Helper Functions ---
 
-            // --- Common Colors ---
-            vec3 colPrimary = vec3(106./255., 0., 1.);
-            vec3 colSecondary = vec3(0., 1., 204./255.);
-            vec3 colTertiary = vec3(0., 184./255., 212./255.);
-            vec3 colBackground = vec3(5./255., 5./255., 17./255.);
-            // --- END Colors ---
+             // --- Common Colors ---
+             vec3 colPrimary = vec3(106./255., 0., 1.);
+             vec3 colSecondary = vec3(0., 1., 204./255.);
+             vec3 colTertiary = vec3(0., 184./255., 212./255.);
+             vec3 colBackground = vec3(5./255., 5./255., 17./255.);
+             // Add other colors needed if the user code might use them
+             vec3 colGreen = vec3(0.1, 0.8, 0.4);
+             vec3 colGold = vec3(0.9, 0.7, 0.1);
+             vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2);
+             vec3 colDeepRed = vec3(0.6, 0.0, 0.15);
+             vec3 colWhite = vec3(1.0);
+             vec3 colOrange = vec3(1.0, 0.5, 0.0);
+             vec3 colPink = vec3(1.0, 0.4, 0.7);
+             vec3 colSkyBlue = vec3(0.5, 0.7, 1.0);
+             vec3 colLimeGreen = vec3(0.7, 1.0, 0.0);
+             vec3 colDarkGrey = vec3(0.2, 0.2, 0.2);
+             vec3 colElectricBlue = vec3(0.2, 0.6, 1.0);
+             vec3 colSoftPurple = vec3(0.6, 0.4, 0.8);
+             // --- END Colors ---
 
-            // --- User Provided Shader Code ---
-            ${newShaderCode}
-            // --- End User Code ---
-        `;
+             // --- User Provided Shader Code ---
+             ${newShaderCode}
+             // --- End User Code ---
+         `;
 
         let newVs = null;
         let newFs = null;
@@ -421,8 +506,8 @@
 
              // If the render loop was stopped, restart it with the old program
              if (!animationFrameId && program) {
-                console.log("Restarting render loop with previous program after update failure.");
-                animationFrameId = requestAnimationFrame(render);
+                 console.log("Restarting render loop with previous program after update failure.");
+                 animationFrameId = requestAnimationFrame(render);
              }
 
         } finally {
