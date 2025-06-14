@@ -3,568 +3,534 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALIEN ASCENSION</title>
+    <title>Alien Biome Generator</title>
     <style>
-        @keyframes glitch {
-            0% { transform: translate(0, 0); }
-            25% { transform: translate(-5px, 5px); }
-            50% { transform: translate(5px, -5px); }
-            75% { transform: translate(-2px, 2px); }
-            100% { transform: translate(0, 0); }
-        }
-        
         body {
-            background: black;
-            overflow: hidden;
-            color: #00ff00;
-            font-family: 'Courier New', monospace;
             margin: 0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            user-select: none;
+            padding: 20px;
+            background: linear-gradient(135deg, #0a0a0a, #1a0d1a, #0d1a1a);
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
         }
-        
-        #game-container {
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(0, 20, 20, 0.8);
+            border: 2px solid #00ff88;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px #00ff88;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .control-group {
+            background: rgba(0, 40, 40, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #004444;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #66ffaa;
+            font-weight: bold;
+        }
+        input, select {
             width: 100%;
-            height: 100%;
+            padding: 8px;
+            background: #001111;
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            color: #00ff88;
+            font-family: inherit;
+        }
+        button {
+            background: linear-gradient(45deg, #00ff88, #00aa55);
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            color: #000;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.5);
+        }
+        .preview {
+            background: #000;
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            height: 400px;
+            margin: 20px 0;
             position: relative;
             overflow: hidden;
         }
-        
-        #game-ui {
-            position: absolute;
-            z-index: 10;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        #alienTitle {
-            font-size: 2.5rem;
-            padding: 20px;
-            border: 3px solid #00ff00;
+        .stats {
+            background: rgba(0, 20, 20, 0.9);
+            padding: 15px;
             border-radius: 10px;
-            background: rgba(0, 255, 0, 0.1);
-            animation: glitch 0.2s infinite;
-            text-shadow: 2px 2px red, -2px -2px blue;
-            filter: drop-shadow(0 0 10px #00ff00);
-            margin-bottom: 20px;
-        }
-        
-        .glitch-bg {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            color: rgba(0, 255, 0, 0.1);
-            font-size: 2rem;
-            pointer-events: none;
-            z-index: -1;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        #startButton {
-            padding: 15px 30px;
-            border: 3px solid #ff0000;
-            background: black;
-            color: #ff0000;
-            font-size: 1.5rem;
-            font-family: 'Courier New', monospace;
-            cursor: pointer;
-            transition: 0.3s;
-            animation: glitch 0.2s infinite;
-        }
-        
-        #startButton:hover {
-            background: #ff0000;
-            color: black;
-        }
-        
-        #gameArea {
-            display: none;
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: black;
-            overflow: hidden;
-        }
-        
-        .player {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2300ff00"><path d="M12 2L8 10H16L12 2zM4 14l8 8 8-8H4z"/></svg>');
-            background-size: contain;
-            background-repeat: no-repeat;
-            z-index: 5;
-            transition: transform 0.2s;
-        }
-        
-        .platform {
-            position: absolute;
-            background: linear-gradient(to right, #00ff00, #008800);
-            border-radius: 5px;
-            box-shadow: 0 0 10px #00ff00;
-        }
-        
-        .enemy {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ff0000"><path d="M12 1L1 23h22L12 1zm0 10a2 2 0 100 4 2 2 0 000-4z"/></svg>');
-            background-size: contain;
-            background-repeat: no-repeat;
-            z-index: 3;
-        }
-        
-        .artifact {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffff00"><circle cx="12" cy="12" r="10"/></svg>');
-            background-size: contain;
-            background-repeat: no-repeat;
-            z-index: 2;
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-        
-        #hud {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #00ff00;
-            font-size: 1rem;
-            z-index: 20;
-        }
-        
-        #gameOver, #levelComplete {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            border: 3px solid #ff0000;
-            padding: 20px;
-            font-size: 2rem;
-            text-align: center;
-            z-index: 30;
-        }
-        
-        #continueButton, #restartButton {
             margin-top: 20px;
-            padding: 10px 20px;
-            border: 2px solid #00ff00;
-            background: black;
-            color: #00ff00;
-            font-size: 1rem;
-            cursor: pointer;
+            border: 1px solid #004444;
+        }
+        .biome-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .info-card {
+            background: rgba(0, 30, 30, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #00ff88;
+        }
+        #canvas {
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <div id="game-ui">
-            <div id="alienTitle">ALIEN ASCENSION</div>
-            <button id="startButton">PRESS START</button>
+    <div class="container">
+        <h1>🛸 ALIEN BIOME GENERATOR 🛸</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Biome Type</label>
+                <select id="biomeType">
+                    <option value="crystalline">Crystalline Forests</option>
+                    <option value="fungal">Fungal Megastructures</option>
+                    <option value="metallic">Metallic Coral Reefs</option>
+                    <option value="plasma">Plasma Geysers</option>
+                    <option value="fractal">Fractal Canyons</option>
+                    <option value="organic">Organic Tentacle Valleys</option>
+                    <option value="quantum">Quantum Probability Fields</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Terrain Complexity</label>
+                <input type="range" id="complexity" min="50" max="500" value="200">
+                <span id="complexityValue">200</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Alien Factor</label>
+                <input type="range" id="alienFactor" min="1" max="10" value="7">
+                <span id="alienValue">7</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Gravity Anomaly</label>
+                <input type="range" id="gravity" min="0.1" max="3.0" step="0.1" value="1.0">
+                <span id="gravityValue">1.0</span>
+            </div>
         </div>
-        <div class="glitch-bg"></div>
-        <div id="gameArea">
-            <div id="hud">
-                Level: <span id="levelDisplay">1</span> | 
-                Score: <span id="scoreDisplay">0</span> | 
-                Artifacts: <span id="artifactDisplay">0</span>/3
+
+        <div style="text-align: center;">
+            <button onclick="generateBiome()">🌌 GENERATE ALIEN WORLD 🌌</button>
+            <button onclick="downloadPLY()" id="downloadBtn" style="display:none;">💾 DOWNLOAD .PLY FILE 💾</button>
+        </div>
+
+        <div class="preview">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="biome-info" id="biomeInfo" style="display:none;">
+            <div class="info-card">
+                <h3>🌍 World Classification</h3>
+                <div id="worldClass"></div>
             </div>
-            <div id="gameOver">
-                GAME OVER
-                <div>Final Score: <span id="finalScore">0</span></div>
-                <button id="restartButton">RESTART</button>
+            <div class="info-card">
+                <h3>🧬 Dominant Life Forms</h3>
+                <div id="lifeforms"></div>
             </div>
-            <div id="levelComplete">
-                LEVEL COMPLETE
-                <div>Artifacts Collected: <span id="levelArtifacts">0</span>/3</div>
-                <button id="continueButton">CONTINUE</button>
+            <div class="info-card">
+                <h3>⚛️ Atmospheric Composition</h3>
+                <div id="atmosphere"></div>
             </div>
+            <div class="info-card">
+                <h3>🔮 Anomalous Properties</h3>
+                <div id="anomalies"></div>
+            </div>
+        </div>
+
+        <div class="stats" id="stats" style="display:none;">
+            <h3>📊 Generation Statistics</h3>
+            <div id="statsContent"></div>
         </div>
     </div>
 
     <script>
-    (function() {
-        // Function sandwich pattern - all game functions in one self-executing wrapper
-        // Shared game state
-        const G = {
-            level: 1,
-            score: 0,
-            artifacts: 0,
-            levelArtifacts: 0,
-            totalArtifacts: 3,
-            gravityForce: 0.5,
-            jumpForce: -12,
-            player: { x: 0, y: 0, width: 40, height: 40, velocityX: 0, velocityY: 0, jumping: false },
-            platforms: [],
-            enemies: [],
-            collectibles: [],
-            keys: { ArrowLeft: false, ArrowRight: false, ArrowUp: false },
-            gameRunning: false,
-            alienChars: "⏃⎅⟒⟟⍜⎍⌰⌇⋏⍙⏚⏁⊑⊬⊰⊇⊗⋔⋏⋒⋓⋖⋗",
-            animationFrame: null,
+        let vertices = [];
+        let faces = [];
+        let colors = [];
+        let currentBiome = null;
+
+        // Update display values
+        document.getElementById('complexity').oninput = function() {
+            document.getElementById('complexityValue').textContent = this.value;
         };
-        
-        // DOM elements
-        const $$ = (id) => document.getElementById(id);
-        const $ = {
-            gameUI: $$('game-ui'),
-            gameArea: $$('gameArea'),
-            alienTitle: $$('alienTitle'),
-            startButton: $$('startButton'),
-            glitchBg: document.querySelector('.glitch-bg'),
-            levelDisplay: $$('levelDisplay'),
-            scoreDisplay: $$('scoreDisplay'),
-            artifactDisplay: $$('artifactDisplay'),
-            gameOver: $$('gameOver'),
-            finalScore: $$('finalScore'),
-            restartButton: $$('restartButton'),
-            levelComplete: $$('levelComplete'),
-            levelArtifacts: $$('levelArtifacts'),
-            continueButton: $$('continueButton'),
+        document.getElementById('alienFactor').oninput = function() {
+            document.getElementById('alienValue').textContent = this.value;
         };
-        
-        // ===== GAME UTILITIES =====
-        function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-        
-        function generateAlienText(length) {
-            return Array(length).fill(0).map(() => G.alienChars[rand(0, G.alienChars.length - 1)]).join('');
+        document.getElementById('gravity').oninput = function() {
+            document.getElementById('gravityValue').textContent = this.value;
+        };
+
+        function noise(x, y, z) {
+            return Math.sin(x * 0.01) * Math.cos(y * 0.01) * Math.sin(z * 0.01) +
+                   Math.sin(x * 0.02) * 0.5 + Math.cos(y * 0.03) * 0.3 + Math.sin(z * 0.025) * 0.4;
         }
-        
-        function updateGlitchBg() {
-            $.glitchBg.textContent = generateAlienText(100);
-            $.alienTitle.style.color = `rgb(${rand(0,255)}, ${rand(150,255)}, ${rand(0,150)})`;
-        }
-        
-        function createEl(type, className) {
-            const el = document.createElement('div');
-            el.className = className;
-            $.gameArea.appendChild(el);
-            return el;
-        }
-        
-        function removeEl(el) {
-            if (el && el.parentNode) {
-                el.parentNode.removeChild(el);
+
+        function fractalNoise(x, y, z, octaves = 4) {
+            let value = 0;
+            let amplitude = 1;
+            let frequency = 1;
+            
+            for (let i = 0; i < octaves; i++) {
+                value += noise(x * frequency, y * frequency, z * frequency) * amplitude;
+                amplitude *= 0.5;
+                frequency *= 2;
             }
+            return value;
         }
-        
-        function isColliding(obj1, obj2) {
-            return obj1.x < obj2.x + obj2.width &&
-                   obj1.x + obj1.width > obj2.x &&
-                   obj1.y < obj2.y + obj2.height &&
-                   obj1.y + obj1.height > obj2.y;
-        }
-        
-        // ===== GAME SETUP =====
-        function initLevel() {
-            // Clear existing elements
-            G.platforms.forEach(p => removeEl(p.el));
-            G.enemies.forEach(e => removeEl(e.el));
-            G.collectibles.forEach(c => removeEl(c.el));
-            
-            // Reset arrays
-            G.platforms = [];
-            G.enemies = [];
-            G.collectibles = [];
-            G.levelArtifacts = 0;
-            
-            // Position player
-            G.player.x = 50;
-            G.player.y = 300;
-            G.player.velocityX = 0;
-            G.player.velocityY = 0;
-            G.player.jumping = false;
-            
-            // Create game area elements based on level
-            const gameWidth = window.innerWidth;
-            const gameHeight = window.innerHeight;
-            
-            // Create platforms (more challenging with higher levels)
-            const platformCount = 5 + G.level;
-            for (let i = 0; i < platformCount; i++) {
-                const width = rand(100, 200);
-                const x = i === 0 ? 20 : rand(0, gameWidth - width);
-                const y = i === 0 ? 400 : rand(100, gameHeight - 100);
-                
-                const platform = {
-                    x, y, width, height: 20,
-                    el: createEl('div', 'platform')
-                };
-                
-                G.platforms.push(platform);
-                updateElement(platform);
-            }
-            
-            // Create enemies (more with higher levels)
-            const enemyCount = Math.min(G.level, 8);
-            for (let i = 0; i < enemyCount; i++) {
-                const enemy = {
-                    x: rand(50, gameWidth - 50),
-                    y: rand(50, gameHeight - 150),
-                    width: 30, height: 30,
-                    velocityX: (G.level * 0.5) * (Math.random() > 0.5 ? 1 : -1),
-                    el: createEl('div', 'enemy')
-                };
-                
-                G.enemies.push(enemy);
-                updateElement(enemy);
-            }
-            
-            // Create artifacts
-            for (let i = 0; i < G.totalArtifacts; i++) {
-                const artifact = {
-                    x: rand(50, gameWidth - 50),
-                    y: rand(50, gameHeight - 150),
-                    width: 20, height: 20,
-                    collected: false,
-                    el: createEl('div', 'artifact')
-                };
-                
-                G.collectibles.push(artifact);
-                updateElement(artifact);
-            }
-            
-            // Create player element if it doesn't exist
-            if (!G.player.el) {
-                G.player.el = createEl('div', 'player');
-            }
-            
-            // Ensure player is added back to game area (in case we're resetting)
-            if (!G.player.el.parentNode) {
-                $.gameArea.appendChild(G.player.el);
-            }
-            
-            updateElement(G.player);
-            updateHUD();
-        }
-        
-        function updateElement(obj) {
-            if (obj.el) {
-                obj.el.style.left = `${obj.x}px`;
-                obj.el.style.top = `${obj.y}px`;
-                if (obj.width) obj.el.style.width = `${obj.width}px`;
-                if (obj.height) obj.el.style.height = `${obj.height}px`;
-            }
-        }
-        
-        function updateHUD() {
-            $.levelDisplay.textContent = G.level;
-            $.scoreDisplay.textContent = G.score;
-            $.artifactDisplay.textContent = G.levelArtifacts;
-        }
-        
-        // ===== GAME LOOP =====
-        function gameLoop() {
-            if (!G.gameRunning) return;
-            
-            updatePlayer();
-            updateEnemies();
-            checkCollisions();
-            
-            G.animationFrame = requestAnimationFrame(gameLoop);
-        }
-        
-        function updatePlayer() {
-            // Handle player input
-            if (G.keys.ArrowLeft) G.player.velocityX = Math.max(G.player.velocityX - 1, -8);
-            else if (G.keys.ArrowRight) G.player.velocityX = Math.min(G.player.velocityX + 1, 8);
-            else G.player.velocityX *= 0.9; // Friction
-            
-            // Apply gravity
-            G.player.velocityY += G.gravityForce;
-            
-            // Update position
-            G.player.x += G.player.velocityX;
-            G.player.y += G.player.velocityY;
-            
-            // Check boundaries
-            const gameWidth = window.innerWidth;
-            const gameHeight = window.innerHeight;
-            
-            if (G.player.x < 0) G.player.x = 0;
-            if (G.player.x + G.player.width > gameWidth) G.player.x = gameWidth - G.player.width;
-            
-            // Death if falling off screen
-            if (G.player.y > gameHeight) {
-                endGame();
-                return;
-            }
-            
-            // Apply player rotation based on velocity
-            let rotation = G.player.velocityX * 3;
-            G.player.el.style.transform = `rotate(${rotation}deg)`;
-            
-            updateElement(G.player);
-        }
-        
-        function updateEnemies() {
-            const gameWidth = window.innerWidth;
-            
-            G.enemies.forEach(enemy => {
-                enemy.x += enemy.velocityX;
-                
-                // Bounce off walls
-                if (enemy.x <= 0 || enemy.x + enemy.width >= gameWidth) {
-                    enemy.velocityX *= -1;
-                }
-                
-                updateElement(enemy);
-            });
-        }
-        
-        function checkCollisions() {
-            let onPlatform = false;
-            
-            // Check platform collisions
-            G.platforms.forEach(platform => {
-                if (G.player.velocityY > 0 && // Falling
-                    G.player.y + G.player.height > platform.y && 
-                    G.player.y < platform.y &&
-                    G.player.x + G.player.width > platform.x && 
-                    G.player.x < platform.x + platform.width) {
+
+        function generateBiome() {
+            const biomeType = document.getElementById('biomeType').value;
+            const complexity = parseInt(document.getElementById('complexity').value);
+            const alienFactor = parseInt(document.getElementById('alienFactor').value);
+            const gravity = parseFloat(document.getElementById('gravity').value);
+
+            vertices = [];
+            faces = [];
+            colors = [];
+
+            const size = Math.min(complexity, 200);
+            const scale = 100;
+            const time = Date.now() * 0.001;
+
+            // Generate terrain based on biome type
+            for (let x = 0; x < size; x++) {
+                for (let z = 0; z < size; z++) {
+                    const wx = (x - size/2) * scale / size;
+                    const wz = (z - size/2) * scale / size;
                     
-                    G.player.y = platform.y - G.player.height;
-                    G.player.velocityY = 0;
-                    G.player.jumping = false;
-                    onPlatform = true;
+                    let height = 0;
+                    let r = 0, g = 0, b = 0;
+
+                    switch (biomeType) {
+                        case 'crystalline':
+                            height = generateCrystalline(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [0.3 + Math.random() * 0.7, 0.8 + Math.random() * 0.2, 1.0];
+                            break;
+                        case 'fungal':
+                            height = generateFungal(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [0.8 + Math.random() * 0.2, 0.4 + Math.random() * 0.4, 0.9];
+                            break;
+                        case 'metallic':
+                            height = generateMetallic(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [0.9, 0.7 + Math.random() * 0.3, 0.3 + Math.random() * 0.4];
+                            break;
+                        case 'plasma':
+                            height = generatePlasma(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [1.0, 0.3 + Math.random() * 0.4, 0.8 + Math.random() * 0.2];
+                            break;
+                        case 'fractal':
+                            height = generateFractal(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [0.7, 0.9, 0.4 + Math.random() * 0.6];
+                            break;
+                        case 'organic':
+                            height = generateOrganic(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [0.6 + Math.random() * 0.4, 1.0, 0.5 + Math.random() * 0.5];
+                            break;
+                        case 'quantum':
+                            height = generateQuantum(wx, wz, alienFactor, gravity, time);
+                            [r, g, b] = [Math.random(), Math.random(), Math.random()];
+                            break;
+                    }
+
+                    vertices.push([wx, height / gravity, wz]);
+                    colors.push([r, g, b]);
                 }
-            });
-            
-            // Allow jump if on platform
-            if (onPlatform && G.keys.ArrowUp && !G.player.jumping) {
-                G.player.velocityY = G.jumpForce;
-                G.player.jumping = true;
             }
-            
-            // Check enemy collisions
-            G.enemies.forEach(enemy => {
-                if (isColliding(G.player, enemy)) {
-                    endGame();
-                    return;
+
+            // Generate faces
+            for (let x = 0; x < size - 1; x++) {
+                for (let z = 0; z < size - 1; z++) {
+                    const i1 = x * size + z;
+                    const i2 = (x + 1) * size + z;
+                    const i3 = x * size + (z + 1);
+                    const i4 = (x + 1) * size + (z + 1);
+
+                    faces.push([i1, i2, i3]);
+                    faces.push([i2, i4, i3]);
                 }
-            });
-            
-            // Check artifact collisions
-            G.collectibles.forEach(artifact => {
-                if (!artifact.collected && isColliding(G.player, artifact)) {
-                    artifact.collected = true;
-                    artifact.el.style.display = 'none';
-                    G.levelArtifacts++;
-                    G.artifacts++;
-                    G.score += 100 * G.level;
-                    updateHUD();
-                    
-                    if (G.levelArtifacts >= G.totalArtifacts) {
-                        completeLevel();
+            }
+
+            currentBiome = {
+                type: biomeType,
+                complexity: complexity,
+                alienFactor: alienFactor,
+                gravity: gravity,
+                vertexCount: vertices.length,
+                faceCount: faces.length
+            };
+
+            updateVisualization();
+            updateBiomeInfo();
+            updateStats();
+            document.getElementById('downloadBtn').style.display = 'inline-block';
+        }
+
+        function generateCrystalline(x, z, alien, gravity, time) {
+            const crystal1 = Math.sin(x * 0.1 + time) * Math.cos(z * 0.1) * 20;
+            const crystal2 = Math.sin(x * 0.05) * Math.sin(z * 0.05) * 15;
+            const spikes = Math.max(0, Math.sin(x * 0.2) * Math.cos(z * 0.2)) * alien * 5;
+            return crystal1 + crystal2 + spikes + fractalNoise(x, 0, z, 3) * 10;
+        }
+
+        function generateFungal(x, z, alien, gravity, time) {
+            const mushroom = Math.exp(-((x % 20) ** 2 + (z % 20) ** 2) / 100) * alien * 8;
+            const stems = Math.sin(x * 0.3) * Math.cos(z * 0.3) * 5;
+            const caps = Math.max(0, Math.sin(x * 0.1 + time * 2) * Math.cos(z * 0.1)) * 12;
+            return mushroom + stems + caps + fractalNoise(x, time * 10, z, 4) * 8;
+        }
+
+        function generateMetallic(x, z, alien, gravity, time) {
+            const coral = Math.sin(x * 0.2) * Math.cos(z * 0.15) * Math.sin(time) * 15;
+            const pipes = Math.abs(Math.sin(x * 0.05)) * Math.abs(Math.cos(z * 0.05)) * alien * 6;
+            const rings = Math.sin(Math.sqrt(x*x + z*z) * 0.1 + time) * 8;
+            return coral + pipes + rings + fractalNoise(x, time * 5, z, 3) * 12;
+        }
+
+        function generatePlasma(x, z, alien, gravity, time) {
+            const geyser = Math.exp(-((x % 15) ** 2 + (z % 15) ** 2) / 50) * Math.sin(time * 3) * alien * 12;
+            const waves = Math.sin(x * 0.1 + time * 2) * Math.cos(z * 0.1 + time * 1.5) * 10;
+            const turbulence = fractalNoise(x + time * 20, time * 30, z + time * 15, 5) * 8;
+            return geyser + waves + turbulence;
+        }
+
+        function generateFractal(x, z, alien, gravity, time) {
+            let height = 0;
+            let scale = 1;
+            for (let i = 0; i < alien; i++) {
+                height += Math.sin(x * scale * 0.01) * Math.cos(z * scale * 0.01) * (20 / scale);
+                scale *= 2.3;
+            }
+            return height + fractalNoise(x, time * 8, z, 6) * 15;
+        }
+
+        function generateOrganic(x, z, alien, gravity, time) {
+            const tentacle1 = Math.sin(x * 0.1 + time) * Math.exp(-z * z / 1000) * alien * 4;
+            const tentacle2 = Math.cos(z * 0.1 + time * 1.3) * Math.exp(-x * x / 800) * alien * 4;
+            const bulbs = Math.sin(x * 0.3) * Math.sin(z * 0.3) * Math.sin(time * 2) * 8;
+            const organic = fractalNoise(x + Math.sin(time) * 10, time * 12, z + Math.cos(time) * 10, 4) * 12;
+            return tentacle1 + tentacle2 + bulbs + organic;
+        }
+
+        function generateQuantum(x, z, alien, gravity, time) {
+            const probability = Math.random() < 0.5 ? 1 : -1;
+            const quantum1 = Math.sin(x * 0.1 * probability + time) * alien * 3;
+            const quantum2 = Math.cos(z * 0.1 / probability + time * 1.7) * alien * 3;
+            const superposition = (Math.sin(x * 0.05) + Math.cos(z * 0.05)) * probability * 10;
+            const uncertainty = Math.random() * alien * 5 - alien * 2.5;
+            return quantum1 + quantum2 + superposition + uncertainty + fractalNoise(x * probability, time * 20, z, 5) * 8;
+        }
+
+        function updateVisualization() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            ctx.fillStyle = '#000011';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (vertices.length === 0) return;
+
+            // Simple 3D to 2D projection
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = Math.min(canvas.width, canvas.height) / 300;
+
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 0.5;
+
+            // Draw wireframe
+            for (let i = 0; i < faces.length; i += 10) { // Skip some faces for performance
+                const face = faces[i];
+                if (face && face.length === 3) {
+                    const v1 = vertices[face[0]];
+                    const v2 = vertices[face[1]];
+                    const v3 = vertices[face[2]];
+
+                    if (v1 && v2 && v3) {
+                        ctx.beginPath();
+                        ctx.moveTo(centerX + v1[0] * scale, centerY + v1[1] * scale - v1[2] * scale * 0.5);
+                        ctx.lineTo(centerX + v2[0] * scale, centerY + v2[1] * scale - v2[2] * scale * 0.5);
+                        ctx.lineTo(centerX + v3[0] * scale, centerY + v3[1] * scale - v3[2] * scale * 0.5);
+                        ctx.closePath();
+                        
+                        const color = colors[face[0]];
+                        if (color) {
+                            ctx.strokeStyle = `rgb(${Math.floor(color[0] * 255)}, ${Math.floor(color[1] * 255)}, ${Math.floor(color[2] * 255)})`;
+                        }
+                        ctx.stroke();
                     }
                 }
-            });
+            }
         }
-        
-        function completeLevel() {
-            G.gameRunning = false;
-            cancelAnimationFrame(G.animationFrame);
-            
-            $.levelArtifacts.textContent = G.levelArtifacts;
-            $.levelComplete.style.display = 'block';
-        }
-        
-        function nextLevel() {
-            $.levelComplete.style.display = 'none';
-            G.level++;
-            initLevel();
-            G.gameRunning = true;
-            G.animationFrame = requestAnimationFrame(gameLoop);
-        }
-        
-        function endGame() {
-            G.gameRunning = false;
-            cancelAnimationFrame(G.animationFrame);
-            
-            $.finalScore.textContent = G.score;
-            $.gameOver.style.display = 'block';
-        }
-        
-        function restartGame() {
-            $.gameOver.style.display = 'none';
-            
-            G.level = 1;
-            G.score = 0;
-            G.artifacts = 0;
-            
-            initLevel();
-            G.gameRunning = true;
-            G.animationFrame = requestAnimationFrame(gameLoop);
-        }
-        
-        // ===== EVENT HANDLERS =====
-        function setupEventListeners() {
-            // Title screen glitch effect
-            setInterval(updateGlitchBg, 500);
-            
-            // Start button
-            $.startButton.addEventListener('click', () => {
-                $.gameUI.style.display = 'none';
-                $.gameArea.style.display = 'block';
-                
-                initLevel();
-                G.gameRunning = true;
-                gameLoop();
-            });
-            
-            // Keyboard input
-            window.addEventListener('keydown', (e) => {
-                if (G.keys.hasOwnProperty(e.code)) {
-                    G.keys[e.code] = true;
+
+        function updateBiomeInfo() {
+            const biome = currentBiome;
+            if (!biome) return;
+
+            const biomeInfo = {
+                crystalline: {
+                    worldClass: "Silicate Crystalline World - Class XC-7",
+                    lifeforms: "Resonant Crystal Entities, Harmonic Photosynthetic Structures",
+                    atmosphere: "75% Xenon, 20% Crystalline Particulates, 5% Unknown Noble Gases",
+                    anomalies: "Sonic Amplification Zones, Temporal Echo Chambers"
+                },
+                fungal: {
+                    worldClass: "Macro-Fungal Collective - Class FB-9",
+                    lifeforms: "Sentient Spore Networks, Bioluminescent Mycelial Mega-organisms",
+                    atmosphere: "45% Methane, 30% Oxygen, 25% Psychoactive Spore Compounds",
+                    anomalies: "Collective Consciousness Fields, Memory-Storing Substrates"
+                },
+                metallic: {
+                    worldClass: "Metallic Coral Reef World - Class MC-4",
+                    lifeforms: "Electro-Conductive Coral Minds, Magnetic Field Manipulators",
+                    atmosphere: "60% Nitrogen, 25% Metallic Vapor, 15% Electromagnetic Plasma",
+                    anomalies: "Self-Assembling Structures, Electromagnetic Consciousness"
+                },
+                plasma: {
+                    worldClass: "High-Energy Plasma World - Class PE-12",
+                    lifeforms: "Energy-Based Entities, Plasma Storm Dancers",
+                    atmosphere: "90% Ionized Gases, 10% Pure Energy Fields",
+                    anomalies: "Temporal Distortion Geysers, Matter-Energy Conversion Zones"
+                },
+                fractal: {
+                    worldClass: "Infinite Recursive Landscape - Class FR-∞",
+                    lifeforms: "Self-Similar Organisms, Recursive Evolution Cycles",
+                    atmosphere: "Mathematically Structured Gas Patterns, Geometric Precipitation",
+                    anomalies: "Scale-Invariant Physics, Infinite Zoom Territories"
+                },
+                organic: {
+                    worldClass: "Bio-Mechanical Symbiosis World - Class OM-6",
+                    lifeforms: "Tentacle-Root Hybrids, Sentient Soil Networks",
+                    atmosphere: "55% Bio-Synthesized Oxygen, 35% Organic Compounds, 10% Pheromone Clouds",
+                    anomalies: "Living Terrain, Emotional Resonance Fields"
+                },
+                quantum: {
+                    worldClass: "Quantum Probability World - Class QP-?",
+                    lifeforms: "Superposition Entities, Probability Wave Surfers",
+                    atmosphere: "Uncertain - Changes Upon Observation",
+                    anomalies: "Reality Fluctuation Zones, Observer Effect Phenomena"
                 }
-            });
-            
-            window.addEventListener('keyup', (e) => {
-                if (G.keys.hasOwnProperty(e.code)) {
-                    G.keys[e.code] = false;
-                }
-            });
-            
-            // Game UI buttons
-            $.continueButton.addEventListener('click', nextLevel);
-            $.restartButton.addEventListener('click', restartGame);
-            
-            // Resize handling
-            window.addEventListener('resize', () => {
-                if (G.gameRunning) {
-                    initLevel();
-                }
-            });
+            };
+
+            const info = biomeInfo[biome.type];
+            document.getElementById('worldClass').textContent = info.worldClass;
+            document.getElementById('lifeforms').textContent = info.lifeforms;
+            document.getElementById('atmosphere').textContent = info.atmosphere;
+            document.getElementById('anomalies').textContent = info.anomalies;
+            document.getElementById('biomeInfo').style.display = 'grid';
         }
-        
-        // Initialize everything
-        updateGlitchBg();
-        setupEventListeners();
-    })();
+
+        function updateStats() {
+            const biome = currentBiome;
+            if (!biome) return;
+
+            const stats = `
+                <strong>Vertices:</strong> ${biome.vertexCount.toLocaleString()}<br>
+                <strong>Faces:</strong> ${biome.faceCount.toLocaleString()}<br>
+                <strong>Biome Type:</strong> ${biome.type.charAt(0).toUpperCase() + biome.type.slice(1)}<br>
+                <strong>Complexity Level:</strong> ${biome.complexity}<br>
+                <strong>Alien Factor:</strong> ${biome.alienFactor}/10<br>
+                <strong>Gravity Modifier:</strong> ${biome.gravity}x Standard<br>
+                <strong>Estimated File Size:</strong> ~${Math.round((biome.vertexCount * 50 + biome.faceCount * 30) / 1024)}KB
+            `;
+            document.getElementById('statsContent').innerHTML = stats;
+            document.getElementById('stats').style.display = 'block';
+        }
+
+        function downloadPLY() {
+            if (vertices.length === 0 || faces.length === 0) {
+                alert('Generate a biome first!');
+                return;
+            }
+
+            let plyContent = `ply
+format ascii 1.0
+comment Generated by Alien Biome Generator
+comment Biome Type: ${currentBiome.type}
+comment Alien Factor: ${currentBiome.alienFactor}
+comment Complexity: ${currentBiome.complexity}
+element vertex ${vertices.length}
+property float x
+property float y
+property float z
+property uchar red
+property uchar green
+property uchar blue
+element face ${faces.length}
+property list uchar int vertex_indices
+end_header
+`;
+
+            // Add vertices with colors
+            for (let i = 0; i < vertices.length; i++) {
+                const v = vertices[i];
+                const c = colors[i];
+                const r = Math.floor(c[0] * 255);
+                const g = Math.floor(c[1] * 255);
+                const b = Math.floor(c[2] * 255);
+                plyContent += `${v[0].toFixed(6)} ${v[1].toFixed(6)} ${v[2].toFixed(6)} ${r} ${g} ${b}\n`;
+            }
+
+            // Add faces
+            for (let i = 0; i < faces.length; i++) {
+                const f = faces[i];
+                plyContent += `3 ${f[0]} ${f[1]} ${f[2]}\n`;
+            }
+
+            const blob = new Blob([plyContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `alien_biome_${currentBiome.type}_${Date.now()}.ply`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Auto-generate on load
+        window.onload = function() {
+            generateBiome();
+        };
     </script>
 </body>
 </html>
