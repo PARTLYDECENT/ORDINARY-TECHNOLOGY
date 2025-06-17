@@ -7,308 +7,117 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
-            --critical-color: #ff6b6b;
-            --success-color: #51cf66;
-            --warning-color: #ffd43b;
-            --info-color: #5c9cec;
-            --panel-bg: rgba(25, 25, 40, 0.92);
-            --border-color: #ff5555;
-            --text-primary: #e0e0e0;
-            --text-secondary: #b0b0b0;
+            --critical-color: #ff6b6b; --success-color: #51cf66; --warning-color: #ffd43b;
+            --info-color: #5c9cec; --panel-bg: rgba(25, 25, 40, 0.92); --border-color: #ff5555;
+            --text-primary: #e0e0e0; --text-secondary: #b0b0b0; --active-tab: #ff5555;
         }
-        body { 
-            font-family: 'Consolas', 'Courier New', monospace; 
-            background: linear-gradient(145deg, #3a0a0a, #1d0b0b); 
-            color: var(--text-primary); 
-            margin: 0; 
-            overflow: hidden; 
+        body { font-family: 'Consolas', 'Courier New', monospace; background: linear-gradient(145deg, #3a0a0a, #1d0b0b); color: var(--text-primary); margin: 0; overflow: hidden; }
+        #canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; cursor: crosshair; z-index: 1; }
+        .tooltip { position: absolute; background-color: rgba(0,0,0,0.9); color: white; padding: 6px 12px; border-radius: 5px; font-size: 10px; pointer-events: none; display: none; border: 1px solid var(--border-color); z-index: 200; }
+        #side-panel {
+            position: fixed; top: 0; left: 0; width: 320px; height: 100vh; z-index: 100;
+            background: var(--panel-bg); border-right: 2px solid var(--border-color);
+            backdrop-filter: blur(12px); display: flex; flex-direction: column;
+            transition: transform 0.4s ease-in-out;
         }
-        #ui-overlay { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            pointer-events: none; 
-            z-index: 100; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: space-between; 
+        #side-panel.collapsed { transform: translateX(-100%); }
+        #panel-toggle {
+            position: absolute; top: 50%; right: -25px; transform: translateY(-50%);
+            width: 25px; height: 60px; background: var(--panel-bg); cursor: pointer;
+            border: 2px solid var(--border-color); border-left: none;
+            border-top-right-radius: 8px; border-bottom-right-radius: 8px;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+            color: var(--border-color);
         }
-        .ui-panel { 
-            pointer-events: all; 
-            background: var(--panel-bg); 
-            border: 1px solid var(--border-color); 
-            backdrop-filter: blur(12px); 
-            border-radius: 8px; 
-            font-size: 11px; 
-            padding: 10px 14px; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.4); 
-            transition: all 0.3s ease;
-        }
-        .ui-panel:hover { 
-            background: rgba(25, 25, 40, 0.95); 
-            box-shadow: 0 0 25px rgba(255,85,85,0.2); 
-        }
-        
-        .critical { color: var(--critical-color); font-weight: bold; animation: pulse 2s infinite; }
-        .success { color: var(--success-color); font-weight: bold; }
-        .warning { color: var(--warning-color); font-weight: bold; }
-        .info { color: var(--info-color); }
-
-        .hud-top-bar { display: flex; justify-content: space-between; padding: 12px 18px; gap: 18px; }
-        .hud-top-bar > .ui-panel { flex: 1; min-width: 220px; max-width: 300px; }
-        
-        .hud-bottom-container { 
-            padding: 0 18px 12px 18px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: flex-end; 
-            gap: 18px; 
-        }
-        .hud-bottom-container > .ui-panel { 
-            flex-basis: 24%; 
-            max-width: 280px; 
-            min-height: 180px; 
-            max-height: 240px; 
-            overflow-y: auto; 
-            scrollbar-width: thin; 
-            scrollbar-color: var(--border-color) rgba(255,255,255,0.03); 
-        }
-        
-        .main-controls-panel { flex-basis: 20% !important; max-width: 240px !important; }
-        .main-controls-panel .btn { font-size: 10px; padding: 8px 12px; margin-bottom: 8px; }
-        
-        .status-bar { height: 90px; padding: 0 18px 12px 18px; box-sizing: border-box; }
-        .status-bar > .ui-panel { 
-            width: 100%; 
-            height: 100%; 
-            margin: 0; 
-            padding: 8px 12px; 
-            background: rgba(15,15,25,0.88); 
-        }
-        .status-bar h4 { 
-            font-size: 11px; 
-            margin-bottom: 4px; 
-            color: var(--border-color); 
-            border-bottom: 1px solid var(--border-color); 
-            padding-bottom: 3px;
-        }
-        .console { 
-            height: calc(100% - 25px); 
-            font-size: 10px; 
-            line-height: 1.3; 
-            color: var(--text-secondary); 
-        }
-
-        #canvas { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100vw; 
-            height: 100vh; 
-            cursor: crosshair; 
-            z-index: -1;
-        }
-        
-        .metric { 
-            display: flex; 
-            justify-content: space-between; 
-            margin: 4px 0; 
-            font-size: 11px; 
-        }
-        .metric-label { 
-            color: var(--text-secondary); 
-            flex-basis: 60%; 
-            white-space: nowrap; 
-            overflow: hidden; 
-            text-overflow: ellipsis;
-        }
-        .metric-value { 
-            color: var(--text-primary); 
-            font-weight: bold; 
-            text-align: right; 
-            flex-basis: 40%; 
-        }
-        
-        .progress-bar-container { 
-            background: rgba(0,0,0,0.4); 
-            border-radius: 4px; 
-            height: 12px; 
-            margin: 3px 0; 
-            overflow: hidden; 
-            border: 1px solid #555;
-        }
-        .progress-bar { 
-            height: 100%; 
-            background: var(--success-color); 
-            transition: width 0.4s ease; 
-            text-align: center; 
-            font-size: 8px; 
-            line-height: 12px; 
-            color: #000;
-        }
+        #side-panel.collapsed #panel-toggle { transform: translateY(-50%) rotate(180deg); }
+        .tab-nav { display: flex; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+        .tab-button { flex: 1; padding: 12px 0; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 10px; text-transform: uppercase; transition: all 0.2s ease; }
+        .tab-button:hover { background: rgba(255, 255, 255, 0.05); color: white; }
+        .tab-button.active { background: var(--active-tab); color: white; font-weight: bold; }
+        .tab-content { padding: 15px; overflow-y: auto; flex-grow: 1; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        h3 { font-size: 1.1em; font-weight: bold; margin-bottom: 12px; color: var(--active-tab); border-bottom: 1px solid var(--border-color); padding-bottom: 5px; }
+        .metric { display: flex; justify-content: space-between; margin: 6px 0; font-size: 12px; }
+        .metric-label { color: var(--text-secondary); }
+        .metric-value { color: var(--text-primary); font-weight: bold; }
+        .progress-bar-container { background: rgba(0,0,0,0.4); border-radius: 4px; height: 12px; overflow: hidden; border: 1px solid #555; }
+        .progress-bar { height: 100%; background: var(--success-color); transition: width 0.4s ease; }
         .progress-bar.warning { background: var(--warning-color); }
         .progress-bar.critical { background: var(--critical-color); }
-
-        .btn { 
-            background: linear-gradient(45deg, #e05050, #b03030); 
-            border: 1px solid #c04040; 
-            color: white; 
-            padding: 8px 14px; 
-            font-size: 10px; 
-            border-radius: 5px; 
-            cursor: pointer; 
-            font-family: inherit; 
-            transition: all 0.3s ease; 
-            text-transform: uppercase; 
-            font-weight: bold;
-        }
-        .btn:hover { 
-            background: linear-gradient(45deg, #f06060, #c04040); 
-            border-color: #d05050; 
-            transform: translateY(-2px); 
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3); 
-        }
-        .btn:active { 
-            transform: translateY(0px); 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
-        }
-        .btn:disabled { 
-            background: #333 !important; 
-            border-color: #444 !important; 
-            color: #777 !important; 
-            cursor: not-allowed !important; 
-            transform: none !important; 
-            box-shadow: none !important;
-        }
-        
-        .view-info {
-            position: fixed;
-            bottom: 120px;
-            left: 20px;
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 10px;
-            color: var(--text-primary);
-            backdrop-filter: blur(10px);
-            z-index: 150;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        .view-info.show { opacity: 1; }
-
+        .btn { background: linear-gradient(45deg, #e05050, #b03030); border: 1px solid #c04040; color: white; padding: 10px 14px; font-size: 11px; border-radius: 5px; cursor: pointer; font-family: inherit; transition: all 0.3s ease; text-transform: uppercase; font-weight: bold; width: 100%; margin-bottom: 10px; }
+        .btn:hover:not(:disabled) { background: linear-gradient(45deg, #f06060, #c04040); border-color: #d05050; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        .btn:disabled { background: #333 !important; border-color: #444 !important; color: #777 !important; cursor: not-allowed !important; transform: none !important; box-shadow: none !important; }
+        .console { font-size: 10px; line-height: 1.4; color: var(--text-secondary); height: calc(100vh - 120px); }
+        .console > div { margin-bottom: 4px; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-        @keyframes glow { 0%, 100% { box-shadow: 0 0 5px rgba(255,85,85,0.3); } 50% { box-shadow: 0 0 20px rgba(255,85,85,0.8); } }
-        
-        .processing { animation: glow 2s infinite; }
-        .tooltip {
-            position: absolute; 
-            background-color: rgba(0,0,0,0.9); 
-            color: white; 
-            padding: 6px 12px; 
-            border-radius: 5px;
-            font-size: 10px; 
-            pointer-events: none; 
-            display: none; 
-            border: 1px solid var(--border-color); 
-            z-index: 200;
-            max-width: 220px; 
-            word-wrap: break-word;
-        }
+        .critical-text { color: var(--critical-color); font-weight: bold; animation: pulse 2s infinite; }
+        .success-text { color: var(--success-color); font-weight: bold; }
+        .warning-text { color: var(--warning-color); font-weight: bold; }
+        .info-text { color: var(--info-color); }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <div id="tooltip" class="tooltip"></div>
-    <div id="view-info" class="view-info">
-        <div id="view-name"></div>
-        <div id="view-description"></div>
-        <div style="margin-top: 4px; font-size: 9px; color: #aaa;">Tab: Cycle | 1-6: Presets | R: Reset</div>
-    </div>
 
-    <div id="ui-overlay">
-        <div class="hud-top-bar">
-            <div id="env-panel" class="ui-panel">
-                <h3 class="text-sm font-bold mb-2 text-red-400">ENVIRONMENTAL STATUS</h3>
-                <div class="metric"><span class="metric-label">Sol:</span><span id="sol" class="metric-value">001</span></div>
+    <div id="side-panel">
+        <div id="panel-toggle" onclick="togglePanel()">«</div>
+        <div class="tab-nav">
+            <button class="tab-button active" onclick="openTab('status')">Status</button>
+            <button class="tab-button" onclick="openTab('resources')">Resources</button>
+            <button class="tab-button" onclick="openTab('production')">Production</button>
+            <button class="tab-button" onclick="openTab('build')">Build</button>
+            <button class="tab-button" onclick="openTab('log')">Log</button>
+        </div>
+        <div class="tab-content">
+            <div id="status-pane" class="tab-pane active">
+                <h3>ENVIRONMENTAL STATUS</h3>
+                <div class="metric"><span class="metric-label">Sol:</span><span id="sol" class="metric-value">1</span></div>
                 <div class="metric"><span class="metric-label">Temperature:</span><span id="temp" class="metric-value">-62°C</span></div>
                 <div class="metric"><span class="metric-label">Wind Speed:</span><span id="wind" class="metric-value">12 kph</span></div>
-                <div class="metric"><span class="metric-label">Atm. Pressure:</span><span id="pressure" class="metric-value">0.6 kPa</span></div>
-                <div class="metric"><span class="metric-label">Radiation Lvl:</span><span id="radiation" class="metric-value">2.4 mSv</span></div>
-                <div class="metric"><span class="metric-label">Weather:</span><span id="weather-status" class="metric-value success">NOMINAL</span></div>
-                <div class="metric" id="event-status-metric" style="display:none;"><span class="metric-label">Active Event:</span><span id="event-status" class="metric-value warning">NONE</span></div>
-            </div>
-            <div id="power-panel" class="ui-panel">
-                <h3 class="text-sm font-bold mb-2 text-green-400">POWER GRID</h3>
+                <div class="metric"><span class="metric-label">Weather:</span><span id="weather-status" class="metric-value success-text">NOMINAL</span></div>
+                <h3 class="mt-6">POWER GRID</h3>
                 <div class="metric"><span class="metric-label">Solar Output:</span><span id="solar-output" class="metric-value">0 W</span></div>
-                <div class="metric"><span class="metric-label">Reactor Output:</span><span id="reactor-output-val" class="metric-value">0 W</span></div>
                 <div class="metric"><span class="metric-label">Consumption:</span><span id="total-consumption" class="metric-value">0 W</span></div>
-                <div class="metric"><span class="metric-label">Net Power:</span><span id="net-power" class="metric-value">0 W</span></div>
-                <div class="metric"><span class="metric-label">Battery:</span> <span id="battery-charge-value" class="metric-value">5000/10000 Wh</span></div>
+                <div class="metric"><span class="metric-label">Battery:</span> <span id="battery-charge-value" class="metric-value"></span></div>
                 <div class="progress-bar-container"><div id="battery-bar" class="progress-bar"></div></div>
+                <h3 class="mt-6">MISSION OBJECTIVE</h3>
+                <div class="text-xs mb-2">Construct 20 solar panels to secure the colony's power grid.</div>
+                <div class="metric"><span class="metric-label">Solar Panels Built:</span><span id="mission-panels-progress" class="metric-value"></span></div>
+                <div class="progress-bar-container"><div id="mission-panels-bar" class="progress-bar"></div></div>
             </div>
-             <div id="mission-panel" class="ui-panel">
-                <h3 class="text-sm font-bold mb-2 text-yellow-400">MISSION OBJECTIVES</h3>
-                <div id="objective-text" class="text-xs">ESTABLISH SUSTAINABLE COLONY IN VALLES MARINERIS</div>
-                <div class="metric mt-2"><span class="metric-label">Iron Plates:</span><span id="mission-plates-progress" class="metric-value">0/20</span></div>
-                <div class="progress-bar-container mt-1"><div id="mission-plates-bar" class="progress-bar"></div></div>
-                <div class="metric mt-1"><span class="metric-label">Colony Status:</span><span id="mission-status" class="metric-value success">OPERATIONAL</span></div>
-            </div>
-        </div>
-
-        <div class="hud-bottom-container">
-            <div id="res-panel" class="ui-panel">
-                <h3 class="text-sm font-bold mb-2 text-cyan-400">RESOURCE INVENTORY</h3>
-                <div class="metric"><span class="metric-label">Oxygen:</span><span id="oxygen" class="metric-value">94%</span></div>
+            <div id="resources-pane" class="tab-pane">
+                <h3>RESOURCE INVENTORY</h3>
+                <div class="metric"><span class="metric-label">Oxygen:</span><span id="oxygen" class="metric-value"></span></div>
                 <div class="progress-bar-container"><div id="oxygen-bar" class="progress-bar"></div></div>
-                <div class="metric"><span class="metric-label">Water:</span><span id="water" class="metric-value">78%</span></div>
+                <div class="metric"><span class="metric-label">Water:</span><span id="water" class="metric-value"></span></div>
                 <div class="progress-bar-container"><div id="water-bar" class="progress-bar"></div></div>
-                <div class="metric"><span class="metric-label">Food:</span><span id="food" class="metric-value">85%</span></div>
-                <div class="progress-bar-container"><div id="food-bar" class="progress-bar"></div></div>
-                <div class="metric"><span class="metric-label">Regolith:</span><span id="regolith" class="metric-value">0 kg</span></div>
-                <div class="metric"><span class="metric-label">Iron Ore:</span><span id="iron-ore" class="metric-value">0 kg</span></div>
-                <div class="metric"><span class="metric-label">Silicon:</span><span id="silicon" class="metric-value">0 kg</span></div>
-                <div class="metric"><span class="metric-label">Iron Plates:</span><span id="iron-plates" class="metric-value">0 u</span></div>
-                <div class="metric"><span class="metric-label">Electronics:</span><span id="electronics" class="metric-value">0 u</span></div>
-                <div class="metric"><span class="metric-label">Hydrogen:</span><span id="hydrogen" class="metric-value">0 L</span></div>
+                <div class="metric"><span class="metric-label">Regolith:</span><span id="regolith" class="metric-value"></span></div>
+                <div class="metric"><span class="metric-label">Iron Ore:</span><span id="iron-ore" class="metric-value"></span></div>
+                <div class="metric"><span class="metric-label">Iron Plates:</span><span id="iron-plates" class="metric-value"></span></div>
+                <div class="metric"><span class="metric-label">Electronics:</span><span id="electronics" class="metric-value"></span></div>
             </div>
-
-            <div id="control-panel" class="ui-panel main-controls-panel">
-                <h3 class="text-sm font-bold mb-2 text-red-400">SYSTEM CONTROLS</h3>
-                <button class="btn w-full" onclick="advanceTime()">ADVANCE SOL</button>
-                <button class="btn w-full" onclick="toggleStorm()">WEATHER CONTROL</button>
-                <button class="btn w-full" onclick="deployRover()">ROVER OPERATIONS</button>
-                <button class="btn w-full" onclick="emergencyProtocol()">EMERGENCY PROTOCOL</button>
-                <button class="btn w-full" onclick="cameraControls.cyclePresetViews()">CYCLE VIEW</button>
+            <div id="production-pane" class="tab-pane">
+                <h3>SYSTEM CONTROLS</h3>
+                <button class="btn" onclick="advanceTime()">Advance Sol</button>
+                <button class="btn" onclick="toggleStorm()">Toggle Storm</button>
+                <button class="btn" onclick="deployRover()">Deploy Rover</button>
+                <h3 class="mt-6">MANUFACTURING</h3>
+                <button class="btn" onclick="interactWithStructure('refinery')">Refine Regolith (20R)</button>
+                <button class="btn" onclick="interactWithStructure('arc_furnace')">Smelt Plates (8 Ore)</button>
+                <button class="btn" onclick="interactWithStructure('fabricator')">Craft Electronics (2P, 2R)</button>
+                <button class="btn" onclick="interactWithStructure('habitat_module', 'electrolysis')">Electrolysis (15W)</button>
             </div>
-            
-            <div id="crafting-panel" class="ui-panel">
-                <h3 class="text-sm font-bold mb-2 text-purple-400">PRODUCTION & RESEARCH</h3>
-                <button class="btn w-full" onclick="interactWithStructure('arc_furnace')">SMELT IRON PLATES</button>
-                <button class="btn w-full" onclick="interactWithStructure('refinery')">REFINE REGOLITH</button>
-                <button class="btn w-full" onclick="interactWithStructure('fabricator')">CRAFT ELECTRONICS</button>
-                <button class="btn w-full" onclick="interactWithStructure('habitat_module', 'electrolysis')">ELECTROLYSIS</button>
-                <button class="btn w-full" onclick="interactWithStructure('research_outpost')">RESEARCH TECH</button>
+            <div id="build-pane" class="tab-pane">
+                <h3>COLONY CONSTRUCTION</h3>
+                <button id="build-panel-btn" class="btn" onclick="buildSolarPanel()">Build Solar Panel (5P, 3E)</button>
+                <button id="upgrade-lifesupport-btn" class="btn" onclick="attemptUpgrade('improvedLifeSupport')">Upgrade Life Support (10P, 5E)</button>
+                <button id="upgrade-battery-btn" class="btn" onclick="attemptUpgrade('batteryExpansion')">Expand Battery (20P, 10E)</button>
             </div>
-
-            <div id="upgrades-panel" class="ui-panel">
-                 <h3 class="text-sm font-bold mb-2 text-orange-400">COLONY UPGRADES</h3>
-                 <button id="upgrade-lifesupport-btn" class="btn w-full" onclick="attemptUpgrade('improvedLifeSupport')">LIFE SUPPORT (5E, 10P)</button>
-                 <button id="upgrade-battery-btn" class="btn w-full" onclick="attemptUpgrade('batteryExpansion')">BATTERY EXP. (10E, 20P)</button>
-                 <div id="tech-tree" class="mt-3 text-xs">
-                    <p class="font-bold text-fuchsia-400">Research Progress:</p>
-                    <ul id="unlocked-tech-list" class="list-disc list-inside ml-2 text-xs"></ul>
-                 </div>
-            </div>
-        </div>
-
-        <div class="status-bar">
-            <div class="ui-panel">
-                <h4 class="text-red-400">MISSION LOG - VALLES MARINERIS EXPEDITION</h4>
-                <div id="console" class="console"></div>
+            <div id="log-pane" class="tab-pane">
+                 <h3>MISSION LOG</h3>
+                 <div id="console" class="console"></div>
             </div>
         </div>
     </div>
@@ -317,1139 +126,426 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // Enhanced Game Constants
-        const SOL_DURATION_SECONDS = 45;
-        const MISSION_TARGET_PLATES = 20;
-        const INITIAL_BATTERY_CAPACITY = 10000;
-        const INITIAL_BATTERY_CHARGE = 5000;
+        // --- CORE CONSTANTS & DEFINITIONS ---
+        const SOL_DURATION_SECONDS = 60;
+        const MISSION_TARGET_PANELS = 20;
+        const CANYON_DEPTH = -40;
         const POWER_CONSUMPTION = {
-            habitat_base: 60, electrolysis: 180, 
-            refinery_idle: 12, refinery_active: 220,
-            arc_furnace_idle: 18, arc_furnace_active: 380,
-            fabricator_idle: 8, fabricator_active: 120,
-            research_idle: 10, research_active: 140,
-            mining_rig_active: 280, 
-            rover_deploy_action: 60, 
-            surface_mining_action: 25, 
+            habitat_base: 50, electrolysis: 150, refinery_active: 200, arc_furnace_active: 350,
+            fabricator_active: 100, rover_deploy: 50, life_support_upgrade: 25,
+        };
+        const STRUCTURE_DEFS = {
+            habitat_module: { id: 1, pos: [0, 0], fallback: new THREE.CylinderGeometry(8, 10, 12, 16) },
+            arc_furnace:    { id: 2, pos: [-25, 15], fallback: new THREE.BoxGeometry(8, 6, 6) },
+            refinery:       { id: 3, pos: [20, 25], fallback: new THREE.CylinderGeometry(5, 6, 10, 12) },
+            fabricator:     { id: 4, pos: [-15, -25], fallback: new THREE.BoxGeometry(6, 4, 8) },
+            mining_rig:     { id: 5, pos: [30, -20], fallback: new THREE.CylinderGeometry(4, 5, 8, 8) },
+            rover:          { id: 6, pos: [15, -10], fallback: new THREE.BoxGeometry(4, 2, 6) },
         };
 
-        // Enhanced Game State
-        let scene, camera, renderer, controls, clock = new THREE.Clock();
-        let lightingSystem, cameraControls;
-        let gameState = { 
-            sol: 1, timeOfDay: 0.3, 
-            batteryCharge: INITIAL_BATTERY_CHARGE, batteryCapacity: INITIAL_BATTERY_CAPACITY,
-            solarPanelEfficiency: 0.8, totalPowerGeneration: 0, totalPowerConsumption: 0, reactorOutput: 0,
-            oxygen: 94, water: 78, food: 85, 
-            regolith: 0, ironOre: 0, silicon: 0, 
-            ironPlates: 0, electronics: 0, hydrogen: 0,
-            temp: -62, wind: 12, pressure: 0.6, radiation: 2.4, 
-            isStorm: false, roverDeployed: false, emergencyActive: false, 
-            missionPhase: 'CANYON_EXPLORATION',
-            activeProcesses: { 
-                refinery: { active: false, timeLeft: 0, produces: {}, powerDraw: 0 },
-                arc_furnace: { active: false, timeLeft: 0, produces: {}, powerDraw: 0 },
-                fabricator: { active: false, timeLeft: 0, produces: {}, powerDraw: 0 },
-                research: { active: false, timeLeft: 0, currentProject: null, powerDraw: 0 },
-                electrolysis: { active: false, timeLeft: 0, produces: {}, powerDraw: 0 }
-            },
-            unlockedTech: {
-                advancedSmelting: false, optimizedSolar: false, efficientBatteries: false, 
-                regolithAnalysis: false, canyonMapping: false, atmosphericProcessing: false
-            },
-            habitatUpgrades: { improvedLifeSupport: false, batteryExpansion: false },
-            currentEvent: null, nextEventCheckSol: 2,
+        // --- SCENE & STATE ---
+        let scene, camera, renderer, controls, clock, loader;
+        let lightingSystem, solTimer = 0;
+        let objects = { structures: {}, terrain: null, dust: null };
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        let gameState = {
+            sol: 1, timeOfDay: 0.3, batteryCharge: 5000, batteryCapacity: 10000, solarPanelCount: 4,
+            oxygen: 94, water: 78, regolith: 50, ironOre: 25, ironPlates: 10, electronics: 5,
+            temp: -62, wind: 12, isStorm: false, roverDeployed: false,
+            activeProcesses: {}, upgrades: { improvedLifeSupport: false, batteryExpansion: false },
         };
 
-        let objects = { structures: {}, effects: [], terrain: null, dust: null };
-        const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
-        const tooltip = document.getElementById('tooltip');
-        let solTimer = 0;
-
-        // Enhanced SimplexNoise Implementation
-        const SimplexNoise = (() => {
-            const grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
-            const p = []; for (let i=0; i<256; i++) { p[i] = Math.floor(Math.random()*256); }
-            const perm = []; for(let i=0; i<512; i++) { perm[i]=p[i & 255]; }
-            function dot(g, x, y) { return g[0]*x + g[1]*y; }
-
-            return function(seed) {
-                this.noise2D = (xin, yin) => {
-                    let n0, n1, n2;
-                    const F2 = 0.5*(Math.sqrt(3.0)-1.0);
-                    let s = (xin+yin)*F2;
-                    let i = Math.floor(xin+s);
-                    let j = Math.floor(yin+s);
-                    const G2 = (3.0-Math.sqrt(3.0))/6.0;
-                    let t = (i+j)*G2;
-                    let X0 = i-t;
-                    let Y0 = j-t;
-                    let x0 = xin-X0;
-                    let y0 = yin-Y0;
-                    let i1, j1;
-                    if(x0>y0) {i1=1; j1=0;}
-                    else {i1=0; j1=1;}
-                    let x1 = x0 - i1 + G2;
-                    let y1 = y0 - j1 + G2;
-                    let x2 = x0 - 1.0 + 2.0 * G2;
-                    let y2 = y0 - 1.0 + 2.0 * G2;
-                    let ii = i & 255;
-                    let jj = j & 255;
-                    let gi0 = perm[ii+perm[jj]] % 12;
-                    let gi1 = perm[ii+i1+perm[jj+j1]] % 12;
-                    let gi2 = perm[ii+1+perm[jj+1]] % 12;
-                    let t0 = 0.5 - x0*x0-y0*y0;
-                    if(t0<0) n0 = 0.0;
-                    else { t0 *= t0; n0 = t0 * t0 * dot(grad3[gi0], x0, y0); }
-                    let t1 = 0.5 - x1*x1-y1*y1;
-                    if(t1<0) n1 = 0.0;
-                    else { t1 *= t1; n1 = t1 * t1 * dot(grad3[gi1], x1, y1); }
-                    let t2 = 0.5 - x2*x2-y2*y2;
-                    if(t2<0) n2 = 0.0;
-                    else { t2 *= t2; n2 = t2 * t2 * dot(grad3[gi2], x2, y2); }
-                    return 70.0 * (n0 + n1 + n2);
-                };
-            };
-        })();
-
-        // Enhanced Lighting System
-        class EnhancedLightingSystem {
-            constructor(scene) {
-                this.scene = scene;
-                this.sunLight = null;
-                this.ambientLight = null;
-                this.timeOfDay = 0.3;
-            }
-
-            setupLighting() {
-                this.ambientLight = new THREE.AmbientLight(0x664433, 0.5);
-                this.scene.add(this.ambientLight);
-
-                this.sunLight = new THREE.DirectionalLight(0xFFD4A3, 4.5);
-                this.sunLight.position.set(150, 200, 100);
-                this.sunLight.castShadow = true;
-                
-                this.sunLight.shadow.mapSize.width = 4096;
-                this.sunLight.shadow.mapSize.height = 4096;
-                this.sunLight.shadow.camera.near = 10;
-                this.sunLight.shadow.camera.far = 600;
-                this.sunLight.shadow.camera.left = -300;
-                this.sunLight.shadow.camera.right = 300;
-                this.sunLight.shadow.camera.top = 300;
-                this.sunLight.shadow.camera.bottom = -300;
-                this.sunLight.shadow.bias = -0.002;
-                this.sunLight.shadow.normalBias = 0.05;
-
-                this.scene.add(this.sunLight);
-                this.scene.add(this.sunLight.target);
-
-                const rimLight = new THREE.DirectionalLight(0xFF8844, 2.0);
-                rimLight.position.set(-120, 80, -150);
-                this.scene.add(rimLight);
-
-                const scatterLight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 0.7);
-                this.scene.add(scatterLight);
-
-                return this.sunLight;
-            }
-
-            updateTimeOfDay(timeOfDay, isStorm = false) {
-                this.timeOfDay = timeOfDay;
-                const sunAngle = timeOfDay * Math.PI * 2 - Math.PI / 1.5;
-                const sunHeight = Math.sin(sunAngle) * 200 + 50;
-                
-                if (this.sunLight) {
-                    this.sunLight.position.x = Math.cos(sunAngle) * 250;
-                    this.sunLight.position.y = Math.max(20, sunHeight);
-                    this.sunLight.position.z = Math.sin(sunAngle * 0.7) * 200;
-                    
-                    const sunColor = this.calculateSunColor(timeOfDay);
-                    this.sunLight.color.setHex(sunColor);
-                    
-                    let intensity = Math.max(0.3, sunHeight / 200);
-                    if (isStorm) intensity *= 0.4;
-                    this.sunLight.intensity = intensity * 4.8;
-                }
-
-                if (this.ambientLight) {
-                    const ambientIntensity = Math.max(0.2, (sunHeight + 50) / 300);
-                    this.ambientLight.intensity = ambientIntensity * 0.7;
-                }
-            }
-
-            calculateSunColor(timeOfDay) {
-                const colors = [0x4A4A6B, 0x6B4A4A, 0xB8860B, 0xFFD4A3, 0xFF8C42, 0xFF4500, 0x8B0000, 0x4A4A6B];
-                const colorIndex = timeOfDay * (colors.length - 1);
-                const lowerIndex = Math.floor(colorIndex);
-                const upperIndex = Math.ceil(colorIndex);
-                const factor = colorIndex - lowerIndex;
-                
-                if (lowerIndex === upperIndex) return colors[lowerIndex];
-                
-                const lowerColor = new THREE.Color(colors[lowerIndex]);
-                const upperColor = new THREE.Color(colors[upperIndex]);
-                return lowerColor.lerp(upperColor, factor).getHex();
-            }
-        }
-
-        // Enhanced Camera Controls
-        class EnhancedCameraControls {
-            constructor(camera, renderer) {
-                this.camera = camera;
-                this.renderer = renderer;
-                this.controls = null;
-                this.presetViews = [
-                    { name: "Canyon Overview", position: { x: 60, y: 90, z: 180 }, target: { x: 0, y: -15, z: 0 }, description: "Wide view of Valles Marineris canyon system" },
-                    { name: "Canyon Floor", position: { x: 0, y: 30, z: 100 }, target: { x: 0, y: -25, z: 0 }, description: "Ground level exploration view" },
-                    { name: "Eastern Rim", position: { x: 140, y: 70, z: 30 }, target: { x: -60, y: -20, z: 0 }, description: "Looking west across the great canyon" },
-                    { name: "Western Rim", position: { x: -140, y: 70, z: 30 }, target: { x: 60, y: -20, z: 0 }, description: "Looking east across the canyon system" },
-                    { name: "Orbital Survey", position: { x: 0, y: 250, z: 120 }, target: { x: 0, y: 0, z: 0 }, description: "High altitude geological survey" },
-                    { name: "Base Operations", position: { x: 30, y: 50, z: 90 }, target: { x: 0, y: 8, z: 0 }, description: "Optimal view for colony management" }
-                ];
-                this.currentPreset = 0;
-            }
-
-            setupControls() {
-                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-                this.controls.enableDamping = true;
-                this.controls.dampingFactor = 0.08;
-                this.controls.minDistance = 18;
-                this.controls.maxDistance = 450;
-                this.controls.maxPolarAngle = Math.PI / 2 - 0.05;
-                this.controls.minPolarAngle = Math.PI / 8;
-                
-                this.camera.position.set(60, 90, 180);
-                this.controls.target.set(0, -15, 0);
-                
-                this.setupKeyboardShortcuts();
-                return this.controls;
-            }
-
-            setupKeyboardShortcuts() {
-                document.addEventListener('keydown', (event) => {
-                    if (event.key >= '1' && event.key <= '6') {
-                        const presetIndex = parseInt(event.key) - 1;
-                        if (presetIndex < this.presetViews.length) {
-                            this.switchToPreset(presetIndex);
-                        }
-                    } else if (event.key === 'Tab') {
-                        event.preventDefault();
-                        this.cyclePresetViews();
-                    } else if (event.key.toLowerCase() === 'r') {
-                        this.resetToDefaultView();
-                    }
-                });
-            }
-
-            switchToPreset(index) {
-                if (index >= 0 && index < this.presetViews.length) {
-                    const preset = this.presetViews[index];
-                    this.currentPreset = index;
-                    this.animateToView(preset.position, preset.target, 1800);
-                    this.showViewInfo(preset);
-                }
-            }
-
-            cyclePresetViews() {
-                this.currentPreset = (this.currentPreset + 1) % this.presetViews.length;
-                this.switchToPreset(this.currentPreset);
-            }
-
-            resetToDefaultView() {
-                this.switchToPreset(0);
-            }
-
-            animateToView(targetPosition, targetLookAt, duration = 1800) {
-                const startPosition = this.camera.position.clone();
-                const startTarget = this.controls.target.clone();
-                const startTime = Date.now();
-                
-                const animate = () => {
-                    const elapsed = Date.now() - startTime;
-                    const progress = Math.min(elapsed / duration, 1);
-                    const easeProgress = 1 - Math.pow(1 - progress, 3);
-                    
-                    this.camera.position.lerpVectors(startPosition, 
-                        new THREE.Vector3(targetPosition.x, targetPosition.y, targetPosition.z), 
-                        easeProgress);
-                    
-                    this.controls.target.lerpVectors(startTarget,
-                        new THREE.Vector3(targetLookAt.x, targetLookAt.y, targetLookAt.z),
-                        easeProgress);
-                    
-                    this.controls.update();
-                    
-                    if (progress < 1) {
-                        requestAnimationFrame(animate);
-                    }
-                };
-                
-                animate();
-            }
-
-            showViewInfo(preset) {
-                const viewInfo = document.getElementById('view-info');
-                const viewName = document.getElementById('view-name');
-                const viewDescription = document.getElementById('view-description');
-                
-                viewName.textContent = preset.name;
-                viewDescription.textContent = preset.description;
-                
-                viewInfo.classList.add('show');
-                
-                setTimeout(() => {
-                    viewInfo.classList.remove('show');
-                }, 4000);
-            }
-        }
-
-        // Enhanced Terrain Generation
-        function createEnhancedTerrain() {
-            const terrainSize = 700;
-            const segments = 300;
-            const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, segments, segments);
-            const vertices = geometry.attributes.position;
-            const halfSize = terrainSize / 2;
-            const simplex = new SimplexNoise(Math.random());
-
-            for (let i = 0; i < vertices.count; i++) {
-                const x = vertices.getX(i);
-                const y = vertices.getY(i);
-                const nx = x / halfSize;
-                const ny = y / halfSize;
-                
-                let height = 0;
-                
-                // Main canyon system (Valles Marineris-like)
-                const canyonCenterY = 0.1;
-                const canyonWidth = 0.7;
-                const canyonDepth = -50;
-                const distFromCenter = Math.abs(ny - canyonCenterY);
-                
-                if (distFromCenter < canyonWidth) {
-                    const normalizedDist = distFromCenter / canyonWidth;
-                    const wallSteepness = Math.pow(1 - normalizedDist, 2.8);
-                    const wallVariation = simplex.noise2D(nx * 6, ny * 6) * 0.4;
-                    height += canyonDepth * wallSteepness * (1 + wallVariation);
-                    
-                    // Terracing effect
-                    const terraceSpacing = 0.18;
-                    const terraceHeight = 4;
-                    const terraceLevel = Math.floor((1 - normalizedDist) / terraceSpacing);
-                    height += terraceLevel * terraceHeight * (1 - normalizedDist);
-                }
-                
-                // Branch canyons
-                const northBranchX = nx - 0.3;
-                const northBranchY = ny + 0.4;
-                const northDist = Math.sqrt(northBranchX * northBranchX + northBranchY * northBranchY * 4);
-                if (northDist < 0.45) {
-                    height += -30 * Math.pow(1 - northDist / 0.45, 2.2);
-                }
-                
-                // Base elevation with multiple octaves
-                height += simplex.noise2D(x / 220, y / 220) * 28;
-                height += simplex.noise2D(x / 140, y / 140) * 18;
-                height += simplex.noise2D(x / 70, y / 70) * 10;
-                height += simplex.noise2D(x / 35, y / 35) * 5;
-                height += simplex.noise2D(x / 15, y / 15) * 2;
-                height += simplex.noise2D(x / 8, y / 8) * 0.8;
-                
-                // Craters
-                const craters = [
-                    { x: 180, y: 140, radius: 65, depth: 0.7 },
-                    { x: -200, y: -160, radius: 80, depth: 0.6 },
-                    { x: -90, y: 220, radius: 50, depth: 0.5 },
-                    { x: 220, y: -90, radius: 35, depth: 0.4 }
-                ];
-                
-                craters.forEach(crater => {
-                    const distance = Math.sqrt(Math.pow(x - crater.x, 2) + Math.pow(y - crater.y, 2));
-                    if (distance < crater.radius) {
-                        const normalizedDist = distance / crater.radius;
-                        const craterProfile = Math.pow(1 - normalizedDist, 1.8);
-                        const rimEffect = distance > crater.radius * 0.85 ? (1 - normalizedDist) * 4 : 0;
-                        height -= crater.radius * crater.depth * craterProfile;
-                        height += rimEffect;
-                    }
-                });
-                
-                height += (Math.random() - 0.5) * 0.4;
-                vertices.setZ(i, height);
-            }
-            
-            geometry.computeVertexNormals();
-            
-            // Enhanced texture
-            const canvas = document.createElement('canvas');
-            canvas.width = canvas.height = 1024;
-            const ctx = canvas.getContext('2d');
-            
-            const gradient = ctx.createLinearGradient(0, 0, 0, 1024);
-            gradient.addColorStop(0, '#D4A574');
-            gradient.addColorStop(0.25, '#C68E65');
-            gradient.addColorStop(0.5, '#B57454');
-            gradient.addColorStop(0.75, '#A25B40');
-            gradient.addColorStop(1, '#6B3A23');
-            
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 1024, 1024);
-            
-            // Rock stratification
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < 25; i++) {
-                const y = (i / 25) * 1024 + Math.sin(i * 0.6) * 40;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(1024, y);
-                ctx.stroke();
-            }
-            
-            // Surface detail
-            for (let i = 0; i < 35000; i++) {
-                const brightness = Math.random() * 45 + 25;
-                const alpha = Math.random() * 0.1 + 0.02;
-                ctx.fillStyle = `rgba(${brightness + Math.random() * 30}, ${brightness - Math.random() * 12}, ${brightness - Math.random() * 25}, ${alpha})`;
-                const size = Math.random() * 4 + 0.5;
-                ctx.fillRect(Math.random() * 1024, Math.random() * 1024, size, size);
-            }
-            
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x9A5833,
-                roughness: 0.96,
-                metalness: 0.02,
-                map: new THREE.CanvasTexture(canvas)
-            });
-            
-            const terrain = new THREE.Mesh(geometry, material);
-            terrain.rotation.x = -Math.PI / 2;
-            terrain.receiveShadow = true;
-            terrain.name = "terrain";
-            
-            return terrain;
-        }
-
-        // Enhanced Structure Creation
-        function createEnhancedStructures() {
-            // Habitat Module
-            const habitatGeom = new THREE.CylinderGeometry(8, 10, 12, 16);
-            const habitatMat = new THREE.MeshStandardMaterial({ color: 0xCCCCCC, roughness: 0.3, metalness: 0.7 });
-            objects.structures.habitat_module = new THREE.Mesh(habitatGeom, habitatMat);
-            objects.structures.habitat_module.position.set(0, 6, 0);
-            objects.structures.habitat_module.castShadow = true;
-            objects.structures.habitat_module.receiveShadow = true;
-            objects.structures.habitat_module.name = "habitat_module";
-            scene.add(objects.structures.habitat_module);
-
-            // Solar Arrays
-            for (let i = 0; i < 4; i++) {
-                const panelGeom = new THREE.BoxGeometry(12, 0.3, 8);
-                const panelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.1, metalness: 0.9 });
-                const panel = new THREE.Mesh(panelGeom, panelMat);
-                const angle = (i / 4) * Math.PI * 2;
-                panel.position.set(Math.cos(angle) * 25, 8, Math.sin(angle) * 25);
-                panel.rotation.y = angle + Math.PI / 2;
-                panel.castShadow = true;
-                panel.name = `solar_panel_${i}`;
-                objects.structures[`solar_panel_${i}`] = panel;
-                scene.add(panel);
-            }
-
-            // Mining Rig
-            const rigBaseGeom = new THREE.CylinderGeometry(4, 5, 8, 8);
-            const rigBaseMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8, metalness: 0.3 });
-            objects.structures.mining_rig = new THREE.Mesh(rigBaseGeom, rigBaseMat);
-            objects.structures.mining_rig.position.set(30, 4, -20);
-            objects.structures.mining_rig.castShadow = true;
-            objects.structures.mining_rig.name = "mining_rig";
-            scene.add(objects.structures.mining_rig);
-
-            // Arc Furnace
-            const furnaceGeom = new THREE.BoxGeometry(8, 6, 6);
-            const furnaceMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.4 });
-            objects.structures.arc_furnace = new THREE.Mesh(furnaceGeom, furnaceMat);
-            objects.structures.arc_furnace.position.set(-25, 3, 15);
-            objects.structures.arc_furnace.castShadow = true;
-            objects.structures.arc_furnace.name = "arc_furnace";
-            scene.add(objects.structures.arc_furnace);
-
-            // Refinery
-            const refineryGeom = new THREE.CylinderGeometry(5, 6, 10, 12);
-            const refineryMat = new THREE.MeshStandardMaterial({ color: 0x4682B4, roughness: 0.6, metalness: 0.5 });
-            objects.structures.refinery = new THREE.Mesh(refineryGeom, refineryMat);
-            objects.structures.refinery.position.set(20, 5, 25);
-            objects.structures.refinery.castShadow = true;
-            objects.structures.refinery.name = "refinery";
-            scene.add(objects.structures.refinery);
-
-            // Fabricator
-            const fabGeom = new THREE.BoxGeometry(6, 4, 8);
-            const fabMat = new THREE.MeshStandardMaterial({ color: 0x9932CC, roughness: 0.5, metalness: 0.6 });
-            objects.structures.fabricator = new THREE.Mesh(fabGeom, fabMat);
-            objects.structures.fabricator.position.set(-15, 2, -25);
-            objects.structures.fabricator.castShadow = true;
-            objects.structures.fabricator.name = "fabricator";
-            scene.add(objects.structures.fabricator);
-
-            // Research Outpost
-            const researchGeom = new THREE.SphereGeometry(6, 16, 12);
-            const researchMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.4, metalness: 0.7 });
-            objects.structures.research_outpost = new THREE.Mesh(researchGeom, researchMat);
-            objects.structures.research_outpost.position.set(-35, 6, -10);
-            objects.structures.research_outpost.castShadow = true;
-            objects.structures.research_outpost.name = "research_outpost";
-            scene.add(objects.structures.research_outpost);
-
-            // Reactor
-            const reactorGeom = new THREE.CylinderGeometry(6, 8, 15, 16);
-            const reactorMat = new THREE.MeshStandardMaterial({ color: 0x32CD32, roughness: 0.3, metalness: 0.8 });
-            objects.structures.reactor = new THREE.Mesh(reactorGeom, reactorMat);
-            objects.structures.reactor.position.set(40, 7.5, 10);
-            objects.structures.reactor.castShadow = true;
-            objects.structures.reactor.name = "reactor";
-            scene.add(objects.structures.reactor);
-
-            // Rover
-            const roverBodyGeom = new THREE.BoxGeometry(4, 2, 6);
-            const roverBodyMat = new THREE.MeshStandardMaterial({ color: 0xFF6347, roughness: 0.6, metalness: 0.4 });
-            objects.structures.rover = new THREE.Mesh(roverBodyGeom, roverBodyMat);
-            objects.structures.rover.position.set(15, 1, -10);
-            objects.structures.rover.castShadow = true;
-            objects.structures.rover.name = "rover";
-            scene.add(objects.structures.rover);
-        }
-
-        // Enhanced Atmosphere
-        function createEnhancedAtmosphere() {
-            const dustGeometry = new THREE.BufferGeometry();
-            const dustCount = 2500;
-            const dustPositions = new Float32Array(dustCount * 3);
-            
-            for (let i = 0; i < dustCount; i++) {
-                const i3 = i * 3;
-                dustPositions[i3] = (Math.random() - 0.5) * 900;
-                dustPositions[i3 + 1] = Math.random() * 180 + 15;
-                dustPositions[i3 + 2] = (Math.random() - 0.5) * 900;
-            }
-            
-            dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
-            
-            const dustMaterial = new THREE.PointsMaterial({
-                color: 0xD2B48C,
-                size: 1.0,
-                transparent: true,
-                opacity: 0.4,
-                sizeAttenuation: true,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending
-            });
-            
-            objects.dust = new THREE.Points(dustGeometry, dustMaterial);
-            objects.dust.name = 'atmosphericDust';
-            scene.add(objects.dust);
-        }
-
-        // Game Logic Functions
-        function startProcess(processKey, duration, powerDraw, inputs, produces) {
-            const procMeta = gameState.activeProcesses[processKey];
-            if (procMeta && procMeta.active) {
-                log(`${processKey.toUpperCase().replace(/_/g,' ')} is already processing.`, "warning");
-                return false;
-            }
-            
-            for (const res in inputs) {
-                if (gameState[res] < inputs[res]) {
-                    log(`Insufficient ${res} for ${processKey}. Need ${inputs[res]}, have ${gameState[res]}.`, "critical");
-                    return false;
-                }
-            }
-            
-            const estimatedEnergyNeeded = powerDraw * (duration / SOL_DURATION_SECONDS);
-            if (gameState.batteryCharge < estimatedEnergyNeeded * 0.3) {
-                log(`Insufficient power for ${processKey}. Needs ${powerDraw}W.`, "critical");
-                return false;
-            }
-
-            for (const res in inputs) gameState[res] -= inputs[res];
-            
-            gameState.activeProcesses[processKey] = {
-                active: true,
-                timeLeft: duration,
-                produces: produces,
-                powerDraw: powerDraw
-            };
-            
-            log(`${processKey.toUpperCase().replace(/_/g,' ')} process initiated. Duration: ${duration}s.`, "info");
-            
-            const structure = objects.structures[processKey] || objects.structures[processKey.split('_')[0]];
-            if (structure) {
-                structure.userData.isProcessing = true;
-                structure.material.emissive.setHex(0x444400);
-            }
-            
-            updatePowerConsumption();
-            updateUI();
-            return true;
-        }
-
-        function updateProcesses(deltaTime) {
-            Object.keys(gameState.activeProcesses).forEach(processKey => {
-                const process = gameState.activeProcesses[processKey];
-                if (process.active) {
-                    process.timeLeft -= deltaTime;
-                    
-                    if (process.timeLeft <= 0) {
-                        // Process completed
-                        if (process.produces.item) {
-                            gameState[process.produces.item] += process.produces.amount;
-                            log(`${processKey.toUpperCase().replace(/_/g,' ')} completed. Produced ${process.produces.amount} ${process.produces.item}.`, "success");
-                        }
-                        if (process.produces.item1) {
-                            gameState[process.produces.item1] += process.produces.amount1;
-                            if (process.produces.item2) {
-                                gameState[process.produces.item2] += process.produces.amount2;
-                            }
-                            log(`${processKey.toUpperCase().replace(/_/g,' ')} completed. Multiple outputs produced.`, "success");
-                        }
-                        if (process.produces.tech) {
-                            gameState.unlockedTech[process.produces.tech] = true;
-                            log(`Research completed: ${process.produces.tech.replace(/([A-Z])/g, ' $1').trim()}!`, "success");
-                        }
-                        
-                        process.active = false;
-                        process.timeLeft = 0;
-                        process.powerDraw = 0;
-                        
-                        const structure = objects.structures[processKey] || objects.structures[processKey.split('_')[0]];
-                        if (structure) {
-                            structure.userData.isProcessing = false;
-                            structure.material.emissive.setHex(0x000000);
-                        }
-                        
-                        updatePowerConsumption();
-                    }
-                }
-            });
-        }
-
-        function updatePowerConsumption() {
-            let totalConsumption = POWER_CONSUMPTION.habitat_base;
-            
-            Object.values(gameState.activeProcesses).forEach(process => {
-                if (process.active) {
-                    totalConsumption += process.powerDraw;
-                }
-            });
-            
-            gameState.totalPowerConsumption = totalConsumption;
-            
-            // Solar power calculation
-            const solarOutput = gameState.solarPanelEfficiency * 800 * (gameState.isStorm ? 0.2 : 1);
-            gameState.totalPowerGeneration = solarOutput + gameState.reactorOutput;
-            
-            const netPower = gameState.totalPowerGeneration - gameState.totalPowerConsumption;
-            
-            // Battery management
-            if (netPower > 0) {
-                gameState.batteryCharge = Math.min(gameState.batteryCapacity, gameState.batteryCharge + netPower * (1/60));
-            } else {
-                gameState.batteryCharge = Math.max(0, gameState.batteryCharge + netPower * (1/60));
-            }
-        }
-
-        function updateUI() {
-            document.getElementById('sol').textContent = String(gameState.sol).padStart(3, '0');
-            document.getElementById('temp').textContent = `${gameState.temp}°C`;
-            document.getElementById('wind').textContent = `${gameState.wind} kph`;
-            document.getElementById('pressure').textContent = `${gameState.pressure} kPa`;
-            document.getElementById('radiation').textContent = `${gameState.radiation} mSv`;
-            document.getElementById('weather-status').textContent = gameState.isStorm ? 'STORM' : 'NOMINAL';
-            document.getElementById('weather-status').className = gameState.isStorm ? 'metric-value critical' : 'metric-value success';
-            
-            document.getElementById('solar-output').textContent = `${Math.round(gameState.totalPowerGeneration - gameState.reactorOutput)} W`;
-            document.getElementById('reactor-output-val').textContent = `${Math.round(gameState.reactorOutput)} W`;
-            document.getElementById('total-consumption').textContent = `${Math.round(gameState.totalPowerConsumption)} W`;
-            document.getElementById('net-power').textContent = `${Math.round(gameState.totalPowerGeneration - gameState.totalPowerConsumption)} W`;
-            document.getElementById('battery-charge-value').textContent = `${Math.round(gameState.batteryCharge)}/${gameState.batteryCapacity} Wh`;
-            
-            const batteryPercent = (gameState.batteryCharge / gameState.batteryCapacity) * 100;
-            const batteryBar = document.getElementById('battery-bar');
-            batteryBar.style.width = `${batteryPercent}%`;
-            batteryBar.className = `progress-bar ${batteryPercent < 20 ? 'critical' : batteryPercent < 40 ? 'warning' : ''}`;
-            
-            // Resources
-            document.getElementById('oxygen').textContent = `${gameState.oxygen}%`;
-            document.getElementById('water').textContent = `${gameState.water}%`;
-            document.getElementById('food').textContent = `${gameState.food}%`;
-            document.getElementById('regolith').textContent = `${gameState.regolith} kg`;
-            document.getElementById('iron-ore').textContent = `${gameState.ironOre} kg`;
-            document.getElementById('silicon').textContent = `${gameState.silicon} kg`;
-            document.getElementById('iron-plates').textContent = `${gameState.ironPlates} u`;
-            document.getElementById('electronics').textContent = `${gameState.electronics} u`;
-            document.getElementById('hydrogen').textContent = `${gameState.hydrogen} L`;
-            
-            // Progress bars for life support
-            ['oxygen', 'water', 'food'].forEach(resource => {
-                const value = gameState[resource];
-                const bar = document.getElementById(`${resource}-bar`);
-                bar.style.width = `${value}%`;
-                bar.className = `progress-bar ${value < 20 ? 'critical' : value < 40 ? 'warning' : ''}`;
-            });
-            
-            // Mission progress
-            document.getElementById('mission-plates-progress').textContent = `${gameState.ironPlates}/${MISSION_TARGET_PLATES}`;
-            const missionPercent = (gameState.ironPlates / MISSION_TARGET_PLATES) * 100;
-            const missionBar = document.getElementById('mission-plates-bar');
-            missionBar.style.width = `${Math.min(100, missionPercent)}%`;
-            
-            // Tech tree
-            const techList = document.getElementById('unlocked-tech-list');
-            techList.innerHTML = '';
-            Object.keys(gameState.unlockedTech).forEach(tech => {
-                if (gameState.unlockedTech[tech]) {
-                    const li = document.createElement('li');
-                    li.textContent = tech.replace(/([A-Z])/g, ' $1').trim();
-                    li.className = 'text-green-400';
-                    techList.appendChild(li);
-                }
-            });
-        }
-
-        function log(message, type = "info") {
-            const console = document.getElementById('console');
-            const timestamp = `[Sol ${String(gameState.sol).padStart(3, '0')}]`;
-            const logEntry = document.createElement('div');
-            logEntry.innerHTML = `<span class="text-gray-500">${timestamp}</span> <span class="${type}">${message}</span>`;
-            console.appendChild(logEntry);
-            console.scrollTop = console.scrollHeight;
-            
-            // Keep only last 50 entries
-            while (console.children.length > 50) {
-                console.removeChild(console.firstChild);
-            }
-        }
-
-        function createParticleEffect(position, color, count = 50, duration = 1.5) {
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(count * 3);
-            const velocities = new Float32Array(count * 3);
-            
-            for (let i = 0; i < count; i++) {
-                const i3 = i * 3;
-                positions[i3] = position.x + (Math.random() - 0.5) * 2;
-                positions[i3 + 1] = position.y + (Math.random() - 0.5) * 2;
-                positions[i3 + 2] = position.z + (Math.random() - 0.5) * 2;
-                
-                const phi = Math.random() * Math.PI * 2;
-                const theta = Math.acos((Math.random() * 2) - 1);
-                const speed = Math.random() * 3 + 1;
-                
-                velocities[i3] = speed * Math.sin(theta) * Math.cos(phi);
-                velocities[i3 + 1] = speed * Math.cos(theta) + 2;
-                velocities[i3 + 2] = speed * Math.sin(theta) * Math.sin(phi);
-            }
-            
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
-            
-            const material = new THREE.PointsMaterial({
-                color: color,
-                size: 0.8,
-                transparent: true,
-                opacity: 1.0,
-                sizeAttenuation: true,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending
-            });
-            
-            const effect = new THREE.Points(geometry, material);
-            effect.userData = { startTime: clock.getElapsedTime(), duration: duration };
-            scene.add(effect);
-            objects.effects.push(effect);
-        }
-
-        function updateEffects() {
-            const now = clock.getElapsedTime();
-            const dt = clock.getDelta();
-            
-            objects.effects = objects.effects.filter(effect => {
-                const age = now - effect.userData.startTime;
-                if (age > effect.userData.duration) {
-                    scene.remove(effect);
-                    if (effect.geometry) effect.geometry.dispose();
-                    if (effect.material) effect.material.dispose();
-                    return false;
-                }
-                
-                const positions = effect.geometry.attributes.position.array;
-                const velocities = effect.geometry.attributes.velocity.array;
-                
-                for (let i = 0; i < positions.length; i += 3) {
-                    positions[i] += velocities[i] * dt;
-                    positions[i + 1] += velocities[i + 1] * dt;
-                    positions[i + 2] += velocities[i + 2] * dt;
-                    velocities[i + 1] -= 3.71 * dt; // Mars gravity
-                }
-                
-                effect.geometry.attributes.position.needsUpdate = true;
-                effect.material.opacity = Math.max(0, 1 - (age / effect.userData.duration));
-                return true;
-            });
-        }
-
-        // Interaction System
-        function setupInteraction() {
-            renderer.domElement.addEventListener('click', onMouseClick);
-            renderer.domElement.addEventListener('mousemove', onMouseMove);
-        }
-
-        function onMouseMove(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-            
-            if (intersects.length > 0) {
-                const object = intersects[0].object;
-                if (object.name && objects.structures[object.name]) {
-                    tooltip.style.display = 'block';
-                    tooltip.style.left = event.clientX + 10 + 'px';
-                    tooltip.style.top = event.clientY - 30 + 'px';
-                    tooltip.textContent = object.name.replace(/_/g, ' ').toUpperCase();
-                } else {
-                    tooltip.style.display = 'none';
-                }
-            } else {
-                tooltip.style.display = 'none';
-            }
-        }
-
-        function onMouseClick(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-            
-            if (intersects.length > 0) {
-                const object = intersects[0].object;
-                const clickPoint = intersects[0].point;
-                
-                if (object.name && objects.structures[object.name]) {
-                    interactWithStructure(object.name, null, clickPoint);
-                } else if (object.name === 'terrain') {
-                    interactWithStructure('terrain', null, clickPoint);
-                }
-            }
-        }
-
-        // Global Functions
-        window.interactWithStructure = function(structureName, action, clickPoint) {
-            const structure = objects.structures[structureName];
-            let effectPosition = structure ? structure.position.clone() : (clickPoint || new THREE.Vector3());
-            
-            switch(structureName) {
-                case 'terrain':
-                    if (gameState.batteryCharge >= 25) {
-                        const minedRegolith = Math.floor(Math.random() * 8) + 4;
-                        gameState.regolith += minedRegolith;
-                        gameState.batteryCharge -= 25;
-                        log(`Surface extraction yielded ${minedRegolith}kg Regolith.`, "info");
-                        createParticleEffect(clickPoint, 0xA08070, 40, 1.5);
-                    } else {
-                        log("Insufficient power for surface extraction.", "warning");
-                    }
-                    break;
-                    
-                case 'mining_rig':
-                    if (gameState.batteryCharge > 100) {
-                        const minedOre = Math.floor(Math.random() * 12) + 6;
-                        gameState.ironOre += minedOre;
-                        gameState.batteryCharge -= 100;
-                        log(`Deep core drill extracted ${minedOre}kg Iron Ore.`, "success");
-                        createParticleEffect(effectPosition, 0xB8B8C8, 80, 2.0);
-                    } else {
-                        log("Insufficient power for deep core mining.", "critical");
-                    }
-                    break;
-                    
-                case 'arc_furnace':
-                    startProcess('arc_furnace', 12, POWER_CONSUMPTION.arc_furnace_active, 
-                        { ironOre: 8 }, 
-                        { item: 'ironPlates', amount: 3 }
-                    );
-                    break;
-                    
-                case 'refinery':
-                    startProcess('refinery', 15, POWER_CONSUMPTION.refinery_active,
-                        { regolith: 20 }, 
-                        { item1: 'silicon', amount1: 3, item2: 'ironOre', amount2: 4 }
-                    );
-                    break;
-                    
-                case 'fabricator':
-                    startProcess('fabricator', 10, POWER_CONSUMPTION.fabricator_active,
-                        { ironPlates: 2, silicon: 3 }, 
-                        { item: 'electronics', amount: 1 }
-                    );
-                    break;
-                    
-                case 'habitat_module':
-                    if (action === 'electrolysis') {
-                        startProcess('electrolysis', 18, POWER_CONSUMPTION.electrolysis,
-                            { water: 15 }, 
-                            { item1: 'oxygen', amount1: 8, item2: 'hydrogen', amount2: 6 }
-                        );
-                    } else {
-                        log("Habitat Module systems nominal. Life support operational.", "info");
-                    }
-                    break;
-                    
-                case 'research_outpost':
-                    const availableTech = Object.keys(gameState.unlockedTech).filter(tech => !gameState.unlockedTech[tech]);
-                    if (availableTech.length === 0) {
-                        log("All available technologies researched!", "success");
-                        return;
-                    }
-                    const techToResearch = availableTech[0];
-                    if (startProcess('research', 30, POWER_CONSUMPTION.research_active, {}, { tech: techToResearch })) {
-                        gameState.activeProcesses.research.currentProject = techToResearch;
-                        log(`Research project initiated: ${techToResearch.replace(/([A-Z])/g, ' $1').trim()}`, "info");
-                    }
-                    break;
-                    
-                case 'reactor':
-                    const boost = 1000;
-                    gameState.batteryCharge = Math.min(gameState.batteryCapacity, gameState.batteryCharge + boost);
-                    gameState.reactorOutput = Math.min(400, gameState.reactorOutput + 50);
-                    log(`Reactor core stimulated. Power surge: +${boost}Wh, Output: +50W`, "success");
-                    createParticleEffect(effectPosition, 0x70FFB0, 80, 2.5);
-                    break;
-                    
-                case 'rover':
-                    log(gameState.roverDeployed ? "Rover on active mission." : "Rover ready for deployment.", "info");
-                    break;
-                    
-                default:
-                    log(`Interacted with ${structureName.replace(/_/g, ' ')}.`, "info");
-            }
-            updateUI();
-        };
-
-        window.advanceTime = function() {
-            gameState.sol++;
-            gameState.timeOfDay = (gameState.timeOfDay + 0.1) % 1;
-            
-            // Consume life support resources
-            gameState.oxygen = Math.max(0, gameState.oxygen - (Math.random() * 3 + 1));
-            gameState.water = Math.max(0, gameState.water - (Math.random() * 2 + 1));
-            gameState.food = Math.max(0, gameState.food - (Math.random() * 2 + 1));
-            
-            // Environmental changes
-            gameState.temp = -62 + (Math.random() - 0.5) * 20;
-            gameState.wind = 12 + (Math.random() - 0.5) * 30;
-            gameState.radiation = 2.4 + (Math.random() - 0.5) * 1.5;
-            
-            log(`Sol ${gameState.sol} begins. Environmental conditions updated.`, "info");
-            updateUI();
-        };
-
-        window.toggleStorm = function() {
-            gameState.isStorm = !gameState.isStorm;
-            if (gameState.isStorm) {
-                gameState.wind += 50;
-                log("Dust storm detected! Solar efficiency reduced, wind speed increased.", "warning");
-            } else {
-                gameState.wind = Math.max(5, gameState.wind - 50);
-                log("Weather conditions stabilizing. Storm has passed.", "success");
-            }
-            updateUI();
-        };
-
-        window.deployRover = function() {
-            if (!gameState.roverDeployed && gameState.batteryCharge >= 100) {
-                gameState.roverDeployed = true;
-                gameState.batteryCharge -= 100;
-                const discovery = Math.random();
-                if (discovery < 0.3) {
-                    const foundOre = Math.floor(Math.random() * 15) + 10;
-                    gameState.ironOre += foundOre;
-                    log(`Rover discovered iron ore deposit! Collected ${foundOre}kg.`, "success");
-                } else if (discovery < 0.6) {
-                    const foundRegolith = Math.floor(Math.random() * 20) + 15;
-                    gameState.regolith += foundRegolith;
-                    log(`Rover collected ${foundRegolith}kg regolith from remote location.`, "info");
-                } else {
-                    log("Rover completed geological survey. No significant deposits found.", "info");
-                }
-                setTimeout(() => {
-                    gameState.roverDeployed = false;
-                    log("Rover returned to base.", "info");
-                    updateUI();
-                }, 8000);
-            } else if (gameState.roverDeployed) {
-                log("Rover is already deployed on mission.", "warning");
-            } else {
-                log("Insufficient power for rover deployment.", "critical");
-            }
-            updateUI();
-        };
-
-        window.emergencyProtocol = function() {
-            if (!gameState.emergencyActive) {
-                gameState.emergencyActive = true;
-                gameState.batteryCharge = Math.min(gameState.batteryCapacity, gameState.batteryCharge + 2000);
-                gameState.oxygen = Math.min(100, gameState.oxygen + 20);
-                gameState.water = Math.min(100, gameState.water + 15);
-                log("EMERGENCY PROTOCOL ACTIVATED! Emergency reserves deployed.", "critical");
-                setTimeout(() => {
-                    gameState.emergencyActive = false;
-                    log("Emergency protocol deactivated. Systems returning to normal.", "info");
-                    updateUI();
-                }, 10000);
-            } else {
-                log("Emergency protocol already active.", "warning");
-            }
-            updateUI();
-        };
-
-        window.attemptUpgrade = function(upgradeType) {
-            let cost = {};
-            let alreadyUpgraded = false;
-            let success = false;
-            
-            switch(upgradeType) {
-                case 'improvedLifeSupport':
-                    cost = { electronics: 5, ironPlates: 10 };
-                    alreadyUpgraded = gameState.habitatUpgrades.improvedLifeSupport;
-                    if (!alreadyUpgraded && gameState.electronics >= cost.electronics && gameState.ironPlates >= cost.ironPlates) {
-                        gameState.electronics -= cost.electronics;
-                        gameState.ironPlates -= cost.ironPlates;
-                        gameState.habitatUpgrades.improvedLifeSupport = true;
-                        success = true;
-                    }
-                    break;
-                    
-                case 'batteryExpansion':
-                    cost = { electronics: 10, ironPlates: 20 };
-                    alreadyUpgraded = gameState.habitatUpgrades.batteryExpansion;
-                    if (!alreadyUpgraded && gameState.electronics >= cost.electronics && gameState.ironPlates >= cost.ironPlates) {
-                        gameState.electronics -= cost.electronics;
-                        gameState.ironPlates -= cost.ironPlates;
-                        gameState.habitatUpgrades.batteryExpansion = true;
-                        gameState.batteryCapacity += 10000;
-                        success = true;
-                    }
-                    break;
-            }
-            
-            if (success) {
-                log(`Colony upgrade completed: ${upgradeType.replace(/([A-Z])/g, ' $1').trim()}!`, "success");
-            } else if (alreadyUpgraded) {
-                log(`${upgradeType.replace(/([A-Z])/g, ' $1').trim()} already installed.`, "info");
-            } else {
-                log(`Insufficient resources for ${upgradeType.replace(/([A-Z])/g, ' $1').trim()}.`, "critical");
-            }
-            updateUI();
-        };
-
-        // Main Initialization
+        // --- INITIALIZATION ---
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x2a1810);
             scene.fog = new THREE.Fog(0x502828, 80, 500);
 
             camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
-            
+            camera.position.set(0, 15, 130);
+
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 0.9;
+            
+            clock = new THREE.Clock();
+            loader = new GLTFLoader();
 
-            // Initialize enhanced systems
-            lightingSystem = new EnhancedLightingSystem(scene);
-            lightingSystem.setupLighting();
-            
-            cameraControls = new EnhancedCameraControls(camera, renderer);
-            controls = cameraControls.setupControls();
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.target.set(0, CANYON_DEPTH, 0);
+            controls.minDistance = 10;
+            controls.maxDistance = 300;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-            // Create enhanced terrain and structures
-            objects.terrain = createEnhancedTerrain();
-            scene.add(objects.terrain);
+            setupLighting();
+            createTerrain();
+            createInitialStructures(); // This now relies on terrain existing
+            createAtmosphere();
             
-            createEnhancedStructures();
-            createEnhancedAtmosphere();
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('click', onMouseClick);
+            window.addEventListener('resize', onWindowResize);
             
-            setupInteraction();
-            updatePowerConsumption();
-            updateUI();
-            
-            log("Mars Colony Command: Valles Marineris Edition initialized.", "success");
-            log("Mission: Establish sustainable colony in the great canyon system.", "warning");
-            log("Use Tab to cycle camera views, 1-6 for presets, R to reset.", "info");
-            
+            log("Mars Colony Command Initialized.", "success");
+            log(`Objective: Construct ${MISSION_TARGET_PANELS} Solar Panels.`, "warning");
+            updateAllUI();
             animate();
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            const deltaTime = clock.getDelta();
-            solTimer += deltaTime;
-            
-            // Update time of day
-            gameState.timeOfDay = (gameState.timeOfDay + deltaTime / SOL_DURATION_SECONDS * 0.1) % 1;
-            
-            // Update lighting
-            lightingSystem.updateTimeOfDay(gameState.timeOfDay, gameState.isStorm);
-            
-            // Update processes
-            updateProcesses(deltaTime);
-            
-            // Update power every second
-            if (solTimer >= 1) {
-                updatePowerConsumption();
-                solTimer = 0;
+        function setupLighting() {
+            scene.add(new THREE.AmbientLight(0x664433, 0.5));
+            lightingSystem = new THREE.DirectionalLight(0xFFD4A3, 3.5);
+            lightingSystem.position.set(150, 200, 100);
+            lightingSystem.castShadow = true;
+            lightingSystem.shadow.mapSize.set(2048, 2048);
+            lightingSystem.shadow.camera.near = 10;
+            lightingSystem.shadow.camera.far = 600;
+            lightingSystem.shadow.camera.left = -300;
+            lightingSystem.shadow.camera.right = 300;
+            lightingSystem.shadow.camera.top = 300;
+            lightingSystem.shadow.camera.bottom = -300;
+            scene.add(lightingSystem);
+        }
+
+        function createTerrain() {
+            const size = 800, segments = 250;
+            const canyonFloorWidth = 100, canyonTopWidth = 250;
+            const wallTransition = (canyonTopWidth - canyonFloorWidth) / 2;
+
+            const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+            const vertices = geometry.attributes.position;
+            const simpleNoise = (x, y, scale, mag) => mag * Math.sin(x / scale + y / (scale/2));
+
+            for (let i = 0; i < vertices.count; i++) {
+                const x = vertices.getX(i);
+                const pz = vertices.getY(i);
+                const distFromCenter = Math.abs(x);
+                let height = 0;
+
+                if (distFromCenter < canyonFloorWidth / 2) {
+                    height = CANYON_DEPTH;
+                } else if (distFromCenter < canyonTopWidth / 2) {
+                    const progress = (distFromCenter - canyonFloorWidth / 2) / wallTransition;
+                    height = CANYON_DEPTH + (CANYON_DEPTH * -1) * Math.pow(progress, 1.8);
+                }
+                
+                height += simpleNoise(x, pz, 30, 0.8) + simpleNoise(x, pz, 100, 1.5);
+                vertices.setZ(i, height);
             }
-            
-            // Update effects and atmosphere
-            updateEffects();
-            
-            if (objects.dust && gameState.isStorm) {
-                objects.dust.rotation.y += deltaTime * 0.1;
-                objects.dust.material.opacity = 0.6;
-            } else if (objects.dust) {
-                objects.dust.material.opacity = 0.4;
+            geometry.computeVertexNormals();
+            const material = new THREE.MeshStandardMaterial({ color: 0x9A5833, roughness: 0.96 });
+            objects.terrain = new THREE.Mesh(geometry, material);
+            objects.terrain.rotation.x = -Math.PI / 2;
+            objects.terrain.receiveShadow = true;
+            objects.terrain.name = "terrain";
+            scene.add(objects.terrain);
+
+            // THIS IS THE CRITICAL FIX: Update the terrain's matrix before doing anything else
+            objects.terrain.updateMatrixWorld(true);
+        }
+        
+        function getSurfaceHeight(x, z) {
+            raycaster.set(new THREE.Vector3(x, 200, z), new THREE.Vector3(0, -1, 0)); // Start ray higher up
+            const intersects = raycaster.intersectObject(objects.terrain);
+            if (intersects.length > 0) {
+                return intersects[0].point.y;
             }
-            
-            // Animate processing structures
-            Object.keys(objects.structures).forEach(structureName => {
-                const structure = objects.structures[structureName];
-                if (structure && structure.userData.isProcessing) {
-                    structure.rotation.y += deltaTime * 0.5;
+            console.error(`Raycast failed for position (${x}, ${z}). Using fallback depth.`);
+            return CANYON_DEPTH;
+        }
+
+        function setupModel(model, name, x, z, yOffset = 0) {
+            const groundY = getSurfaceHeight(x, z);
+            model.position.set(x, groundY + yOffset, z);
+            model.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
                 }
             });
+            model.name = name;
+            objects.structures[name] = model;
+            scene.add(model);
+        }
+        
+        function loadGLBModel(name, definition, material) {
+            const [x, z] = definition.pos;
+            loader.load(`struct${definition.id}.glb`, 
+                (gltf) => setupModel(gltf.scene, name, x, z), 
+                undefined, 
+                () => {
+                    log(`Fallback: creating procedural model for ${name}.`, 'warning');
+                    const fallbackMesh = new THREE.Mesh(definition.fallback, material);
+                    setupModel(fallbackMesh, name, x, z, definition.fallback.parameters.height / 2 || 0);
+                }
+            );
+        }
+
+        function createInitialStructures() {
+            const genericMaterial = new THREE.MeshStandardMaterial({ color: 0xCCCCCC, roughness: 0.3, metalness: 0.7 });
+            for (const name in STRUCTURE_DEFS) {
+                loadGLBModel(name, STRUCTURE_DEFS[name], genericMaterial.clone());
+            }
+            for (let i = 0; i < gameState.solarPanelCount; i++) createSolarPanel(i);
+        }
+
+        function createSolarPanel(index) {
+            const panelName = `solar_panel_${index}`;
+            const panelGeom = new THREE.BoxGeometry(12, 0.3, 8);
+            const panelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.1, metalness: 0.9 });
+            const panel = new THREE.Mesh(panelGeom, panelMat);
+            const angle = (index / 10) * Math.PI;
+            const radius = 35 + Math.floor(index / 10) * 15;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            setupModel(panel, panelName, x, z, 0.15);
+        }
+
+        function createAtmosphere() {
+            const dustGeometry = new THREE.BufferGeometry();
+            const dustPositions = new Float32Array(2500 * 3);
+            for (let i = 0; i < 2500 * 3; i+=3) {
+                dustPositions[i] = (Math.random() - 0.5) * 900;
+                dustPositions[i + 1] = Math.random() * 180 + 15;
+                dustPositions[i + 2] = (Math.random() - 0.5) * 900;
+            }
+            dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+            const dustMaterial = new THREE.PointsMaterial({ color: 0xD2B48C, size: 1.0, transparent: true, opacity: 0.4, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending });
+            objects.dust = new THREE.Points(dustGeometry, dustMaterial);
+            scene.add(objects.dust);
+        }
+
+        // --- All other functions (game logic, UI, etc.) are included but omitted here for brevity ---
+        //<editor-fold desc="Game Logic, UI, and Event Handlers">
+        window.buildSolarPanel = function() {
+            const cost = { ironPlates: 5, electronics: 3 };
+            if (gameState.ironPlates >= cost.ironPlates && gameState.electronics >= cost.electronics) {
+                gameState.ironPlates -= cost.ironPlates;
+                gameState.electronics -= cost.electronics;
+                createSolarPanel(gameState.solarPanelCount);
+                gameState.solarPanelCount++;
+                log(`Solar panel ${gameState.solarPanelCount} constructed.`, "success");
+                updateAllUI();
+                if (gameState.solarPanelCount >= MISSION_TARGET_PANELS) {
+                    log("MISSION COMPLETE: Power grid secured! VICTORY.", "success");
+                    setTimeout(() => window.location.href = 'win22.html', 2000);
+                }
+            } else { log("Insufficient resources for solar panel.", "critical"); }
+        }
+
+        function startProcess(key, duration, power, inputs, outputs) {
+            if (gameState.activeProcesses[key]?.active) { log(`${key.replace(/_/g, ' ')} is already running.`, "warning"); return; }
+            for (const res in inputs) {
+                if (gameState[res] < inputs[res]) { log(`Insufficient ${res} for ${key}. Need ${inputs[res]}.`, "critical"); return; }
+            }
+            if (gameState.batteryCharge < power * 0.1) { log(`Insufficient power to start ${key}.`, "critical"); return; }
+            for (const res in inputs) gameState[res] -= inputs[res];
             
+            gameState.activeProcesses[key] = { active: true, timeLeft: duration, power, outputs };
+            log(`${key.replace(/_/g, ' ')} process initiated.`, "info");
+            updateAllUI();
+        }
+
+        window.interactWithStructure = (name, action) => {
+            const interactions = {
+                'refinery': () => startProcess('refinery', 15, POWER_CONSUMPTION.refinery_active, {regolith: 20}, {ironOre: 4, electronics: 2}),
+                'arc_furnace': () => startProcess('arc_furnace', 12, POWER_CONSUMPTION.arc_furnace_active, {ironOre: 8}, {ironPlates: 3}),
+                'fabricator': () => startProcess('fabricator', 10, POWER_CONSUMPTION.fabricator_active, {ironPlates: 2, regolith: 2}, {electronics: 1}),
+                'habitat_module': () => { if (action === 'electrolysis') startProcess('electrolysis', 18, POWER_CONSUMPTION.electrolysis, {water: 15}, {oxygen: 8}); },
+            };
+            if(interactions[name]) interactions[name]();
+        };
+
+        window.advanceTime = function() {
+            gameState.sol++;
+            gameState.timeOfDay = 0.3; 
+            const mod = gameState.upgrades.improvedLifeSupport ? 0.5 : 1;
+            gameState.oxygen = Math.max(0, gameState.oxygen - (Math.random() * 3 + 1) * mod);
+            gameState.water = Math.max(0, gameState.water - (Math.random() * 2 + 1) * mod);
+            gameState.temp = -62 + (Math.random() - 0.5) * 20;
+            gameState.wind = 12 + (Math.random() - 0.5) * 30;
+            log(`Advancing to Sol ${gameState.sol}.`, "info");
+            updateAllUI();
+        };
+
+        window.toggleStorm = () => {
+            gameState.isStorm = !gameState.isStorm;
+            log(gameState.isStorm ? "Dust storm incoming!" : "Weather clearing.", gameState.isStorm ? "warning" : "success");
+        };
+
+        window.deployRover = function() {
+            if (gameState.roverDeployed) { log("Rover is already on a mission.", "warning"); return; }
+            if (gameState.batteryCharge < POWER_CONSUMPTION.rover_deploy) { log("Insufficient power for rover deployment.", "critical"); return; }
+            gameState.roverDeployed = true;
+            gameState.batteryCharge -= POWER_CONSUMPTION.rover_deploy;
+            log("Rover deployed for geological survey.", "info");
+            setTimeout(() => {
+                const foundOre = Math.floor(Math.random() * 20) + 10;
+                const foundRegolith = Math.floor(Math.random() * 30) + 15;
+                gameState.ironOre += foundOre;
+                gameState.regolith += foundRegolith;
+                log(`Rover returned: found ${foundOre}kg Ore and ${foundRegolith}kg Regolith.`, "success");
+                gameState.roverDeployed = false;
+                updateAllUI();
+            }, 8000);
+        };
+
+        window.attemptUpgrade = function(type) {
+            const costs = {
+                improvedLifeSupport: { ironPlates: 10, electronics: 5 },
+                batteryExpansion: { ironPlates: 20, electronics: 10 },
+            };
+            const cost = costs[type];
+            const name = type.replace(/([A-Z])/g, ' $1').trim();
+            if (gameState.upgrades[type]) { log(`${name} already installed.`, "info"); return; }
+            if (gameState.ironPlates >= cost.ironPlates && gameState.electronics >= cost.electronics) {
+                gameState.ironPlates -= cost.ironPlates;
+                gameState.electronics -= cost.electronics;
+                gameState.upgrades[type] = true;
+                if (type === 'batteryExpansion') gameState.batteryCapacity += 10000;
+                log(`Upgrade successful: ${name}.`, "success");
+            } else { log(`Insufficient resources for ${name}.`, "critical"); }
+            updateAllUI();
+        };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            gameState.timeOfDay = (gameState.timeOfDay + deltaTime / SOL_DURATION_SECONDS) % 1;
+            updateLighting();
+            updateProcesses(deltaTime);
+            if (solTimer > 1) { updatePower(); solTimer = 0; }
+            solTimer += deltaTime;
+            objects.dust.material.opacity = gameState.isStorm ? 0.8 : 0.4;
+            if(gameState.isStorm) objects.dust.rotation.y += deltaTime * 0.1;
             controls.update();
             renderer.render(scene, camera);
         }
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
+        function updateLighting() {
+            const sunAngle = gameState.timeOfDay * Math.PI * 2 - Math.PI / 1.5;
+            const yPos = Math.sin(sunAngle) * 200 + 50;
+            lightingSystem.position.x = Math.cos(sunAngle) * 250;
+            lightingSystem.position.y = Math.max(20, yPos);
+            lightingSystem.intensity = Math.max(0.1, yPos / 200) * 3.5 * (gameState.isStorm ? 0.3 : 1);
+        }
+        
+        function updateProcesses(deltaTime) {
+            let uiNeedsUpdate = false;
+            for (const key in gameState.activeProcesses) {
+                const p = gameState.activeProcesses[key];
+                if (p.active) {
+                    p.timeLeft -= deltaTime;
+                    if (p.timeLeft <= 0) {
+                        for (const res in p.outputs) gameState[res] = (gameState[res] || 0) + p.outputs[res];
+                        log(`${key.replace(/_/g, ' ')} process complete.`, "success");
+                        p.active = false;
+                        uiNeedsUpdate = true;
+                    }
+                }
+            }
+            if (uiNeedsUpdate) updateAllUI();
+        }
+
+        function updatePower() {
+            let consumption = POWER_CONSUMPTION.habitat_base + (gameState.upgrades.improvedLifeSupport ? POWER_CONSUMPTION.life_support_upgrade : 0);
+            for (const key in gameState.activeProcesses) if(gameState.activeProcesses[key].active) consumption += gameState.activeProcesses[key].power;
+            const sunAngle = gameState.timeOfDay * Math.PI * 2 - Math.PI / 1.5;
+            const solarEfficiency = Math.max(0, Math.sin(sunAngle) + 0.5) * (gameState.isStorm ? 0.2 : 1);
+            const generation = (80 * gameState.solarPanelCount) * solarEfficiency;
+            gameState.batteryCharge = Math.max(0, Math.min(gameState.batteryCapacity, gameState.batteryCharge + (generation - consumption) * (1/60)));
+            updateAllUI();
+        }
+
+        function updateAllUI() {
+            document.getElementById('sol').textContent = String(gameState.sol).padStart(3, '0');
+            document.getElementById('temp').textContent = `${Math.round(gameState.temp)}°C`;
+            document.getElementById('wind').textContent = `${Math.round(gameState.wind * (gameState.isStorm ? 3 : 1))} kph`;
+            const weatherEl = document.getElementById('weather-status');
+            weatherEl.textContent = gameState.isStorm ? 'STORM' : 'NOMINAL';
+            weatherEl.className = `metric-value ${gameState.isStorm ? 'critical-text' : 'success-text'}`;
+            document.getElementById('solar-output').textContent = `${Math.round(gameState.batteryCharge < 1 ? 0 : (80 * gameState.solarPanelCount) * Math.max(0, Math.sin(gameState.timeOfDay * Math.PI * 2 - Math.PI/1.5) + 0.5) * (gameState.isStorm ? 0.2 : 1) )} W`;
+            document.getElementById('total-consumption').textContent = `${Math.round(POWER_CONSUMPTION.habitat_base + Object.values(gameState.activeProcesses).reduce((acc, p) => acc + (p.active ? p.power : 0), 0))} W`;
+            const batteryPercent = (gameState.batteryCharge / gameState.batteryCapacity) * 100;
+            const batteryBar = document.getElementById('battery-bar');
+            batteryBar.style.width = `${batteryPercent}%`;
+            batteryBar.className = `progress-bar ${batteryPercent < 20 ? 'critical' : batteryPercent < 40 ? 'warning' : ''}`;
+            document.getElementById('battery-charge-value').textContent = `${Math.round(gameState.batteryCharge)}/${gameState.batteryCapacity} Wh`;
+            const missionPercent = (gameState.solarPanelCount / MISSION_TARGET_PANELS) * 100;
+            document.getElementById('mission-panels-progress').textContent = `${gameState.solarPanelCount}/${MISSION_TARGET_PANELS}`;
+            document.getElementById('mission-panels-bar').style.width = `${missionPercent}%`;
+            ['oxygen', 'water'].forEach(res => {
+                const val = Math.round(gameState[res]);
+                document.getElementById(res).textContent = `${val}%`;
+                const bar = document.getElementById(`${res}-bar`);
+                bar.style.width = `${val}%`;
+                bar.className = `progress-bar ${val < 20 ? 'critical' : val < 40 ? 'warning' : ''}`;
+            });
+            document.getElementById('regolith').textContent = `${gameState.regolith} kg`;
+            document.getElementById('iron-ore').textContent = `${gameState.ironOre} kg`;
+            document.getElementById('iron-plates').textContent = `${gameState.ironPlates} u`;
+            document.getElementById('electronics').textContent = `${gameState.electronics} u`;
+            document.getElementById('build-panel-btn').disabled = gameState.ironPlates < 5 || gameState.electronics < 3;
+            document.getElementById('upgrade-lifesupport-btn').disabled = gameState.upgrades.improvedLifeSupport;
+            document.getElementById('upgrade-battery-btn').disabled = gameState.upgrades.batteryExpansion;
+        }
+
+        function log(message, type = "info") {
+            const consoleEl = document.getElementById('console');
+            consoleEl.innerHTML += `<div><span class="text-gray-500">[Sol ${String(gameState.sol).padStart(3, '0')}]</span> <span class="${type}-text">${message}</span></div>`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        window.openTab = function(tabName) {
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(`${tabName}-pane`).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+        window.togglePanel = function() {
+            document.getElementById('side-panel').classList.toggle('collapsed');
+        }
+        function onMouseMove(event) {
+            const tooltipEl = document.getElementById('tooltip');
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Object.values(objects.structures));
+            if (intersects.length > 0 && objects.structures[intersects[0].object.name]) {
+                tooltipEl.style.display = 'block';
+                tooltipEl.style.left = `${event.clientX + 10}px`;
+                tooltipEl.style.top = `${event.clientY - 30}px`;
+                tooltipEl.textContent = intersects[0].object.name.replace(/_/g, ' ').toUpperCase();
+            } else {
+                tooltipEl.style.display = 'none';
+            }
+        }
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            if (intersects.length > 0 && intersects[0].object.name) {
+                const name = intersects[0].object.name;
+                if(STRUCTURE_DEFS[name]) interactWithStructure(name);
+            }
+        }
+        function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        }
+        //</editor-fold>
 
-        // Start the game
         init();
     </script>
 </body>
 </html>
-
