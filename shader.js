@@ -1,1306 +1,545 @@
-// mainx1.js - Optimized with Manual Vertex Update for Mountains
-// Consolidated revisions including platform/ramp, global constants,
-// material cache fix, path corrections, shadow setup, and basic UI updates.
+// Wrap everything in an Immediately Invoked Function Expression (IIFE)
+// to avoid polluting the global scope unnecessarily, except for `window.updateShader`.
+(function() {
+    "use strict"; // Enable strict mode
 
-// --- Ship UI Overlay (moved to top for global access) ---
-function showShipUI() {
-    let ui = document.getElementById("shipUIOverlay");
-    if (!ui) {
-        ui = document.createElement("div");
-        ui.id = "shipUIOverlay";
-        ui.style.position = "absolute";
-        ui.style.top = "20px";
-        ui.style.left = "50%";
-        ui.style.transform = "translateX(-50%)";
-        ui.style.background = "rgba(10,30,60,0.7)";
-        ui.style.color = "#0ff";
-        ui.style.fontFamily = "monospace";
-        ui.style.fontSize = "22px";
-        ui.style.padding = "16px 32px";
-        ui.style.borderRadius = "12px";
-        ui.style.zIndex = 10000;
-        ui.innerHTML = "SHIP MODE";
-        document.body.appendChild(ui);
-    }
-    ui.style.display = "block";
-}
-function hideShipUI() {
-    const ui = document.getElementById("shipUIOverlay");
-    if (ui) ui.style.display = "none";
-}
-function updateShipUI(speed, altitude, canExit) {
-    const ui = document.getElementById("shipUIOverlay");
-    if (ui) {
-        ui.innerHTML = `SHIP MODE<br>Speed: <b>${speed.toFixed(1)}</b>  Altitude: <b>${altitude.toFixed(1)}</b><br>${canExit ? '<span style=\"color:#0f0\">Press R to Exit</span>' : '<span style=\"color:#888\">Land to Exit</span>'}`;
-    }
-}
+    // --- WebGL Setup and Shader Logic ---
+    // --- (Derived from sources 200-548) ---
 
-// --- Material Cache --- <<< MOVED TO TOP
-const materialCache = {};
-function getCachedMaterial(name, scene, options, generatorFunc) {
-    // Ensure scene is valid
-    if (!scene) {
-        console.error("Attempted to get cached material with invalid scene:", name);
-        return null; // Or throw an error
+    const webglCanvas = document.getElementById('webglCanvas');
+    let gl = null; // Keep gl scoped within this IIFE
+
+    if (!webglCanvas) {
+        console.error("WebGL Canvas element with id 'webglCanvas' not found!");
+        return; // Stop script execution if canvas isn't found
     }
-    if (!materialCache[name]) {
+
+    try {
+        webglCanvas.width = window.innerWidth;
+        webglCanvas.height = window.innerHeight;
+        // Try to get webgl2, fall back to webgl1
+        gl = webglCanvas.getContext('webgl2') ||
+             webglCanvas.getContext('webgl') ||
+             webglCanvas.getContext('experimental-webgl');
+
+        if (!gl) {
+            throw new Error("WebGL not supported or context creation failed.");
+        }
+
+        if (gl instanceof WebGL2RenderingContext) {
+            console.log("WebGL2 Context Initialized.");
+        } else {
+            console.log("WebGL1 Context Initialized. Note: Shader uses GLSL 3.00 ES features.");
+        }
+    } catch (e) {
+        console.error("WebGL Initialization Error:", e);
+        // Fallback: Provide a static background color if WebGL fails
+        if (document.body) document.body.style.backgroundColor = '#050511';
+        return; // Stop script execution
+    }
+
+    // --- Shader Sources ---
+    // Vertex Shader (GLSL 3.00 ES)
+    const vertexShaderSource = `#version 300 es
+        precision highp float; // Precision needed in VS for GLSL 300 es
+        in vec4 a_position;
+        void main() {
+            gl_Position = a_position; // Pass position through
+        }
+    `;
+
+    // Fragment Shader (GLSL 3.00 ES - 30 Phases)
+    // Added 10 more phases (20-29) including one marked "// ordinary".
+    const fragmentShaderSource = `#version 300 es
+        precision highp float; // Precision qualifier required in fragment shaders
+
+        // Uniforms: Inputs from JavaScript
+        uniform float u_time;
+        uniform vec2 u_resolution;
+
+        // Output variable: Replaces gl_FragColor
+        out vec4 outColor;
+
+        // --- Constants ---
+        const float PI = 3.14159265359;
+        const float TWO_PI = 6.28318530718;
+        const int FBM_OCTAVES = 5; // Used in fbm() and updateShader()
+        const int MAX_RAYMARCH_STEPS = 48;
+        const float MAX_RAYMARCH_DIST = 12.0;
+        const int MANDELBROT_ITER = 40;
+        const float TOTAL_PHASES_F = 30.0; // <<< UPDATED TO 30 PHASES
+
+        // --- Helper Functions (minified versions often used in shaders) ---
+        float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
+        float rand(float n){ return fract(sin(n) * 43758.5453123); }
+        float hash(float n) { return fract(sin(n) * 43758.5453); }
+        float noise(vec2 p) { vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); float n=i.x+i.y*57.; return mix(mix(hash(n),hash(n+1.),f.x), mix(hash(n+57.),hash(n+58.),f.x),f.y); }
+        float fbm(vec2 p) { float s=0., a=.7, f=1.; for(int i=0; i<FBM_OCTAVES; i++) { s+=noise(p*f)*a; a*=.5; f*=2.; } return s; }
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+        float snoise(vec3 v) { const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.); vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx); vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy); vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy; i=mod289(i); vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.)); float n_=1./7.; vec3 ns=n_*D.wyz-D.xzx; vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_); vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y); vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw); vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.)); vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww; vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w); vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3))); p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w; vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m; return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3))); }
+        float snoise(vec2 v) { return snoise(vec3(v, 0.0)); }
+        mat2 rotate2D(float a) { return mat2(cos(a), -sin(a), sin(a), cos(a)); }
+        float worley(vec2 p) { float md=10.; vec2 g=floor(p); for(int x=-1;x<=1;x++){ for(int y=-1;y<=1;y++){ vec2 n=g+vec2(float(x),float(y)); vec2 pt=vec2(rand(n),rand(n+vec2(7.3,3.7))); pt=.5+.5*sin(u_time*.3+TWO_PI*pt); vec2 fp=n+pt; md=min(md,length(p-fp)); }} return md; }
+        float truchetPattern(vec2 uv, float s) { uv*=s; vec2 ip=floor(uv), fp=fract(uv); float r=rand(ip), t=floor(r*2.), d; if(t==0.){d=abs(fp.x+fp.y-1.)/sqrt(2.);}else{d=abs(fp.x-fp.y)/sqrt(2.);} return smoothstep(.04,.06,abs(d-.5)); }
+        float sdSphere(vec3 p, float s) { return length(p) - s; }
+        float sdPlane(vec3 p, vec3 n, float h) { return dot(p, n) + h; }
+
+        // --- Color Definitions ---
+        vec3 colPrimary = vec3(106./255., 0., 1.); // Purple/Blue
+        vec3 colSecondary = vec3(0., 1., 204./255.); // Cyan
+        vec3 colTertiary = vec3(0., 184./255., 212./255.); // Turquoise
+        vec3 colGreen = vec3(0.1, 0.8, 0.4); // Vibrant Green
+        vec3 colGold = vec3(0.9, 0.7, 0.1); // Gold/Yellow
+        vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2); // Darker Green
+        vec3 colDeepRed = vec3(0.6, 0.0, 0.15); // Maroon
+        vec3 colWhite = vec3(1.0); // White
+        vec3 colOrange = vec3(1.0, 0.5, 0.0); // Orange
+        vec3 colPink = vec3(1.0, 0.4, 0.7); // Pink
+        vec3 colSkyBlue = vec3(0.5, 0.7, 1.0); // Light Blue
+        vec3 colLimeGreen = vec3(0.7, 1.0, 0.0); // Lime Green
+        vec3 colDarkGrey = vec3(0.2, 0.2, 0.2); // Dark Grey
+        vec3 colElectricBlue = vec3(0.2, 0.6, 1.0); // Electric Blue
+        vec3 colSoftPurple = vec3(0.6, 0.4, 0.8); // Soft Purple
+
+        vec3 colBackground = vec3(5./255., 5./255., 17./255.); // Dark Background
+
+        // Basic color getter for CA effect
+        vec3 getColorForCA(vec2 uv, float t) { float n = fbm(uv*4. + t*.15); return mix(colPrimary, colTertiary, n); }
+
+        // --- Main Shader Logic ---
+        void main() {
+            // Normalized device coordinates, aspect corrected, origin center
+            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
+            // Original UV coordinates (0 to 1)
+            vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
+
+            float time_warp = u_time * 0.1; // Controls phase speed
+            float phase = mod(time_warp, TOTAL_PHASES_F);
+            float phaseProgress = fract(phase); // Progress within current phase
+            int phaseIndex = int(floor(phase)); // Current phase index (0-29)
+
+            vec3 color = colBackground; // Start with background
+
+            // --- Phase Implementations (Condensed versions) ---
+            if (phaseIndex == 0) { float wf=.1+.05*sin(u_time*.2); wf=max(.001,wf); float z=.1/max(.01,.1-uv.y*wf+.02*fbm(uv+u_time*.05)); z=clamp(z,.1,15.); vec2 warp=uv*z; vec2 grid=abs(fract(warp*vec2(5.,3.)+u_time*.1)-.5); float line=smoothstep(.04,.05,min(grid.x,grid.y))*.6; float df=fract(z*.1+u_time*.15); vec3 bc=mix(mix(colPrimary,colTertiary,sin(u_time*.1)*.5+.5),colSecondary,sin(length(warp)*.5-u_time*.5)*.5+.5); color=mix(bc*.15,bc,line*df*1.5); }
+            else if (phaseIndex == 1) { float d=length(uv); float r=sin(d*18.-u_time*2.5)*.5+.5; r*=smoothstep(1.8,.4,d); float w=sin(uv.y*25.+u_time*1.2)*.04; vec2 wu=uv+vec2(w,sin(uv.x*15.+u_time*.8)*.03); float n=fbm(wu*3.5+u_time*.25); vec3 bc=mix(mix(colSecondary,colTertiary,r),mix(colGreen,colGold,n),.5+.5*sin(u_time*.6+d*2.)); color=mix(bc*.2,bc,r*.8+n*.6); }
+            else if (phaseIndex == 2) { vec2 r=vec2(1.,1.732), h=r*.5; vec2 a=mod(uv*2.+u_time*.1,r)-h, b=mod(uv*2.-h+u_time*.1,r)-h; vec2 gv=length(a)<length(b)?a:b; float p=sin(u_time*3.5)*.5+.5, e=sin(length(gv)*25.-u_time*3.5); e=smoothstep(-.1,.15,e)-smoothstep(.15,.4,e); float ds=fbm(uv*2.5+vec2(u_time*.15,0.)); vec3 baseC=mix(colTertiary,colGreen,ds), glowC=mix(colSecondary,colPrimary,p); color=mix(baseC*.1,glowC,e*p*1.5); float dt=abs(sin(uv.x*22.+u_time*1.1))*abs(sin(uv.y*22.-u_time*1.3)); color+=glowC*dt*.08; }
+            else if (phaseIndex == 3) { float a=atan(uv.y,uv.x), rd=length(uv); a+=.1*fbm(uv*.5+u_time*.05); float sa=a*6.+rd*8.-u_time*2.2, s=smoothstep(-.2,.2,sin(sa)); float rdd=rd+sin(a*10.+u_time*.3)*.08, b=fract(rdd*6.-u_time*.6); b=smoothstep(0.,.1,b)*smoothstep(.8,.5,b); float t=fbm(vec2(rdd*6.,a*3.)+u_time*.15); vec3 dc=mix(colPrimary,colDeepRed,sin(rdd*12.)*.5+.5), bc=mix(colGold,colSecondary,cos(a*4.)*.5+.5); color=mix(dc*.5,bc,b+t*.4); color+=bc*s*.3; }
+            else if (phaseIndex == 4) { vec2 cu=uv*mix(3.,5.,phaseProgress); float n=fbm(cu+u_time*.2), c=0.; for(float x=-1.;x<=1.;x+=1.){for(float y=-1.;y<=1.;y+=1.){vec2 nb=vec2(x,y), cc=floor(cu)+nb, pt=cc+.5+sin(u_time*.1+cc)*.3; c+=smoothstep(.4,.38,length(cu-pt));}} c=clamp(c,0.,1.); vec3 cellC=mix(colStrangeGreen,colPrimary,n); cellC=mix(cellC,colDeepRed,smoothstep(.6,.8,n)); color=mix(colBackground*.5,cellC,c*1.2); color+=fbm(uv*15.+u_time*.5)*.05; }
+            else if (phaseIndex == 5) { float t=phaseProgress; vec2 bu=floor(originalUV*mix(20.,60.,sin(u_time*2.)*.5+.5))/mix(20.,60.,sin(u_time*2.)*.5+.5); float bn=fbm(bu*5.+u_time*.5); color=mix(colPrimary,colSecondary,bn); float tl=sin(originalUV.y*10.+u_time*5.)*.5+.5, ta=smoothstep(.8,.85,tl); float ofs=ta*(rand(vec2(floor(u_time*2.),floor(originalUV.y*10.)))-.5)*.1; vec2 tu=uv+vec2(ofs*t,0.); float tn=fbm(tu*4.+u_time*.3); color=mix(color,mix(colTertiary,colDeepRed,tn),ta); float cao=(.005+.01*abs(sin(u_time*3.)))*t; vec3 cR=getColorForCA(uv+vec2(cao,0.),u_time), cB=getColorForCA(uv-vec2(cao*.5,cao*.8),u_time); color=vec3(cR.r,color.g,cB.b); color+=(rand(originalUV+fract(u_time*10.))-.5)*.15*t; }
+            else if (phaseIndex == 6) { vec2 p=uv*2.; float i=fbm(p+u_time*.3), r=abs(snoise(vec3(p*1.5,u_time*.5))); r=pow(1.-r,4.); vec3 fc=mix(colPrimary,colTertiary,smoothstep(0.,1.,i)); color=mix(colBackground*.4,fc,r*1.5); color*=1.-smoothstep(.8,1.5,length(uv)); }
+            else if (phaseIndex == 7) { vec2 p=uv*3.+vec2(u_time*.1,u_time*.2); float d=worley(p), e=1.-smoothstep(0.,.05,d), c=smoothstep(0.,.4,d); vec3 cc=mix(colStrangeGreen,colGold,c*1.2); color=mix(cc*.3,colWhite,e); }
+            else if (phaseIndex == 8) { vec2 p=rotate2D(u_time*.4)*uv; float a=atan(p.y,p.x), rd=length(p); float t=fbm(vec2(1./(rd+.1),a*2.)+u_time*.2), r=sin(rd*20.-u_time*3.)*.5+.5; vec3 tc=mix(colSecondary,colPink,smoothstep(0.,1.,t)); color=mix(colBackground,(tc*(smoothstep(0.,.8,t)+r*.5)*.8),1.); } // Removed background mix factor for stronger effect
+            else if (phaseIndex == 9) { float s=mix(4.,8.,sin(u_time*.5)*.5+.5), p=truchetPattern(uv,s); vec2 us=uv*s; float bn=noise(floor(us)+u_time*.1); vec3 tc=mix(colPrimary,colTertiary,bn); color=mix(tc*.2,colWhite*.9,p); }
+            else if (phaseIndex == 10) { float v=sin(uv.x*3.+u_time*.8)+sin(uv.y*4.-u_time*.5+sin(uv.x*3.+u_time*.8)*.5)+sin(uv.x*uv.y*2.+u_time)+sin(sqrt(pow(uv.x+.5*sin(u_time/5.),2.)+pow(uv.y+.5*cos(u_time/3.),2.))*5.+u_time); v*=.5; vec3 pc1=mix(colDeepRed,colOrange,sin(u_time*.2)*.5+.5), pc2=mix(colPrimary,colSecondary,cos(u_time*.3)*.5+.5); color=mix(pc1,pc2,smoothstep(-.8,.8,v)); }
+            else if (phaseIndex == 11) { vec2 gu=originalUV*vec2(80.,60.), c=floor(gu); float sp=rand(c.x)*3.+1., ss=rand(c.x)*10., sps=fract(ss-u_time*sp*.1), cy=originalUV.y; float tl=.15+rand(c.x)*.1, ci=smoothstep(sps,sps+.01,cy)*(1.-smoothstep(sps+.01,sps+tl,cy)); float cv=rand(c+floor((ss-u_time*sp*.1)*10.)); vec3 rc=mix(colStrangeGreen*.5,colGreen*1.5,step(.5,cv)); color=mix(colBackground,rc,ci); }
+            else if (phaseIndex == 12) { float z=.5+pow(mod(u_time*.05,5.)+1.,2.); vec2 c=uv*1.5/z-vec2(.7,0.), zz=vec2(0.); int it=0; for(int i=0;i<MANDELBROT_ITER;i++){zz=vec2(zz.x*zz.x-zz.y*zz.y,2.*zz.x*zz.y)+c; if(dot(zz,zz)>4.)break; it++;} float m=clamp(float(it)/float(MANDELBROT_ITER),0.,1.); m=pow(m,.5); color=mix(colBackground,mix(colPrimary,colGold,m),smoothstep(0.,.1,m)); if(it==MANDELBROT_ITER)color=colBackground*.5; }
+            else if (phaseIndex == 13) { vec2 d=vec2(snoise(vec3(uv*2.,u_time*.3)),snoise(vec3(uv*2.+10.,u_time*.35)))*.15, du=uv+d; vec2 g=abs(fract(du*6.)-.5); float l=smoothstep(.03,.04,min(g.x,g.y)); float n=fbm(du*3.+u_time*.1); vec3 gc=mix(colTertiary,colPink,n); color=mix(colBackground*.5,gc,l*1.2); }
+            else if (phaseIndex == 14) { float h=snoise(vec3(uv*1.5,u_time*.2)), f=snoise(vec3(uv*3.+h*.3,u_time*.4)); float la=.785, l=clamp(.5+h*.5*cos(atan(uv.y,uv.x)-la),.2,1.); vec3 tc=mix(colGreen*.8,colGold*.6,h*.5+.5), wc=mix(colPrimary*.7,colTertiary*.9,f*.5+.5); color=mix(wc,tc*l,smoothstep(-.1,.1,h))*.8; }
+            else if (phaseIndex == 15) { vec2 p=abs(uv)*.8; float s=1.5+.5*sin(u_time*.4); for(int i=0;i<4;i++){ p=abs(p*s-1.); if(dot(p,p)>20.)break; } float r=sin(length(p)*.2*10.+u_time); color=mix(colSecondary,colPrimary,smoothstep(-.5,.5,r)); }
+            else if (phaseIndex == 16) { vec2 p=uv*2.5; float d1=worley(p), d2=worley(p+vec2(5.2,1.3)); float c=pow(1.-smoothstep(0.,.1,d1),2.)+pow(1.-smoothstep(0.,.05,d2),2.)*.5; c=clamp(c,0.,1.); float g=fbm(p*10.+u_time*.1); vec3 cc=mix(colWhite*.8,colTertiary,g); color=mix(colBackground*.8,cc,c); }
+            else if (phaseIndex == 17) { float i=.5+.5*noise(vec2(u_time*1.5,originalUV.y*5.)); float fs=floor(u_time*15.)+floor(originalUV.y*10.), f=rand(fs); i*=smoothstep(.2,.8,f); vec3 bc=mix(colPrimary,colSecondary,noise(uv*3.+u_time*.2)); float sy=fract(originalUV.y*u_resolution.y*.5), se=smoothstep(.4,.5,sy)*(1.-smoothstep(.5,.6,sy)); color=mix(bc*.5,vec3(0.),se*i*1.5); color+=(rand(originalUV+u_time)-.5)*.1*i; }
+            else if (phaseIndex == 18) { vec3 ro=vec3(0.,0.,-3.+sin(u_time*.3)), rd=normalize(vec3(uv,1.)); vec3 col=colBackground; float t=0.; for(int i=0;i<MAX_RAYMARCH_STEPS;i++){ vec3 p=ro+rd*t, sc=vec3(0.,sin(u_time*.8)*.5-.2,0.); float ds=sdSphere(p-sc,.5), dp=sdPlane(p,vec3(0.,1.,0.),1.); float d=min(ds,dp); if(d<.001*t){ vec3 hc, n; if(dp<ds){hc=colGreen*.8;n=vec3(0.,1.,0.);}else{hc=colPrimary;vec2 eps=vec2(.001,0.);n=normalize(vec3(sdSphere(p+eps.xyy-sc,.5)-sdSphere(p-eps.xyy-sc,.5),sdSphere(p+eps.yxy-sc,.5)-sdSphere(p-eps.yxy-sc,.5),sdSphere(p+eps.yyx-sc,.5)-sdSphere(p-eps.yyx-sc,.5)));} float l=max(.2,dot(n,normalize(vec3(-.7,.7,-.5)))); col=hc*l; break; } t+=d; if(t>MAX_RAYMARCH_DIST)break; } color=col; }
+            else if (phaseIndex == 19) { float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
+
+            // --- New Phases (20-29) ---
+            else if (phaseIndex == 20) { // Simple pulsing grid
+                 vec2 gv = abs(fract(uv * (10.0 + 5.0 * sin(u_time * 0.5))) - 0.5);
+                 float gridLine = smoothstep(0.02, 0.03, min(gv.x, gv.y));
+                 vec3 gridColor = mix(colTertiary, colElectricBlue, sin(u_time * 0.8) * 0.5 + 0.5);
+                 color = mix(colBackground, gridColor, gridLine * 1.5);
+            }
+            else if (phaseIndex == 21) { // Radial noise with color mix
+                 float rd = length(uv);
+                 float n = fbm(uv * 5.0 + u_time * 0.2);
+                 vec3 noiseColor = mix(colPrimary, colSoftPurple, n);
+                 color = mix(colBackground, noiseColor, smoothstep(0.0, 1.0, rd * 0.8) * (n * 0.5 + 0.5));
+            }
+            else if (phaseIndex == 22) { // Circular wave pattern
+                 float wave = sin(length(uv) * 20.0 - u_time * 4.0) * 0.5 + 0.5;
+                 vec3 waveColor = mix(colSecondary, colLimeGreen, wave);
+                 color = mix(colBackground, waveColor, smoothstep(0.0, 0.8, wave));
+            }
+            else if (phaseIndex == 23) { // Simple horizontal bars
+                 float bars = sin(uv.y * 20.0 + u_time * 3.0) * 0.5 + 0.5;
+                 vec3 barColor = mix(colPrimary, colTertiary, bars);
+                 color = mix(colBackground, barColor, smoothstep(0.3, 0.7, bars));
+            }
+            else if (phaseIndex == 24) { // Diagonal lines with shift
+                 vec2 d_uv = uv;
+                 d_uv.x += d_uv.y * 0.5 + u_time * 0.2;
+                 float lines = fract(d_uv.x * 8.0) * 2.0 - 1.0;
+                 lines = smoothstep(0.9, 1.0, abs(lines));
+                 vec3 lineColor = mix(colGold, colOrange, sin(u_time * 0.7) * 0.5 + 0.5);
+                 color = mix(colBackground, lineColor, lines);
+            }
+            else if (phaseIndex == 25) { // ordinary - A simple static gradient for testing
+                 // ordinary
+                 color = mix(colBackground, colDarkGrey, length(uv) * 0.5);
+            }
+            else if (phaseIndex == 26) { // Cellular automata effect with color cycling
+                 float cellScale = mix(15.0, 30.0, sin(u_time * 0.4) * 0.5 + 0.5);
+                 vec2 cu = floor(originalUV * cellScale) / cellScale;
+                 float cellState = rand(cu + floor(u_time * 5.0));
+                 vec3 cellColor = mix(colPrimary, colTertiary, cellState);
+                 color = mix(colBackground * 0.8, cellColor, smoothstep(0.3, 0.7, cellState));
+            }
+            else if (phaseIndex == 27) { // Swirling noise pattern
+                 vec2 p = rotate2D(u_time * 0.5) * uv * (2.0 + 1.0 * cos(u_time * 0.3));
+                 float n = snoise(vec3(p, u_time * 0.1));
+                 vec3 noiseColor = mix(colDeepRed, colOrange, smoothstep(-0.5, 0.5, n));
+                 color = mix(colBackground * 0.7, noiseColor, (n * 0.5 + 0.5) * 1.2);
+            }
+            else if (phaseIndex == 28) { // Concentric pulsating circles
+                 float rd = length(uv);
+                 float pulse = sin((rd - u_time * 0.6) * 15.0) * 0.5 + 0.5;
+                 pulse = smoothstep(0.8, 1.0, pulse);
+                 vec3 circleColor = mix(colWhite, colSkyBlue, sin(u_time * 1.0) * 0.5 + 0.5);
+                 color = mix(colBackground, circleColor, pulse);
+            }
+            else { /* phaseIndex == 29 */ // Plasma-like fbm distortion
+                 vec2 pu = uv * 4.0;
+                 pu.x += sin(u_time * 0.5 + pu.y * 0.8) * 0.5;
+                 pu.y += cos(u_time * 0.6 + pu.x * 0.7) * 0.5;
+                 float n = fbm(pu + u_time * 0.3);
+                 vec3 plasmaColor = mix(colPrimary, colPink, smoothstep(0.2, 0.8, n));
+                 color = mix(colBackground, plasmaColor, n);
+            }
+
+
+            // --- Global Effects ---
+            // Subtle Scanlines
+            float scanlineVal = sin(originalUV.y * u_resolution.y * 0.8 + u_time * 0.1) * 0.5 + 0.5;
+            float scanlineIntensity = 0.03 + 0.015 * sin(u_time * 0.5);
+            color = mix(color, color * (1.0 - scanlineIntensity * 0.8), smoothstep(0.3, 0.0, scanlineVal));
+            color = mix(color, color * (1.0 + scanlineIntensity * 0.5), smoothstep(0.7, 1.0, scanlineVal));
+            // Vignette
+            float vignette = smoothstep(1.5, 0.5, length(uv));
+            color *= vignette;
+
+            // Final Output (ensure alpha is 1.0)
+            outColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+        }
+    `;
+
+    // --- WebGL Utility Functions ---
+    function createShader(type, source) {
+        const shader = gl.createShader(type);
+        if (!shader) { throw new Error(`Failed to create shader (type: ${type})`); }
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
+            const infoLog = gl.getShaderInfoLog(shader);
+            console.error(`>>> Shader compile error (${shaderType}):\n${infoLog}`);
+            // Log source with line numbers for easier debugging
+            const lines = source.split('\n');
+            const sourceWithLines = lines.map((line, index) => `${index + 1}: ${line}`).join('\n');
+            console.error(`--- Shader Source (${shaderType}) ---\n${sourceWithLines}\n--------------------------`);
+            gl.deleteShader(shader);
+            throw new Error(`Shader compilation failed: ${shaderType}`);
+        }
+        return shader;
+    }
+
+    function createProgram(vertexShader, fragmentShader) {
+        const program = gl.createProgram();
+        if (!program) { throw new Error("Failed to create program"); }
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            const infoLog = gl.getProgramInfoLog(program);
+            console.error('>>> Program link error:', infoLog);
+            // Log info about attached shaders if linking fails
+            const shaders = gl.getAttachedShaders(program);
+            if (shaders) {
+                 shaders.forEach(shader => {
+                     const type = gl.getShaderParameter(shader, gl.SHADER_TYPE);
+                     const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
+                     console.error(`--- Attached ${shaderType} Shader Info Log ---\n${gl.getShaderInfoLog(shader)}`);
+                 });
+            }
+            gl.deleteProgram(program);
+            throw new Error("Program linking failed");
+        }
+        // Detaching shaders after successful linking is good practice
+        // but not strictly required by WebGL spec. Can sometimes help resource management.
+        gl.detachShader(program, vertexShader);
+        gl.detachShader(program, fragmentShader);
+        return program;
+    }
+
+    // --- WebGL State Variables ---
+    let program = null;
+    let positionAttributeLocation = -1;
+    let timeUniformLocation = null;
+    let resolutionUniformLocation = null;
+    let positionBuffer = null;
+    let animationFrameId = null; // Keep track of animation frame request
+    let startTime = performance.now();
+
+    // --- Initialize WebGL Program and Buffers ---
+    function setupWebGL() {
+        let vs = null;
+        let fs = null;
         try {
-            materialCache[name] = generatorFunc(scene, options);
+            vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+            fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+            program = createProgram(vs, fs);
+
+            // Get attribute/uniform locations (only need to do this once per program)
+            positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+            timeUniformLocation = gl.getUniformLocation(program, "u_time");
+            resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+
+            // Basic check if locations are valid
+            if (positionAttributeLocation === -1) console.warn("Attribute 'a_position' not found in shader program.");
+            if (!timeUniformLocation) console.warn("Uniform 'u_time' not found in shader program."); // Uniform location is object or null
+            if (!resolutionUniformLocation) console.warn("Uniform 'u_resolution' not found in shader program.");
+
+            // Create buffer for the fullscreen quad positions
+            positionBuffer = gl.createBuffer();
+            if (!positionBuffer) throw new Error("Failed to create position buffer");
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            // Use TRIANGLE_STRIP: (-1,1), (-1,-1), (1,1), (1,-1) covers the screen
+            const positions = new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1]);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            return true; // Indicate successful setup
+
+        } catch (error) {
+            console.error(">>> Failed during WebGL setup:", error);
+            // Clean up partial resources if error occurred
+            if (program) gl.deleteProgram(program);
+            if (vs) gl.deleteShader(vs);
+            if (fs) gl.deleteShader(fs);
+            if (positionBuffer) gl.deleteBuffer(positionBuffer);
+            program = null; // Ensure program is null if setup failed
+            return false; // Indicate setup failure
+        } finally {
+            // Delete shaders after program creation (whether successful or not)
+            // as they are linked into the program.
+            if (vs) gl.deleteShader(vs);
+            if (fs) gl.deleteShader(fs);
+        }
+    }
+
+    // --- Render Loop ---
+    function render(now) {
+        if (!program) { // If program is null (setup failed or deleted), stop rendering
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            return;
+        }
+
+        // Calculate time elapsed
+        let time = (now - startTime) * 0.001; // Time in seconds
+
+        // --- Canvas Resize Check ---
+        // More efficient than resize event listener for continuous resizing
+        const currentWidth = window.innerWidth;
+        const currentHeight = window.innerHeight;
+        if (webglCanvas.width !== currentWidth || webglCanvas.height !== currentHeight) {
+            webglCanvas.width = currentWidth;
+            webglCanvas.height = currentHeight;
+            // Update the WebGL viewport to match the new canvas size
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            console.log(`Resized canvas to ${gl.canvas.width}x${gl.canvas.height}`);
+        }
+
+        // --- Prepare for Drawing ---
+        // Clear might not be necessary if shader draws fullscreen opaque pixels
+        // gl.clearColor(0, 0, 0, 0); // Clear to transparent black
+        // gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Select the program to use
+        gl.useProgram(program);
+
+        // --- Set up Vertex Attributes ---
+        if (positionAttributeLocation !== -1 && positionBuffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); // Bind the position buffer
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+            gl.vertexAttribPointer(
+                positionAttributeLocation, // location
+                2,           // size (num components per iteration, vec2)
+                gl.FLOAT,    // type
+                false,       // normalize
+                0,           // stride (0 = use size * sizeof(type))
+                0            // offset (bytes from start of buffer)
+            );
+        } else {
+            // Disable attribute if not used or buffer missing, prevents potential errors
+            if (positionAttributeLocation !== -1) gl.disableVertexAttribArray(positionAttributeLocation);
+        }
+
+        // --- Set Uniforms ---
+        if (timeUniformLocation) {
+           gl.uniform1f(timeUniformLocation, time);
+        }
+        if (resolutionUniformLocation) {
+           gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+        }
+
+        // --- Draw the Quad ---
+        // Draw 4 vertices using the bound buffer and TRIANGLE_STRIP mode
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        // --- Request Next Frame ---
+        animationFrameId = requestAnimationFrame(render);
+    }
+
+    // --- Function to Update Shader Dynamically ---
+    // Expose this function to the global scope so it can be called from index.html
+    window.updateShader = function(newShaderCode) {
+        if (!gl) {
+            console.warn("WebGL context not available. Cannot update shader.");
+            if(typeof showNotification === 'function') showNotification("WebGL inactive. Cannot update shader.");
+            return;
+        }
+        console.log("Attempting shader update with new code...");
+
+        // Basic validation
+        if (!newShaderCode || typeof newShaderCode !== 'string' || newShaderCode.indexOf('main()') === -1) {
+             console.error("Invalid shader code provided: Missing main() function or not a string.");
+             if(typeof showNotification === 'function') showNotification("Invalid shader code: Missing main().");
+             console.error("Provided code:\n", newShaderCode);
+             return;
+        }
+
+        // Construct the full source for the new fragment shader, including essential parts
+          const completeNewFragmentSource = `#version 300 es
+             precision highp float;
+             uniform float u_time;
+             uniform vec2 u_resolution;
+             out vec4 outColor;
+
+             // --- Include Common Helper Functions ---
+             const int FBM_OCTAVES = ${FBM_OCTAVES}; // Use the JS constant
+             float hash(float n) { return fract(sin(n) * 43758.5453); }
+             float noise(vec2 p) { vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=i.x+i.y*57.;return mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y); }
+             float fbm(vec2 p) { float s=0.,a=.7,f=1.;for(int i=0;i<FBM_OCTAVES;i++){s+=noise(p*f)*a;a*=.5;f*=2.;}return s;}
+             float rand(vec2 co){ return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453); }
+             // --- END Helper Functions ---
+
+             // --- Common Colors ---
+             vec3 colPrimary = vec3(106./255., 0., 1.);
+             vec3 colSecondary = vec3(0., 1., 204./255.);
+             vec3 colTertiary = vec3(0., 184./255., 212./255.);
+             vec3 colBackground = vec3(5./255., 5./255., 17./255.);
+             // Add other colors needed if the user code might use them
+             vec3 colGreen = vec3(0.1, 0.8, 0.4);
+             vec3 colGold = vec3(0.9, 0.7, 0.1);
+             vec3 colStrangeGreen = vec3(0.1, 0.4, 0.2);
+             vec3 colDeepRed = vec3(0.6, 0.0, 0.15);
+             vec3 colWhite = vec3(1.0);
+             vec3 colOrange = vec3(1.0, 0.5, 0.0);
+             vec3 colPink = vec3(1.0, 0.4, 0.7);
+             vec3 colSkyBlue = vec3(0.5, 0.7, 1.0);
+             vec3 colLimeGreen = vec3(0.7, 1.0, 0.0);
+             vec3 colDarkGrey = vec3(0.2, 0.2, 0.2);
+             vec3 colElectricBlue = vec3(0.2, 0.6, 1.0);
+             vec3 colSoftPurple = vec3(0.6, 0.4, 0.8);
+             // --- END Colors ---
+
+             // --- User Provided Shader Code ---
+             ${newShaderCode}
+             // --- End User Code ---
+         `;
+
+        let newVs = null;
+        let newFs = null;
+        let newProgram = null;
+        try {
+             // Recompile the vertex shader (it's simple, but good practice)
+             newVs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+             // Compile the new fragment shader
+             newFs = createShader(gl.FRAGMENT_SHADER, completeNewFragmentSource);
+             // Link the new program
+             newProgram = createProgram(newVs, newFs);
+
+             // --- Success! Switch to the new program ---
+             console.log("New shader compiled and linked successfully.");
+
+             // Stop the old animation loop before changing the program
+             if (animationFrameId) {
+                 cancelAnimationFrame(animationFrameId);
+                 animationFrameId = null;
+             }
+
+             // Delete the old program *before* assigning the new one
+             if (program) {
+                 gl.deleteProgram(program);
+                 console.log("Old program deleted.");
+             }
+             program = newProgram; // Assign the new program
+
+             // Re-get all attribute and uniform locations for the *new* program
+             positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+             timeUniformLocation = gl.getUniformLocation(program, "u_time");
+             resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+
+             // Optional: Check new locations for debugging
+             if (positionAttributeLocation === -1) console.warn("New program missing 'a_position' attribute.");
+             if (!timeUniformLocation) console.warn("New program missing 'u_time' uniform.");
+             if (!resolutionUniformLocation) console.warn("New program missing 'u_resolution' uniform.");
+
+             // Restart the render loop with the new program
+             startTime = performance.now(); // Optionally reset start time
+             animationFrameId = requestAnimationFrame(render);
+
+             console.log("Shader update complete. Render loop restarted.");
+              if(typeof showNotification === 'function') showNotification("SHADER UPDATE SUCCESSFUL.");
+
         } catch (e) {
-            console.error(`Error creating cached material '${name}':`, e);
-            // Optionally return a default fallback material
-            return null;
-        }
-    }
-    return materialCache[name];
-}
-// --- END OF MOVED CODE ---
+             console.error('>>> Shader update failed during compile/link:', e);
+             // Clean up partially created resources from the failed update attempt
+             if (newProgram) gl.deleteProgram(newProgram); // Should be null if link failed, but check anyway
+             if (newVs) gl.deleteShader(newVs);
+             if (newFs) gl.deleteShader(newFs);
+             // Do NOT delete the old 'program' if the update failed, keep it running
+             if(typeof showNotification === 'function') showNotification(`SHADER UPDATE FAILED: ${e.message}`);
 
-// --- Global Variables ---
-const PLAYER_DAMAGE = 20;
-const GROUND_LEVEL = 0;
-let healthPacks = [];
-let currentCrosshairIndex = 0;
-
-// --- Platform/Ramp Constants --- <<< MOVED TO GLOBAL SCOPE
-const PLATFORM_HEIGHT = 20;
-const PLATFORM_POS = new BABYLON.Vector3(150, GROUND_LEVEL + PLATFORM_HEIGHT, -80);
-const PLATFORM_WIDTH = 30;
-const PLATFORM_DEPTH = 40;
-const PLATFORM_THICKNESS = 2;
-const RAMP_WIDTH = 15;
-const RAMP_LENGTH = 45; // Adjust for desired slope along with PLATFORM_HEIGHT
-const RAMP_THICKNESS = 1;
-
-/**
- * Updates the player health and stamina display in the UI.
- */
-function updatePlayerHealthUI() {
-    // Update Health
-    const healthCounter = document.getElementById("playerHealthCounter");
-    if (window.player && healthCounter) {
-        healthCounter.innerText = "Health: " + Math.round(player.health); // Use Math.round for cleaner display
-    }
-
-    // Update stamina UI if player and elements exist
-    if (window.player && typeof window.player.updateStaminaUI === 'function') {
-        window.player.updateStaminaUI(); // Delegate stamina update logic to Player class
-    } else if (window.player && !document.getElementById("staminaUI")) {
-        // Warn only once if UI elements are missing after player exists
-        if (!window.player.staminaWarningShown) {
-            console.warn("Stamina UI elements (staminaUI, staminaFill, staminaText) not found in HTML.");
-            window.player.staminaWarningShown = true; // Prevent repeated warnings
-        }
-    }
-}
-
-// Make getCachedMaterial globally accessible if needed by other scripts (optional)
-window.getCachedMaterial = getCachedMaterial;
-
-// --- Drivable UFO Ship Class ---
-class DrivableUFO {
-    constructor(scene, position) {
-        this.scene = scene;
-        this.isPlayerIn = false;
-        this.mesh = null;
-        this.speed = 0;
-        this.maxSpeed = 3.2;
-        this.accel = 0.09;
-        this.decel = 0.07;
-        this.turnSpeed = 0.035;
-        this.upSpeed = 1.5;
-        this.grounded = false;
-        this._loadUFOMesh(position);
-    }
-    async _loadUFOMesh(position) {
-        const modelPath = "./assets/models/";
-        const modelFile = "ufo.glb";
-        try {
-            const result = await BABYLON.SceneLoader.ImportMeshAsync("", modelPath, modelFile, this.scene);
-            this.mesh = result.meshes[0];
-            this.mesh.position = position.clone();
-            this.mesh.scaling.scaleInPlace(2.5);
-        } catch (e) {
-            // Fallback: disc + dome
-            const disc = BABYLON.MeshBuilder.CreateDisc("ufoDisc", { radius: 5, tessellation: 48 }, this.scene);
-            disc.position = position.clone();
-            disc.material = new BABYLON.StandardMaterial("ufoDiscMat", this.scene);
-            disc.material.diffuseColor = new BABYLON.Color3(0.7, 0.7, 0.8);
-            disc.material.specularColor = new BABYLON.Color3(0.8, 0.9, 1.0);
-            // Dome
-            const dome = BABYLON.MeshBuilder.CreateSphere("ufoDome", { diameter: 4, slice: 0.5 }, this.scene);
-            dome.position = position.clone().add(new BABYLON.Vector3(0, 2, 0));
-            dome.material = new BABYLON.StandardMaterial("ufoDomeMat", this.scene);
-            dome.material.diffuseColor = new BABYLON.Color3(0.5, 0.8, 1.0);
-            dome.material.alpha = 0.5;
-            // Parent dome to disc
-            dome.parent = disc;
-            this.mesh = disc;
-        }
-        this.mesh.checkCollisions = true;
-        this.mesh.receiveShadows = true;
-        this.mesh.isPickable = true;
-        this.mesh.metadata = { isShip: true, ref: this };
-        if (this.scene.shadowGenerator) this.scene.shadowGenerator.addShadowCaster(this.mesh);
-    }
-    setPlayerIn(player) {
-        this.isPlayerIn = true;
-        this.player = player;
-        player.camera.parent = this.mesh;
-        player.camera.position = new BABYLON.Vector3(0, 2, -8);
-        player.camera.rotation = new BABYLON.Vector3(0, 0, 0);
-        player.camera.attachControl(false);
-        player.inShip = true;
-        player.disableControls = true;
-        showShipUI();
-        this._setupShipControls();
-    }
-    setPlayerOut() {
-        if (!this.isPlayerIn) return;
-        this.isPlayerIn = false;
-        if (this.player) {
-            this.player.camera.parent = null;
-            const exitPos = this.mesh.position.add(new BABYLON.Vector3(0, 2, -7));
-            this.player.camera.position = exitPos;
-            this.player.camera.attachControl(true);
-            this.player.inShip = false;
-            this.player.disableControls = false;
-        }
-        hideShipUI();
-        this._removeShipControls();
-    }
-    _setupShipControls() {
-        this._keyState = {};
-        this._keyListener = (e) => {
-            if (e.type === "keydown") this._keyState[e.key.toLowerCase()] = true;
-            else if (e.type === "keyup") this._keyState[e.key.toLowerCase()] = false;
-        };
-        window.addEventListener("keydown", this._keyListener);
-        window.addEventListener("keyup", this._keyListener);
-        this._updateObserver = this.scene.onBeforeRenderObservable.add(() => this._update());
-    }
-    _removeShipControls() {
-        window.removeEventListener("keydown", this._keyListener);
-        window.removeEventListener("keyup", this._keyListener);
-        if (this._updateObserver) this.scene.onBeforeRenderObservable.remove(this._updateObserver);
-    }
-    _update() {
-        if (!this.isPlayerIn || !this.mesh) return;
-        let move = BABYLON.Vector3.Zero();
-        let rotY = 0;
-        if (this._keyState["w"]) this.speed = Math.min(this.maxSpeed, this.speed + this.accel);
-        else if (this._keyState["s"]) this.speed = Math.max(-this.maxSpeed * 0.5, this.speed - this.accel * 0.7);
-        else {
-            if (this.speed > 0) this.speed = Math.max(0, this.speed - this.decel);
-            else if (this.speed < 0) this.speed = Math.min(0, this.speed + this.decel * 0.7);
-        }
-        if (this._keyState["a"]) rotY += this.turnSpeed;
-        if (this._keyState["d"]) rotY -= this.turnSpeed;
-        if (this._keyState[" "] || this._keyState["space"]) move.y += this.upSpeed;
-        if (this._keyState["control"] || this._keyState["ctrl"]) move.y -= this.upSpeed;
-        this.mesh.rotation.y += rotY;
-        const forward = new BABYLON.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
-        this.mesh.position.addInPlace(forward.scale(this.speed * 0.19));
-        this.mesh.position.y += move.y * 0.13;
-        if (!this._keyState[" "] && !this._keyState["space"]) {
-            this.mesh.position.y -= 0.09;
-        }
-        if (this.mesh.position.y < GROUND_LEVEL + 2) {
-            this.mesh.position.y = GROUND_LEVEL + 2;
-            this.grounded = true;
-        } else {
-            this.grounded = false;
-        }
-        const altitude = this.mesh.position.y - GROUND_LEVEL;
-        updateShipUI(Math.abs(this.speed * 10), altitude, this.grounded);
-        if (this.grounded && this._keyState["r"] && !this._exitPressed) {
-            this.setPlayerOut();
-            this._exitPressed = true;
-        }
-        if (!this._keyState["r"]) {
-            this._exitPressed = false;
-        }
-    }
-}
-
-// --- Place a UFO ship in the world ---
-function placeDrivableUFO(scene) {
-    const ufoPos = new BABYLON.Vector3(PLATFORM_POS.x + 30, GROUND_LEVEL + 2, PLATFORM_POS.z - 30);
-    const ufo = new DrivableUFO(scene, ufoPos);
-    scene.drivableUFO = ufo;
-}
-
-// --- Main Scene Creation ---
-const createScene = async function(engine, canvas) {
-    const scene = new BABYLON.Scene(engine);
-    scene.gamePaused = false;
-    scene.enemies = []; // Array to hold enemy instances
-    scene.gameWon = false;
-    scene.boss = null;
-    scene.collisionsEnabled = true; // Default Babylon collision system
-    scene.groundPlane = null;
-    scene.mountains = []; // Array to hold mountain meshes
-    scene.platform = null; // Reference for platform
-    scene.ramp = null;     // Reference for ramp
-    scene.shadowGenerator = null; // Reference for shadow map generator
-
-    // --- Physics Setup ---
-    try {
-        // Using Cannon.js - Note the MeshImpostor collision limitation warning
-        scene.enablePhysics(new BABYLON.Vector3(0, -9.81, 0), new BABYLON.CannonJSPlugin());
-        console.log("Physics engine enabled (Cannon.js)");
-    } catch (e) {
-        console.error("Failed to enable physics:", e);
-        // Potentially display error to user and stop loading
-        engine.hideLoadingUI();
-        alert("Error initializing physics engine. Game cannot start.");
-        return null;
-    }
-
-    // --- Environment & Ground Setup ---
-    setupEnvironment(scene); // Sets up lights, skybox, fog, and scene.shadowGenerator
-
-    try {
-        createFlatPlaneTerrain(scene); // Creates ground mesh, material, physics
-        if (!scene.groundPlane) throw new Error("Ground plane mesh failed creation.");
-    } catch (terrainError) {
-        console.error("FATAL: Failed to create ground plane.", terrainError);
-        engine.hideLoadingUI();
-        alert("Error creating terrain. Game cannot start.");
-        return null;
-    }
-
-    // --- Mountains Setup ---
-    try {
-        await createMountains(scene); // Adds mountains and shadow casters
-    } catch (mountainError) {
-        console.error("Error creating mountains:", mountainError);
-        // Non-fatal, game can continue without mountains potentially
-    }
-
-    // --- Platform and Ramp Setup ---
-    try {
-        createPlatformAndRamp(scene); // Adds platform/ramp and shadow handling
-        console.log("Platform and Ramp created.");
-    } catch (structureError) {
-        console.error("Error creating platform and ramp:", structureError);
-        // Potentially non-fatal, depending on gameplay reliance
-    }
-
-    // --- Player Setup ---
-    try {
-        if (typeof Player !== 'undefined') {
-            window.player = new Player(scene, canvas, { PLAYER_DAMAGE, playerShotSoundPath: "assets/sounds/shot1.mp3" });
-            // Start player near the ramp base
-            const startPos = new BABYLON.Vector3(
-                PLATFORM_POS.x,
-                GROUND_LEVEL + window.player.normalCameraHeight + 1, // Start slightly above ground
-                PLATFORM_POS.z - RAMP_LENGTH * 0.7 // Start further back from ramp base
-             );
-            player.camera.position = startPos;
-            player.initialize(); // Sets up controls, stamina, etc.
-             // Add player capsule/mesh to shadow casters if it exists and should cast shadows
-             if (scene.shadowGenerator && player.getMesh && player.getMesh()) { // Assuming player has a getMesh() method
-                 scene.shadowGenerator.addShadowCaster(player.getMesh(), true);
-                 console.log("Player added to shadow casters.");
-             } else {
-                 console.warn("Player mesh not found or shadow generator missing, cannot add player to shadow casters.");
+             // If the render loop was stopped, restart it with the old program
+             if (!animationFrameId && program) {
+                 console.log("Restarting render loop with previous program after update failure.");
+                 animationFrameId = requestAnimationFrame(render);
              }
 
-        } else {
-            console.error("Player class not defined!");
-            throw new Error("Player class definition is missing."); // Make it fatal
+        } finally {
+             // Delete the new shaders regardless of success, as they are now linked (or failed)
+             if (newVs) gl.deleteShader(newVs);
+             if (newFs) gl.deleteShader(newFs);
         }
-    } catch (playerError) {
-        console.error("Failed to initialize player:", playerError);
-        engine.hideLoadingUI();
-        alert("Error initializing player. Game cannot start.");
-        return null;
-    }
+    }; // End window.updateShader
 
-    // --- Load Game Elements ---
-    // Ensure player is initialized before loading elements that might reference it (like zombies)
-    if (window.player) {
-        loadGameElements(scene); // Spawns enemies, items, effects, adds shadow casters
+    // --- Start WebGL ---
+    if (setupWebGL()) {
+        // Start the rendering loop only if setup was successful
+        console.log("WebGL setup successful. Starting render loop.");
+        animationFrameId = requestAnimationFrame(render);
     } else {
-         console.error("Cannot load game elements because player failed to initialize.");
+        console.error("WebGL setup failed. Render loop will not start.");
+        // Ensure static background as fallback
+        if(document.body) document.body.style.backgroundColor = '#050511';
     }
 
-
-    // --- UI Setup ---
-    setupPauseMenu(scene, engine);
-    setupInventoryMenu();
-
-    // --- Win Condition Check ---
-    scene.checkWinCondition = function() {
-        // Ensure enemies array exists and filter out potentially null/disposed enemies
-        const activeEnemies = scene.enemies ? scene.enemies.filter(e => e && !e.isDisposed) : [];
-        scene.enemies = activeEnemies; // Update scene enemies array
-        const bossAlive = scene.boss && !scene.boss.isDisposed; // Check if boss exists and is not disposed
-
-        const totalEnemies = activeEnemies.length + (bossAlive ? 1 : 0);
-
-        if (totalEnemies === 0 && !scene.gameWon) { // Prevent multiple wins
-            scene.gameWon = true;
-            console.log("YOU WON!");
-            // Display win message UI
-             const winMsg = document.getElementById("winMessage");
-             if (winMsg) winMsg.style.display = 'block';
-             // Optionally pause game on win
-             // scene.gamePaused = true;
+    // --- Resize Listener ---
+    // Handles canvas buffer resizing via check in render loop, but good to have listener too.
+    window.addEventListener('resize', () => {
+        // The actual resizing logic is handled within the render loop check
+        // This listener ensures responsiveness if the loop somehow stops temporarily
+        // and helps trigger the check on resize events.
+        if (!animationFrameId && program) {
+            // If the loop isn't running but we have a program, request a frame
+            // This might happen if the tab was hidden and the loop stopped
+            console.log("Resize event: Requesting animation frame.");
+            animationFrameId = requestAnimationFrame(render);
         }
-    };
+    }, false); // Use passive: true? Might improve scroll perf slightly if listener is heavy.
 
-    // Check win condition less frequently to save performance
-    scene.onBeforeRenderObservable.add(() => {
-        if (!scene.gameWon && !scene.gamePaused && scene.frameId % 120 === 0) { // Check every ~2 seconds
-            scene.checkWinCondition();
-        }
-    });
-
-    placeDrivableUFO(scene);
-    scene.onBeforeRenderObservable.add(() => {
-        if (!window.player || !scene.drivableUFO || !scene.drivableUFO.mesh) return;
-        if (window.player.inShip) return; // Only one ship at a time
-        const dist = BABYLON.Vector3.Distance(window.player.camera.position, scene.drivableUFO.mesh.position);
-        if (dist < 9 && !window.player._ufoEnterPressed && window.player._keyState && window.player._keyState["r"]) {
-            scene.drivableUFO.setPlayerIn(window.player);
-            window.player._ufoEnterPressed = true;
-        }
-        if (!window.player._keyState || !window.player._keyState["r"]) {
-            window.player._ufoEnterPressed = false;
-        }
-    });
-    if (!window.player._keyState) window.player._keyState = {};
-    window.addEventListener("keydown", e => window.player._keyState[e.key.toLowerCase()] = true);
-    window.addEventListener("keyup", e => window.player._keyState[e.key.toLowerCase()] = false);
-
-    console.log("Scene setup complete.");
-    return scene;
-};
-
-/**
- * Creates a simple flat plane for terrain
- */
-function createFlatPlaneTerrain(scene) {
-    const groundSize = 3000;
-    const ground = BABYLON.MeshBuilder.CreateGround("groundPlane", {
-        width: groundSize,
-        height: groundSize,
-        subdivisions: 10
-    }, scene);
-
-    ground.position.y = GROUND_LEVEL;
-
-    // Use getCachedMaterial safely
-    const groundMat = getCachedMaterial("groundPlaneMat", scene, {}, (sc) => {
-        const mat = new BABYLON.StandardMaterial("groundPlaneMat", sc);
-        mat.diffuseColor = new BABYLON.Color3(0.4, 0.35, 0.3);
-        mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-        try {
-            // Ensure path is relative to the HTML file
-            mat.diffuseTexture = new BABYLON.Texture("assets/textures/ground.jpg", sc);
-            mat.diffuseTexture.uScale = 60;
-            mat.diffuseTexture.vScale = 60;
-        } catch (texErr) {
-            console.warn("Ground texture 'assets/textures/ground.jpg' not found, using color.", texErr);
-        }
-        return mat;
-    });
-    if (groundMat) { // Check if material was created successfully
-        ground.material = groundMat;
-    } else {
-        console.error("Failed to create or cache ground material.");
-        // Apply a basic fallback material
-        const fallbackMat = new BABYLON.StandardMaterial("fallbackGroundMat", scene);
-        fallbackMat.diffuseColor = new BABYLON.Color3(0.5, 0.4, 0.3);
-        ground.material = fallbackMat;
-    }
-
-
-    ground.checkCollisions = true;
-    ground.receiveShadows = true; // Ground should receive shadows
-    ground.isMapGround = true; // Custom flag if needed
-
-    try {
-        ground.physicsImpostor = new BABYLON.PhysicsImpostor(
-            ground,
-            BABYLON.PhysicsImpostor.BoxImpostor, // BoxImpostor is efficient for flat ground
-            { mass: 0, restitution: 0.1, friction: 0.8 },
-            scene
-        );
-    } catch(e) {
-        console.error("Failed physics for ground plane", e);
-    }
-
-    scene.groundPlane = ground;
-    return ground;
-}
-
-/**
- * Creates the raised platform and the ramp leading to it.
- */
-function createPlatformAndRamp(scene) {
-    // --- Labyrinth Materials ---
-    const platformMat = getCachedMaterial("labPlatformMat", scene, {}, (sc) => {
-        const mat = new BABYLON.StandardMaterial("labPlatformMat", sc);
-        mat.diffuseColor = new BABYLON.Color3(0.5, 0.6, 0.7);
-        mat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-        try {
-            mat.diffuseTexture = new BABYLON.Texture("assets/textures/concrete_normal.jpg", sc);
-            mat.diffuseTexture.uScale = 2;
-            mat.diffuseTexture.vScale = 2;
-        } catch (e) {}
-        return mat;
-    });
-    const rampMat = getCachedMaterial("labRampMat", scene, {}, (sc) => {
-        const mat = new BABYLON.StandardMaterial("labRampMat", sc);
-        mat.diffuseColor = new BABYLON.Color3(0.4, 0.5, 0.6);
-        mat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-        return mat;
-    });
-
-    // --- Labyrinth Parameters ---
-    const mazeWidth = 9; // number of cells
-    const mazeDepth = 9;
-    const cellSize = 10;
-    const platformHeight = 1.5;
-    const wallHeight = 4.5;
-    const labyrinthY = PLATFORM_POS.y;
-    const labyrinthCenter = new BABYLON.Vector3(PLATFORM_POS.x, labyrinthY, PLATFORM_POS.z);
-
-    // --- Maze Generation (simple DFS) ---
-    function generateMaze(w, h) {
-        const maze = Array.from({ length: h }, () => Array(w).fill(0));
-        const visited = Array.from({ length: h }, () => Array(w).fill(false));
-        const stack = [[0, 0]];
-        visited[0][0] = true;
-        while (stack.length) {
-            const [cx, cy] = stack[stack.length - 1];
-            const dirs = [
-                [0, -1, 1], // up
-                [1, 0, 2],  // right
-                [0, 1, 4],  // down
-                [-1, 0, 8]  // left
-            ].sort(() => Math.random() - 0.5);
-            let moved = false;
-            for (const [dx, dy, bit] of dirs) {
-                const nx = cx + dx, ny = cy + dy;
-                if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx]) {
-                    maze[cy][cx] |= bit;
-                    maze[ny][nx] |= (bit === 1 ? 4 : bit === 2 ? 8 : bit === 4 ? 1 : 2);
-                    visited[ny][nx] = true;
-                    stack.push([nx, ny]);
-                    moved = true;
-                    break;
-                }
-            }
-            if (!moved) stack.pop();
-        }
-        return maze;
-    }
-    const maze = generateMaze(mazeWidth, mazeDepth);
-
-    // --- Create Platforms (floors) ---
-    const platforms = [];
-    for (let z = 0; z < mazeDepth; z++) {
-        for (let x = 0; x < mazeWidth; x++) {
-            const px = labyrinthCenter.x + (x - Math.floor(mazeWidth / 2)) * cellSize;
-            const pz = labyrinthCenter.z + (z - Math.floor(mazeDepth / 2)) * cellSize;
-            const platform = BABYLON.MeshBuilder.CreateBox(`labPlatform_${x}_${z}`, {
-                width: cellSize * 0.98,
-                height: platformHeight,
-                depth: cellSize * 0.98
-            }, scene);
-            platform.position = new BABYLON.Vector3(px, labyrinthY, pz);
-            platform.material = platformMat;
-            platform.checkCollisions = true;
-            platform.receiveShadows = true;
-            try {
-                platform.physicsImpostor = new BABYLON.PhysicsImpostor(platform, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-            } catch (e) {}
-            if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(platform);
-            platforms.push(platform);
-        }
-    }
-
-    // --- Create Walls (maze) ---
-    for (let z = 0; z < mazeDepth; z++) {
-        for (let x = 0; x < mazeWidth; x++) {
-            const px = labyrinthCenter.x + (x - Math.floor(mazeWidth / 2)) * cellSize;
-            const pz = labyrinthCenter.z + (z - Math.floor(mazeDepth / 2)) * cellSize;
-            const cell = maze[z][x];
-            // North wall
-            if ((cell & 1) === 0) {
-                const wall = BABYLON.MeshBuilder.CreateBox(`labWallN_${x}_${z}`, {
-                    width: cellSize,
-                    height: wallHeight,
-                    depth: 0.7
-                }, scene);
-                wall.position = new BABYLON.Vector3(px, labyrinthY + wallHeight / 2, pz - cellSize / 2);
-                wall.material = platformMat;
-                wall.checkCollisions = true;
-                wall.receiveShadows = true;
-                try {
-                    wall.physicsImpostor = new BABYLON.PhysicsImpostor(wall, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-                } catch (e) {}
-                if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(wall);
-            }
-            // West wall
-            if ((cell & 8) === 0) {
-                const wall = BABYLON.MeshBuilder.CreateBox(`labWallW_${x}_${z}`, {
-                    width: 0.7,
-                    height: wallHeight,
-                    depth: cellSize
-                }, scene);
-                wall.position = new BABYLON.Vector3(px - cellSize / 2, labyrinthY + wallHeight / 2, pz);
-                wall.material = platformMat;
-                wall.checkCollisions = true;
-                wall.receiveShadows = true;
-                try {
-                    wall.physicsImpostor = new BABYLON.PhysicsImpostor(wall, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-                } catch (e) {}
-                if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(wall);
-            }
-            // South wall (maze border)
-            if (z === mazeDepth - 1) {
-                const wall = BABYLON.MeshBuilder.CreateBox(`labWallS_${x}_${z}`, {
-                    width: cellSize,
-                    height: wallHeight,
-                    depth: 0.7
-                }, scene);
-                wall.position = new BABYLON.Vector3(px, labyrinthY + wallHeight / 2, pz + cellSize / 2);
-                wall.material = platformMat;
-                wall.checkCollisions = true;
-                wall.receiveShadows = true;
-                try {
-                    wall.physicsImpostor = new BABYLON.PhysicsImpostor(wall, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-                } catch (e) {}
-                if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(wall);
-            }
-            // East wall (maze border)
-            if (x === mazeWidth - 1) {
-                const wall = BABYLON.MeshBuilder.CreateBox(`labWallE_${x}_${z}`, {
-                    width: 0.7,
-                    height: wallHeight,
-                    depth: cellSize
-                }, scene);
-                wall.position = new BABYLON.Vector3(px + cellSize / 2, labyrinthY + wallHeight / 2, pz);
-                wall.material = platformMat;
-                wall.checkCollisions = true;
-                wall.receiveShadows = true;
-                try {
-                    wall.physicsImpostor = new BABYLON.PhysicsImpostor(wall, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-                } catch (e) {}
-                if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(wall);
-            }
-        }
-    }
-
-    // --- Main Ramp to Labyrinth Entrance ---
-    const rampLength = PLATFORM_HEIGHT * 2.5;
-    const ramp = BABYLON.MeshBuilder.CreateBox("labRamp", {
-        width: cellSize * 1.2,
-        height: 1.2,
-        depth: rampLength
-    }, scene);
-    ramp.material = rampMat;
-    ramp.checkCollisions = true;
-    ramp.receiveShadows = true;
-    // Position and rotate ramp
-    ramp.position = new BABYLON.Vector3(labyrinthCenter.x, GROUND_LEVEL + PLATFORM_HEIGHT / 2, labyrinthCenter.z - (mazeDepth * cellSize) / 2 - rampLength / 2 + cellSize / 2);
-    ramp.rotation.x = Math.atan(PLATFORM_HEIGHT / rampLength);
-    try {
-        ramp.physicsImpostor = new BABYLON.PhysicsImpostor(ramp, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-    } catch (e) {}
-    if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(ramp);
-    scene.ramp = ramp;
-
-    // --- Optionally: Add some random ramps inside the maze for verticality ---
-    for (let i = 0; i < 8; i++) {
-        const x = Math.floor(Math.random() * mazeWidth);
-        const z = Math.floor(Math.random() * mazeDepth);
-        const up = Math.random() > 0.5;
-        const px = labyrinthCenter.x + (x - Math.floor(mazeWidth / 2)) * cellSize;
-        const pz = labyrinthCenter.z + (z - Math.floor(mazeDepth / 2)) * cellSize;
-        const rampLen = cellSize * (0.9 + Math.random() * 0.5);
-        const rampAngle = Math.PI / 8 + Math.random() * Math.PI / 12;
-        const rampY = labyrinthY + (up ? platformHeight : 0);
-        const mazeRamp = BABYLON.MeshBuilder.CreateBox(`mazeRamp_${i}`, {
-            width: cellSize * 0.7,
-            height: 1.0,
-            depth: rampLen
-        }, scene);
-        mazeRamp.material = rampMat;
-        mazeRamp.checkCollisions = true;
-        mazeRamp.receiveShadows = true;
-        mazeRamp.position = new BABYLON.Vector3(px, rampY + 0.5, pz);
-        mazeRamp.rotation.x = up ? -rampAngle : rampAngle;
-        try {
-            mazeRamp.physicsImpostor = new BABYLON.PhysicsImpostor(mazeRamp, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1, friction: 0.9 }, scene);
-        } catch (e) {}
-        if (scene.shadowGenerator) scene.shadowGenerator.addShadowCaster(mazeRamp);
-    }
-}
-
-/**
- * Optimized mountain creation with vertex manipulation
- */
-async function createMountains(scene) {
-    const mountainCount = 15;
-    const spawnArea = 1200;
-    const minBaseRadius = 80;
-    const maxBaseRadius = 250;
-    const minHeight = 100;
-    const maxHeight = 400;
-    const subdivisions = 24;
-
-    // --- Mountain Material ---
-    const mountMat = getCachedMaterial("mountainMat", scene, {}, (sc) => {
-        const mat = new BABYLON.StandardMaterial("mountainMat", sc);
-        mat.diffuseColor = new BABYLON.Color3(0.55, 0.5, 0.45);
-        mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-        mat.specularPower = 16;
-        try {
-            mat.diffuseTexture = new BABYLON.Texture("assets/textures/rock_diffuse.jpg", sc);
-            mat.bumpTexture = new BABYLON.Texture("assets/textures/rock_normal.jpg", sc);
-            mat.diffuseTexture.uScale = 5; mat.diffuseTexture.vScale = 5;
-            mat.useParallax = true; mat.useParallaxOcclusion = true;
-            mat.parallaxScaleBias = 0.05;
-        } catch(texErr){ console.warn("Mountain textures not found.") }
-        return mat;
-    });
-     const fallbackMat = new BABYLON.StandardMaterial("fallbackMountMat", scene);
-     fallbackMat.diffuseColor = new BABYLON.Color3(0.55, 0.5, 0.45);
-
-    const addShadowCaster = (mesh) => {
-        if (scene.shadowGenerator && mesh) {
-            scene.shadowGenerator.addShadowCaster(mesh, true);
-        }
-    };
-
-    const batchSize = 5;
-    for (let batch = 0; batch < Math.ceil(mountainCount / batchSize); batch++) {
-        const startIdx = batch * batchSize;
-        const endIdx = Math.min(startIdx + batchSize, mountainCount);
-
-        for (let i = startIdx; i < endIdx; i++) {
-            try {
-                const baseRadius = minBaseRadius + Math.random() * (maxBaseRadius - minBaseRadius);
-                const height = minHeight + Math.random() * (maxHeight - minHeight);
-                const mountainMesh = BABYLON.MeshBuilder.CreateGround(`mountain_${i}`, {
-                    width: baseRadius * 2, height: baseRadius * 2,
-                    subdivisions: subdivisions, updatable: true
-                }, scene);
-
-                const positions = mountainMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-                if (!positions) { mountainMesh.dispose(); continue; }
-
-                for (let v = 0; v < positions.length / 3; v++) {
-                    const idx = v * 3; const x = positions[idx]; const z = positions[idx + 2];
-                    const distFromCenter = Math.sqrt(x * x + z * z);
-                    const normalizedDist = Math.min(1.0, distFromCenter / baseRadius);
-                    let heightFactor = Math.cos(normalizedDist * Math.PI / 2);
-                    heightFactor *= (1.0 + (Math.random() - 0.5) * 0.4);
-                    heightFactor = Math.max(0, heightFactor);
-                    positions[idx + 1] = heightFactor * height;
-                }
-
-                mountainMesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
-                mountainMesh.computeWorldMatrix(true);
-                mountainMesh.createNormals(true);
-                mountainMesh.refreshBoundingInfo(true);
-
-                let posX, posZ;
-                const bufferDist = 1.5; // Increase buffer slightly
-                do {
-                     posX = (Math.random() - 0.5) * 2 * spawnArea;
-                     posZ = (Math.random() - 0.5) * 2 * spawnArea;
-                } while (
-                     Math.abs(posX - PLATFORM_POS.x) < (maxBaseRadius + PLATFORM_WIDTH) * bufferDist &&
-                     Math.abs(posZ - PLATFORM_POS.z) < (maxBaseRadius + PLATFORM_DEPTH) * bufferDist
-                );
-
-                mountainMesh.position = new BABYLON.Vector3(posX, GROUND_LEVEL, posZ);
-                mountainMesh.material = mountMat || fallbackMat;
-                mountainMesh.checkCollisions = true;
-                mountainMesh.receiveShadows = true; // Mountains receive shadows
-
-                try {
-                    mountainMesh.physicsImpostor = new BABYLON.PhysicsImpostor( mountainMesh,
-                        BABYLON.PhysicsImpostor.MeshImpostor,
-                        { mass: 0, restitution: 0.1, friction: 0.8 }, scene );
-                } catch (physErr) { console.error(`Mountain ${i} physics failed:`, physErr); }
-
-                addShadowCaster(mountainMesh); // Mountains cast shadows
-                scene.mountains.push(mountainMesh);
-            } catch (error) { console.error(`Error processing mountain ${i}:`, error); }
-        }
-        await new Promise(resolve => setTimeout(resolve, 10)); // Slightly longer yield
-    }
-    console.log(`Created ${scene.mountains.length} mountains`);
-}
-
-/**
- * Environment setup with lights, fog, skybox, and shadow generator
- */
-function setupEnvironment(scene) {
-    // --- Lighting ---
-    const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0.1, 1, 0.1), scene);
-    hemiLight.intensity = 0.6;
-    hemiLight.diffuse = new BABYLON.Color3(1, 1, 1);
-    hemiLight.groundColor = new BABYLON.Color3(0.4, 0.4, 0.5);
-
-    const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-0.7, -0.8, 0.5), scene);
-    dirLight.intensity = 0.9;
-    dirLight.position = new BABYLON.Vector3(250, 400, -200); // Adjust light position for desired shadow angle
-    dirLight.shadowMinZ = 10;
-    dirLight.shadowMaxZ = 1000; // Adjust based on scene scale and camera distance
-
-    // --- Shadow Generator Setup ---
-    try {
-        const shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight); // 1024, 2048, or 4096 resolution
-        // PCF (Percentage Closer Filtering) provides softer shadows than ESM/BlurESM sometimes, less prone to light bleeding
-        shadowGenerator.usePercentageCloserFiltering = true;
-        shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH; // Or MEDIUM/LOW
-        // shadowGenerator.useExponentialShadowMap = true;
-        // shadowGenerator.useBlurExponentialShadowMap = true;
-        // shadowGenerator.blurKernel = 32;
-        shadowGenerator.setDarkness(0.5); // Adjust darkness (0 to 1)
-        shadowGenerator.bias = 0.005; // Adjust bias to prevent shadow acne
-        // shadowGenerator.normalBias = 0.02; // Adjust normal bias if needed
-
-        // Assign the light that casts shadows
-        dirLight.shadowGenerator = shadowGenerator;
-        // Store on scene object for easy access
-        scene.shadowGenerator = shadowGenerator;
-        console.log("Shadow Generator created.");
-
-        // Automatically make the light cast shadows
-        dirLight.castShadows = true; // Ensure the light source is set to cast shadows
-
-    } catch (sgError) {
-        console.error("Failed to create Shadow Generator:", sgError);
-        scene.shadowGenerator = null; // Ensure it's null if creation fails
-    }
-
-
-    // --- Fog ---
-    scene.fogMode = BABYLON.Scene.FOGMODE_LINEAR;
-    scene.fogStart = 400.0;
-    scene.fogEnd = 1500.0;
-    scene.fogColor = new BABYLON.Color3(0.15, 0.15, 0.2);
-    scene.clearColor = scene.fogColor.clone(); // Match background clear color to fog
-
-    // --- Skybox ---
-    try {
-        const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 5000 }, scene);
-        const skyboxMaterial = new BABYLON.StandardMaterial("skyBoxMat", scene);
-        skyboxMaterial.backFaceCulling = false;
-        skyboxMaterial.disableLighting = true;
-        // IMPORTANT: Ensure 6 texture files (e.g., sky_px.jpg, sky_nx.jpg...)
-        // exist in 'assets/textures/skybox/' relative to the HTML file.
-        skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("assets/textures/skybox/sky", scene);
-        skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
-        skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0); // Black base color for skybox
-        skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-        skybox.material = skyboxMaterial;
-        skybox.infiniteDistance = true; // Keeps skybox fixed relative to camera
-    } catch (e) {
-        console.warn("Failed to load skybox texture. Check path 'assets/textures/skybox/sky*.jpg'. Using clear color.", e);
-        // Fallback is handled by scene.clearColor
-    }
-}
-
-
-/**
- * Load game elements like effects, enemies and items
- */
-function loadGameElements(scene) {
-     const addShadowCaster = (mesh) => {
-         if (scene.shadowGenerator && mesh) {
-             scene.shadowGenerator.addShadowCaster(mesh, true);
-         }
-     };
-
-    // Spawn effect near ramp base
-    createSpawnEffect(scene, new BABYLON.Vector3(PLATFORM_POS.x, GROUND_LEVEL + 1, PLATFORM_POS.z - RAMP_LENGTH * 0.7));
-
-    // Create decorative elements
-    createDebrisPile(scene, "rampBaseDebris", new BABYLON.Vector3(PLATFORM_POS.x + RAMP_WIDTH, GROUND_LEVEL, PLATFORM_POS.z - RAMP_LENGTH), 5, 15);
-    createDebrisPile(scene, "platformCornerDebris", new BABYLON.Vector3(PLATFORM_POS.x - PLATFORM_WIDTH/2 - 3, GROUND_LEVEL, PLATFORM_POS.z + PLATFORM_DEPTH/2 + 3), 4, 10);
-
-    // Add a decal on the platform
-    createGroundDecal(scene, "platformDecal",
-        new BABYLON.Vector3(PLATFORM_POS.x, PLATFORM_POS.y + 0.05, PLATFORM_POS.z),
-        8, "assets/textures/rune_decal.png", Math.random() * Math.PI * 2
-    );
-
-    // --- Spawn enemies ---
-    if (typeof ModelZombie !== 'undefined' && window.player) {
-        const zombieSpawnPoints = [
-            { x: -50, z: 30 }, { x: 50, z: 50 }, { x: -30, z: -40 },
-            { x: PLATFORM_POS.x + 50, z: PLATFORM_POS.z - 20 },
-            { x: 200, z: 250}
-        ];
-        zombieSpawnPoints.forEach((pos) => {
-            try {
-                const spawnPos = new BABYLON.Vector3(pos.x, GROUND_LEVEL + 1.0, pos.z);
-                // Check distance from player before spawning?
-                // if (BABYLON.Vector3.Distance(spawnPos, window.player.camera.position) > 50) {
-                    const newZombie = new ModelZombie(scene, window.player, spawnPos); // Pass player ref
-                    if (newZombie?.mesh) { // Optional chaining
-                        addShadowCaster(newZombie.mesh);
-                        scene.enemies.push(newZombie);
-                    }
-                // }
-            } catch (e) { console.error("Failed to spawn zombie:", e); }
-        });
-        console.log(`Spawned ${scene.enemies.length} zombies.`);
-    } else { /* ... warnings ... */ }
-
-    // --- Spawn items ---
-    const itemSpawnPoints = [
-        { x: PLATFORM_POS.x, z: PLATFORM_POS.z }, // Center platform
-        { x: PLATFORM_POS.x - PLATFORM_WIDTH * 0.4, z: PLATFORM_POS.z + PLATFORM_DEPTH * 0.3 }, // Corner platform
-        { x: -3, z: -12 }, { x: 40, z: 45 } // Ground
-    ];
-    itemSpawnPoints.forEach((pos) => {
-         let yPos = GROUND_LEVEL + 1; // Default to ground + offset
-         // Check if within platform bounds
-         if (Math.abs(pos.x - PLATFORM_POS.x) < PLATFORM_WIDTH / 2 &&
-             Math.abs(pos.z - PLATFORM_POS.z) < PLATFORM_DEPTH / 2) {
-             yPos = PLATFORM_POS.y + 1; // Place above platform surface
-         }
-        createInteractableItem(scene, new BABYLON.Vector3(pos.x, yPos, pos.z));
-    });
-
-    // Schedule boss spawn
-    setTimeout(() => { spawnBoss(scene); }, 60000); // 1 minute
-}
-
-/**
- * Spawn the boss entity
- */
-function spawnBoss(scene) {
-    if (!scene || scene.isDisposed) return;
-    if (scene.boss) { console.log("Boss already spawned."); return; } // Prevent multiple bosses
-
-    if (typeof BossCore !== 'undefined') {
-        try {
-            const bossSpawnPos = new BABYLON.Vector3(0, GROUND_LEVEL + 50, 400); // Spawn further away
-            const bossInstance = new BossCore(scene, bossSpawnPos);
-            if (!bossInstance) throw new Error("BossCore constructor failed.");
-
-            const bossScale = 4;
-            if (bossInstance.coreMesh) {
-                bossInstance.coreMesh.scaling.scaleInPlace(bossScale);
-                bossInstance.coreMesh.computeWorldMatrix(true); // Update matrix after scaling
-
-                 if (scene.shadowGenerator) {
-                     scene.shadowGenerator.addShadowCaster(bossInstance.coreMesh, true);
-                 }
-                // Scale emitters relative to new boss scale
-                if (bossInstance.emitters) {
-                    bossInstance.emitters.forEach(emitter => {
-                        if (emitter?.mesh) { // Check if emitter and its mesh exist
-                             if (emitter.mesh.name.startsWith("orbitEmitter_")) {
-                                 emitter.mesh.position.z *= bossScale; // Adjust orbit distance
-                             }
-                             if (scene.shadowGenerator) { // Add emitter meshes as casters
-                                  scene.shadowGenerator.addShadowCaster(emitter.mesh, true);
-                             }
-                         }
-                    });
-                }
-                 // Physics might need update - depends on BossCore implementation
-            } else {
-                 console.warn("BossCore instance created, but coreMesh not found for scaling/shadows.");
-            }
-            scene.boss = bossInstance; // Assign to scene only if successful
-            console.log("Boss spawned at", bossSpawnPos);
-        } catch (e) {
-            console.error("Failed to spawn boss:", e);
-            scene.boss = null; // Ensure boss is null if spawning failed
-        }
-    } else {
-        console.warn("BossCore class not defined, cannot spawn boss.");
-    }
-}
-
-
-/**
- * Creates particle effect for spawn points
- */
-function createSpawnEffect(scene, position) {
-    try {
-        const particleSystem = new BABYLON.ParticleSystem("spawnParticles_" + BABYLON.Tools.RandomId(), 500, scene);
-        // Ensure texture path is correct relative to the HTML file
-        particleSystem.particleTexture = new BABYLON.Texture("assets/textures/flare.png", scene);
-        particleSystem.emitter = position;
-        // --- Rest of particle properties ---
-        particleSystem.minEmitBox = new BABYLON.Vector3(-1.5, -0.2, -1.5);
-        particleSystem.maxEmitBox = new BABYLON.Vector3(1.5, 1.0, 1.5);
-        particleSystem.color1 = new BABYLON.Color4(0.5, 0.7, 1.0, 1.0);
-        particleSystem.color2 = new BABYLON.Color4(0.2, 0.3, 1.0, 1.0);
-        particleSystem.colorDead = new BABYLON.Color4(0.1, 0.1, 0.3, 0.0);
-        particleSystem.minSize = 0.1; particleSystem.maxSize = 0.6;
-        particleSystem.minLifeTime = 0.5; particleSystem.maxLifeTime = 1.5;
-        particleSystem.emitRate = 400;
-        particleSystem.minEmitPower = 1; particleSystem.maxEmitPower = 3;
-        particleSystem.updateSpeed = 0.01;
-        particleSystem.gravity = new BABYLON.Vector3(0, -2.81, 0);
-        particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADDITIVE;
-        particleSystem.targetStopDuration = 1.5;
-        particleSystem.disposeOnStop = true; // Automatically remove when done
-        particleSystem.start();
-    } catch (e) {
-        // Check if the error is specifically about the texture
-        if (e.message && (e.message.includes("flare.png") || e.message.includes("404"))) {
-             console.error("Failed to load particle texture 'assets/textures/flare.png'. Check path and file existence.", e);
-        } else {
-             console.error("Failed to create spawn effect:", e);
-        }
-    }
-}
-
-
-/**
- * Creates a physics-enabled debris pile
- */
-function createDebrisPile(scene, namePrefix, centerPosition, pileRadius, debrisCount) {
-    const debrisMat = getCachedMaterial("debrisMat", scene, {}, (sc) => {
-        const mat = new BABYLON.StandardMaterial("debrisMat", sc);
-        mat.diffuseColor = new BABYLON.Color3(0.45, 0.45, 0.45);
-        mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-        try {
-            mat.diffuseTexture = new BABYLON.Texture("assets/textures/concrete_rubble.jpg", sc);
-            mat.diffuseTexture.uScale = 2; mat.diffuseTexture.vScale = 2;
-        } catch(e) { console.warn("Debris texture 'assets/textures/concrete_rubble.jpg' not found.") }
-        return mat;
-    });
-     const fallbackMat = new BABYLON.StandardMaterial("fallbackDebrisMat", scene);
-     fallbackMat.diffuseColor = new BABYLON.Color3(0.45, 0.45, 0.45);
-
-    const debrisParent = new BABYLON.TransformNode(namePrefix + "_Parent", scene);
-    debrisParent.position = new BABYLON.Vector3(centerPosition.x, GROUND_LEVEL, centerPosition.z);
-
-     const addShadowCaster = (mesh) => {
-         if (scene.shadowGenerator && mesh) {
-             scene.shadowGenerator.addShadowCaster(mesh);
-         }
-     };
-
-    for (let i = 0; i < debrisCount; i++) {
-        try {
-            const size = 0.4 + Math.random() * 1.2;
-            const isBox = Math.random() < 0.6;
-            let debrisMesh;
-            if (isBox) {
-                 debrisMesh = BABYLON.MeshBuilder.CreateBox(namePrefix + i, {
-                    width: size * (0.7 + Math.random() * 0.6), // Randomize dimensions
-                    height: size * (0.7 + Math.random() * 0.6),
-                    depth: size * (0.7 + Math.random() * 0.6) }, scene);
-            } else {
-                 debrisMesh = BABYLON.MeshBuilder.CreateIcoSphere(namePrefix + i, {
-                    radius: size * 0.5, subdivisions: 1 }, scene);
-            }
-
-            debrisMesh.material = debrisMat || fallbackMat;
-            debrisMesh.parent = debrisParent;
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * pileRadius;
-            const initialY = size / 2 + Math.random() * pileRadius * 0.3; // Stack less aggressively
-            debrisMesh.position = new BABYLON.Vector3(Math.cos(angle) * radius, initialY, Math.sin(angle) * radius);
-            debrisMesh.rotation = new BABYLON.Vector3(Math.random() * Math.PI, Math.random() * Math.PI*2, Math.random() * Math.PI); // Random rotation
-
-            const impostorType = isBox ? BABYLON.PhysicsImpostor.BoxImpostor : BABYLON.PhysicsImpostor.SphereImpostor;
-            const mass = 1.5 + Math.random() * 4;
-            const friction = 0.6 + Math.random() * 0.3; // Slightly higher friction
-            const restitution = 0.05 + Math.random() * 0.1;
-            debrisMesh.physicsImpostor = new BABYLON.PhysicsImpostor(debrisMesh, impostorType, { mass, restitution, friction }, scene);
-            debrisMesh.checkCollisions = true; // Keep for potential raycasting
-            debrisMesh.receiveShadows = true; // Debris should receive shadows
-            addShadowCaster(debrisMesh); // Debris should cast shadows
-
-        } catch (e) { console.error(`Failed to create debris ${i}:`, e); }
-    }
-}
-
-
-/**
- * Creates a ground decal (texture applied to ground or other horizontal surfaces)
- */
-function createGroundDecal(scene, name, position, size, texturePath, rotationY = 0) {
-    try {
-        // Ensure texture path is correct
-        const fullTexturePath = texturePath.startsWith("assets/") ? texturePath : `assets/textures/${texturePath}`;
-
-        const decalPlane = BABYLON.MeshBuilder.CreatePlane(name, { size: size, sideOrientation: BABYLON.Mesh.DOUBLESIDE }, scene);
-        decalPlane.position = new BABYLON.Vector3(position.x, position.y + 0.02, position.z);
-        decalPlane.rotation.x = Math.PI / 2;
-        decalPlane.rotation.z = rotationY;
-
-        const decalMaterial = getCachedMaterial(name + "_mat", scene, { texturePath: fullTexturePath }, (sc, opts) => {
-            const mat = new BABYLON.StandardMaterial(name + "_mat", sc);
-            try {
-                const decalTexture = new BABYLON.Texture(opts.texturePath, sc, true, false);
-                decalTexture.hasAlpha = true;
-                mat.diffuseTexture = decalTexture;
-                mat.useAlphaFromDiffuseTexture = true;
-                mat.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED_PORTERDUFF; // Often better blending for decals
-                mat.backFaceCulling = false;
-                mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-                mat.zOffset = -2; // Render closer
-            } catch (e) {
-                console.error(`Failed to load decal texture ${opts.texturePath}:`, e);
-                 mat.diffuseColor = new BABYLON.Color3(1,0,1); // Magenta fallback color
-                 mat.alpha = 0.5;
-            }
-             return mat;
-        });
-
-        if (decalMaterial) {
-             decalPlane.material = decalMaterial;
-        } else {
-             const fallbackMat = new BABYLON.StandardMaterial("fallbackDecalMat", scene);
-             fallbackMat.diffuseColor = new BABYLON.Color3(1,0,1); fallbackMat.alpha = 0.5;
-             decalPlane.material = fallbackMat;
-        }
-
-        decalPlane.isPickable = false;
-        decalPlane.receiveShadows = true; // Decals should receive shadows
-
-        return decalPlane;
-    } catch (e) {
-        console.error(`Failed to create decal ${name}:`, e);
-        return null;
-    }
-}
-
-/**
- * Creates an interactable game item (using GLB model)
- */
-function createInteractableItem(scene, position) {
-    const modelPath = "./assets/models/"; // Relative to HTML
-    const modelFile = "energy.glb";
-
-     const addShadowCaster = (mesh) => {
-         if (scene.shadowGenerator && mesh) {
-             scene.shadowGenerator.addShadowCaster(mesh, true);
-         }
-     };
-
-    BABYLON.SceneLoader.ImportMeshAsync("", modelPath, modelFile, scene)
-        .then(result => {
-            if (!result.meshes || result.meshes.length === 0) {
-                 throw new Error(`No meshes found in loaded GLB: ${modelFile}`);
-            }
-
-            let itemRoot = null;
-            // Find the first mesh with geometry data, often the primary visible mesh
-            for (let mesh of result.meshes) {
-                 if (mesh.geometry && mesh.getTotalVertices() > 0) {
-                     itemRoot = mesh;
-                     break;
-                 }
-            }
-            // Fallback to the __root__ mesh if it exists and others don't have geometry
-             if (!itemRoot && result.meshes[0]?.name === "__root__") {
-                  itemRoot = result.meshes[0];
-                  // Find the actual visible mesh under the root if possible
-                  let childMesh = itemRoot.getChildMeshes(false, (node) => node instanceof BABYLON.Mesh && node.getTotalVertices() > 0)[0];
-                  if (childMesh) itemRoot = childMesh; // Use the child if found
-                  else console.warn(`GLB root node '${result.meshes[0].name}' used, but no visible child mesh found.`);
-             } else if (!itemRoot) {
-                  itemRoot = result.meshes[0]; // Last resort: use the very first mesh node
-                  console.warn(`Could not determine primary mesh in ${modelFile}, using first node: ${itemRoot.name}`);
-             }
-
-
-            itemRoot.name = "interactable_energy_" + BABYLON.Tools.RandomId();
-            itemRoot.position = position.clone();
-            itemRoot.scaling.scaleInPlace(0.8); // Adjust scale as needed
-            itemRoot.computeWorldMatrix(true); // Update world matrix after position/scale changes
-
-
-            itemRoot.metadata = { isItem: true, itemName: "Energy Sphere", itemValue: 25 };
-            itemRoot.checkCollisions = true; // Enable standard collision checks
-
-             try {
-                  // Use SphereImpostor for better performance than MeshImpostor for small items
-                  itemRoot.physicsImpostor = new BABYLON.PhysicsImpostor( itemRoot,
-                      BABYLON.PhysicsImpostor.SphereImpostor,
-                      { mass: 0.5, restitution: 0.2, friction: 0.6 }, scene );
-             } catch (physErr) { console.error(`Failed physics for item ${itemRoot.name}:`, physErr); }
-
-            addShadowCaster(itemRoot); // Items cast shadows
-            // Ensure all child meshes also receive shadows if the GLB has a hierarchy
-             itemRoot.getChildMeshes(false).forEach(m => m.receiveShadows = true);
-             itemRoot.receiveShadows = true; // The root itself too
-
-
-            // Bobbing Animation
-             const bobAnim = new BABYLON.Animation( itemRoot.name + "_bob", "position.y", 30,
-                 BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE );
-             const startY = itemRoot.position.y;
-             const bobHeight = 0.25;
-             bobAnim.setKeys([ { frame: 0, value: startY }, { frame: 30, value: startY + bobHeight }, { frame: 60, value: startY } ]);
-             const easingFunction = new BABYLON.SineEase();
-             easingFunction.setEasingMode(BABYLON.EasingFunction.EASINGMODE_EASEINOUT);
-             bobAnim.setEasingFunction(easingFunction);
-             itemRoot.animations = itemRoot.animations || [];
-             itemRoot.animations.push(bobAnim);
-             scene.beginAnimation(itemRoot, 0, 60, true, 0.8 + Math.random() * 0.4);
-
-             // console.log(`Item '${itemRoot.metadata.itemName}' created at ${position}`);
-
-        })
-        .catch(error => {
-            console.error(`Failed to load item model '${modelPath}${modelFile}':`, error);
-             // Handle error, maybe spawn a placeholder?
-        });
-}
-
-
-// --- UI Stubs ---
-function setupPauseMenu(scene, engine) {
-    // console.log("Setting up Pause Menu");
-    const pauseMenuElement = document.getElementById("pauseMenu"); // Get reference once
-
-    window.addEventListener("keydown", (ev) => {
-        if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") {
-             if (scene && !scene.isDisposed) {
-                 scene.gamePaused = !scene.gamePaused;
-                 console.log("Game Paused:", scene.gamePaused);
-                 if (pauseMenuElement) { // Check if element exists
-                     pauseMenuElement.style.display = scene.gamePaused ? "block" : "none";
-                 }
-                 // Manage render loop if needed (often better to check pause state within loop)
-                 // if (scene.gamePaused) engine.stopRenderLoop(); else engine.runRenderLoop(...);
-             }
-        }
-    });
-}
-
-function setupInventoryMenu() {
-    // console.log("Setting up Inventory Menu");
-    const invMenuElement = document.getElementById("inventoryMenu"); // Get reference once
-
-     window.addEventListener("keydown", (ev) => {
-         if (ev.key === "i" || ev.key === "I") {
-             if (invMenuElement) { // Check if element exists
-                  const isVisible = invMenuElement.style.display === "block";
-                  invMenuElement.style.display = isVisible ? "none" : "block";
-                  console.log("Inventory Toggled:", !isVisible);
-                  // Decide if inventory pauses the game
-                  // if (scene && !scene.isDisposed) scene.gamePaused = !isVisible;
-             }
-         }
-     });
-}
-
-// --- Game Initialization ---
-const canvas = document.getElementById("renderCanvas");
-if (!canvas) {
-    console.error("FATAL: Could not find canvas element with ID 'renderCanvas'");
-    alert("Error: Canvas element not found. Game cannot load."); // User-friendly message
-    document.body.innerHTML = `<div style="color:red; padding: 20px; font-family: sans-serif;">Error: Canvas element 'renderCanvas' not found.</div>`;
-} else {
-    let engine;
-    try {
-        engine = new BABYLON.Engine(canvas, true, {
-            preserveDrawingBuffer: true, stencil: true, antialias: true
-        }, true); // Enable Hardware Scaling
-        window.engine = engine; // Make global if needed
-    } catch (e) {
-         console.error("FATAL: Failed to create Babylon Engine.", e);
-         alert("Error: Could not initialize graphics engine. Your browser might not be supported.");
-         engine = null; // Ensure engine is null if creation fails
-    }
-
-
-    if (engine) { // Only proceed if engine was created successfully
-         engine.displayLoadingUI();
-         console.log("Displaying Loading UI");
-
-        const startGame = async () => {
-            console.log("Starting game initialization...");
-            let scene = null; // Declare scene variable here
-            try {
-                scene = await createScene(engine, canvas);
-                if (!scene) {
-                     // createScene should have already alerted the user if fatal error occurred
-                     console.error("Scene creation returned null. Aborting game start.");
-                    engine.hideLoadingUI();
-                    return;
-                }
-                console.log("Scene created successfully.");
-                 engine.hideLoadingUI();
-                 console.log("Hidden Loading UI");
-
-                // --- Main Render Loop ---
-                let lastTime = performance.now();
-                engine.runRenderLoop(() => {
-                     if (scene?.activeCamera && !scene.isDisposed) { // Check scene and camera validity
-                        if (!scene.gamePaused) {
-                            const currentTime = performance.now();
-                            // Calculate delta time, capping at 0.1s (100ms) to prevent huge jumps if tabbed out
-                            const deltaTime = Math.min(0.1, (currentTime - lastTime) / 1000.0);
-                            lastTime = currentTime;
-
-                            // --- Update Game Logic ---
-                            if (window.player?.update) { window.player.update(deltaTime); }
-
-                            // Update enemies - Safe iteration and cleanup
-                            for (let i = scene.enemies.length - 1; i >= 0; i--) {
-                                const enemy = scene.enemies[i];
-                                if (enemy && !enemy.isDisposed) {
-                                     if (enemy.update) { enemy.update(deltaTime); }
-                                } else {
-                                     scene.enemies.splice(i, 1); // Remove null or disposed enemy
-                                }
-                            }
-
-                            if (scene.boss && !scene.boss.isDisposed && scene.boss.update) {
-                                 scene.boss.update(deltaTime);
-                            } else if (scene.boss && scene.boss.isDisposed) {
-                                 scene.boss = null; // Clear reference if boss is disposed
-                            }
-
-                            // --- Render ---
-                            scene.render();
-
-                            // --- Update UI ---
-                            updatePlayerHealthUI();
-                            // Update FPS counter (optional)
-                            // const fpsLabel = document.getElementById("fpsLabel");
-                            // if (fpsLabel) fpsLabel.innerText = "FPS: " + engine.getFps().toFixed();
-                        }
-                    } else if (!scene || scene.isDisposed) {
-                        console.log("Scene disposed or invalid, stopping render loop.");
-                        engine.stopRenderLoop();
-                     }
-                });
-
-            } catch (error) {
-                console.error("Critical error during game start:", error);
-                engine.hideLoadingUI();
-                alert(`Critical Error during game start: ${error.message}. Check console.`);
-                // Optional: Display error message on the page itself
-            }
-        };
-
-        // Start the game initialization process
-        startGame();
-
-        // --- Window Resize Handling ---
-        window.addEventListener("resize", () => {
-            if (engine) {
-                engine.resize();
-                // console.log("Engine resized.");
-            }
-        });
-
-    } // End if(engine) check
-} // End else block for canvas check
+})(); // Execute the IIFE
