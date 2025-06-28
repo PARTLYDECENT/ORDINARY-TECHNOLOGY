@@ -1315,197 +1315,489 @@ Let’s keep unlocking.</p>
 	//////////////////////////CALCULATOR///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	
-	
-	
-    // --- Quantum Calculator ---
-    function openQuantumCalculator() {
-      showNotification('QUANTUM CALCULATOR INITIALIZING...');
-      
-      const overlay = document.createElement('div');
-      overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        color: var(--neon-green);
-        font-family: 'Space Grotesk', monospace;
+	// --- Shader Graph Builder ---
+function openShaderGraphBuilder() {
+  showNotification('SHADER GRAPH BUILDER INITIALIZING...');
+  
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    color: var(--neon-green);
+    font-family: 'Space Grotesk', monospace;
+    overflow: hidden;
+  `;
+  
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 20px;
+    border-bottom: 1px solid var(--neon-green);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  
+  const title = document.createElement('h2');
+  title.textContent = 'SHADER GRAPH BUILDER';
+  title.style.cssText = 'margin: 0; letter-spacing: 3px; color: var(--neon-green);';
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'CLOSE';
+  closeBtn.style.cssText = `
+    background: transparent;
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: 'Space Grotesk', monospace;
+    letter-spacing: 2px;
+    font-size: 12px;
+  `;
+  
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+  
+  // Main content area
+  const mainContent = document.createElement('div');
+  mainContent.style.cssText = `
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  `;
+  
+  // Left panel - Node palette
+  const leftPanel = document.createElement('div');
+  leftPanel.style.cssText = `
+    width: 250px;
+    background: rgba(0, 0, 0, 0.5);
+    border-right: 1px solid var(--neon-green);
+    padding: 20px;
+    overflow-y: auto;
+  `;
+  
+  const paletteTitle = document.createElement('h3');
+  paletteTitle.textContent = 'SHADER NODES';
+  paletteTitle.style.cssText = 'margin: 0 0 20px 0; font-size: 14px; letter-spacing: 2px;';
+  leftPanel.appendChild(paletteTitle);
+  
+  // Node categories
+  const nodeCategories = {
+    'INPUT': ['Time', 'UV Coords', 'Position', 'Normal', 'Color'],
+    'MATH': ['Add', 'Multiply', 'Sin', 'Cos', 'Pow', 'Lerp'],
+    'TEXTURE': ['Sample 2D', 'Noise', 'Gradient'],
+    'OUTPUT': ['Fragment', 'Vertex']
+  };
+  
+  Object.entries(nodeCategories).forEach(([category, nodes]) => {
+    const categoryDiv = document.createElement('div');
+    categoryDiv.style.cssText = 'margin-bottom: 20px;';
+    
+    const categoryLabel = document.createElement('div');
+    categoryLabel.textContent = category;
+    categoryLabel.style.cssText = `
+      font-size: 12px;
+      margin-bottom: 10px;
+      opacity: 0.7;
+      letter-spacing: 1px;
+    `;
+    categoryDiv.appendChild(categoryLabel);
+    
+    nodes.forEach(nodeName => {
+      const nodeBtn = document.createElement('div');
+      nodeBtn.textContent = nodeName;
+      nodeBtn.style.cssText = `
+        background: rgba(0, 255, 102, 0.1);
+        border: 1px solid var(--neon-green);
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: all 0.2s ease;
+        user-select: none;
       `;
       
-      const title = document.createElement('h2');
-      title.textContent = 'QUANTUM CALCULATOR';
-      title.style.cssText = 'margin-bottom: 30px; letter-spacing: 3px; color: var(--neon-green);';
+      nodeBtn.addEventListener('mouseover', () => {
+        nodeBtn.style.background = 'rgba(0, 255, 102, 0.2)';
+      });
       
-      const display = document.createElement('div');
-      display.style.cssText = `
-        width: 300px;
-        height: 60px;
-        background: rgba(0, 0, 0, 0.5);
+      nodeBtn.addEventListener('mouseout', () => {
+        nodeBtn.style.background = 'rgba(0, 255, 102, 0.1)';
+      });
+      
+      nodeBtn.addEventListener('click', () => {
+        addShaderNode(nodeName, canvas);
+        showNotification(`${nodeName.toUpperCase()} NODE ADDED`);
+      });
+      
+      categoryDiv.appendChild(nodeBtn);
+    });
+    
+    leftPanel.appendChild(categoryDiv);
+  });
+  
+  // Center panel - Canvas
+  const canvas = document.createElement('div');
+  canvas.style.cssText = `
+    flex: 1;
+    background: radial-gradient(circle at 50% 50%, rgba(0, 20, 10, 0.3) 0%, rgba(0, 0, 0, 0.8) 100%);
+    position: relative;
+    overflow: hidden;
+  `;
+  
+  // Grid pattern
+  const gridSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  gridSvg.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.1;
+  `;
+  
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  pattern.setAttribute('id', 'grid');
+  pattern.setAttribute('width', '50');
+  pattern.setAttribute('height', '50');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M 50 0 L 0 0 0 50');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', '#00ff66');
+  path.setAttribute('stroke-width', '1');
+  
+  pattern.appendChild(path);
+  defs.appendChild(pattern);
+  gridSvg.appendChild(defs);
+  
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('width', '100%');
+  rect.setAttribute('height', '100%');
+  rect.setAttribute('fill', 'url(#grid)');
+  gridSvg.appendChild(rect);
+  
+  canvas.appendChild(gridSvg);
+  
+  // Right panel - Code output
+  const rightPanel = document.createElement('div');
+  rightPanel.style.cssText = `
+    width: 350px;
+    background: rgba(0, 0, 0, 0.7);
+    border-left: 1px solid var(--neon-green);
+    display: flex;
+    flex-direction: column;
+  `;
+  
+  const codeHeader = document.createElement('div');
+  codeHeader.style.cssText = `
+    padding: 15px;
+    border-bottom: 1px solid var(--neon-green);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  
+  const codeTitle = document.createElement('h3');
+  codeTitle.textContent = 'GENERATED GLSL';
+  codeTitle.style.cssText = 'margin: 0; font-size: 14px; letter-spacing: 2px;';
+  
+  const exportBtn = document.createElement('button');
+  exportBtn.textContent = 'EXPORT';
+  exportBtn.style.cssText = `
+    background: transparent;
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: 'Space Grotesk', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+  `;
+  
+  codeHeader.appendChild(codeTitle);
+  codeHeader.appendChild(exportBtn);
+  
+  const codeOutput = document.createElement('textarea');
+  codeOutput.style.cssText = `
+    flex: 1;
+    background: rgba(0, 0, 0, 0.8);
+    border: none;
+    color: var(--neon-green);
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 15px;
+    resize: none;
+    outline: none;
+    line-height: 1.5;
+  `;
+  
+  // Default shader code
+  const defaultShader = `// Generated Fragment Shader
+precision mediump float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+varying vec2 v_uv;
+
+void main() {
+    vec2 uv = v_uv;
+    
+    // Basic color output
+    vec3 color = vec3(0.0, 1.0, 0.4);
+    
+    gl_FragColor = vec4(color, 1.0);
+}`;
+  
+  codeOutput.value = defaultShader;
+  
+  rightPanel.appendChild(codeHeader);
+  rightPanel.appendChild(codeOutput);
+  
+  // Assemble UI
+  mainContent.appendChild(leftPanel);
+  mainContent.appendChild(canvas);
+  mainContent.appendChild(rightPanel);
+  
+  overlay.appendChild(header);
+  overlay.appendChild(mainContent);
+  
+  // Node storage
+  let nodes = [];
+  let nodeIdCounter = 0;
+  
+  // Add shader node function
+  function addShaderNode(type, container) {
+    const node = document.createElement('div');
+    const nodeId = nodeIdCounter++;
+    
+    node.style.cssText = `
+      position: absolute;
+      left: ${Math.random() * 400 + 50}px;
+      top: ${Math.random() * 300 + 50}px;
+      width: 150px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid var(--neon-green);
+      border-radius: 4px;
+      cursor: move;
+      user-select: none;
+    `;
+    
+    const nodeHeader = document.createElement('div');
+    nodeHeader.style.cssText = `
+      padding: 8px 12px;
+      background: rgba(0, 255, 102, 0.1);
+      border-bottom: 1px solid var(--neon-green);
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    `;
+    nodeHeader.textContent = type.toUpperCase();
+    
+    const nodeBody = document.createElement('div');
+    nodeBody.style.cssText = 'padding: 10px;';
+    
+    // Add inputs/outputs based on node type
+    const nodeData = getNodeData(type);
+    nodeData.inputs.forEach(input => {
+      const inputDiv = document.createElement('div');
+      inputDiv.style.cssText = `
+        font-size: 10px;
+        margin: 3px 0;
+        display: flex;
+        align-items: center;
+      `;
+      
+      const inputDot = document.createElement('div');
+      inputDot.style.cssText = `
+        width: 8px;
+        height: 8px;
         border: 1px solid var(--neon-green);
-        margin-bottom: 20px;
+        border-radius: 50%;
+        margin-right: 8px;
+        background: rgba(0, 0, 0, 0.5);
+      `;
+      
+      const inputLabel = document.createElement('span');
+      inputLabel.textContent = input;
+      
+      inputDiv.appendChild(inputDot);
+      inputDiv.appendChild(inputLabel);
+      nodeBody.appendChild(inputDiv);
+    });
+    
+    if (nodeData.outputs.length > 0) {
+      const separator = document.createElement('div');
+      separator.style.cssText = `
+        height: 1px;
+        background: var(--neon-green);
+        margin: 8px 0;
+        opacity: 0.3;
+      `;
+      nodeBody.appendChild(separator);
+    }
+    
+    nodeData.outputs.forEach(output => {
+      const outputDiv = document.createElement('div');
+      outputDiv.style.cssText = `
+        font-size: 10px;
+        margin: 3px 0;
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        padding: 0 20px;
-        font-size: 24px;
-        overflow: hidden;
-        font-family: monospace;
-        position: relative;
       `;
       
-      // Add quantum noise effect to display
-      const quantumNoise = document.createElement('div');
-      quantumNoise.style.cssText = `
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, 
-          rgba(0, 255, 102, 0) 0%,
-          rgba(0, 255, 102, 0.1) 50%,
-          rgba(0, 255, 102, 0) 100%);
-        opacity: 0.5;
-        pointer-events: none;
-        animation: quantumScan 2s infinite linear;
-      `;
-      display.appendChild(quantumNoise);
+      const outputLabel = document.createElement('span');
+      outputLabel.textContent = output;
       
-      const displayText = document.createElement('div');
-      displayText.textContent = '0';
-      display.appendChild(displayText);
-      
-      const buttonContainer = document.createElement('div');
-      buttonContainer.style.cssText = `
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-        width: 300px;
-      `;
-      
-      const buttons = [
-        '7', '8', '9', '/',
-        '4', '5', '6', '*',
-        '1', '2', '3', '-',
-        '0', '.', '=', '+',
-        'C', 'QE', 'SP', 'EN'
-      ];
-      
-      buttons.forEach(btn => {
-        const button = document.createElement('button');
-        button.textContent = btn;
-        button.style.cssText = `
-          background: rgba(0, 0, 0, 0.7);
-          border: 1px solid var(--neon-green);
-          color: var(--neon-green);
-          padding: 15px;
-          cursor: pointer;
-          font-family: 'Space Grotesk', monospace;
-          transition: all 0.2s ease;
-        `;
-        
-        button.addEventListener('mouseover', () => {
-          button.style.background = 'rgba(0, 255, 102, 0.2)';
-        });
-        
-        button.addEventListener('mouseout', () => {
-          button.style.background = 'rgba(0, 0, 0, 0.7)';
-        });
-        
-        button.addEventListener('click', () => {
-          if (btn === 'C') {
-            displayText.textContent = '0';
-          } else if (btn === '=') {
-            try {
-              // Simulate quantum calculation with random fluctuation
-              const result = eval(displayText.textContent);
-              const quantumFluctuation = Math.random() * 0.0001;
-              displayText.textContent = (result + quantumFluctuation).toString();
-              
-              // Show quantum calculation animation
-              const calcEffect = document.createElement('div');
-              calcEffect.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 255, 102, 0.3);
-                pointer-events: none;
-              `;
-              display.appendChild(calcEffect);
-              
-              setTimeout(() => {
-                display.removeChild(calcEffect);
-              }, 300);
-            } catch (e) {
-              displayText.textContent = 'ERROR';
-            }
-          } else if (btn === 'QE') {
-            // Quantum entanglement simulation
-            showNotification('QUANTUM ENTANGLEMENT SIMULATION ACTIVE');
-            displayText.textContent = (Math.random() < 0.5 ? '1' : '0') + ' ⟷ ' + (Math.random() < 0.5 ? '1' : '0');
-          } else if (btn === 'SP') {
-            // Superposition simulation
-            showNotification('SUPERPOSITION STATE CALCULATED');
-            displayText.textContent = '|ψ⟩ = α|0⟩ + β|1⟩';
-          } else if (btn === 'EN') {
-            // Close calculator
-            document.body.removeChild(overlay);
-            showNotification('QUANTUM CALCULATOR DEACTIVATED');
-          } else {
-            if (displayText.textContent === '0' || displayText.textContent === 'ERROR') {
-              displayText.textContent = btn;
-            } else {
-              displayText.textContent += btn;
-            }
-          }
-        });
-        
-        buttonContainer.appendChild(button);
-      });
-      
-      const closeButton = document.createElement('button');
-      closeButton.textContent = 'CLOSE';
-      closeButton.style.cssText = `
-        background: transparent;
+      const outputDot = document.createElement('div');
+      outputDot.style.cssText = `
+        width: 8px;
+        height: 8px;
         border: 1px solid var(--neon-green);
-        color: var(--neon-green);
-        padding: 10px 20px;
-        cursor: pointer;
-        font-family: 'Space Grotesk', monospace;
-        letter-spacing: 2px;
-        margin-top: 20px;
-        transition: all 0.3s ease;
+        border-radius: 50%;
+        margin-left: 8px;
+        background: rgba(0, 255, 102, 0.3);
       `;
       
-      closeButton.addEventListener('mouseover', () => {
-        closeButton.style.background = 'rgba(0, 255, 102, 0.2)';
-      });
-      
-      closeButton.addEventListener('mouseout', () => {
-        closeButton.style.background = 'transparent';
-      });
-      
-      closeButton.addEventListener('click', () => {
-        document.body.removeChild(overlay);
-        showNotification('QUANTUM CALCULATOR DEACTIVATED');
-      });
-      
-      overlay.appendChild(title);
-      overlay.appendChild(display);
-      overlay.appendChild(buttonContainer);
-      overlay.appendChild(closeButton);
-      document.body.appendChild(overlay);
+      outputDiv.appendChild(outputLabel);
+      outputDiv.appendChild(outputDot);
+      nodeBody.appendChild(outputDiv);
+    });
+    
+    node.appendChild(nodeHeader);
+    node.appendChild(nodeBody);
+    container.appendChild(node);
+    
+    // Make draggable
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+    
+    nodeHeader.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      const rect = node.getBoundingClientRect();
+      dragOffset.x = e.clientX - rect.left;
+      dragOffset.y = e.clientY - rect.top;
+      node.style.zIndex = '1001';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        const canvasRect = container.getBoundingClientRect();
+        node.style.left = (e.clientX - canvasRect.left - dragOffset.x) + 'px';
+        node.style.top = (e.clientY - canvasRect.top - dragOffset.y) + 'px';
+      }
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        node.style.zIndex = 'auto';
+        updateShaderCode();
+      }
+    });
+    
+    nodes.push({ id: nodeId, type, element: node });
+    updateShaderCode();
+  }
+  
+  function getNodeData(type) {
+    const nodeTypes = {
+      'Time': { inputs: [], outputs: ['float'] },
+      'UV Coords': { inputs: [], outputs: ['vec2'] },
+      'Position': { inputs: [], outputs: ['vec3'] },
+      'Normal': { inputs: [], outputs: ['vec3'] },
+      'Color': { inputs: [], outputs: ['vec4'] },
+      'Add': { inputs: ['A', 'B'], outputs: ['Result'] },
+      'Multiply': { inputs: ['A', 'B'], outputs: ['Result'] },
+      'Sin': { inputs: ['Input'], outputs: ['Output'] },
+      'Cos': { inputs: ['Input'], outputs: ['Output'] },
+      'Pow': { inputs: ['Base', 'Exp'], outputs: ['Result'] },
+      'Lerp': { inputs: ['A', 'B', 'T'], outputs: ['Result'] },
+      'Sample 2D': { inputs: ['UV'], outputs: ['RGBA'] },
+      'Noise': { inputs: ['UV'], outputs: ['float'] },
+      'Gradient': { inputs: ['UV'], outputs: ['vec3'] },
+      'Fragment': { inputs: ['Color'], outputs: [] },
+      'Vertex': { inputs: ['Position'], outputs: [] }
+    };
+    
+    return nodeTypes[type] || { inputs: [], outputs: [] };
+  }
+  
+  function updateShaderCode() {
+    let shaderCode = `// Generated Fragment Shader
+precision mediump float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+varying vec2 v_uv;
+
+void main() {
+    vec2 uv = v_uv;
+    
+    // Node graph output`;
+    
+    if (nodes.length > 0) {
+      shaderCode += `
+    
+    // Time-based animation
+    float time = u_time * 0.5;
+    
+    // UV coordinates
+    vec2 coords = uv;
+    
+    // Dynamic color based on nodes
+    vec3 color = vec3(
+        sin(time + coords.x * 10.0) * 0.5 + 0.5,
+        cos(time + coords.y * 10.0) * 0.5 + 0.5,
+        sin(time * 2.0) * 0.5 + 0.5
+    );`;
+    } else {
+      shaderCode += `
+    
+    // Basic color output
+    vec3 color = vec3(0.0, 1.0, 0.4);`;
     }
     
-	
+    shaderCode += `
+    
+    gl_FragColor = vec4(color, 1.0);
+}`;
+    
+    codeOutput.value = shaderCode;
+  }
+  
+  // Event listeners
+  exportBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(codeOutput.value).then(() => {
+      showNotification('SHADER CODE COPIED TO CLIPBOARD');
+    });
+  });
+  
+  closeBtn.addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    showNotification('SHADER GRAPH BUILDER DEACTIVATED');
+  });
+  
+  document.body.appendChild(overlay);
+  
+  // Add some default nodes for demo
+  setTimeout(() => {
+    addShaderNode('UV Coords', canvas);
+    addShaderNode('Time', canvas);
+    addShaderNode('Sin', canvas);
+  }, 500);
+}
 	
 	
 	
