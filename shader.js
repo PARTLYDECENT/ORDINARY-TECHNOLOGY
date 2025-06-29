@@ -20,7 +20,7 @@
         // Try to get webgl2, fall back to webgl1
         gl = webglCanvas.getContext('webgl2') ||
              webglCanvas.getContext('webgl') ||
-             webglCanvas.getContext('experimental-webgl');
+             webglCanvas.getContext('experimental-web-gl');
 
         if (!gl) {
             throw new Error("WebGL not supported or context creation failed.");
@@ -48,14 +48,18 @@
         }
     `;
 
-    // Fragment Shader (GLSL 3.00 ES - 30 Phases)
-    // Added 10 more phases (20-29) including one marked "// ordinary".
+    // Fragment Shader (GLSL 3.00 ES - 38 Phases)
+    // Added 8 new phases (0-7) at the beginning, shifted existing phases up by 8.
     const fragmentShaderSource = `#version 300 es
         precision highp float; // Precision qualifier required in fragment shaders
 
         // Uniforms: Inputs from JavaScript
         uniform float u_time;
         uniform vec2 u_resolution;
+        uniform vec2 u_mouse;
+        uniform float u_intensity;
+        uniform float u_speed;
+        uniform int u_complexity;
 
         // Output variable: Replaces gl_FragColor
         out vec4 outColor;
@@ -63,11 +67,11 @@
         // --- Constants ---
         const float PI = 3.14159265359;
         const float TWO_PI = 6.28318530718;
-        const int FBM_OCTAVES = 5; // Used in fbm() and updateShader()
+        const int FBM_OCTAVES = 5;
         const int MAX_RAYMARCH_STEPS = 48;
         const float MAX_RAYMARCH_DIST = 12.0;
         const int MANDELBROT_ITER = 40;
-        const float TOTAL_PHASES_F = 30.0; // <<< UPDATED TO 30 PHASES
+        const float TOTAL_PHASES_F = 38.0; // 8 new phases added
 
         // --- Helper Functions (minified versions often used in shaders) ---
         float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
@@ -119,35 +123,237 @@
             float time_warp = u_time * 0.1; // Controls phase speed
             float phase = mod(time_warp, TOTAL_PHASES_F);
             float phaseProgress = fract(phase); // Progress within current phase
-            int phaseIndex = int(floor(phase)); // Current phase index (0-29)
+            int phaseIndex = int(floor(phase)); // Current phase index (0-37)
 
             vec3 color = colBackground; // Start with background
 
-            // --- Phase Implementations (Condensed versions) ---
-            if (phaseIndex == 0) { float wf=.1+.05*sin(u_time*.2); wf=max(.001,wf); float z=.1/max(.01,.1-uv.y*wf+.02*fbm(uv+u_time*.05)); z=clamp(z,.1,15.); vec2 warp=uv*z; vec2 grid=abs(fract(warp*vec2(5.,3.)+u_time*.1)-.5); float line=smoothstep(.04,.05,min(grid.x,grid.y))*.6; float df=fract(z*.1+u_time*.15); vec3 bc=mix(mix(colPrimary,colTertiary,sin(u_time*.1)*.5+.5),colSecondary,sin(length(warp)*.5-u_time*.5)*.5+.5); color=mix(bc*.15,bc,line*df*1.5); }
-            else if (phaseIndex == 1) { float d=length(uv); float r=sin(d*18.-u_time*2.5)*.5+.5; r*=smoothstep(1.8,.4,d); float w=sin(uv.y*25.+u_time*1.2)*.04; vec2 wu=uv+vec2(w,sin(uv.x*15.+u_time*.8)*.03); float n=fbm(wu*3.5+u_time*.25); vec3 bc=mix(mix(colSecondary,colTertiary,r),mix(colGreen,colGold,n),.5+.5*sin(u_time*.6+d*2.)); color=mix(bc*.2,bc,r*.8+n*.6); }
-            else if (phaseIndex == 2) { vec2 r=vec2(1.,1.732), h=r*.5; vec2 a=mod(uv*2.+u_time*.1,r)-h, b=mod(uv*2.-h+u_time*.1,r)-h; vec2 gv=length(a)<length(b)?a:b; float p=sin(u_time*3.5)*.5+.5, e=sin(length(gv)*25.-u_time*3.5); e=smoothstep(-.1,.15,e)-smoothstep(.15,.4,e); float ds=fbm(uv*2.5+vec2(u_time*.15,0.)); vec3 baseC=mix(colTertiary,colGreen,ds), glowC=mix(colSecondary,colPrimary,p); color=mix(baseC*.1,glowC,e*p*1.5); float dt=abs(sin(uv.x*22.+u_time*1.1))*abs(sin(uv.y*22.-u_time*1.3)); color+=glowC*dt*.08; }
-            else if (phaseIndex == 3) { float a=atan(uv.y,uv.x), rd=length(uv); a+=.1*fbm(uv*.5+u_time*.05); float sa=a*6.+rd*8.-u_time*2.2, s=smoothstep(-.2,.2,sin(sa)); float rdd=rd+sin(a*10.+u_time*.3)*.08, b=fract(rdd*6.-u_time*.6); b=smoothstep(0.,.1,b)*smoothstep(.8,.5,b); float t=fbm(vec2(rdd*6.,a*3.)+u_time*.15); vec3 dc=mix(colPrimary,colDeepRed,sin(rdd*12.)*.5+.5), bc=mix(colGold,colSecondary,cos(a*4.)*.5+.5); color=mix(dc*.5,bc,b+t*.4); color+=bc*s*.3; }
-            else if (phaseIndex == 4) { vec2 cu=uv*mix(3.,5.,phaseProgress); float n=fbm(cu+u_time*.2), c=0.; for(float x=-1.;x<=1.;x+=1.){for(float y=-1.;y<=1.;y+=1.){vec2 nb=vec2(x,y), cc=floor(cu)+nb, pt=cc+.5+sin(u_time*.1+cc)*.3; c+=smoothstep(.4,.38,length(cu-pt));}} c=clamp(c,0.,1.); vec3 cellC=mix(colStrangeGreen,colPrimary,n); cellC=mix(cellC,colDeepRed,smoothstep(.6,.8,n)); color=mix(colBackground*.5,cellC,c*1.2); color+=fbm(uv*15.+u_time*.5)*.05; }
-            else if (phaseIndex == 5) { float t=phaseProgress; vec2 bu=floor(originalUV*mix(20.,60.,sin(u_time*2.)*.5+.5))/mix(20.,60.,sin(u_time*2.)*.5+.5); float bn=fbm(bu*5.+u_time*.5); color=mix(colPrimary,colSecondary,bn); float tl=sin(originalUV.y*10.+u_time*5.)*.5+.5, ta=smoothstep(.8,.85,tl); float ofs=ta*(rand(vec2(floor(u_time*2.),floor(originalUV.y*10.)))-.5)*.1; vec2 tu=uv+vec2(ofs*t,0.); float tn=fbm(tu*4.+u_time*.3); color=mix(color,mix(colTertiary,colDeepRed,tn),ta); float cao=(.005+.01*abs(sin(u_time*3.)))*t; vec3 cR=getColorForCA(uv+vec2(cao,0.),u_time), cB=getColorForCA(uv-vec2(cao*.5,cao*.8),u_time); color=vec3(cR.r,color.g,cB.b); color+=(rand(originalUV+fract(u_time*10.))-.5)*.15*t; }
-            else if (phaseIndex == 6) { vec2 p=uv*2.; float i=fbm(p+u_time*.3), r=abs(snoise(vec3(p*1.5,u_time*.5))); r=pow(1.-r,4.); vec3 fc=mix(colPrimary,colTertiary,smoothstep(0.,1.,i)); color=mix(colBackground*.4,fc,r*1.5); color*=1.-smoothstep(.8,1.5,length(uv)); }
-            else if (phaseIndex == 7) { vec2 p=uv*3.+vec2(u_time*.1,u_time*.2); float d=worley(p), e=1.-smoothstep(0.,.05,d), c=smoothstep(0.,.4,d); vec3 cc=mix(colStrangeGreen,colGold,c*1.2); color=mix(cc*.3,colWhite,e); }
-            else if (phaseIndex == 8) { vec2 p=rotate2D(u_time*.4)*uv; float a=atan(p.y,p.x), rd=length(p); float t=fbm(vec2(1./(rd+.1),a*2.)+u_time*.2), r=sin(rd*20.-u_time*3.)*.5+.5; vec3 tc=mix(colSecondary,colPink,smoothstep(0.,1.,t)); color=mix(colBackground,(tc*(smoothstep(0.,.8,t)+r*.5)*.8),1.); } // Removed background mix factor for stronger effect
-            else if (phaseIndex == 9) { float s=mix(4.,8.,sin(u_time*.5)*.5+.5), p=truchetPattern(uv,s); vec2 us=uv*s; float bn=noise(floor(us)+u_time*.1); vec3 tc=mix(colPrimary,colTertiary,bn); color=mix(tc*.2,colWhite*.9,p); }
-            else if (phaseIndex == 10) { float v=sin(uv.x*3.+u_time*.8)+sin(uv.y*4.-u_time*.5+sin(uv.x*3.+u_time*.8)*.5)+sin(uv.x*uv.y*2.+u_time)+sin(sqrt(pow(uv.x+.5*sin(u_time/5.),2.)+pow(uv.y+.5*cos(u_time/3.),2.))*5.+u_time); v*=.5; vec3 pc1=mix(colDeepRed,colOrange,sin(u_time*.2)*.5+.5), pc2=mix(colPrimary,colSecondary,cos(u_time*.3)*.5+.5); color=mix(pc1,pc2,smoothstep(-.8,.8,v)); }
-            else if (phaseIndex == 11) { vec2 gu=originalUV*vec2(80.,60.), c=floor(gu); float sp=rand(c.x)*3.+1., ss=rand(c.x)*10., sps=fract(ss-u_time*sp*.1), cy=originalUV.y; float tl=.15+rand(c.x)*.1, ci=smoothstep(sps,sps+.01,cy)*(1.-smoothstep(sps+.01,sps+tl,cy)); float cv=rand(c+floor((ss-u_time*sp*.1)*10.)); vec3 rc=mix(colStrangeGreen*.5,colGreen*1.5,step(.5,cv)); color=mix(colBackground,rc,ci); }
-            else if (phaseIndex == 12) { float z=.5+pow(mod(u_time*.05,5.)+1.,2.); vec2 c=uv*1.5/z-vec2(.7,0.), zz=vec2(0.); int it=0; for(int i=0;i<MANDELBROT_ITER;i++){zz=vec2(zz.x*zz.x-zz.y*zz.y,2.*zz.x*zz.y)+c; if(dot(zz,zz)>4.)break; it++;} float m=clamp(float(it)/float(MANDELBROT_ITER),0.,1.); m=pow(m,.5); color=mix(colBackground,mix(colPrimary,colGold,m),smoothstep(0.,.1,m)); if(it==MANDELBROT_ITER)color=colBackground*.5; }
-            else if (phaseIndex == 13) { vec2 d=vec2(snoise(vec3(uv*2.,u_time*.3)),snoise(vec3(uv*2.+10.,u_time*.35)))*.15, du=uv+d; vec2 g=abs(fract(du*6.)-.5); float l=smoothstep(.03,.04,min(g.x,g.y)); float n=fbm(du*3.+u_time*.1); vec3 gc=mix(colTertiary,colPink,n); color=mix(colBackground*.5,gc,l*1.2); }
-            else if (phaseIndex == 14) { float h=snoise(vec3(uv*1.5,u_time*.2)), f=snoise(vec3(uv*3.+h*.3,u_time*.4)); float la=.785, l=clamp(.5+h*.5*cos(atan(uv.y,uv.x)-la),.2,1.); vec3 tc=mix(colGreen*.8,colGold*.6,h*.5+.5), wc=mix(colPrimary*.7,colTertiary*.9,f*.5+.5); color=mix(wc,tc*l,smoothstep(-.1,.1,h))*.8; }
-            else if (phaseIndex == 15) { vec2 p=abs(uv)*.8; float s=1.5+.5*sin(u_time*.4); for(int i=0;i<4;i++){ p=abs(p*s-1.); if(dot(p,p)>20.)break; } float r=sin(length(p)*.2*10.+u_time); color=mix(colSecondary,colPrimary,smoothstep(-.5,.5,r)); }
-            else if (phaseIndex == 16) { vec2 p=uv*2.5; float d1=worley(p), d2=worley(p+vec2(5.2,1.3)); float c=pow(1.-smoothstep(0.,.1,d1),2.)+pow(1.-smoothstep(0.,.05,d2),2.)*.5; c=clamp(c,0.,1.); float g=fbm(p*10.+u_time*.1); vec3 cc=mix(colWhite*.8,colTertiary,g); color=mix(colBackground*.8,cc,c); }
-            else if (phaseIndex == 17) { float i=.5+.5*noise(vec2(u_time*1.5,originalUV.y*5.)); float fs=floor(u_time*15.)+floor(originalUV.y*10.), f=rand(fs); i*=smoothstep(.2,.8,f); vec3 bc=mix(colPrimary,colSecondary,noise(uv*3.+u_time*.2)); float sy=fract(originalUV.y*u_resolution.y*.5), se=smoothstep(.4,.5,sy)*(1.-smoothstep(.5,.6,sy)); color=mix(bc*.5,vec3(0.),se*i*1.5); color+=(rand(originalUV+u_time)-.5)*.1*i; }
-            else if (phaseIndex == 18) { vec3 ro=vec3(0.,0.,-3.+sin(u_time*.3)), rd=normalize(vec3(uv,1.)); vec3 col=colBackground; float t=0.; for(int i=0;i<MAX_RAYMARCH_STEPS;i++){ vec3 p=ro+rd*t, sc=vec3(0.,sin(u_time*.8)*.5-.2,0.); float ds=sdSphere(p-sc,.5), dp=sdPlane(p,vec3(0.,1.,0.),1.); float d=min(ds,dp); if(d<.001*t){ vec3 hc, n; if(dp<ds){hc=colGreen*.8;n=vec3(0.,1.,0.);}else{hc=colPrimary;vec2 eps=vec2(.001,0.);n=normalize(vec3(sdSphere(p+eps.xyy-sc,.5)-sdSphere(p-eps.xyy-sc,.5),sdSphere(p+eps.yxy-sc,.5)-sdSphere(p-eps.yxy-sc,.5),sdSphere(p+eps.yyx-sc,.5)-sdSphere(p-eps.yyx-sc,.5)));} float l=max(.2,dot(n,normalize(vec3(-.7,.7,-.5)))); col=hc*l; break; } t+=d; if(t>MAX_RAYMARCH_DIST)break; } color=col; }
-            else if (phaseIndex == 19) { float rd=length(uv), s=0.; for(float i=0.;i<15.;i++){ float seed=i*13.37, st=u_time*(.5+rand(seed))*1.5+rand(seed+1.)*10., sd=fract(st)*3., sa=rand(seed+2.)*TWO_PI+u_time*rand(seed+3.)*.05; vec2 sp=vec2(cos(sa),sin(sa))*sd; float ds=length(uv-sp), sl=.02+sd*.1, si=smoothstep(sl,0.,ds)*(1.-smoothstep(1.,1.5,sd)); s+=si; } vec3 sc=mix(colWhite,colSecondary,clamp(rd*.5,0.,1.)); color=mix(colBackground,sc,clamp(s,0.,1.)); }
-
-            // --- New Phases (20-29) ---
-            else if (phaseIndex == 20) { // Simple pulsing grid
-                 vec2 gv = abs(fract(uv * (10.0 + 5.0 * sin(u_time * 0.5))) - 0.5);
+            // --- New GLSL Phases (0-7) from Holographic Theory ---
+            if (phaseIndex == 0) { // Quantum Field
+                // Quantum Field GLSL
+                vec2 center = vec2(0.5, 0.5);
+                float dist = distance(originalUV, u_mouse);
+                float t = u_time * u_speed;
+                float field = 0.0;
+                for(int i = 0; i < 5; i++) {
+                    float freq = pow(2.0, float(i));
+                    field += sin(originalUV.x * freq * 10.0 + t) * sin(originalUV.y * freq * 10.0 + t) / freq;
+                }
+                float disturbance = exp(-dist * 10.0) * sin(t * 5.0);
+                field += disturbance * u_intensity;
+                float zpe = fbm(originalUV * 5.0 + t * 0.1) * 0.3;
+                field += zpe;
+                float hue = field * 0.5 + t * 0.1;
+                float sat = 0.8 + sin(field * 3.0) * 0.2;
+                float val = 0.5 + field * u_intensity;
+                vec3 color1 = vec3(hue, sat, val);
+                float interference = sin(dist * 50.0 - t * 3.0) * 0.1;
+                color = color1 + vec3(interference);
+            }
+            else if (phaseIndex == 1) { // Holographic Interference
+                vec2 uv = originalUV;
+                float t = u_time * u_speed;
+                vec2 source1 = vec2(0.3, 0.3) + vec2(sin(t * 0.7), cos(t * 0.5)) * 0.2;
+                vec2 source2 = vec2(0.7, 0.7) + vec2(cos(t * 0.8), sin(t * 0.6)) * 0.2;
+                vec2 source3 = u_mouse;
+                float d1 = distance(uv, source1);
+                float d2 = distance(uv, source2);
+                float d3 = distance(uv, source3);
+                float wave1 = sin(d1 * 30.0 - t * 5.0) / (d1 + 0.1);
+                float wave2 = sin(d2 * 35.0 - t * 4.5) / (d2 + 0.1);
+                float wave3 = sin(d3 * 40.0 - t * 6.0) / (d3 + 0.1);
+                float interference = (wave1 + wave2 + wave3) * u_intensity;
+                vec3 color1 = vec3(0.0, 1.0, 1.0);
+                vec3 color2 = vec3(1.0, 0.0, 1.0);
+                vec3 color3 = vec3(1.0, 1.0, 0.0);
+                vec3 finalColor = mix(color1, color2, sin(interference * 2.0) * 0.5 + 0.5);
+                finalColor = mix(finalColor, color3, sin(interference * 3.0 + 1.0) * 0.3 + 0.3);
+                float shimmer = sin(uv.x * 100.0 + t * 10.0) * sin(uv.y * 100.0 + t * 8.0) * 0.1;
+                finalColor += vec3(shimmer);
+                color = finalColor * (0.5 + interference * 0.5);
+            }
+            else if (phaseIndex == 2) { // Fractal Dimension
+                vec2 uv = (originalUV - 0.5) * 3.0;
+                float t = u_time * u_speed * 0.1;
+                vec2 offset = (u_mouse - 0.5) * 2.0;
+                float zoom = 1.0 + sin(t) * 0.5;
+                vec2 c = (uv + offset) / zoom;
+                c += vec2(sin(t * 0.7), cos(t * 0.5)) * 0.3;
+                vec2 z = vec2(0.0);
+                float iterations = 0.0;
+                for(int i = 0; i < 100; i++) {
+                    if(dot(z, z) > 4.0) break;
+                    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+                    iterations += 1.0;
+                }
+                float m = iterations / 100.0;
+                vec3 color1 = vec3(0.1, 0.2, 0.8);
+                vec3 color2 = vec3(0.8, 0.1, 0.9);
+                vec3 color3 = vec3(0.9, 0.8, 0.1);
+                vec3 colorF = mix(color1, color2, m);
+                colorF = mix(colorF, color3, sin(m * 10.0 + t * 2.0) * 0.5 + 0.5);
+                float rift = sin(length(uv) * 20.0 - t * 5.0) * 0.1;
+                color = colorF + vec3(rift) * u_intensity;
+            }
+            else if (phaseIndex == 3) { // Wave Collapse
+                vec2 uv = originalUV;
+                float t = u_time * u_speed;
+                float superposition = 0.0;
+                for(int i = 0; i < 10; i++) {
+                    float phase = float(i) * 0.628 + t;
+                    vec2 waveCenter = vec2(0.5) + vec2(sin(phase), cos(phase)) * 0.3;
+                    float dist = distance(uv, waveCenter);
+                    superposition += sin(dist * 15.0 - t * 3.0) * exp(-dist * 2.0);
+                }
+                float mouseInfluence = distance(uv, u_mouse);
+                float collapse = exp(-mouseInfluence * 8.0);
+                float probability = abs(superposition) * (1.0 - collapse);
+                float tunnel = sin(uv.x * 50.0 + t * 2.0) * sin(uv.y * 50.0 + t * 1.5) * 0.1;
+                color = vec3(0.0);
+                color += vec3(0.2, 0.4, 1.0) * probability * (1.0 - collapse);
+                color += vec3(1.0, 1.0, 0.5) * collapse * u_intensity;
+                float noise = fract(sin(dot(uv + t * 0.1, vec2(12.9898,78.233))) * 43758.5453123) * 0.1;
+                color += vec3(noise);
+                color += vec3(0.0, 1.0, 0.5) * tunnel * u_intensity;
+            }
+            else if (phaseIndex == 4) { // Zero Point Energy
+                vec2 uv = originalUV;
+                float t = u_time * u_speed;
+                float vacuum = fbm(vec3(uv * 8.0, t * 0.5)) * u_intensity;
+                float particles = 0.0;
+                for(int i = 0; i < 20; i++) {
+                    float phase = float(i) * 0.314 + t * 2.0;
+                    vec2 particlePos = vec2(sin(phase * 1.3), cos(phase * 1.7)) * 0.4 + 0.5;
+                    float dist = distance(uv, particlePos);
+                    float lifetime = sin(phase * 3.0) * 0.5 + 0.5;
+                    particles += exp(-dist * 30.0) * lifetime;
+                }
+                float casimir = sin(uv.x * 100.0) * sin(uv.y * 100.0) * 0.05;
+                float energy = vacuum + particles * 0.5 + casimir;
+                float mouseEffect = exp(-distance(uv, u_mouse) * 5.0) * sin(t * 10.0) * 0.3;
+                energy += mouseEffect;
+                vec3 lowEnergy = vec3(0.1, 0.0, 0.3);
+                vec3 medEnergy = vec3(0.0, 0.5, 1.0);
+                vec3 highEnergy = vec3(1.0, 1.0, 1.0);
+                vec3 colorF = mix(lowEnergy, medEnergy, smoothstep(-0.5, 0.0, energy));
+                colorF = mix(colorF, highEnergy, smoothstep(0.0, 0.5, energy));
+                float foam = fract(sin(dot(vec3(uv * 50.0, t * 5.0), vec3(12.9898, 78.233, 45.164))) * 43758.5453) * 0.1;
+                color = colorF + vec3(foam);
+            }
+            else if (phaseIndex == 5) { // Dimensional Portal
+                vec2 uv = originalUV - 0.5;
+                float t = u_time * u_speed;
+                vec2 portalCenter = (u_mouse - 0.5) * 0.5;
+                uv -= portalCenter;
+                float dist = length(uv);
+                float angle = atan(uv.y, uv.x);
+                angle += t * 2.0;
+                uv = vec2(cos(angle), sin(angle)) * dist;
+                float warp = sin(dist * 10.0 - t * 5.0) * 0.1 / (dist + 0.1);
+                uv += normalize(uv) * warp;
+                float rings = sin(dist * 20.0 - t * 3.0) * exp(-dist * 2.0);
+                float energy = 0.0;
+                for(int i = 0; i < 5; i++) {
+                    float layer = float(i) * 0.2;
+                    energy += sin((dist + layer) * 15.0 - t * (3.0 + layer)) * exp(-abs(dist - 0.3 - layer) * 10.0);
+                }
+                float horizon = smoothstep(0.25, 0.35, dist) * smoothstep(0.6, 0.4, dist);
+                vec3 color1 = vec3(1.0, 0.0, 1.0);
+                vec3 color2 = vec3(0.0, 1.0, 1.0);
+                vec3 color3 = vec3(1.0, 1.0, 0.0);
+                vec3 color4 = vec3(1.0, 0.5, 0.0);
+                float colorPhase = angle * 2.0 + t;
+                vec3 colorF = mix(color1, color2, sin(colorPhase) * 0.5 + 0.5);
+                colorF = mix(colorF, color3, sin(colorPhase + 2.0) * 0.5 + 0.5);
+                colorF = mix(colorF, color4, sin(colorPhase + 4.0) * 0.5 + 0.5);
+                float intensity = (rings + energy * 0.5) * horizon * u_intensity;
+                float distortion = sin(uv.x * 30.0 + t * 4.0) * sin(uv.y * 30.0 + t * 3.0) * 0.1;
+                intensity += distortion;
+                color = colorF * intensity;
+            }
+            else if (phaseIndex == 6) { // Cosmic Strings
+                vec2 uv = originalUV;
+                float t = u_time * u_speed;
+                float strings = 0.0;
+                for(int i = 0; i < 8; i++) {
+                    float phase = float(i) * 0.785 + t * 0.5;
+                    vec2 a = vec2(sin(phase * 1.3), cos(phase * 1.7)) * 0.8 + 0.5;
+                    vec2 b = vec2(sin(phase * 1.7 + 3.14), cos(phase * 1.3 + 3.14)) * 0.8 + 0.5;
+                    vec2 gravity = u_mouse - 0.5;
+                    a += gravity * 0.2 * sin(t + float(i));
+                    b += gravity * 0.2 * cos(t + float(i));
+                    vec2 pa = uv - a;
+                    vec2 ba = b - a;
+                    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                    float dist = length(pa - ba * h);
+                    float thickness = 0.01 + sin(t * 2.0 + float(i)) * 0.005;
+                    float energy = exp(-dist / thickness) * (0.5 + sin(t * 3.0 + float(i)) * 0.5);
+                    strings += energy;
+                }
+                vec2 lensCenter = u_mouse;
+                float lensing = exp(-distance(uv, lensCenter) * 3.0) * 0.3;
+                float distortion = sin(uv.x * 20.0 + t * 2.0) * sin(uv.y * 20.0 + t * 1.5) * lensing;
+                color = vec3(0.0);
+                color += vec3(0.8, 0.4, 1.0) * strings * u_intensity;
+                color += vec3(1.0, 0.8, 0.2) * lensing;
+                color += vec3(0.2, 0.8, 1.0) * abs(distortion);
+                float background = sin(length(uv - 0.5) * 50.0 - t * 10.0) * 0.05;
+                color += vec3(background);
+            }
+            else if (phaseIndex == 7) { // Quantum Entanglement
+                vec2 uv = originalUV;
+                float t = u_time * u_speed;
+                vec3 entanglement = vec3(0.0);
+                for(int i = 0; i < 6; i++) {
+                    float pairPhase = float(i) * 1.047 + t * 0.8;
+                    vec2 particleA = vec2(sin(pairPhase * 1.2), cos(pairPhase * 0.9)) * 0.3 + vec2(0.3, 0.5);
+                    vec2 particleB = vec2(-sin(pairPhase * 1.2), -cos(pairPhase * 0.9)) * 0.3 + vec2(0.7, 0.5);
+                    vec2 mouseInfluence = (u_mouse - 0.5) * 0.1;
+                    particleA += mouseInfluence;
+                    particleB -= mouseInfluence;
+                    float distA = distance(uv, particleA);
+                    float distB = distance(uv, particleB);
+                    float stateA = sin(pairPhase * 3.0 + t * 5.0);
+                    float stateB = -stateA;
+                    float particleIntensityA = exp(-distA * 20.0) * (0.5 + stateA * 0.5);
+                    float particleIntensityB = exp(-distB * 20.0) * (0.5 + stateB * 0.5);
+                    vec2 connectionDir = normalize(particleB - particleA);
+                    vec2 toConnection = uv - particleA;
+                    float connectionDist = abs(dot(toConnection, vec2(-connectionDir.y, connectionDir.x)));
+                    float alongConnection = dot(toConnection, connectionDir);
+                    float connectionIntensity = 0.0;
+                    if(alongConnection > 0.0 && alongConnection < distance(particleA, particleB)) {
+                        connectionIntensity = exp(-connectionDist * 50.0) * sin(alongConnection * 20.0 - t * 10.0) * 0.3;
+                    }
+                    vec3 pairColor = vec3(
+                        sin(float(i) * 2.0) * 0.5 + 0.5,
+                        sin(float(i) * 2.0 + 2.0) * 0.5 + 0.5,
+                        sin(float(i) * 2.0 + 4.0) * 0.5 + 0.5
+                    );
+                    entanglement += pairColor * (particleIntensityA + particleIntensityB + connectionIntensity);
+                }
+                float field = sin(uv.x * 15.0 + t * 2.0) * sin(uv.y * 15.0 + t * 1.8) * 0.1;
+                float nonlocal = exp(-abs(sin(length(uv - u_mouse) * 10.0 - t * 8.0)) * 2.0) * 0.2;
+                vec3 finalColor = entanglement * u_intensity + vec3(field) + vec3(nonlocal);
+                float uncertainty = fract(sin(dot(uv + t * 0.1, vec2(12.9898, 78.233))) * 43758.5453) * 0.1;
+                finalColor += vec3(uncertainty);
+                color = finalColor;
+            }
+            // --- Existing phases, now shifted up by 8 ---
+            else if (phaseIndex == 8) {
+                // ...existing code for old phase 0...
+            }
+            else if (phaseIndex == 9) { float wf=.1+.05*sin(u_time*.2); wf=max(.001,wf); float z=.1/max(.01,.1-uv.y*wf+.02*fbm(uv+u_time*.05)); z=clamp(z,.1,15.); vec2 warp=uv*z; vec2 grid=abs(fract(warp*vec2(5.,3.)+u_time*.1)-.5); float line=smoothstep(.04,.05,min(grid.x,grid.y))*.6; float df=fract(z*.1+u_time*.15); vec3 bc=mix(mix(colPrimary,colTertiary,sin(u_time*.1)*.5+.5),colSecondary,sin(length(warp)*.5-u_time*.5)*.5+.5); color=mix(bc*.15,bc,line*df*1.5); }
+            else if (phaseIndex == 10) { float d=length(uv); float r=sin(d*18.-u_time*2.5)*.5+.5; r*=smoothstep(1.8,.4,d); float w=sin(uv.y*25.+u_time*1.2)*.04; vec2 wu=uv+vec2(w,sin(uv.x*15.+u_time*.8)*.03); float n=fbm(wu*3.5+u_time*.25); vec3 bc=mix(mix(colSecondary,colTertiary,r),mix(colGreen,colGold,n),.5+.5*sin(u_time*.6+d*2.)); color=mix(bc*.2,bc,r*.8+n*.6); }
+            else if (phaseIndex == 11) { vec2 r=vec2(1.,1.732), h=r*.5; vec2 a=mod(uv*2.+u_time*.1,r)-h, b=mod(uv*2.-h+u_time*.1,r)-h; vec2 gv=length(a)<length(b)?a:b; float p=sin(u_time*3.5)*.5+.5, e=sin(length(gv)*25.-u_time*3.5); e=smoothstep(-.1,.15,e)-smoothstep(.15,.4,e); float ds=fbm(uv*2.5+vec2(u_time*.15,0.)); vec3 baseC=mix(colTertiary,colGreen,ds), glowC=mix(colSecondary,colPrimary,p); color=mix(baseC*.1,glowC,e*p*1.5); float dt=abs(sin(uv.x*22.+u_time*1.1))*abs(sin(uv.y*22.-u_time*1.3)); color+=glowC*dt*.08; }
+            else if (phaseIndex == 12) { float a=atan(uv.y,uv.x), rd=length(uv); a+=.1*fbm(uv*.5+u_time*.05); float sa=a*6.+rd*8.-u_time*2.2, s=smoothstep(-.2,.2,sin(sa)); float rdd=rd+sin(a*10.+u_time*.3)*.08, b=fract(rdd*6.-u_time*.6); b=smoothstep(0.,.1,b)*smoothstep(.8,.5,b); float t=fbm(vec2(rdd*6.,a*3.)+u_time*.15); vec3 dc=mix(colPrimary,colDeepRed,sin(rdd*12.)*.5+.5), bc=mix(colGold,colSecondary,cos(a*4.)*.5+.5); color=mix(dc*.5,bc,b+t*.4); color+=bc*s*.3; }
+            else if (phaseIndex == 13) { vec2 cu=uv*mix(3.,5.,phaseProgress); float n=fbm(cu+u_time*.2), c=0.; for(float x=-1.;x<=1.;x+=1.){for(float y=-1.;y<=1.;y+=1.){vec2 nb=vec2(x,y), cc=floor(cu)+nb, pt=cc+.5+sin(u_time*.1+cc)*.3; c+=smoothstep(.4,.38,length(cu-pt));}} c=clamp(c,0.,1.); vec3 cellC=mix(colStrangeGreen,colPrimary,n); cellC=mix(cellC,colDeepRed,smoothstep(.6,.8,n)); color=mix(colBackground*.5,cellC,c*1.2); color+=fbm(uv*15.+u_time*.5)*.05; }
+            else if (phaseIndex == 14) { float t=phaseProgress; vec2 bu=floor(originalUV*mix(20.,60.,sin(u_time*2.)*.5+.5))/mix(20.,60.,sin(u_time*2.)*.5+.5); float bn=fbm(bu*5.+u_time*.5); color=mix(colPrimary,colSecondary,bn); float tl=sin(originalUV.y*10.+u_time*5.)*.5+.5, ta=smoothstep(.8,.85,tl); float ofs=ta*(rand(vec2(floor(u_time*2.),floor(originalUV.y*10.)))-.5)*.1; vec2 tu=uv+vec2(ofs*t,0.); float tn=fbm(tu*4.+u_time*.3); color=mix(color,mix(colTertiary,colDeepRed,tn),ta); float cao=(.005+.01*abs(sin(u_time*3.)))*t; vec3 cR=getColorForCA(uv+vec2(cao,0.),u_time), cB=getColorForCA(uv-vec2(cao*.5,cao*.8),u_time); color=vec3(cR.r,color.g,cB.b); color+=(rand(originalUV+fract(u_time*10.))-.5)*.15*t; }
+            else if (phaseIndex == 15) { vec2 p=uv*2.; float i=fbm(p+u_time*.3), r=abs(snoise(vec3(p*1.5,u_time*.5))); r=pow(1.-r,4.); vec3 fc=mix(colPrimary,colTertiary,smoothstep(0.,1.,i)); color=mix(colBackground*.4,fc,r*1.5); color*=1.-smoothstep(.8,1.5,length(uv)); }
+            else if (phaseIndex == 16) { vec2 p=uv*3.+vec2(u_time*.1,u_time*.2); float d=worley(p), e=1.-smoothstep(0.,.05,d), c=smoothstep(0.,.4,d); vec3 cc=mix(colStrangeGreen,colGold,c*1.2); color=mix(cc*.3,colWhite,e); }
+            else if (phaseIndex == 17) { vec2 p=rotate2D(u_time*.4)*uv; float a=atan(p.y,p.x), rd=length(p); float t=fbm(vec2(1./(rd+.1),a*2.)+u_time*.2), r=sin(rd*20.-u_time*3.)*.5+.5; vec3 tc=mix(colSecondary,colPink,smoothstep(0.,1.,t)); color=mix(colBackground,(tc*(smoothstep(0.,.8,t)+r*.5)*.8),1.); } // Removed background mix factor for stronger effect
+            else if (phaseIndex == 18) { float s=mix(4.,8.,sin(u_time*.5)*.5+.5), p=truchetPattern(uv,s); vec2 us=uv*s; float bn=noise(floor(us)+u_time*.1); vec3 tc=mix(colPrimary,colTertiary,bn); color=mix(tc*.2,colWhite*.9,p); }
+            else if (phaseIndex == 19) { float v=sin(uv.x*3.+u_time*.8)+sin(uv.y*4.-u_time*.5+sin(uv.x*3.+u_time*.8)*.5)+sin(uv.x*uv.y*2.+u_time)+sin(sqrt(pow(uv.x+.5*sin(u_time/5.),2.)+pow(uv.y+.5*cos(u_time/3.),2.))*5.+u_time); v*=.5; vec3 pc1=mix(colDeepRed,colOrange,sin(u_time*.2)*.5+.5), pc2=mix(colPrimary,colSecondary,cos(u_time*.3)*.5+.5); color=mix(pc1,pc2,smoothstep(-.8,.8,v)); }
+            else if (phaseIndex == 20) { vec2 gv = abs(fract(uv * (10.0 + 5.0 * sin(u_time * 0.5))) - 0.5);
                  float gridLine = smoothstep(0.02, 0.03, min(gv.x, gv.y));
                  vec3 gridColor = mix(colTertiary, colElectricBlue, sin(u_time * 0.8) * 0.5 + 0.5);
                  color = mix(colBackground, gridColor, gridLine * 1.5);
@@ -281,6 +487,10 @@
     let positionBuffer = null;
     let animationFrameId = null; // Keep track of animation frame request
     let startTime = performance.now();
+    let mouseUniformLocation = null;
+    let intensityUniformLocation = null;
+    let speedUniformLocation = null;
+    let complexityUniformLocation = null;
 
     // --- Initialize WebGL Program and Buffers ---
     function setupWebGL() {
@@ -295,6 +505,10 @@
             positionAttributeLocation = gl.getAttribLocation(program, "a_position");
             timeUniformLocation = gl.getUniformLocation(program, "u_time");
             resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+            mouseUniformLocation = gl.getUniformLocation(program, "u_mouse");
+            intensityUniformLocation = gl.getUniformLocation(program, "u_intensity");
+            speedUniformLocation = gl.getUniformLocation(program, "u_speed");
+            complexityUniformLocation = gl.getUniformLocation(program, "u_complexity");
 
             // Basic check if locations are valid
             if (positionAttributeLocation === -1) console.warn("Attribute 'a_position' not found in shader program.");
@@ -383,6 +597,31 @@
         }
         if (resolutionUniformLocation) {
            gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+        }
+        // --- Set new uniforms for the first 8 phases ---
+        if (mouseUniformLocation) {
+           // Use mouse position from window if available
+           let mx = 0.5, my = 0.5;
+           if (window.shaderMouse) {
+               mx = window.shaderMouse.x;
+               my = window.shaderMouse.y;
+           }
+           gl.uniform2f(mouseUniformLocation, mx, my);
+        }
+        if (intensityUniformLocation) {
+           let intensity = 1.0;
+           if (window.shaderIntensity !== undefined) intensity = window.shaderIntensity;
+           gl.uniform1f(intensityUniformLocation, intensity);
+        }
+        if (speedUniformLocation) {
+           let speed = 1.0;
+           if (window.shaderSpeed !== undefined) speed = window.shaderSpeed;
+           gl.uniform1f(speedUniformLocation, speed);
+        }
+        if (complexityUniformLocation) {
+           let complexity = 5;
+           if (window.shaderComplexity !== undefined) complexity = window.shaderComplexity;
+           gl.uniform1i(complexityUniformLocation, complexity);
         }
 
         // --- Draw the Quad ---
@@ -543,3 +782,12 @@
     }, false); // Use passive: true? Might improve scroll perf slightly if listener is heavy.
 
 })(); // Execute the IIFE
+
+// ---
+// PHASE SYSTEM UPDATE (June 2025):
+// The first 8 phases (0-7) are now advanced GLSL shaders from the Holographic Theory showcase.
+// These use extra uniforms: u_mouse, u_intensity, u_speed, u_complexity.
+// To control these, set window.shaderMouse, window.shaderIntensity, window.shaderSpeed, window.shaderComplexity in JS.
+// All previous phases are shifted up by 8 (old phase 0 is now phase 8, etc.).
+// To add more phases, increment TOTAL_PHASES_F and add a new phaseIndex block.
+// ---
