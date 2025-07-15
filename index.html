@@ -1023,260 +1023,75 @@ iframe.addEventListener('load', () => {
 
 
 
-    <div class="demo-header">
-        <h1 class="demo-title">AI CHAT DROP-IN</h1>
-        <p class="demo-subtitle">NO BACKEND • NO API KEY • JUST DROP IT IN!</p>
-        
-        <div class="demo-instructions">
-            <h3>🚀 HOW TO USE:</h3>
-            <ul>
-                <li>Copy the entire .ai-chat-section div below</li>
-                <li>Drop it anywhere in your HTML</li>
-                <li>Include the CSS styles</li>
-                <li>Include the JavaScript</li>
-                <li>BOOM! Working AI chat on any site</li>
-            </ul>
-        </div>
-    </div>
+	
 
-    <!-- AI CHAT SECTION - THIS IS WHAT YOU DROP IN -->
-    <div class="ai-chat-section">
-        <div class="ai-status" id="aiStatus">
-            <div class="ai-status-dot"></div>
-            <span>AI Online</span>
-        </div>
-        
-        <div class="ai-chat-header">
-            <h2 class="ai-chat-title">🤖 AI ASSISTANT</h2>
-            <p class="ai-chat-subtitle">Ask me anything • I'm powered by GPT-4o Mini</p>
-        </div>
-        
-        <div class="ai-chat-container">
-            <div class="ai-chat-messages" id="chatMessages">
-                <div class="ai-message">
-                    👋 Hey there! I'm your AI assistant. I'm running on a free GPT-4o Mini API with no backend required! Ask me anything and let's chat!
-                </div>
-            </div>
-            
-            <div class="ai-chat-input-area">
-                <input 
-                    type="text" 
-                    class="ai-chat-input" 
-                    id="chatInput"
-                    placeholder="Type your message here..."
-                    maxlength="500"
-                >
-                <button class="ai-chat-send-btn" id="sendButton">
-                    SEND 🚀
-                </button>
-            </div>
-        </div>
-    </div>
 
-    <script>
-        // AI Chat Drop-in Script
-        class AIChatDropIn {
-            constructor() {
-                this.apiUrl = 'https://free-unoficial-gpt4o-mini-api-g70n.onrender.com/chat/';
-                this.chatMessages = document.getElementById('chatMessages');
-                this.chatInput = document.getElementById('chatInput');
-                this.sendButton = document.getElementById('sendButton');
-                this.statusElement = document.getElementById('aiStatus');
-                
-                this.isTyping = false;
-                this.messageHistory = [];
-                
-                this.init();
-            }
+<!-- Alien Terrain Sim -->
+<div id="alienTerrain" style="width:100%;height:500px;"></div>
 
-            init() {
-                // Event listeners
-                this.sendButton.addEventListener('click', () => this.sendMessage());
-                this.chatInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage();
-                    }
-                });
+<!-- Include Three.js and noise -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/perlin-noise/1.1.0/perlin.min.js"></script>
 
-                // Focus input on load
-                this.chatInput.focus();
-                
-                // Test API connection
-                this.testConnection();
-            }
+<script>
+(function() {
+  const container = document.getElementById('alienTerrain');
 
-            async testConnection() {
-                try {
-                    const response = await fetch(this.apiUrl + '?query=test', {
-                        method: 'GET',
-                        headers: { 'Accept': 'application/json' }
-                    });
-                    
-                    if (response.ok) {
-                        this.updateStatus('online', 'AI Online');
-                    } else {
-                        this.updateStatus('error', 'Connection Error');
-                    }
-                } catch (error) {
-                    this.updateStatus('error', 'Offline');
-                }
-            }
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f0f1f);
+  
+  const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+  camera.position.z = 50;
+  camera.position.y = 20;
+  camera.lookAt(0, 0, 0);
+  
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(renderer.domElement);
 
-            updateStatus(type, message) {
-                this.statusElement.className = `ai-status ${type}`;
-                this.statusElement.querySelector('span').textContent = message;
-            }
+  const light = new THREE.PointLight(0xff00ff, 1, 500);
+  light.position.set(50, 50, 50);
+  scene.add(light);
 
-            async sendMessage() {
-                const message = this.chatInput.value.trim();
-                if (!message || this.isTyping) return;
+  const geometry = new THREE.PlaneGeometry(100, 100, 100, 100);
+  const material = new THREE.MeshStandardMaterial({ 
+    color: 0x550088, 
+    wireframe: false,
+    flatShading: true,
+    metalness: 0.3,
+    roughness: 0.7
+  });
 
-                // Add user message
-                this.addMessage(message, 'user');
-                this.chatInput.value = '';
-                this.chatInput.focus();
+  const terrain = new THREE.Mesh(geometry, material);
+  terrain.rotation.x = -Math.PI / 2;
 
-                // Show typing indicator
-                this.showTyping();
+  // Apply Perlin noise
+  for (let i = 0; i < geometry.attributes.position.count; i++) {
+    const x = geometry.attributes.position.getX(i) / 10;
+    const y = geometry.attributes.position.getY(i) / 10;
+    const z = noise.perlin2(x, y) * 5 + Math.sin(x * 2) + Math.cos(y * 2);
+    geometry.attributes.position.setZ(i, z);
+  }
+  geometry.computeVertexNormals();
 
-                try {
-                    // Make API call
-                    const response = await fetch(this.apiUrl + `?query=${encodeURIComponent(message)}`, {
-                        method: 'GET',
-                        headers: { 'Accept': 'application/json' }
-                    });
+  scene.add(terrain);
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
+  // Animate
+  function animate() {
+    requestAnimationFrame(animate);
+    terrain.rotation.z += 0.001;
+    terrain.rotation.y += 0.001;
+    renderer.render(scene, camera);
+  }
+  animate();
 
-                    const data = await response.json();
-                    
-                    // Hide typing indicator
-                    this.hideTyping();
-                    
-                    // Add AI response
-                    let aiResponse = data.response || data.message || "I'm having trouble responding right now. Please try again!";
-                    
-                    // Add some personality to the response
-                    aiResponse = this.addPersonality(aiResponse);
-                    
-                    this.addMessage(aiResponse, 'ai');
-                    
-                    // Update status
-                    this.updateStatus('online', 'AI Online');
-                    
-                } catch (error) {
-                    console.error('AI Chat Error:', error);
-                    this.hideTyping();
-                    
-                    // Error message with personality
-                    const errorMessages = [
-                        "Oops! 🤖 My circuits got a bit tangled. Mind trying that again?",
-                        "Whoa there! 🚀 I hit a small glitch. Let's give it another shot!",
-                        "Error detected! 🔧 But don't worry, I'm still here. Try asking again!",
-                        "Houston, we have a problem! 🌟 But I'm working on it. Please retry!",
-                        "My AI brain farted! 💨 Give me another chance to impress you!"
-                    ];
-                    
-                    const randomError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
-                    this.addMessage(randomError, 'ai');
-                    this.updateStatus('error', 'Connection Error');
-                }
-            }
-
-            addPersonality(response) {
-                // Add some random personality to responses
-                const personalities = [
-                    { prefix: "🤖 ", suffix: " Hope that helps!" },
-                    { prefix: "⚡ ", suffix: " What do you think?" },
-                    { prefix: "🚀 ", suffix: " Pretty cool, right?" },
-                    { prefix: "🌟 ", suffix: " Let me know if you need more!" },
-                    { prefix: "💡 ", suffix: " Does that make sense?" }
-                ];
-                
-                // Only add personality 50% of the time to keep it natural
-                if (Math.random() > 0.5) {
-                    const personality = personalities[Math.floor(Math.random() * personalities.length)];
-                    return personality.prefix + response + personality.suffix;
-                }
-                
-                return response;
-            }
-
-            addMessage(message, type) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `${type}-message`;
-                messageDiv.textContent = message;
-                
-                this.chatMessages.appendChild(messageDiv);
-                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-                
-                // Store in history
-                this.messageHistory.push({ message, type, timestamp: Date.now() });
-                
-                // Limit history to last 50 messages
-                if (this.messageHistory.length > 50) {
-                    this.messageHistory.shift();
-                }
-            }
-
-            showTyping() {
-                this.isTyping = true;
-                this.sendButton.disabled = true;
-                this.sendButton.textContent = 'THINKING...';
-                
-                const typingDiv = document.createElement('div');
-                typingDiv.className = 'ai-typing';
-                typingDiv.id = 'typingIndicator';
-                typingDiv.innerHTML = `
-                    <span>AI is typing</span>
-                    <div class="ai-typing-dots">
-                        <div class="ai-typing-dot"></div>
-                        <div class="ai-typing-dot"></div>
-                        <div class="ai-typing-dot"></div>
-                    </div>
-                `;
-                
-                this.chatMessages.appendChild(typingDiv);
-                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-            }
-
-            hideTyping() {
-                this.isTyping = false;
-                this.sendButton.disabled = false;
-                this.sendButton.textContent = 'SEND 🚀';
-                
-                const typingIndicator = document.getElementById('typingIndicator');
-                if (typingIndicator) {
-                    typingIndicator.remove();
-                }
-            }
-        }
-
-        // Initialize the AI chat when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new AIChatDropIn();
-        });
-
-        // Add some extra visual flair
-        document.addEventListener('DOMContentLoaded', () => {
-            // Add random glitch effect to title
-            const title = document.querySelector('.ai-chat-title');
-            if (title) {
-                setInterval(() => {
-                    if (Math.random() > 0.95) {
-                        title.style.textShadow = '2px 2px #ff0080, -2px -2px #00ff41';
-                        setTimeout(() => {
-                            title.style.textShadow = '0 0 20px #00ff41';
-                        }, 100);
-                    }
-                }, 1000);
-            }
-        });
-    </script>
-
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+})();
+</script>
 
 
 
@@ -1286,8 +1101,34 @@ iframe.addEventListener('load', () => {
 
 
 
-	
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
   <section id="interactive-showcase">
       <h2 class="scroll-reveal">SYSTEM MODULES :: INTERFACE ACTIVE</h2> 
       <div class="showcase-grid scroll-reveal"> 
