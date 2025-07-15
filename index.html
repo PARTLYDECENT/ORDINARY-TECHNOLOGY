@@ -1021,70 +1021,414 @@ iframe.addEventListener('load', () => {
 
 
 
-
+////////////////////////////////ALIEN TERRAIN SIM ANIMATION//////////////////////////////////////
 
 	
-<div id="alienTerrain" style="width:100%;height:500px;"></div>
+<div id="alienTerrain" style="width:100%;height:500px;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+  <div id="startScreen" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg, #0a0a1a 0%, #1a0a2a 50%, #2a0a3a 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:1000;transition:opacity 1s ease-out;">
+    <h1 style="color:#00ffaa;font-size:48px;margin:0;text-shadow:0 0 20px #00ffaa;font-family:Arial,sans-serif;letter-spacing:3px;">ALIEN WORLD</h1>
+    <p style="color:#ffffff;font-size:18px;margin:20px 0;text-align:center;font-family:Arial,sans-serif;">Journey to an unknown planet</p>
+    <button id="startButton" style="background:linear-gradient(45deg, #00ffaa, #0088ff);border:none;color:#ffffff;font-size:20px;padding:15px 30px;border-radius:25px;cursor:pointer;font-family:Arial,sans-serif;box-shadow:0 5px 15px rgba(0,255,170,0.3);transition:all 0.3s ease;">BEGIN EXPLORATION</button>
+  </div>
+  <div id="sceneIndicator" style="position:absolute;top:20px;right:20px;color:#00ffaa;font-family:Arial,sans-serif;z-index:100;font-size:14px;">Scene 1/3</div>
+  <div id="nextButton" style="position:absolute;bottom:20px;right:20px;background:rgba(0,255,170,0.3);border:2px solid #00ffaa;color:#00ffaa;padding:10px 20px;border-radius:20px;cursor:pointer;font-family:Arial,sans-serif;z-index:100;opacity:0;transition:opacity 0.5s ease;">Next Scene</div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// Basic pseudo-random terrain function
+let scene, camera, renderer, currentScene = 0, animationId;
+let terrain, planet, crystals = [], particles = [];
+
+// Enhanced noise function for terrain generation
 function noise2D(x, y) {
-  return (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
+  let n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return (n - Math.floor(n));
+}
+
+function octaveNoise(x, y, octaves = 4, persistence = 0.5) {
+  let total = 0;
+  let frequency = 1;
+  let amplitude = 1;
+  let maxValue = 0;
+  
+  for (let i = 0; i < octaves; i++) {
+    total += noise2D(x * frequency, y * frequency) * amplitude;
+    maxValue += amplitude;
+    amplitude *= persistence;
+    frequency *= 2;
+  }
+  
+  return total / maxValue;
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('alienTerrain');
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x111122);
-
-  const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(0, 30, 50);
-  camera.lookAt(0, 0, 0);
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const startScreen = document.getElementById('startScreen');
+  const startButton = document.getElementById('startButton');
+  const nextButton = document.getElementById('nextButton');
+  const sceneIndicator = document.getElementById('sceneIndicator');
+  
+  // Initialize Three.js
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setClearColor(0x000000);
   container.appendChild(renderer.domElement);
-
-  const light = new THREE.DirectionalLight(0xff00ff, 1);
-  light.position.set(50, 50, 50);
-  scene.add(light);
-
-  const geometry = new THREE.PlaneGeometry(100, 100, 100, 100);
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x6600cc,
-    wireframe: false,
-    flatShading: true,
-    metalness: 0.2,
-    roughness: 0.8
+  
+  // Start button hover effect
+  startButton.addEventListener('mouseenter', () => {
+    startButton.style.transform = 'scale(1.05)';
+    startButton.style.boxShadow = '0 8px 25px rgba(0,255,170,0.5)';
   });
-
-  const terrain = new THREE.Mesh(geometry, material);
-  terrain.rotation.x = -Math.PI / 2;
-
-  for (let i = 0; i < geometry.attributes.position.count; i++) {
-    const x = geometry.attributes.position.getX(i) / 5;
-    const y = geometry.attributes.position.getY(i) / 5;
-    const z = noise2D(x, y) * 8 + Math.cos(x) + Math.sin(y);
-    geometry.attributes.position.setZ(i, z);
+  
+  startButton.addEventListener('mouseleave', () => {
+    startButton.style.transform = 'scale(1)';
+    startButton.style.boxShadow = '0 5px 15px rgba(0,255,170,0.3)';
+  });
+  
+  // Scene transitions
+  startButton.addEventListener('click', () => {
+    startScreen.style.opacity = '0';
+    setTimeout(() => {
+      startScreen.style.display = 'none';
+      setupScene1();
+      animate();
+    }, 1000);
+  });
+  
+  nextButton.addEventListener('click', () => {
+    currentScene++;
+    if (currentScene === 1) {
+      setupScene2();
+    } else if (currentScene === 2) {
+      setupScene3();
+    }
+    sceneIndicator.textContent = `Scene ${currentScene + 1}/3`;
+    
+    if (currentScene === 2) {
+      nextButton.style.opacity = '0';
+      setTimeout(() => {
+        nextButton.textContent = 'Restart';
+        nextButton.style.opacity = '1';
+      }, 500);
+    } else if (currentScene > 2) {
+      location.reload();
+    }
+  });
+  
+  // Scene 1: Alien Planet Surface
+  function setupScene1() {
+    clearScene();
+    
+    // Alien sky with gradient
+    const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+    const skyMaterial = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec3 color1 = vec3(0.1, 0.0, 0.3);
+          vec3 color2 = vec3(0.3, 0.0, 0.6);
+          vec3 color3 = vec3(0.6, 0.2, 0.8);
+          float h = normalize(vWorldPosition).y;
+          vec3 color = mix(color1, color2, max(0.0, h));
+          color = mix(color, color3, max(0.0, h - 0.5) * 2.0);
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+      side: THREE.BackSide
+    });
+    const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+    scene.add(sky);
+    
+    // Enhanced terrain with better noise
+    const terrainGeometry = new THREE.PlaneGeometry(200, 200, 150, 150);
+    const terrainMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4a0080,
+      wireframe: false,
+      flatShading: true,
+      metalness: 0.3,
+      roughness: 0.7
+    });
+    
+    terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+    terrain.rotation.x = -Math.PI / 2;
+    
+    // Generate more realistic terrain
+    for (let i = 0; i < terrainGeometry.attributes.position.count; i++) {
+      const x = terrainGeometry.attributes.position.getX(i) / 20;
+      const y = terrainGeometry.attributes.position.getY(i) / 20;
+      const height = octaveNoise(x, y, 6, 0.6) * 15 + 
+                   octaveNoise(x * 2, y * 2, 4, 0.3) * 8;
+      terrainGeometry.attributes.position.setZ(i, height);
+    }
+    terrainGeometry.computeVertexNormals();
+    scene.add(terrain);
+    
+    // Add alien crystals
+    for (let i = 0; i < 15; i++) {
+      const crystalGeometry = new THREE.ConeGeometry(Math.random() * 2 + 1, Math.random() * 8 + 4, 6);
+      const crystalMaterial = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(Math.random() * 0.3 + 0.7, 0.8, 0.6),
+        transparent: true,
+        opacity: 0.8,
+        emissive: new THREE.Color().setHSL(Math.random() * 0.3 + 0.7, 0.5, 0.2)
+      });
+      const crystal = new THREE.Mesh(crystalGeometry, crystalMaterial);
+      crystal.position.set(
+        (Math.random() - 0.5) * 150,
+        crystal.geometry.parameters.height / 2,
+        (Math.random() - 0.5) * 150
+      );
+      crystal.rotation.y = Math.random() * Math.PI * 2;
+      crystals.push(crystal);
+      scene.add(crystal);
+    }
+    
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x330066, 0.4);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xff0080, 0.8);
+    directionalLight.position.set(50, 50, 50);
+    scene.add(directionalLight);
+    
+    camera.position.set(0, 25, 60);
+    camera.lookAt(0, 0, 0);
+    
+    nextButton.style.opacity = '1';
   }
-  geometry.computeVertexNormals();
-
-  scene.add(terrain);
-
+  
+  // Scene 2: Alien Planet in Space
+  function setupScene2() {
+    clearScene();
+    
+    // Space background
+    scene.background = new THREE.Color(0x000011);
+    
+    // Create alien planet
+    const planetGeometry = new THREE.SphereGeometry(25, 64, 64);
+    const planetMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6600cc,
+      roughness: 0.8,
+      metalness: 0.2
+    });
+    
+    // Add surface detail to planet
+    const positions = planetGeometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const vertex = new THREE.Vector3(
+        positions.getX(i),
+        positions.getY(i),
+        positions.getZ(i)
+      );
+      const noise = octaveNoise(vertex.x * 0.1, vertex.y * 0.1, 4, 0.5) * 2;
+      vertex.normalize().multiplyScalar(25 + noise);
+      positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+    planetGeometry.computeVertexNormals();
+    
+    planet = new THREE.Mesh(planetGeometry, planetMaterial);
+    scene.add(planet);
+    
+    // Add atmosphere
+    const atmosphereGeometry = new THREE.SphereGeometry(27, 32, 32);
+    const atmosphereMaterial = new THREE.MeshBasicMaterial({
+      color: 0x8800ff,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.BackSide
+    });
+    const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+    scene.add(atmosphere);
+    
+    // Add stars
+    const starGeometry = new THREE.BufferGeometry();
+    const starPositions = [];
+    for (let i = 0; i < 2000; i++) {
+      starPositions.push(
+        (Math.random() - 0.5) * 1000,
+        (Math.random() - 0.5) * 1000,
+        (Math.random() - 0.5) * 1000
+      );
+    }
+    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    scene.add(stars);
+    
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x220044, 0.3);
+    scene.add(ambientLight);
+    
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+    sunLight.position.set(100, 50, 50);
+    scene.add(sunLight);
+    
+    camera.position.set(0, 0, 80);
+    camera.lookAt(0, 0, 0);
+    
+    nextButton.style.opacity = '1';
+  }
+  
+  // Scene 3: Alien City/Structure
+  function setupScene3() {
+    clearScene();
+    
+    // Dark alien sky
+    scene.background = new THREE.Color(0x0a0a2a);
+    
+    // Create alien structures
+    for (let i = 0; i < 12; i++) {
+      const height = Math.random() * 30 + 10;
+      const radius = Math.random() * 3 + 2;
+      const segments = Math.floor(Math.random() * 3) + 4;
+      
+      const structureGeometry = new THREE.CylinderGeometry(radius, radius * 1.5, height, segments);
+      const structureMaterial = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(Math.random() * 0.3 + 0.6, 0.7, 0.4),
+        emissive: new THREE.Color().setHSL(Math.random() * 0.3 + 0.6, 0.5, 0.1),
+        metalness: 0.8,
+        roughness: 0.2
+      });
+      
+      const structure = new THREE.Mesh(structureGeometry, structureMaterial);
+      structure.position.set(
+        (Math.random() - 0.5) * 80,
+        height / 2,
+        (Math.random() - 0.5) * 80
+      );
+      scene.add(structure);
+    }
+    
+    // Add floating particles
+    for (let i = 0; i < 50; i++) {
+      const particleGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+      const particleMaterial = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6),
+        transparent: true,
+        opacity: 0.7
+      });
+      
+      const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+      particle.position.set(
+        (Math.random() - 0.5) * 100,
+        Math.random() * 40 + 5,
+        (Math.random() - 0.5) * 100
+      );
+      particle.userData = {
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.02,
+          (Math.random() - 0.5) * 0.02,
+          (Math.random() - 0.5) * 0.02
+        )
+      };
+      particles.push(particle);
+      scene.add(particle);
+    }
+    
+    // Ground
+    const groundGeometry = new THREE.PlaneGeometry(200, 200);
+    const groundMaterial = new THREE.MeshStandardMaterial({
+      color: 0x2a1040,
+      roughness: 0.9,
+      metalness: 0.1
+    });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+    
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x330066, 0.6);
+    scene.add(ambientLight);
+    
+    const spotLight = new THREE.SpotLight(0x00ffaa, 1, 100, Math.PI / 4, 0.5);
+    spotLight.position.set(0, 50, 0);
+    scene.add(spotLight);
+    
+    camera.position.set(0, 20, 50);
+    camera.lookAt(0, 10, 0);
+    
+    nextButton.style.opacity = '1';
+  }
+  
+  function clearScene() {
+    while (scene.children.length > 0) {
+      scene.remove(scene.children[0]);
+    }
+    crystals = [];
+    particles = [];
+  }
+  
   function animate() {
-    requestAnimationFrame(animate);
-    terrain.rotation.z += 0.0005;
-    terrain.rotation.y += 0.0005;
+    animationId = requestAnimationFrame(animate);
+    
+    if (currentScene === 0) {
+      // Terrain animation
+      if (terrain) {
+        terrain.rotation.z += 0.0005;
+        terrain.rotation.y += 0.001;
+      }
+      
+      // Crystal glow animation
+      crystals.forEach((crystal, index) => {
+        const time = Date.now() * 0.001;
+        crystal.material.emissive.setHSL(
+          (time + index) * 0.1 % 1,
+          0.5,
+          0.2 + Math.sin(time + index) * 0.1
+        );
+        crystal.rotation.y += 0.01;
+      });
+    }
+    
+    if (currentScene === 1) {
+      // Planet rotation
+      if (planet) {
+        planet.rotation.y += 0.005;
+        planet.rotation.x += 0.002;
+      }
+    }
+    
+    if (currentScene === 2) {
+      // Particle movement
+      particles.forEach(particle => {
+        particle.position.add(particle.userData.velocity);
+        
+        // Boundary check
+        if (Math.abs(particle.position.x) > 50 || 
+            Math.abs(particle.position.z) > 50 ||
+            particle.position.y > 45 || particle.position.y < 5) {
+          particle.userData.velocity.multiplyScalar(-1);
+        }
+        
+        // Glow effect
+        const time = Date.now() * 0.001;
+        particle.material.opacity = 0.5 + Math.sin(time * 2 + particle.position.x) * 0.2;
+      });
+    }
+    
     renderer.render(scene, camera);
   }
-
-  animate();
+  
+  // Handle window resize
+  window.addEventListener('resize', () => {
+    if (renderer) {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+  });
 });
 </script>
-
-
 
 	
 
