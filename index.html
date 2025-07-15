@@ -1526,7 +1526,290 @@ Let’s keep unlocking.</p>
 
 
 
-
+<!-- A L I E N   P L A N E T   T E R R A F O R M I N G   S I M U L A T I O N -->
+<div id="alienTerrain" style="width:100%;height:500px;position:relative;background:#000;">
+  <div style="position:absolute;top:10px;left:10px;color:#00ff88;font-family:monospace;font-size:12px;z-index:100;text-shadow:0 0 5px #00ff88;">
+    <div id="status">TERRAFORMING STATUS: INITIALIZING...</div>
+    <div id="progress">ATMOSPHERIC PROCESSORS: 0%</div>
+    <div id="biome">BIOME GENERATOR: OFFLINE</div>
+    <div id="energy">ENERGY CORE: CHARGING</div>
+  </div>
+</div>
+<!-- Three.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('alienTerrain');
+  
+  // UI Elements
+  const statusEl = document.getElementById('status');
+  const progressEl = document.getElementById('progress');
+  const biomeEl = document.getElementById('biome');
+  const energyEl = document.getElementById('energy');
+  
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0a1f);
+  scene.fog = new THREE.Fog(0x0a0a1f, 50, 300);
+  
+  const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+  camera.position.set(0, 60, 100);
+  camera.lookAt(0, 0, 0);
+  
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+  
+  // Energy core (central light)
+  const coreLight = new THREE.PointLight(0x00ffff, 0.1, 400);
+  coreLight.position.set(0, 80, 0);
+  coreLight.castShadow = true;
+  scene.add(coreLight);
+  
+  // Atmospheric processors (moving lights)
+  const processor1 = new THREE.PointLight(0xff4400, 0.5, 200);
+  const processor2 = new THREE.PointLight(0x4400ff, 0.5, 200);
+  const processor3 = new THREE.PointLight(0x00ff44, 0.5, 200);
+  scene.add(processor1, processor2, processor3);
+  
+  const ambientLight = new THREE.AmbientLight(0x221144, 0.2);
+  scene.add(ambientLight);
+  
+  // Terrain (the planet surface being terraformed)
+  const geometry = new THREE.PlaneGeometry(300, 300, 200, 200);
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x332211,
+    metalness: 0.3,
+    roughness: 0.8,
+    flatShading: true
+  });
+  const terrain = new THREE.Mesh(geometry, material);
+  terrain.rotation.x = -Math.PI / 2;
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+  
+  // Atmospheric particles (terraforming nanobots)
+  const particleGeometry = new THREE.BufferGeometry();
+  const particleCount = 2000;
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  const velocities = new Float32Array(particleCount * 3);
+  
+  for (let i = 0; i < particleCount; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * 400;
+    positions[i * 3 + 1] = Math.random() * 150;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 400;
+    
+    velocities[i * 3] = (Math.random() - 0.5) * 0.2;
+    velocities[i * 3 + 1] = Math.random() * 0.1;
+    velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.2;
+    
+    colors[i * 3] = 0.2;
+    colors[i * 3 + 1] = 0.8;
+    colors[i * 3 + 2] = 0.9;
+  }
+  
+  particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  
+  const particleMaterial = new THREE.PointsMaterial({
+    size: 1.5,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7
+  });
+  
+  const nanobots = new THREE.Points(particleGeometry, particleMaterial);
+  scene.add(nanobots);
+  
+  // Terraforming simulation variables
+  let time = 0;
+  let phase = 0; // 0: charging, 1: processing, 2: growing, 3: stabilizing
+  let progress = 0;
+  let energyLevel = 0;
+  
+  // Terrain transformation phases
+  function getTerrainHeight(x, y, t, phase) {
+    const distance = Math.sqrt(x*x + y*y);
+    let height = 0;
+    
+    switch(phase) {
+      case 0: // Charging phase - minimal activity
+        height = Math.sin(distance * 0.01 + t * 0.5) * 2;
+        break;
+      case 1: // Processing phase - aggressive reshaping
+        height = Math.sin(distance * 0.02 + t * 2) * 8 + 
+                Math.cos(x * 0.03 + t * 1.5) * 5 +
+                Math.sin(y * 0.025 + t * 1.8) * 4;
+        break;
+      case 2: // Growing phase - organic patterns
+        height = Math.sin(distance * 0.015 + t) * 12 + 
+                Math.cos((x + y) * 0.02 + t * 0.8) * 6 +
+                Math.sin(Math.sqrt(x*x + y*y) * 0.01 + t * 1.2) * 8;
+        break;
+      case 3: // Stabilizing phase - gentle rolling hills
+        height = Math.sin(distance * 0.008 + t * 0.3) * 15 + 
+                Math.cos(x * 0.01 + t * 0.2) * 8 +
+                Math.sin(y * 0.012 + t * 0.25) * 6;
+        break;
+    }
+    
+    return height;
+  }
+  
+  function updateTerrain(t) {
+    const pos = geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = getTerrainHeight(x, y, t, phase);
+      pos.setZ(i, z);
+    }
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+  }
+  
+  function updateUI() {
+    const phaseNames = ['CHARGING', 'PROCESSING', 'GROWING', 'STABILIZING'];
+    const phaseColors = ['#ffaa00', '#ff4444', '#44ff44', '#4444ff'];
+    
+    statusEl.textContent = `TERRAFORMING STATUS: ${phaseNames[phase]}`;
+    statusEl.style.color = phaseColors[phase];
+    
+    progressEl.textContent = `ATMOSPHERIC PROCESSORS: ${Math.floor(progress)}%`;
+    biomeEl.textContent = `BIOME GENERATOR: ${phase > 1 ? 'ONLINE' : 'OFFLINE'}`;
+    energyEl.textContent = `ENERGY CORE: ${Math.floor(energyLevel)}%`;
+  }
+  
+  function animate() {
+    requestAnimationFrame(animate);
+    time += 0.05;
+    
+    // Phase progression
+    if (phase === 0) {
+      energyLevel = Math.min(100, energyLevel + 0.5);
+      if (energyLevel >= 100) {
+        phase = 1;
+        progress = 0;
+      }
+    } else if (phase === 1) {
+      progress = Math.min(100, progress + 0.3);
+      if (progress >= 100) {
+        phase = 2;
+        progress = 0;
+      }
+    } else if (phase === 2) {
+      progress = Math.min(100, progress + 0.2);
+      if (progress >= 100) {
+        phase = 3;
+        progress = 0;
+      }
+    } else if (phase === 3) {
+      progress = Math.min(100, progress + 0.1);
+      if (progress >= 100) {
+        phase = 0;
+        energyLevel = 0;
+      }
+    }
+    
+    updateTerrain(time);
+    updateUI();
+    
+    // Energy core intensity based on phase
+    coreLight.intensity = 0.5 + Math.sin(time * 2) * 0.3 + (energyLevel / 100) * 2;
+    coreLight.color.setHSL(0.5 + (phase * 0.1), 1, 0.5);
+    
+    // Atmospheric processors orbit and work
+    const radius = 80 + Math.sin(time * 0.5) * 20;
+    processor1.position.set(
+      Math.cos(time * 0.8) * radius,
+      50 + Math.sin(time * 1.2) * 20,
+      Math.sin(time * 0.8) * radius
+    );
+    processor2.position.set(
+      Math.cos(time * 0.6 + 2.1) * radius,
+      40 + Math.sin(time * 1.1 + 1) * 15,
+      Math.sin(time * 0.6 + 2.1) * radius
+    );
+    processor3.position.set(
+      Math.cos(time * 0.7 + 4.2) * radius,
+      45 + Math.sin(time * 1.3 + 2) * 18,
+      Math.sin(time * 0.7 + 4.2) * radius
+    );
+    
+    processor1.intensity = phase >= 1 ? 1.5 + Math.sin(time * 3) * 0.5 : 0.1;
+    processor2.intensity = phase >= 1 ? 1.3 + Math.cos(time * 2.5) * 0.4 : 0.1;
+    processor3.intensity = phase >= 1 ? 1.4 + Math.sin(time * 2.8) * 0.6 : 0.1;
+    
+    // Nanobots behavior
+    const nanoPos = nanobots.geometry.attributes.position;
+    const nanoColors = nanobots.geometry.attributes.color;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      
+      // Move toward center during active phases
+      if (phase > 0) {
+        const centerPull = 0.01;
+        nanoPos.array[idx] += (velocities[idx] - nanoPos.array[idx] * centerPull);
+        nanoPos.array[idx + 1] += velocities[idx + 1] + Math.sin(time + i * 0.1) * 0.1;
+        nanoPos.array[idx + 2] += (velocities[idx + 2] - nanoPos.array[idx + 2] * centerPull);
+      } else {
+        nanoPos.array[idx] += velocities[idx];
+        nanoPos.array[idx + 1] += velocities[idx + 1];
+        nanoPos.array[idx + 2] += velocities[idx + 2];
+      }
+      
+      // Wrap particles
+      if (nanoPos.array[idx + 1] > 150) nanoPos.array[idx + 1] = 0;
+      if (Math.abs(nanoPos.array[idx]) > 200) velocities[idx] *= -1;
+      if (Math.abs(nanoPos.array[idx + 2]) > 200) velocities[idx + 2] *= -1;
+      
+      // Color based on phase
+      const phaseColors = [
+        [0.2, 0.8, 0.9], // Charging: cyan
+        [1.0, 0.3, 0.1], // Processing: orange
+        [0.2, 1.0, 0.3], // Growing: green
+        [0.3, 0.3, 1.0]  // Stabilizing: blue
+      ];
+      
+      nanoColors.array[idx] = phaseColors[phase][0];
+      nanoColors.array[idx + 1] = phaseColors[phase][1];
+      nanoColors.array[idx + 2] = phaseColors[phase][2];
+    }
+    
+    nanoPos.needsUpdate = true;
+    nanoColors.needsUpdate = true;
+    
+    // Terrain color evolution
+    const terrainColors = [
+      0x332211, // Charging: brown
+      0x553311, // Processing: darker brown
+      0x225533, // Growing: greenish
+      0x336655  // Stabilizing: blue-green
+    ];
+    material.color.setHex(terrainColors[phase]);
+    
+    // Camera movement
+    const camRadius = 100 + Math.sin(time * 0.1) * 20;
+    camera.position.x = Math.sin(time * 0.05) * camRadius;
+    camera.position.z = Math.cos(time * 0.05) * camRadius;
+    camera.position.y = 60 + Math.sin(time * 0.08) * 15;
+    camera.lookAt(0, 0, 0);
+    
+    renderer.render(scene, camera);
+  }
+  
+  animate();
+  
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+});
+</script>
 
 
 
