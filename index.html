@@ -907,7 +907,193 @@ setInterval(updateBTC, 60000);
 
 
 
+<div id="real-ai-gen" style="
+    background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
+    padding: 25px;
+    border-radius: 15px;
+    margin: 20px auto;
+    max-width: 600px;
+    color: white;
+    text-align: center;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+">
+    <h3 style="margin: 0 0 20px 0; font-size: 24px;">🤖 Real AI Image Generator</h3>
+    
+    <input id="ai-prompt" type="text" placeholder="A cyberpunk cat wearing sunglasses in neon city..." style="
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        font-size: 16px;
+        box-sizing: border-box;
+    ">
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap;">
+        <select id="ai-style" style="padding: 10px; border-radius: 8px; border: none; font-size: 14px;">
+            <option value="">Default Style</option>
+            <option value="photorealistic">Photorealistic</option>
+            <option value="anime">Anime</option>
+            <option value="oil painting">Oil Painting</option>
+            <option value="cyberpunk">Cyberpunk</option>
+            <option value="fantasy art">Fantasy Art</option>
+            <option value="minimalist">Minimalist</option>
+        </select>
+        
+        <select id="ai-quality" style="padding: 10px; border-radius: 8px; border: none; font-size: 14px;">
+            <option value="standard">Standard</option>
+            <option value="hd">HD Quality</option>
+        </select>
+    </div>
+    
+    <button onclick="generateRealAI()" id="gen-btn" style="
+        padding: 15px 30px;
+        background: rgba(255,255,255,0.2);
+        border: 2px solid white;
+        border-radius: 25px;
+        color: white;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 20px;
+    ">🎨 Generate AI Image</button>
+    
+    <div id="ai-loading" style="display: none; margin: 20px 0;">
+        <div style="border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        <p style="margin: 15px 0 0 0;">Creating your masterpiece...</p>
+    </div>
+    
+    <div id="ai-result" style="margin-top: 20px;">
+        <img id="ai-image" style="
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            display: none;
+        ">
+        <div id="ai-error" style="
+            background: rgba(255,0,0,0.1);
+            border: 1px solid rgba(255,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+            color: #ffcccb;
+        "></div>
+    </div>
+    
+    <button id="ai-download" onclick="downloadAI()" style="
+        display: none;
+        margin-top: 15px;
+        padding: 10px 20px;
+        background: rgba(255,255,255,0.9);
+        color: #333;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: bold;
+    ">💾 Download Image</button>
+</div>
 
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+let currentAIImage = '';
+
+async function generateRealAI() {
+    const prompt = document.getElementById('ai-prompt').value.trim();
+    if (!prompt) {
+        alert('Please enter a prompt!');
+        return;
+    }
+    
+    const style = document.getElementById('ai-style').value;
+    const quality = document.getElementById('ai-quality').value;
+    
+    const fullPrompt = style ? `${prompt}, ${style} style` : prompt;
+    
+    const loading = document.getElementById('ai-loading');
+    const image = document.getElementById('ai-image');
+    const downloadBtn = document.getElementById('ai-download');
+    const errorDiv = document.getElementById('ai-error');
+    const genBtn = document.getElementById('gen-btn');
+    
+    // Show loading
+    loading.style.display = 'block';
+    image.style.display = 'none';
+    downloadBtn.style.display = 'none';
+    errorDiv.style.display = 'none';
+    genBtn.disabled = true;
+    genBtn.style.opacity = '0.6';
+    
+    try {
+        // DeepAI API call
+        const formData = new FormData();
+        formData.append('text', fullPrompt);
+        formData.append('image_generator_version', quality);
+        
+        const response = await fetch('https://api.deepai.org/api/text2img', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Api-Key': 'quickstart-QUdJIGlzIGNvbWluZy4uLi4K' // Free tier key
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.output_url) {
+            currentAIImage = result.output_url;
+            image.src = result.output_url;
+            image.onload = function() {
+                loading.style.display = 'none';
+                image.style.display = 'block';
+                downloadBtn.style.display = 'inline-block';
+            };
+        } else {
+            throw new Error('No image generated');
+        }
+        
+    } catch (error) {
+        loading.style.display = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.innerHTML = `
+            <strong>Oops! Something went wrong:</strong><br>
+            ${error.message}<br>
+            <small>Try a different prompt or check your connection!</small>
+        `;
+        console.error('AI Generation Error:', error);
+    } finally {
+        genBtn.disabled = false;
+        genBtn.style.opacity = '1';
+    }
+}
+
+function downloadAI() {
+    if (currentAIImage) {
+        const link = document.createElement('a');
+        link.href = currentAIImage;
+        link.download = `ai-generated-${Date.now()}.png`;
+        link.target = '_blank';
+        link.click();
+    }
+}
+
+// Enter key support
+document.getElementById('ai-prompt').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        generateRealAI();
+    }
+});
+</script>
 
 
 
