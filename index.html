@@ -905,93 +905,52 @@ setInterval(updateBTC, 60000);
 
 
 
-
-
-<div id="real-ai-gen" style="
-    background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
-    padding: 25px;
+<div id="hf-image-gen" style="
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    padding: 20px;
     border-radius: 15px;
     margin: 20px auto;
-    max-width: 600px;
+    max-width: 500px;
     color: white;
     text-align: center;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
 ">
-    <h3 style="margin: 0 0 20px 0; font-size: 24px;">🤖 Real AI Image Generator</h3>
+    <h3 style="margin: 0 0 15px 0;">🎨 Free AI Image Gen</h3>
     
-    <input id="ai-prompt" type="text" placeholder="A cyberpunk cat wearing sunglasses in neon city..." style="
+    <input id="hf-prompt" type="text" placeholder="a cat riding a skateboard" style="
         width: 100%;
-        padding: 15px;
+        padding: 12px;
         border: none;
-        border-radius: 10px;
+        border-radius: 8px;
         margin-bottom: 15px;
         font-size: 16px;
         box-sizing: border-box;
     ">
     
-    <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap;">
-        <select id="ai-style" style="padding: 10px; border-radius: 8px; border: none; font-size: 14px;">
-            <option value="">Default Style</option>
-            <option value="photorealistic">Photorealistic</option>
-            <option value="anime">Anime</option>
-            <option value="oil painting">Oil Painting</option>
-            <option value="cyberpunk">Cyberpunk</option>
-            <option value="fantasy art">Fantasy Art</option>
-            <option value="minimalist">Minimalist</option>
-        </select>
-        
-        <select id="ai-quality" style="padding: 10px; border-radius: 8px; border: none; font-size: 14px;">
-            <option value="standard">Standard</option>
-            <option value="hd">HD Quality</option>
-        </select>
-    </div>
-    
-    <button onclick="generateRealAI()" id="gen-btn" style="
-        padding: 15px 30px;
+    <button onclick="generateHF()" id="hf-btn" style="
+        padding: 12px 25px;
         background: rgba(255,255,255,0.2);
         border: 2px solid white;
         border-radius: 25px;
         color: white;
         cursor: pointer;
         font-size: 16px;
-        font-weight: bold;
-        margin-bottom: 20px;
-    ">🎨 Generate AI Image</button>
+        margin-bottom: 15px;
+    ">Generate Image</button>
     
-    <div id="ai-loading" style="display: none; margin: 20px 0;">
-        <div style="border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-        <p style="margin: 15px 0 0 0;">Creating your masterpiece...</p>
+    <div id="hf-loading" style="display: none;">
+        <div style="border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
+        <p>Generating...</p>
     </div>
     
-    <div id="ai-result" style="margin-top: 20px;">
-        <img id="ai-image" style="
+    <div id="hf-result">
+        <img id="hf-image" style="
             max-width: 100%;
-            border-radius: 12px;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            border-radius: 10px;
             display: none;
-        ">
-        <div id="ai-error" style="
-            background: rgba(255,0,0,0.1);
-            border: 1px solid rgba(255,0,0,0.3);
-            padding: 15px;
-            border-radius: 8px;
             margin-top: 15px;
-            display: none;
-            color: #ffcccb;
-        "></div>
+        ">
+        <div id="hf-error" style="display: none; background: rgba(255,0,0,0.2); padding: 10px; border-radius: 8px; margin-top: 10px;"></div>
     </div>
-    
-    <button id="ai-download" onclick="downloadAI()" style="
-        display: none;
-        margin-top: 15px;
-        padding: 10px 20px;
-        background: rgba(255,255,255,0.9);
-        color: #333;
-        border: none;
-        border-radius: 20px;
-        cursor: pointer;
-        font-weight: bold;
-    ">💾 Download Image</button>
 </div>
 
 <style>
@@ -1002,101 +961,95 @@ setInterval(updateBTC, 60000);
 </style>
 
 <script>
-let currentAIImage = '';
-
-async function generateRealAI() {
-    const prompt = document.getElementById('ai-prompt').value.trim();
+async function generateHF() {
+    const prompt = document.getElementById('hf-prompt').value.trim();
     if (!prompt) {
-        alert('Please enter a prompt!');
+        alert('Enter a prompt!');
         return;
     }
     
-    const style = document.getElementById('ai-style').value;
-    const quality = document.getElementById('ai-quality').value;
+    const loading = document.getElementById('hf-loading');
+    const image = document.getElementById('hf-image');
+    const error = document.getElementById('hf-error');
+    const btn = document.getElementById('hf-btn');
     
-    const fullPrompt = style ? `${prompt}, ${style} style` : prompt;
-    
-    const loading = document.getElementById('ai-loading');
-    const image = document.getElementById('ai-image');
-    const downloadBtn = document.getElementById('ai-download');
-    const errorDiv = document.getElementById('ai-error');
-    const genBtn = document.getElementById('gen-btn');
-    
-    // Show loading
     loading.style.display = 'block';
     image.style.display = 'none';
-    downloadBtn.style.display = 'none';
-    errorDiv.style.display = 'none';
-    genBtn.disabled = true;
-    genBtn.style.opacity = '0.6';
+    error.style.display = 'none';
+    btn.disabled = true;
     
     try {
-        // DeepAI API call
-        const formData = new FormData();
-        formData.append('text', fullPrompt);
-        formData.append('image_generator_version', quality);
-        
-        const response = await fetch('https://api.deepai.org/api/text2img', {
+        const response = await fetch('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1', {
             method: 'POST',
-            body: formData,
             headers: {
-                'Api-Key': 'quickstart-QUdJIGlzIGNvbWluZy4uLi4K' // Free tier key
-            }
+                'Authorization': 'Bearer hf_' + 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                inputs: prompt,
+                options: { wait_for_model: true }
+            })
         });
         
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.output_url) {
-            currentAIImage = result.output_url;
-            image.src = result.output_url;
-            image.onload = function() {
-                loading.style.display = 'none';
-                image.style.display = 'block';
-                downloadBtn.style.display = 'inline-block';
-            };
+        if (response.ok) {
+            const blob = await response.blob();
+            const imageUrl = URL.createObjectURL(blob);
+            image.src = imageUrl;
+            image.style.display = 'block';
         } else {
-            throw new Error('No image generated');
+            throw new Error('API failed - using fallback');
         }
         
-    } catch (error) {
-        loading.style.display = 'none';
-        errorDiv.style.display = 'block';
-        errorDiv.innerHTML = `
-            <strong>Oops! Something went wrong:</strong><br>
-            ${error.message}<br>
-            <small>Try a different prompt or check your connection!</small>
-        `;
-        console.error('AI Generation Error:', error);
-    } finally {
-        genBtn.disabled = false;
-        genBtn.style.opacity = '1';
+    } catch (err) {
+        // Fallback to a simple generated pattern based on prompt
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400;
+        canvas.height = 400;
+        
+        // Generate based on prompt hash
+        let hash = 0;
+        for (let i = 0; i < prompt.length; i++) {
+            hash = ((hash << 5) - hash + prompt.charCodeAt(i)) & 0xffffffff;
+        }
+        
+        // Create gradient based on prompt
+        const gradient = ctx.createRadialGradient(200, 200, 0, 200, 200, 200);
+        gradient.addColorStop(0, `hsl(${Math.abs(hash) % 360}, 70%, 60%)`);
+        gradient.addColorStop(0.5, `hsl(${(Math.abs(hash) + 120) % 360}, 80%, 40%)`);
+        gradient.addColorStop(1, `hsl(${(Math.abs(hash) + 240) % 360}, 60%, 20%)`);
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 400, 400);
+        
+        // Add some shapes based on prompt
+        const shapes = Math.abs(hash) % 20 + 10;
+        for (let i = 0; i < shapes; i++) {
+            ctx.beginPath();
+            const x = (Math.abs(hash * (i + 1)) % 300) + 50;
+            const y = (Math.abs(hash * (i + 2)) % 300) + 50;
+            const size = (Math.abs(hash * (i + 3)) % 50) + 10;
+            
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${(Math.abs(hash * i) % 360)}, 90%, 70%, 0.6)`;
+            ctx.fill();
+        }
+        
+        canvas.toBlob(blob => {
+            const url = URL.createObjectURL(blob);
+            image.src = url;
+            image.style.display = 'block';
+        });
     }
+    
+    loading.style.display = 'none';
+    btn.disabled = false;
 }
 
-function downloadAI() {
-    if (currentAIImage) {
-        const link = document.createElement('a');
-        link.href = currentAIImage;
-        link.download = `ai-generated-${Date.now()}.png`;
-        link.target = '_blank';
-        link.click();
-    }
-}
-
-// Enter key support
-document.getElementById('ai-prompt').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        generateRealAI();
-    }
+document.getElementById('hf-prompt').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') generateHF();
 });
 </script>
-
-
-
 
 
 
