@@ -1,190 +1,631 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Advanced Drawing & Image Importer</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500" rel="stylesheet">
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Roboto', sans-serif;
-      background-color: #2c3e50;
-      color: #ecf0f1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    header {
-      width: 100%;
-      background: #34495e;
-      padding: 10px;
-      text-align: center;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-    }
-    header h1 {
-      margin: 0;
-      font-size: 1.8em;
-    }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px;
-      background: #34495e;
-      width: 100%;
-    }
-    .toolbar label,
-    .toolbar button,
-    .toolbar input[type="color"],
-    .toolbar input[type="range"],
-    .toolbar input[type="file"] {
-      background: #ecf0f1;
-      border: none;
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 1em;
-      cursor: pointer;
-    }
-    .toolbar button:hover {
-      background: #bdc3c7;
-    }
-    canvas {
-      border: 2px solid #ecf0f1;
-      background: #fff;
-      margin-top: 10px;
-      cursor: crosshair;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    .container {
-      width: 90%;
-      max-width: 1000px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Scene Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .viewport {
+            flex: 1;
+            position: relative;
+        }
+        
+        h2 {
+            color: #4fc3f7;
+            margin-bottom: 20px;
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .control-group h3 {
+            margin: 0 0 15px 0;
+            color: #81c784;
+            font-size: 14px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .export-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        
+        .export-btn:hover {
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+            appearance: none;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4fc3f7;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        label {
+            display: block;
+            margin: 5px 0;
+            color: #b0bec5;
+            font-size: 12px;
+        }
+        
+        .object-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            padding: 10px;
+        }
+        
+        .object-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        
+        .delete-btn {
+            background: #f44336;
+            padding: 5px 10px;
+            font-size: 12px;
+            width: auto;
+        }
+        
+        .stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            min-width: 200px;
+        }
+        
+        .stats h3 {
+            margin: 0 0 10px 0;
+            color: #4fc3f7;
+        }
+        
+        #canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>Advanced Drawing & Image Importer</h1>
-  </header>
-  <div class="container">
-    <div class="toolbar">
-      <label>Color:
-        <input type="color" id="colorPicker" value="#000000">
-      </label>
-      <label>Brush Size:
-        <input type="range" id="brushSize" min="1" max="50" value="5">
-      </label>
-      <button id="eraserBtn">Eraser</button>
-      <button id="undoBtn">Undo</button>
-      <button id="clearBtn">Clear</button>
-      <label>Import Image:
-        <input type="file" id="importImage" accept="image/*">
-      </label>
-      <button id="exportBtn">Export</button>
+    <div class="container">
+        <div class="sidebar">
+            <h2>3D Scene Generator</h2>
+            
+            <div class="control-group">
+                <h3>Add Objects</h3>
+                <button onclick="addCube()">Add Cube</button>
+                <button onclick="addSphere()">Add Sphere</button>
+                <button onclick="addCylinder()">Add Cylinder</button>
+                <button onclick="addCone()">Add Cone</button>
+                <button onclick="addTorus()">Add Torus</button>
+            </div>
+            
+            <div class="control-group">
+                <h3>Scene Controls</h3>
+                <button onclick="clearScene()">Clear Scene</button>
+                <button onclick="randomizeScene()">Randomize</button>
+                <button onclick="resetCamera()">Reset Camera</button>
+            </div>
+            
+            <div class="control-group">
+                <h3>Lighting</h3>
+                <label>Ambient Light</label>
+                <input type="range" id="ambientLight" min="0" max="1" step="0.1" value="0.4" onchange="updateLighting()">
+                <label>Directional Light</label>
+                <input type="range" id="directionalLight" min="0" max="2" step="0.1" value="1" onchange="updateLighting()">
+            </div>
+            
+            <div class="control-group">
+                <h3>Objects in Scene</h3>
+                <div class="object-list" id="objectList">
+                    <p style="color: #666; text-align: center;">No objects in scene</p>
+                </div>
+            </div>
+            
+            <button class="export-btn" onclick="exportPLY()">Export as PLY</button>
+        </div>
+        
+        <div class="viewport">
+            <canvas id="canvas"></canvas>
+            <div class="stats">
+                <h3>Scene Stats</h3>
+                <div id="stats">
+                    <p>Objects: 0</p>
+                    <p>Vertices: 0</p>
+                    <p>Faces: 0</p>
+                </div>
+            </div>
+        </div>
     </div>
-    <canvas id="drawingCanvas" width="800" height="500"></canvas>
-  </div>
-  
-  <script>
-    const canvas = document.getElementById("drawingCanvas");
-    const ctx = canvas.getContext("2d");
-    let drawing = false;
-    let brushColor = "#000000";
-    let brushSize = 5;
-    let usingEraser = false;
-    
-    // History for undo functionality
-    let undoStack = [];
-    
-    // Save current canvas state to the undo stack
-    function saveState() {
-      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      if (undoStack.length > 50) {
-        undoStack.shift();
-      }
-    }
-    
-    // Save the initial state
-    saveState();
-    
-    canvas.addEventListener("mousedown", (e) => {
-      drawing = true;
-      ctx.beginPath();
-      ctx.moveTo(e.offsetX, e.offsetY);
-      saveState();
-    });
-    canvas.addEventListener("mouseup", () => {
-      drawing = false;
-      ctx.beginPath();
-    });
-    canvas.addEventListener("mousemove", draw);
-    
-    function draw(event) {
-      if (!drawing) return;
-      ctx.lineWidth = brushSize;
-      ctx.lineCap = "round";
-      if (usingEraser) {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.strokeStyle = "rgba(0,0,0,1)";
-      } else {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = brushColor;
-      }
-      ctx.lineTo(event.offsetX, event.offsetY);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(event.offsetX, event.offsetY);
-    }
-    
-    document.getElementById("colorPicker").addEventListener("input", (e) => {
-      brushColor = e.target.value;
-      usingEraser = false; // disable eraser when a color is chosen
-      document.getElementById("eraserBtn").style.backgroundColor = "#ecf0f1";
-    });
-    
-    document.getElementById("brushSize").addEventListener("input", (e) => {
-      brushSize = e.target.value;
-    });
-    
-    document.getElementById("eraserBtn").addEventListener("click", () => {
-      usingEraser = !usingEraser;
-      document.getElementById("eraserBtn").style.backgroundColor = usingEraser ? "#95a5a6" : "#ecf0f1";
-    });
-    
-    document.getElementById("clearBtn").addEventListener("click", () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      saveState();
-    });
-    
-    document.getElementById("undoBtn").addEventListener("click", () => {
-      if (undoStack.length > 1) {
-        undoStack.pop();
-        const previousState = undoStack[undoStack.length - 1];
-        ctx.putImageData(previousState, 0, 0);
-      }
-    });
-    
-    document.getElementById("importImage").addEventListener("change", function(event) {
-      const file = event.target.files[0];
-      if (file) {
-        const img = new Image();
-        img.onload = function() {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          saveState();
-        };
-        img.src = URL.createObjectURL(file);
-      }
-    });
-    
-    document.getElementById("exportBtn").addEventListener("click", exportCanvas);
-    
-    function exportCanvas() {
-      const link = document.createElement("a");
-      link.download = "drawing.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    }
-  </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Global variables
+        let scene, camera, renderer, controls;
+        let objects = [];
+        let ambientLight, directionalLight;
+        let objectCounter = 0;
+
+        // Initialize the scene
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            const canvas = document.getElementById('canvas');
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth - 300, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // Add orbit controls
+            addOrbitControls();
+
+            // Add ground plane
+            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Start render loop
+            animate();
+            updateStats();
+        }
+
+        // Simple orbit controls implementation
+        function addOrbitControls() {
+            let isDragging = false;
+            let mouseX = 0, mouseY = 0;
+            let targetX = 0, targetY = 0;
+            let distance = 8;
+
+            const canvas = document.getElementById('canvas');
+
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const deltaX = e.clientX - mouseX;
+                const deltaY = e.clientY - mouseY;
+
+                targetX += deltaX * 0.01;
+                targetY += deltaY * 0.01;
+
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+
+                updateCameraPosition();
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                distance += e.deltaY * 0.01;
+                distance = Math.max(2, Math.min(20, distance));
+                updateCameraPosition();
+            });
+
+            function updateCameraPosition() {
+                camera.position.x = Math.cos(targetX) * Math.cos(targetY) * distance;
+                camera.position.y = Math.sin(targetY) * distance;
+                camera.position.z = Math.sin(targetX) * Math.cos(targetY) * distance;
+                camera.lookAt(0, 0, 0);
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate objects slightly
+            objects.forEach(obj => {
+                if (obj.userData.rotate) {
+                    obj.rotation.y += 0.005;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Add different shapes
+        function addCube() {
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshLambertMaterial({ 
+                color: getRandomColor() 
+            });
+            const cube = new THREE.Mesh(geometry, material);
+            
+            positionRandomly(cube);
+            cube.castShadow = true;
+            cube.userData = { type: 'Cube', id: ++objectCounter, rotate: true };
+            
+            scene.add(cube);
+            objects.push(cube);
+            updateObjectList();
+            updateStats();
+        }
+
+        function addSphere() {
+            const geometry = new THREE.SphereGeometry(0.5, 16, 16);
+            const material = new THREE.MeshLambertMaterial({ 
+                color: getRandomColor() 
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+            
+            positionRandomly(sphere);
+            sphere.castShadow = true;
+            sphere.userData = { type: 'Sphere', id: ++objectCounter, rotate: false };
+            
+            scene.add(sphere);
+            objects.push(sphere);
+            updateObjectList();
+            updateStats();
+        }
+
+        function addCylinder() {
+            const geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+            const material = new THREE.MeshLambertMaterial({ 
+                color: getRandomColor() 
+            });
+            const cylinder = new THREE.Mesh(geometry, material);
+            
+            positionRandomly(cylinder);
+            cylinder.castShadow = true;
+            cylinder.userData = { type: 'Cylinder', id: ++objectCounter, rotate: true };
+            
+            scene.add(cylinder);
+            objects.push(cylinder);
+            updateObjectList();
+            updateStats();
+        }
+
+        function addCone() {
+            const geometry = new THREE.ConeGeometry(0.5, 1, 16);
+            const material = new THREE.MeshLambertMaterial({ 
+                color: getRandomColor() 
+            });
+            const cone = new THREE.Mesh(geometry, material);
+            
+            positionRandomly(cone);
+            cone.castShadow = true;
+            cone.userData = { type: 'Cone', id: ++objectCounter, rotate: true };
+            
+            scene.add(cone);
+            objects.push(cone);
+            updateObjectList();
+            updateStats();
+        }
+
+        function addTorus() {
+            const geometry = new THREE.TorusGeometry(0.5, 0.2, 8, 16);
+            const material = new THREE.MeshLambertMaterial({ 
+                color: getRandomColor() 
+            });
+            const torus = new THREE.Mesh(geometry, material);
+            
+            positionRandomly(torus);
+            torus.castShadow = true;
+            torus.userData = { type: 'Torus', id: ++objectCounter, rotate: true };
+            
+            scene.add(torus);
+            objects.push(torus);
+            updateObjectList();
+            updateStats();
+        }
+
+        // Utility functions
+        function positionRandomly(object) {
+            object.position.set(
+                (Math.random() - 0.5) * 6,
+                Math.random() * 3 + 0.5,
+                (Math.random() - 0.5) * 6
+            );
+            object.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+        }
+
+        function getRandomColor() {
+            const colors = [0xff6b6b, 0x4ecdc4, 0x45b7d1, 0x96ceb4, 0xffeaa7, 0xdda0dd, 0x98d8c8];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function clearScene() {
+            objects.forEach(obj => scene.remove(obj));
+            objects = [];
+            objectCounter = 0;
+            updateObjectList();
+            updateStats();
+        }
+
+        function randomizeScene() {
+            clearScene();
+            const numObjects = Math.floor(Math.random() * 15) + 5;
+            
+            for (let i = 0; i < numObjects; i++) {
+                const shapeType = Math.floor(Math.random() * 5);
+                switch (shapeType) {
+                    case 0: addCube(); break;
+                    case 1: addSphere(); break;
+                    case 2: addCylinder(); break;
+                    case 3: addCone(); break;
+                    case 4: addTorus(); break;
+                }
+            }
+        }
+
+        function resetCamera() {
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+        }
+
+        function updateLighting() {
+            const ambientValue = document.getElementById('ambientLight').value;
+            const directionalValue = document.getElementById('directionalLight').value;
+            
+            ambientLight.intensity = parseFloat(ambientValue);
+            directionalLight.intensity = parseFloat(directionalValue);
+        }
+
+        function removeObject(id) {
+            const index = objects.findIndex(obj => obj.userData.id === id);
+            if (index !== -1) {
+                scene.remove(objects[index]);
+                objects.splice(index, 1);
+                updateObjectList();
+                updateStats();
+            }
+        }
+
+        function updateObjectList() {
+            const list = document.getElementById('objectList');
+            if (objects.length === 0) {
+                list.innerHTML = '<p style="color: #666; text-align: center;">No objects in scene</p>';
+                return;
+            }
+            
+            list.innerHTML = objects.map(obj => 
+                `<div class="object-item">
+                    <span>${obj.userData.type} #${obj.userData.id}</span>
+                    <button class="delete-btn" onclick="removeObject(${obj.userData.id})">Delete</button>
+                </div>`
+            ).join('');
+        }
+
+        function updateStats() {
+            let totalVertices = 0;
+            let totalFaces = 0;
+            
+            objects.forEach(obj => {
+                if (obj.geometry) {
+                    if (obj.geometry.attributes.position) {
+                        totalVertices += obj.geometry.attributes.position.count;
+                    }
+                    if (obj.geometry.index) {
+                        totalFaces += obj.geometry.index.count / 3;
+                    }
+                }
+            });
+            
+            document.getElementById('stats').innerHTML = `
+                <p>Objects: ${objects.length}</p>
+                <p>Vertices: ${totalVertices}</p>
+                <p>Faces: ${Math.floor(totalFaces)}</p>
+            `;
+        }
+
+        // PLY Export function
+        function exportPLY() {
+            if (objects.length === 0) {
+                alert('No objects in scene to export!');
+                return;
+            }
+
+            let plyContent = 'ply\nformat ascii 1.0\n';
+            let vertices = [];
+            let faces = [];
+            let vertexOffset = 0;
+
+            // Collect all vertices and faces
+            objects.forEach(obj => {
+                if (!obj.geometry) return;
+
+                const geometry = obj.geometry;
+                const position = geometry.attributes.position;
+                const color = obj.material.color;
+
+                // Apply object transformations
+                obj.updateMatrixWorld();
+                const matrix = obj.matrixWorld;
+
+                // Extract vertices
+                for (let i = 0; i < position.count; i++) {
+                    const vertex = new THREE.Vector3(
+                        position.getX(i),
+                        position.getY(i),
+                        position.getZ(i)
+                    );
+                    vertex.applyMatrix4(matrix);
+                    
+                    vertices.push({
+                        x: vertex.x,
+                        y: vertex.y,
+                        z: vertex.z,
+                        r: Math.floor(color.r * 255),
+                        g: Math.floor(color.g * 255),
+                        b: Math.floor(color.b * 255)
+                    });
+                }
+
+                // Extract faces
+                if (geometry.index) {
+                    const index = geometry.index;
+                    for (let i = 0; i < index.count; i += 3) {
+                        faces.push([
+                            index.getX(i) + vertexOffset,
+                            index.getX(i + 1) + vertexOffset,
+                            index.getX(i + 2) + vertexOffset
+                        ]);
+                    }
+                } else {
+                    // Non-indexed geometry
+                    for (let i = 0; i < position.count; i += 3) {
+                        faces.push([
+                            i + vertexOffset,
+                            i + 1 + vertexOffset,
+                            i + 2 + vertexOffset
+                        ]);
+                    }
+                }
+
+                vertexOffset += position.count;
+            });
+
+            // Build PLY header
+            plyContent += `element vertex ${vertices.length}\n`;
+            plyContent += 'property float x\n';
+            plyContent += 'property float y\n';
+            plyContent += 'property float z\n';
+            plyContent += 'property uchar red\n';
+            plyContent += 'property uchar green\n';
+            plyContent += 'property uchar blue\n';
+            plyContent += `element face ${faces.length}\n`;
+            plyContent += 'property list uchar int vertex_indices\n';
+            plyContent += 'end_header\n';
+
+            // Add vertex data
+            vertices.forEach(v => {
+                plyContent += `${v.x.toFixed(6)} ${v.y.toFixed(6)} ${v.z.toFixed(6)} ${v.r} ${v.g} ${v.b}\n`;
+            });
+
+            // Add face data
+            faces.forEach(f => {
+                plyContent += `3 ${f[0]} ${f[1]} ${f[2]}\n`;
+            });
+
+            // Download the file
+            const blob = new Blob([plyContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'scene_export.ply';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            console.log('PLY file exported successfully!');
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = (window.innerWidth - 300) / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth - 300, window.innerHeight);
+        });
+
+        // Initialize the application
+        init();
+    </script>
 </body>
 </html>
