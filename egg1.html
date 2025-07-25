@@ -1,304 +1,836 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Stellar Survivor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Detailed Alien World Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
-        #gameCanvas { cursor: none; }
-        #hud {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            color: #0f0;
+        body {
+            margin: 0;
+            padding: 20px;
             font-family: 'Courier New', monospace;
-            user-select: none;
-            text-shadow: 0 0 5px #0f0;
+            background: linear-gradient(135deg, #0a0a0f, #1a0f2e, #2d1b4e);
+            color: #00ff88;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
-        #healthBar {
-            width: 200px;
-            height: 10px;
-            border: 2px solid #0f0;
-            margin-top: 5px;
-            box-shadow: 0 0 5px #0f0;
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
         }
-        #healthFill {
+        
+        h1 {
+            text-align: center;
+            color: #00ff88;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.7);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 20px rgba(0, 255, 136, 0.7); }
+            to { text-shadow: 0 0 30px rgba(0, 255, 136, 1); }
+        }
+        
+        .alien-panel {
+            background: linear-gradient(145deg, rgba(0, 255, 136, 0.1), rgba(138, 43, 226, 0.1));
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 255, 136, 0.2);
+        }
+        
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00ff88;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        
+        input, select, button {
             width: 100%;
-            height: 100%;
-            background: #0f0;
-            transition: width 0.1s;
+            padding: 10px;
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00ff88;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+        
+        input[type="range"] {
+            background: transparent;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #00ff88, #8a2be2);
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 255, 136, 0.4);
+        }
+        
+        .generate-btn {
+            grid-column: 1 / -1;
+            background: linear-gradient(45deg, #ff0080, #00ff88, #8a2be2);
+            background-size: 300% 300%;
+            animation: rainbow 3s ease infinite;
+            font-size: 1.2em;
+            padding: 15px;
+        }
+        
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        #viewer {
+            width: 100%;
+            height: 600px;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 3px solid rgba(0, 255, 136, 0.5);
+            background: radial-gradient(circle, #1a0f2e, #000);
+            position: relative;
+        }
+        
+        .feature-info {
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 5px solid #00ff88;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .feature-item {
+            background: rgba(138, 43, 226, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(138, 43, 226, 0.4);
+        }
+        
+        .status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff88;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid #00ff88;
+            font-family: 'Courier New', monospace;
+            z-index: 1000;
+        }
+        
+        .loading {
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
 <body>
-    <div id="hud">
-        SCORE: <span id="score">0</span><br>
-        ENERGY: <span id="energy">100</span>%<br>
-        <div id="healthBar">
-            <div id="healthFill"></div>
+    <div class="status" id="status">READY</div>
+    
+    <div class="container">
+        <h1>👽 ULTRA-DETAILED ALIEN WORLD GENERATOR 🛸</h1>
+        
+        <div class="alien-panel">
+            <div class="control-grid">
+                <div class="control-group">
+                    <label>Atmospheric Color:</label>
+                    <select id="atmosphere">
+                        <option value="toxic">Toxic Green</option>
+                        <option value="crimson">Crimson Storm</option>
+                        <option value="azure">Azure Mist</option>
+                        <option value="violet">Violet Haze</option>
+                        <option value="golden">Golden Winds</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>Terrain Type:</label>
+                    <select id="terrain">
+                        <option value="volcanic">Volcanic Hellscape</option>
+                        <option value="crystalline">Crystal Formations</option>
+                        <option value="organic">Bio-Organic</option>
+                        <option value="metallic">Metallic Structures</option>
+                        <option value="hybrid">Hybrid Chaos</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>Crater Density:</label>
+                    <input type="range" id="craters" min="0" max="50" value="25">
+                    <span id="craterValue">25</span>
+                </div>
+                
+                <div class="control-group">
+                    <label>Mountain Ranges:</label>
+                    <input type="range" id="mountains" min="0" max="30" value="15">
+                    <span id="mountainValue">15</span>
+                </div>
+                
+                <div class="control-group">
+                    <label>Valley Systems:</label>
+                    <input type="range" id="valleys" min="0" max="25" value="12">
+                    <span id="valleyValue">12</span>
+                </div>
+                
+                <div class="control-group">
+                    <label>Surface Chaos:</label>
+                    <input type="range" id="chaos" min="0" max="100" value="50">
+                    <span id="chaosValue">50</span>
+                </div>
+                
+                <div class="control-group">
+                    <label>Alien Structures:</label>
+                    <input type="range" id="structures" min="0" max="20" value="8">
+                    <span id="structureValue">8</span>
+                </div>
+                
+                <div class="control-group">
+                    <label>World Name:</label>
+                    <input type="text" id="worldName" value="Xenthari-Prime" placeholder="Alien world designation">
+                </div>
+                
+                <button class="generate-btn" onclick="generateAlienWorld()">🌍 GENERATE ALIEN WORLD 🌍</button>
+                <button onclick="downloadPLY()">📥 DOWNLOAD PLY</button>
+                <button onclick="randomizeAlien()">🎲 RANDOMIZE</button>
+            </div>
+        </div>
+        
+        <div id="viewer"></div>
+        
+        <div class="feature-info">
+            <h3>🛸 ALIEN WORLD FEATURES 🛸</h3>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <strong>Resolution:</strong> 1000+ polygons with ultra-detail
+                </div>
+                <div class="feature-item">
+                    <strong>Surface Features:</strong> Impact craters, mountain ranges, valley systems
+                </div>
+                <div class="feature-item">
+                    <strong>Alien Structures:</strong> Mysterious geometric formations
+                </div>
+                <div class="feature-item">
+                    <strong>Atmospheric Effects:</strong> Color-coded alien atmospheres
+                </div>
+                <div class="feature-item">
+                    <strong>Terrain Types:</strong> Volcanic, crystalline, bio-organic, metallic
+                </div>
+                <div class="feature-item">
+                    <strong>Export Format:</strong> High-detail PLY with normals and vertex colors
+                </div>
+            </div>
         </div>
     </div>
-    <canvas id="gameCanvas"></canvas>
 
-<script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-let width = canvas.width = window.innerWidth;
-let height = canvas.height = window.innerHeight;
-
-// Game state
-let score = 0;
-let energy = 100;
-let health = 100;
-let particles = [];
-let planets = [];
-let asteroids = [];
-let resources = [];
-let powerups = [];
-
-class Spaceship {
-    constructor() {
-        this.x = width/2;
-        this.y = height/2;
-        this.size = 20;
-        this.angle = 0;
-        this.thrust = 0;
-        this.heat = 0;
-    }
-
-    draw() {
-        // Glow effect
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size*1.5, 0, Math.PI*2);
-        ctx.fillStyle = `rgba(0, 255, 0, ${0.2 + Math.random()*0.1})`;
-        ctx.fill();
-
-        // Ship body
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
+    <script>
+        let scene, camera, renderer, planet, controls;
+        let currentGeometry = null;
+        let atmosphereColors = {
+            toxic: 0x00ff44,
+            crimson: 0xff2244,
+            azure: 0x4488ff,
+            violet: 0x8844ff,
+            golden: 0xffdd44
+        };
         
-        ctx.beginPath();
-        ctx.moveTo(this.size, 0);
-        ctx.lineTo(-this.size, this.size/2);
-        ctx.lineTo(-this.size, -this.size/2);
-        ctx.closePath();
-        ctx.fillStyle = this.heat > 80 ? '#f00' : '#0f0';
-        ctx.fill();
-        ctx.strokeStyle = '#0f0';
-        ctx.stroke();
-
-        // Thrust effect
-        if(this.thrust > 0) {
-            ctx.beginPath();
-            ctx.moveTo(-this.size*1.5, 0);
-            ctx.lineTo(-this.size*2 - this.thrust*5, 0);
-            ctx.strokeStyle = `hsl(${Math.random()*40}, 100%, 50%)`;
-            ctx.lineWidth = 3;
-            ctx.stroke();
+        function init() {
+            const container = document.getElementById('viewer');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000005);
+            
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 2000);
+            camera.position.set(0, 0, 400);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+            
+            // Enhanced lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            directionalLight.position.set(300, 300, 300);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+            
+            // Colored rim light
+            const rimLight = new THREE.DirectionalLight(0x00ff88, 0.8);
+            rimLight.position.set(-200, 100, -200);
+            scene.add(rimLight);
+            
+            addAdvancedStarfield();
+            generateAlienWorld();
+            animate();
+            updateSliderDisplays();
         }
-
-        ctx.restore();
-    }
-
-    update() {
-        // Apply gravity from planets
-        planets.forEach(planet => {
-            const dx = planet.x - this.x;
-            const dy = planet.y - this.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if(dist < planet.gravityRadius) {
-                const force = planet.gravityStrength * (1 - dist/planet.gravityRadius);
-                this.x += (dx/dist) * force;
-                this.y += (dy/dist) * force;
+        
+        function addAdvancedStarfield() {
+            // Multiple star layers for depth
+            for (let layer = 0; layer < 3; layer++) {
+                const starsGeometry = new THREE.BufferGeometry();
+                const starCount = 2000 - (layer * 500);
+                const starsVertices = [];
+                const colors = [];
+                
+                for (let i = 0; i < starCount; i++) {
+                    const radius = 800 + (layer * 400);
+                    const x = (Math.random() - 0.5) * radius * 2;
+                    const y = (Math.random() - 0.5) * radius * 2;
+                    const z = (Math.random() - 0.5) * radius * 2;
+                    starsVertices.push(x, y, z);
+                    
+                    // Colored stars
+                    const color = new THREE.Color();
+                    color.setHSL(Math.random(), 0.8, 0.5 + Math.random() * 0.5);
+                    colors.push(color.r, color.g, color.b);
+                }
+                
+                starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+                starsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                
+                const starsMaterial = new THREE.PointsMaterial({ 
+                    size: 2 - layer * 0.5, 
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 1 - layer * 0.2
+                });
+                
+                const stars = new THREE.Points(starsGeometry, starsMaterial);
+                scene.add(stars);
             }
-        });
-
-        // Energy management
-        if(this.thrust > 0) energy = Math.max(0, energy - 0.1);
-        else energy = Math.min(100, energy + 0.05);
-    }
-}
-
-class Planet {
-    constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.size = Math.random() * 80 + 40;
-        this.type = Math.random() < 0.1 ? 'blackhole' : 
-                   Math.random() < 0.3 ? 'ice' : 'normal';
-        this.gravityStrength = this.type === 'blackhole' ? 2 : 0.5;
-        this.gravityRadius = this.size * (this.type === 'blackhole' ? 10 : 5);
-    }
-
-    draw() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-        const gradient = ctx.createRadialGradient(
-            this.x, this.y, 0, this.x, this.y, this.size
-        );
-        
-        if(this.type === 'blackhole') {
-            gradient.addColorStop(0, '#000');
-            gradient.addColorStop(1, '#330066');
-        } else if(this.type === 'ice') {
-            gradient.addColorStop(0, '#00ffff');
-            gradient.addColorStop(1, '#0000ff');
-        } else {
-            gradient.addColorStop(0, '#964B00');
-            gradient.addColorStop(1, '#502000');
         }
         
-        ctx.fillStyle = gradient;
-        ctx.fill();
-    }
-}
-
-// Initialize game objects
-const ship = new Spaceship();
-for(let i = 0; i < 5; i++) planets.push(new Planet());
-
-// Input handling
-let mouseX = width/2, mouseY = height/2;
-canvas.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-});
-
-// Game mechanics
-function spawnAsteroid() {
-    asteroids.push({
-        x: Math.random() < 0.5 ? -100 : width + 100,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 5,
-        vy: (Math.random() - 0.5) * 5,
-        size: Math.random() * 30 + 10
-    });
-}
-
-function spawnResource() {
-    resources.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        type: Math.random() < 0.5 ? 'energy' : 'repair',
-        size: 10
-    });
-}
-
-// Collision detection
-function checkCollisions() {
-    asteroids.forEach((asteroid, i) => {
-        const dx = ship.x - asteroid.x;
-        const dy = ship.y - asteroid.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        
-        if(dist < ship.size + asteroid.size) {
-            health -= 5;
-            asteroids.splice(i, 1);
-            spawnExplosion(asteroid.x, asteroid.y);
+        function updateStatus(message) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = message.includes('GENERATING') ? 'status loading' : 'status';
         }
-    });
-}
-
-function spawnExplosion(x, y) {
-    for(let i = 0; i < 20; i++) {
-        particles.push({
-            x, y,
-            vx: (Math.random() - 0.5) * 5,
-            vy: (Math.random() - 0.5) * 5,
-            life: 1.0
+        
+        function generateAlienWorld() {
+            updateStatus('GENERATING ALIEN WORLD...');
+            
+            if (planet) {
+                scene.remove(planet);
+            }
+            
+            const atmosphere = document.getElementById('atmosphere').value;
+            const terrain = document.getElementById('terrain').value;
+            const craterCount = parseInt(document.getElementById('craters').value);
+            const mountainCount = parseInt(document.getElementById('mountains').value);
+            const valleyCount = parseInt(document.getElementById('valleys').value);
+            const chaos = parseInt(document.getElementById('chaos').value);
+            const structures = parseInt(document.getElementById('structures').value);
+            
+            // Ultra-high detail sphere
+            const segments = 1000; // Ultra detail!
+            const geometry = new THREE.SphereGeometry(150, segments, segments);
+            
+            const positions = geometry.attributes.position;
+            const colors = [];
+            const vertex = new THREE.Vector3();
+            
+            updateStatus('SCULPTING TERRAIN...');
+            
+            // Generate detailed terrain
+            for (let i = 0; i < positions.count; i++) {
+                vertex.fromBufferAttribute(positions, i);
+                const originalRadius = vertex.length();
+                
+                // Multi-octave noise for base terrain
+                let height = 0;
+                let amplitude = 1;
+                let frequency = 0.005;
+                
+                for (let octave = 0; octave < 6; octave++) {
+                    height += noise3D(vertex.x * frequency, vertex.y * frequency, vertex.z * frequency) * amplitude;
+                    amplitude *= 0.5;
+                    frequency *= 2;
+                }
+                
+                // Add craters
+                height += generateCraters(vertex, craterCount);
+                
+                // Add mountain ranges
+                height += generateMountains(vertex, mountainCount);
+                
+                // Add valley systems
+                height += generateValleys(vertex, valleyCount);
+                
+                // Add alien structures
+                height += generateAlienStructures(vertex, structures);
+                
+                // Apply chaos factor
+                const chaosNoise = noise3D(vertex.x * 0.02, vertex.y * 0.02, vertex.z * 0.02) * chaos * 0.3;
+                height += chaosNoise;
+                
+                // Apply terrain type modifications
+                height = applyTerrainType(height, terrain, vertex);
+                
+                vertex.normalize();
+                vertex.multiplyScalar(originalRadius + height);
+                
+                positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+                
+                // Generate vertex colors based on height and terrain
+                const color = generateVertexColor(height, terrain, atmosphere);
+                colors.push(color.r, color.g, color.b);
+            }
+            
+            updateStatus('COMPUTING SURFACE NORMALS...');
+            
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+            currentGeometry = geometry;
+            
+            const material = new THREE.MeshLambertMaterial({ 
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.95
+            });
+            
+            planet = new THREE.Mesh(geometry, material);
+            planet.castShadow = true;
+            planet.receiveShadow = true;
+            scene.add(planet);
+            
+            // Add atmospheric glow
+            addAtmosphericGlow(atmosphere);
+            
+            updateStatus('ALIEN WORLD GENERATED');
+        }
+        
+        function generateCraters(vertex, count) {
+            let craterHeight = 0;
+            for (let i = 0; i < count; i++) {
+                const craterCenter = new THREE.Vector3(
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300
+                ).normalize().multiplyScalar(150);
+                
+                const distance = vertex.distanceTo(craterCenter);
+                const craterRadius = 15 + Math.random() * 25;
+                
+                if (distance < craterRadius) {
+                    const falloff = 1 - (distance / craterRadius);
+                    const depth = -8 * falloff * falloff; // Crater depression
+                    const rim = distance > craterRadius * 0.8 ? 3 * falloff : 0; // Crater rim
+                    craterHeight += depth + rim;
+                }
+            }
+            return craterHeight;
+        }
+        
+        function generateMountains(vertex, count) {
+            let mountainHeight = 0;
+            for (let i = 0; i < count; i++) {
+                const mountainCenter = new THREE.Vector3(
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300
+                ).normalize().multiplyScalar(150);
+                
+                const distance = vertex.distanceTo(mountainCenter);
+                const mountainRadius = 20 + Math.random() * 40;
+                
+                if (distance < mountainRadius) {
+                    const falloff = 1 - (distance / mountainRadius);
+                    const height = 25 * falloff * falloff * falloff; // Sharp peaks
+                    mountainHeight += height;
+                }
+            }
+            return mountainHeight;
+        }
+        
+        function generateValleys(vertex, count) {
+            let valleyHeight = 0;
+            for (let i = 0; i < count; i++) {
+                const valleyStart = new THREE.Vector3(
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300
+                ).normalize().multiplyScalar(150);
+                
+                const valleyEnd = new THREE.Vector3(
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300
+                ).normalize().multiplyScalar(150);
+                
+                // Calculate distance to valley line
+                const lineDistance = distanceToLine(vertex, valleyStart, valleyEnd);
+                const valleyWidth = 8 + Math.random() * 12;
+                
+                if (lineDistance < valleyWidth) {
+                    const falloff = 1 - (lineDistance / valleyWidth);
+                    const depth = -6 * falloff; // Valley depression
+                    valleyHeight += depth;
+                }
+            }
+            return valleyHeight;
+        }
+        
+        function generateAlienStructures(vertex, count) {
+            let structureHeight = 0;
+            for (let i = 0; i < count; i++) {
+                const structureCenter = new THREE.Vector3(
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300,
+                    (Math.random() - 0.5) * 300
+                ).normalize().multiplyScalar(150);
+                
+                const distance = vertex.distanceTo(structureCenter);
+                const structureRadius = 5 + Math.random() * 10;
+                
+                if (distance < structureRadius) {
+                    // Geometric alien structures
+                    const angle = Math.atan2(vertex.z - structureCenter.z, vertex.x - structureCenter.x);
+                    const sides = 3 + Math.floor(Math.random() * 5); // 3-7 sided structures
+                    const sideAngle = (Math.PI * 2) / sides;
+                    const geometricFactor = Math.cos(angle * sides) * 0.5 + 0.5;
+                    
+                    const falloff = 1 - (distance / structureRadius);
+                    const height = 15 * falloff * geometricFactor;
+                    structureHeight += height;
+                }
+            }
+            return structureHeight;
+        }
+        
+        function applyTerrainType(height, terrain, vertex) {
+            switch (terrain) {
+                case 'volcanic':
+                    // Sharp, jagged terrain
+                    return height * 1.5 + Math.abs(noise3D(vertex.x * 0.1, vertex.y * 0.1, vertex.z * 0.1)) * 10;
+                case 'crystalline':
+                    // Geometric, faceted terrain
+                    const facetNoise = Math.floor(noise3D(vertex.x * 0.05, vertex.y * 0.05, vertex.z * 0.05) * 5) / 5;
+                    return height + facetNoise * 8;
+                case 'organic':
+                    // Smooth, flowing terrain
+                    return height * 0.8 + Math.sin(vertex.x * 0.02) * Math.cos(vertex.z * 0.02) * 5;
+                case 'metallic':
+                    // Industrial, structured terrain
+                    const gridX = Math.floor(vertex.x / 20) * 20;
+                    const gridZ = Math.floor(vertex.z / 20) * 20;
+                    const gridNoise = noise3D(gridX * 0.01, vertex.y * 0.01, gridZ * 0.01);
+                    return height + gridNoise * 6;
+                case 'hybrid':
+                    // Chaotic mix of all types
+                    const selector = noise3D(vertex.x * 0.003, vertex.y * 0.003, vertex.z * 0.003);
+                    if (selector > 0.5) return height * 1.3;
+                    else if (selector > 0) return height * 0.7;
+                    else return height + Math.sin(vertex.length() * 0.1) * 4;
+                default:
+                    return height;
+            }
+        }
+        
+        function generateVertexColor(height, terrain, atmosphere) {
+            const color = new THREE.Color();
+            const atmColor = atmosphereColors[atmosphere] || 0x00ff44;
+            const baseColor = new THREE.Color(atmColor);
+            
+            // Height-based coloring
+            if (height > 20) {
+                color.setRGB(1, 1, 1); // Snow caps / peaks
+            } else if (height > 10) {
+                color.lerpColors(baseColor, new THREE.Color(0x888888), 0.3); // Rocky
+            } else if (height > 0) {
+                color.copy(baseColor); // Base terrain
+            } else {
+                color.lerpColors(baseColor, new THREE.Color(0x000000), 0.5); // Valleys/water
+            }
+            
+            // Terrain type modifications
+            switch (terrain) {
+                case 'volcanic':
+                    color.lerp(new THREE.Color(0xff4400), 0.3);
+                    break;
+                case 'crystalline':
+                    color.lerp(new THREE.Color(0x44ffff), 0.4);
+                    break;
+                case 'organic':
+                    color.lerp(new THREE.Color(0x44ff44), 0.3);
+                    break;
+                case 'metallic':
+                    color.lerp(new THREE.Color(0x888888), 0.5);
+                    break;
+            }
+            
+            return color;
+        }
+        
+        function addAtmosphericGlow(atmosphere) {
+            const glowColor = atmosphereColors[atmosphere] || 0x00ff44;
+            const glowGeometry = new THREE.SphereGeometry(165, 64, 64);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: glowColor,
+                transparent: true,
+                opacity: 0.1,
+                side: THREE.BackSide
+            });
+            
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            scene.add(glow);
+        }
+        
+        function distanceToLine(point, lineStart, lineEnd) {
+            const line = new THREE.Vector3().subVectors(lineEnd, lineStart);
+            const pointToStart = new THREE.Vector3().subVectors(point, lineStart);
+            const t = Math.max(0, Math.min(1, pointToStart.dot(line) / line.dot(line)));
+            const projection = new THREE.Vector3().copy(lineStart).add(line.multiplyScalar(t));
+            return point.distanceTo(projection);
+        }
+        
+        function noise3D(x, y, z) {
+            return (Math.sin(x * 1.2) + Math.sin(y * 1.1) + Math.sin(z * 1.3) + 
+                   Math.sin(x * 2.4 + y * 1.7) + Math.sin(y * 2.2 + z * 1.8) +
+                   Math.sin(z * 2.1 + x * 1.9) + Math.sin(x * 4.8 + y * 3.4 + z * 2.7)) / 7;
+        }
+        
+        function downloadPLY() {
+            if (!currentGeometry) {
+                alert('Please generate an alien world first!');
+                return;
+            }
+            
+            updateStatus('EXPORTING PLY FILE...');
+            
+            const worldName = document.getElementById('worldName').value || 'alien-world';
+            const plyData = generateAdvancedPLY(currentGeometry);
+            
+            const blob = new Blob([plyData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${worldName}-ultra-detail.ply`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            updateStatus('PLY FILE EXPORTED');
+        }
+        
+        function generateAdvancedPLY(geometry) {
+            const positions = geometry.attributes.position;
+            const normals = geometry.attributes.normal;
+            const colors = geometry.attributes.color;
+            const indices = geometry.index;
+            
+            let plyData = 'ply\n';
+            plyData += 'format ascii 1.0\n';
+            plyData += 'comment Ultra-detailed alien world generated by Claude\n';
+            plyData += `element vertex ${positions.count}\n`;
+            plyData += 'property float x\n';
+            plyData += 'property float y\n';
+            plyData += 'property float z\n';
+            plyData += 'property float nx\n';
+            plyData += 'property float ny\n';
+            plyData += 'property float nz\n';
+            plyData += 'property uchar red\n';
+            plyData += 'property uchar green\n';
+            plyData += 'property uchar blue\n';
+            
+            if (indices) {
+                plyData += `element face ${indices.count / 3}\n`;
+                plyData += 'property list uchar int vertex_indices\n';
+            }
+            
+            plyData += 'end_header\n';
+            
+            // Write vertices with colors
+            for (let i = 0; i < positions.count; i++) {
+                const x = positions.getX(i).toFixed(6);
+                const y = positions.getY(i).toFixed(6);
+                const z = positions.getZ(i).toFixed(6);
+                const nx = normals.getX(i).toFixed(6);
+                const ny = normals.getY(i).toFixed(6);
+                const nz = normals.getZ(i).toFixed(6);
+                const r = Math.floor(colors.getX(i) * 255);
+                const g = Math.floor(colors.getY(i) * 255);
+                const b = Math.floor(colors.getZ(i) * 255);
+                
+                plyData += `${x} ${y} ${z} ${nx} ${ny} ${nz} ${r} ${g} ${b}\n`;
+            }
+            
+            // Write faces
+            if (indices) {
+                for (let i = 0; i < indices.count; i += 3) {
+                    const a = indices.getX(i);
+                    const b = indices.getX(i + 1);
+                    const c = indices.getX(i + 2);
+                    plyData += `3 ${a} ${b} ${c}\n`;
+                }
+            }
+            
+            return plyData;
+        }
+        
+        function randomizeAlien() {
+            const atmospheres = ['toxic', 'crimson', 'azure', 'violet', 'golden'];
+            const terrains = ['volcanic', 'crystalline', 'organic', 'metallic', 'hybrid'];
+            const alienNames = [
+                'Xenthari-Prime', 'Zyphon-VII', 'Kepler-Nexus', 'Vortania-Beta',
+                'Crystallos-IX', 'Nethys-Core', 'Axiom-Delta', 'Pyrrhus-Omega',
+                'Titanis-Void', 'Helix-Station', 'Quantum-Sphere', 'Nexus-Alpha'
+            ];
+            
+            document.getElementById('atmosphere').value = atmospheres[Math.floor(Math.random() * atmospheres.length)];
+            document.getElementById('terrain').value = terrains[Math.floor(Math.random() * terrains.length)];
+            document.getElementById('craters').value = Math.floor(Math.random() * 50);
+            document.getElementById('mountains').value = Math.floor(Math.random() * 30);
+            document.getElementById('valleys').value = Math.floor(Math.random() * 25);
+            document.getElementById('chaos').value = Math.floor(Math.random() * 100);
+            document.getElementById('structures').value = Math.floor(Math.random() * 20);
+            document.getElementById('worldName').value = alienNames[Math.floor(Math.random() * alienNames.length)];
+            
+            updateSliderDisplays();
+            generateAlienWorld();
+        }
+        
+        function updateSliderDisplays() {
+            document.getElementById('craterValue').textContent = document.getElementById('craters').value;
+            document.getElementById('mountainValue').textContent = document.getElementById('mountains').value;
+            document.getElementById('valleyValue').textContent = document.getElementById('valleys').value;
+            document.getElementById('chaosValue').textContent = document.getElementById('chaos').value;
+            document.getElementById('structureValue').textContent = document.getElementById('structures').value;
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (planet) {
+                planet.rotation.y += 0.003;
+                planet.rotation.x += 0.001;
+            }
+            
+            // Animate stars
+            scene.children.forEach(child => {
+                if (child.material && child.material.type === 'PointsMaterial') {
+                    child.rotation.y += 0.0002;
+                    child.rotation.x += 0.0001;
+                }
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Event listeners for real-time updates
+        ['craters', 'mountains', 'valleys', 'chaos', 'structures'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateSliderDisplays);
         });
-    }
-}
-
-// Game loop
-function update() {
-    // Update ship
-    const dx = mouseX - ship.x;
-    const dy = mouseY - ship.y;
-    ship.angle = Math.atan2(dy, dx);
-    ship.thrust = Math.hypot(dx, dy) > 50 ? 1 : 0;
-    if(ship.thrust) {
-        ship.x += Math.cos(ship.angle) * 3;
-        ship.y += Math.sin(ship.angle) * 3;
-    }
-    ship.update();
-
-    // Update asteroids
-    asteroids.forEach(asteroid => {
-        asteroid.x += asteroid.vx;
-        asteroid.y += asteroid.vy;
-    });
-
-    // Spawn objects
-    if(Math.random() < 0.05) spawnAsteroid();
-    if(Math.random() < 0.01) spawnResource();
-
-    // Update particles
-    particles.forEach(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life -= 0.02;
-    });
-    particles = particles.filter(p => p.life > 0);
-
-    checkCollisions();
-    
-    // Update HUD
-    document.getElementById('score').textContent = Math.floor(score);
-    document.getElementById('energy').textContent = Math.floor(energy);
-    document.getElementById('healthFill').style.width = health + '%';
-
-    // Game over check
-    if(health <= 0) {
-        alert(`GAME OVER! Final Score: ${Math.floor(score)}`);
-        location.reload();
-    }
-
-    score += 0.1;
-}
-
-function draw() {
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, width, height);
-
-    // Draw starfield
-    for(let i = 0; i < 100; i++) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random()})`;
-        ctx.fillRect(Math.random()*width, Math.random()*height, 1, 1);
-    }
-
-    planets.forEach(planet => planet.draw());
-    ship.draw();
-    
-    // Draw asteroids
-    asteroids.forEach(asteroid => {
-        ctx.beginPath();
-        ctx.arc(asteroid.x, asteroid.y, asteroid.size, 0, Math.PI*2);
-        ctx.fillStyle = '#666';
-        ctx.fill();
-    });
-
-    // Draw particles
-    particles.forEach(p => {
-        ctx.fillStyle = `rgba(255, ${Math.random()*255}, 0, ${p.life})`;
-        ctx.fillRect(p.x, p.y, 3, 3);
-    });
-}
-
-function gameLoop() {
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-// Start game
-gameLoop();
-
-// Resize handler
-window.addEventListener('resize', () => {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-});
-</script>
+        
+        // Mouse controls for camera
+        let mouseDown = false;
+        let mouseX = 0;
+        let mouseY = 0;
+        
+        document.getElementById('viewer').addEventListener('mousedown', (e) => {
+            mouseDown = true;
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            mouseDown = false;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!mouseDown) return;
+            
+            const deltaX = e.clientX - mouseX;
+            const deltaY = e.clientY - mouseY;
+            
+            camera.position.x = camera.position.x * Math.cos(deltaX * 0.01) - camera.position.z * Math.sin(deltaX * 0.01);
+            camera.position.z = camera.position.x * Math.sin(deltaX * 0.01) + camera.position.z * Math.cos(deltaX * 0.01);
+            
+            camera.lookAt(0, 0, 0);
+            
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+        
+        // Zoom with mouse wheel
+        document.getElementById('viewer').addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoom = e.deltaY > 0 ? 1.1 : 0.9;
+            camera.position.multiplyScalar(zoom);
+            camera.position.clampLength(200, 800);
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('viewer');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+        
+        // Auto-generate on load
+        window.addEventListener('load', () => {
+            setTimeout(init, 100);
+        });
+    </script>
 </body>
 </html>
