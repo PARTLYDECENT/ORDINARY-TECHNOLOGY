@@ -3748,6 +3748,176 @@ Let’s keep unlocking.</p>
 
 
 
+<!-- START: HAPTIC MORSE CODE DROP-IN MODULE -->
+<!-- You can place this entire block anywhere inside your <body> tag. -->
+<div id="haptic-transmission-module">
+    <!-- This div is for potential future UI, but is kept minimal for the auto-trigger. -->
+    <!-- A status indicator could be added here if desired. -->
+</div>
+
+<style>
+    /* Optional: Style for a visual indicator if you want one */
+    #haptic-status-light {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 15px;
+        height: 15px;
+        background-color: rgba(0, 255, 204, 0.2);
+        border: 1px solid rgba(0, 255, 204, 0.5);
+        border-radius: 50%;
+        box-shadow: 0 0 10px rgba(0, 255, 204, 0.3);
+        z-index: 9999;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+    }
+
+    #haptic-status-light.transmitting {
+        opacity: 1;
+        animation: pulse-transmitting-light 1.5s infinite ease-in-out;
+    }
+
+    @keyframes pulse-transmitting-light {
+        0% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 255, 204, 0.3); }
+        50% { transform: scale(1.2); box-shadow: 0 0 20px rgba(0, 255, 204, 0.7); }
+        100% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 255, 204, 0.3); }
+    }
+</style>
+
+<script>
+    // --- Haptic Morse Code Auto-Trigger Script ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Configuration ---
+        const MESSAGE = "SOMETHING IS WRONG"; // A new, more unsettling message
+        const MORSE_CODE = {
+            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....',
+            'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.',
+            'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+            'Y': '-.--', 'Z': '--..', '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....',
+            '6': '-....', '7': '--...', '8': '---..', '9': '----.', '0': '-----'
+        };
+        const DOT_DURATION = 80;
+        const DASH_DURATION = 240;
+        const SYMBOL_PAUSE = 80;
+        const LETTER_PAUSE = 240;
+        const WORD_PAUSE = 560;
+
+        let transmissionFired = false;
+        let audioCtx;
+        let oscillator;
+
+        // The main function to trigger the transmission
+        const triggerTransmission = () => {
+            // Ensure this only runs once per page load
+            if (transmissionFired) {
+                return;
+            }
+            transmissionFired = true;
+
+            // Check if it's likely a mobile device and supports vibration
+            const isMobile = 'maxTouchPoints' in navigator && navigator.maxTouchPoints > 0;
+            const supportsVibration = 'vibrate' in navigator;
+
+            if (!isMobile || !supportsVibration) {
+                console.log("Haptic transmission skipped: Not a compatible mobile device.");
+                return; // Don't run on desktop or unsupported devices
+            }
+            
+            // Initialize Web Audio API on user interaction
+            if (!audioCtx) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.error("Web Audio API is not supported in this browser.");
+                }
+            }
+
+            // Create a temporary visual indicator
+            const statusLight = document.createElement('div');
+            statusLight.id = 'haptic-status-light';
+            document.body.appendChild(statusLight);
+            statusLight.classList.add('transmitting');
+
+            console.log("HAPTIC TRANSMISSION INITIATED...");
+
+            // --- Build the vibration pattern ---
+            const vibrationPattern = [];
+            const words = MESSAGE.toUpperCase().split(' ');
+            for (const word of words) {
+                const letters = word.split('');
+                for (const letter of letters) {
+                    const code = MORSE_CODE[letter];
+                    if (code) {
+                        const symbols = code.split('');
+                        for (let k = 0; k < symbols.length; k++) {
+                            vibrationPattern.push(symbols[k] === '.' ? DOT_DURATION : DASH_DURATION);
+                            if (k < symbols.length - 1) vibrationPattern.push(SYMBOL_PAUSE);
+                        }
+                    }
+                    vibrationPattern.push(LETTER_PAUSE);
+                }
+                vibrationPattern.push(WORD_PAUSE);
+            }
+            vibrationPattern.pop(); // Remove the last pause
+
+            // --- Vibrate and play sound ---
+            navigator.vibrate(vibrationPattern);
+            playAudioSequence(vibrationPattern);
+
+            // --- Clean up the indicator after transmission ---
+            const totalDuration = vibrationPattern.reduce((a, b) => a + b, 0);
+            setTimeout(() => {
+                statusLight.classList.remove('transmitting');
+                setTimeout(() => {
+                   if(statusLight.parentNode) {
+                       statusLight.parentNode.removeChild(statusLight);
+                   }
+                }, 500);
+            }, totalDuration);
+        };
+
+        // Function to play audio tones matching the vibration
+        async function playAudioSequence(pattern) {
+            let isVibrating = true;
+            for (const duration of pattern) {
+                if (isVibrating) {
+                    playSound(true); // Play tone
+                } else {
+                    playSound(false); // Stop tone
+                }
+                isVibrating = !isVibrating;
+                await new Promise(resolve => setTimeout(resolve, duration));
+            }
+            playSound(false); // Ensure sound is off at the end
+        }
+
+        // Function to control the oscillator
+        function playSound(start) {
+            if (!audioCtx) return;
+            if (start) {
+                if (oscillator) oscillator.stop();
+                oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A lower, more subtle tone
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                oscillator.start();
+            } else {
+                if (oscillator) {
+                    oscillator.stop();
+                    oscillator = null;
+                }
+            }
+        }
+
+        // Add a one-time event listener for the first user interaction
+        // 'pointerdown' captures both clicks and touches
+        document.body.addEventListener('pointerdown', triggerTransmission, { once: true });
+    });
+</script>
+<!-- END: HAPTIC MORSE CODE DROP-IN MODULE -->
 
 
 
