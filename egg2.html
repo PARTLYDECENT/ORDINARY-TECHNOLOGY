@@ -1,929 +1,1234 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spaceship PLY Generator</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+<script>
+// Drop-in Command Panel for HTML Sites - Fully Functional Version
+(function() {
+    // Create command panel UI
+    const commandPanel = document.createElement('div');
+    commandPanel.id = 'command-panel';
+    commandPanel.innerHTML = `
+        <div id="command-header">
+            <span>Command Panel</span>
+            <button id="minimize-btn">−</button>
+            <button id="close-btn">×</button>
+        </div>
+        <div id="command-body">
+            <div id="command-output"></div>
+            <div id="command-input-container">
+                <input type="text" id="command-input" placeholder="Type command (help for options)">
+                <button id="execute-btn">Run</button>
+            </div>
+            <div id="command-tabs">
+                <button class="tab-btn active" data-tab="history">History</button>
+                <button class="tab-btn" data-tab="elements">Elements</button>
+                <button class="tab-btn" data-tab="styles">Styles</button>
+            </div>
+            <div id="command-tab-content">
+                <div id="history-tab" class="tab-content active">
+                    <div id="command-history"></div>
+                </div>
+                <div id="elements-tab" class="tab-content">
+                    <div id="elements-list"></div>
+                </div>
+                <div id="styles-tab" class="tab-content">
+                    <div id="styles-list"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Style the command panel
+    const style = document.createElement('style');
+    style.textContent = `
+        #command-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            max-height: 600px;
+            background-color: #2d2d30;
+            color: #d4d4d4;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+            font-family: 'Consolas', 'Monaco', monospace;
+            z-index: 10000;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
         }
         
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0c0c1e 0%, #1a1a2e 50%, #16213e 100%);
-            color: #e0e0e0;
-            min-height: 100vh;
-            padding: 20px;
+        #command-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: #007acc;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            cursor: move;
         }
         
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: rgba(30, 30, 50, 0.8);
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        h1 {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #00d4ff;
-            font-size: 2.5em;
-            text-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-        }
-        
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .control-group {
-            background: rgba(40, 40, 60, 0.6);
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .control-group h3 {
-            color: #00d4ff;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #b0b0b0;
-            font-weight: 500;
-        }
-        
-        input[type="range"], input[type="number"], select {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 15px;
-            background: rgba(20, 20, 30, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 5px;
-            color: #e0e0e0;
-        }
-        
-        input[type="range"] {
-            height: 6px;
-            background: linear-gradient(90deg, #00d4ff, #0080ff);
-            outline: none;
-            border-radius: 3px;
-        }
-        
-        input[type="range"]::-webkit-slider-thumb {
-            width: 18px;
-            height: 18px;
-            background: #00d4ff;
-            border-radius: 50%;
+        #minimize-btn, #close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
             cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 5px;
         }
         
-        .output-value {
-            color: #00d4ff;
-            font-weight: bold;
+        #close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        #command-body {
+            padding: 15px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        #command-output {
+            background-color: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            min-height: 80px;
+            font-size: 14px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        #command-input-container {
+            display: flex;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+        
+        #command-input {
+            flex: 1;
+            padding: 8px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        
+        #execute-btn {
+            margin-left: 8px;
+            padding: 8px 12px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        #command-tabs {
+            display: flex;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #3e3e42;
+            flex-shrink: 0;
+        }
+        
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #d4d4d4;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-right: 5px;
+        }
+        
+        .tab-btn.active {
+            border-bottom: 2px solid #007acc;
+            color: #007acc;
+        }
+        
+        #command-tab-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .tab-content {
+            display: none;
+            height: 100%;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        #command-history, #elements-list, #styles-list {
+            background-color: #1e1e1e;
+            border-radius: 4px;
+            padding: 10px;
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        .command-history-item, .element-item, .style-item {
+            padding: 6px 8px;
+            border-bottom: 1px solid #3e3e42;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .command-history-item:last-child, .element-item:last-child, .style-item:last-child {
+            border-bottom: none;
+        }
+        
+        .element-item:hover, .style-item:hover {
+            background-color: #2a2d2e;
+        }
+        
+        .element-item.selected {
+            background-color: #094771;
+        }
+        
+        #command-panel.minimized {
+            width: 200px;
+            height: 40px;
+        }
+        
+        #command-panel.minimized #command-body {
+            display: none;
+        }
+        
+        .highlight-element {
+            outline: 2px dashed #ff9900 !important;
+            outline-offset: 2px !important;
+        }
+        
+        .color-picker {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            cursor: pointer;
             margin-left: 10px;
         }
         
-        .buttons {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
+        .style-value {
+            float: right;
+            color: #569cd6;
         }
         
-        button {
-            padding: 12px 25px;
-            background: linear-gradient(45deg, #00d4ff, #0080ff);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        .style-input {
+            width: 100%;
+            padding: 4px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 12px;
         }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
-        }
-        
-        button:active {
-            transform: translateY(0);
-        }
-        
-        .preview {
-            background: rgba(20, 20, 30, 0.8);
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .stat-box {
-            background: rgba(40, 40, 60, 0.6);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid rgba(0, 212, 255, 0.3);
-        }
-        
-        .stat-value {
-            font-size: 1.5em;
-            color: #00d4ff;
-            font-weight: bold;
-        }
-        
-        .stat-label {
-            color: #b0b0b0;
-            font-size: 0.9em;
-        }
-        
-        .download-area {
-            text-align: center;
-            padding: 20px;
-            background: rgba(0, 212, 255, 0.1);
-            border-radius: 10px;
-            border: 2px dashed rgba(0, 212, 255, 0.3);
-        }
-        
-        .ship-type-selector {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .ship-type-btn {
-            padding: 10px;
-            background: rgba(40, 40, 60, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: #e0e0e0;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .ship-type-btn.active {
-            border-color: #00d4ff;
-            background: rgba(0, 212, 255, 0.2);
-            color: #00d4ff;
-        }
-        
-        .ship-type-btn:hover {
-            border-color: #00d4ff;
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 Spaceship PLY Generator</h1>
-        
-        <div class="controls">
-            <div class="control-group">
-                <h3>Ship Type</h3>
-                <div class="ship-type-selector">
-                    <div class="ship-type-btn active" data-type="fighter">Fighter</div>
-                    <div class="ship-type-btn" data-type="cruiser">Cruiser</div>
-                    <div class="ship-type-btn" data-type="cargo">Cargo</div>
-                    <div class="ship-type-btn" data-type="mothership">Mothership</div>
-                </div>
-            </div>
+    `;
+    
+    // Add to document
+    document.head.appendChild(style);
+    document.body.appendChild(commandPanel);
+    
+    // Command panel functionality
+    const commandInput = document.getElementById('command-input');
+    const executeBtn = document.getElementById('execute-btn');
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const closeBtn = document.getElementById('close-btn');
+    const commandOutput = document.getElementById('command-output');
+    const commandHistory = document.getElementById('command-history');
+    const commandPanelElement = document.getElementById('command-panel');
+    const elementsList = document.getElementById('elements-list');
+    const stylesList = document.getElementById('styles-list');
+    
+    let selectedElement = null;
+    let originalStyles = new Map();
+    let commandHistoryArray = [];
+    
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.getAttribute('data-tab');
             
-            <div class="control-group">
-                <h3>Hull Parameters</h3>
-                <label>Hull Length: <span class="output-value" id="lengthValue">50</span></label>
-                <input type="range" id="hullLength" min="20" max="100" value="50">
-                
-                <label>Hull Width: <span class="output-value" id="widthValue">20</span></label>
-                <input type="range" id="hullWidth" min="10" max="40" value="20">
-                
-                <label>Hull Height: <span class="output-value" id="heightValue">15</span></label>
-                <input type="range" id="hullHeight" min="8" max="30" value="15">
-            </div>
+            // Update active tab button
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
             
-            <div class="control-group">
-                <h3>Wing Configuration</h3>
-                <label>Wing Span: <span class="output-value" id="wingSpanValue">30</span></label>
-                <input type="range" id="wingSpan" min="0" max="60" value="30">
-                
-                <label>Wing Sweep: <span class="output-value" id="wingSweepValue">15</span></label>
-                <input type="range" id="wingSweep" min="0" max="45" value="15">
-                
-                <label>Wing Thickness: <span class="output-value" id="wingThicknessValue">3</span></label>
-                <input type="range" id="wingThickness" min="1" max="8" value="3">
-            </div>
+            // Update active tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-tab`).classList.add('active');
             
-            <div class="control-group">
-                <h3>Engine Configuration</h3>
-                <label>Number of Engines: <span class="output-value" id="engineCountValue">2</span></label>
-                <input type="range" id="engineCount" min="1" max="6" value="2">
-                
-                <label>Engine Size: <span class="output-value" id="engineSizeValue">8</span></label>
-                <input type="range" id="engineSize" min="3" max="15" value="8">
-                
-                <label>Engine Length: <span class="output-value" id="engineLengthValue">12</span></label>
-                <input type="range" id="engineLength" min="5" max="25" value="12">
-            </div>
-            
-            <div class="control-group">
-                <h3>Detail Level</h3>
-                <label>Hull Segments: <span class="output-value" id="hullSegmentsValue">16</span></label>
-                <input type="range" id="hullSegments" min="8" max="32" value="16">
-                
-                <label>Surface Detail: <span class="output-value" id="surfaceDetailValue">5</span></label>
-                <input type="range" id="surfaceDetail" min="1" max="10" value="5">
-                
-                <label>Randomization: <span class="output-value" id="randomizationValue">0.1</span></label>
-                <input type="range" id="randomization" min="0" max="0.5" step="0.05" value="0.1">
-            </div>
-            
-            <div class="control-group">
-                <h3>Advanced Features</h3>
-                <label>Add Bridge: 
-                    <input type="checkbox" id="addBridge" checked>
-                </label>
-                
-                <label>Add Weapon Mounts: 
-                    <input type="checkbox" id="addWeapons" checked>
-                </label>
-                
-                <label>Add Solar Panels: 
-                    <input type="checkbox" id="addSolar">
-                </label>
-                
-                <label>Add Landing Gear: 
-                    <input type="checkbox" id="addLandingGear">
-                </label>
-            </div>
-        </div>
-        
-        <div class="buttons">
-            <button onclick="generateSpaceship()">Generate Spaceship</button>
-            <button onclick="randomizeAll()">Randomize All</button>
-            <button onclick="downloadPLY()">Download PLY File</button>
-        </div>
-        
-        <div class="preview">
-            <div class="stats">
-                <div class="stat-box">
-                    <div class="stat-value" id="vertexCount">0</div>
-                    <div class="stat-label">Vertices</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value" id="faceCount">0</div>
-                    <div class="stat-label">Faces</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value" id="fileSize">0 KB</div>
-                    <div class="stat-label">File Size</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value" id="shipClass">Fighter</div>
-                    <div class="stat-label">Ship Class</div>
-                </div>
-            </div>
-            
-            <div class="download-area" id="downloadArea">
-                <p>Generate a spaceship to see PLY data</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let currentPLYData = '';
-        let currentShipType = 'fighter';
-        
-        // Ship type presets
-        const shipPresets = {
-            fighter: {
-                hullLength: 40,
-                hullWidth: 15,
-                hullHeight: 10,
-                wingSpan: 35,
-                wingSweep: 25,
-                wingThickness: 2,
-                engineCount: 2,
-                engineSize: 6,
-                engineLength: 15
-            },
-            cruiser: {
-                hullLength: 70,
-                hullWidth: 25,
-                hullHeight: 20,
-                wingSpan: 20,
-                wingSweep: 10,
-                wingThickness: 5,
-                engineCount: 4,
-                engineSize: 10,
-                engineLength: 18
-            },
-            cargo: {
-                hullLength: 60,
-                hullWidth: 35,
-                hullHeight: 25,
-                wingSpan: 10,
-                wingSweep: 5,
-                wingThickness: 8,
-                engineCount: 6,
-                engineSize: 12,
-                engineLength: 20
-            },
-            mothership: {
-                hullLength: 100,
-                hullWidth: 40,
-                hullHeight: 30,
-                wingSpan: 50,
-                wingSweep: 0,
-                wingThickness: 10,
-                engineCount: 8,
-                engineSize: 15,
-                engineLength: 25
+            // Refresh content if needed
+            if (tabName === 'elements') {
+                updateElementsList();
+            } else if (tabName === 'styles' && selectedElement) {
+                updateStylesList();
             }
-        };
+        });
+    });
+    
+    // Make panel draggable
+    let isDragging = false;
+    let dragOffsetX, dragOffsetY;
+    
+    document.getElementById('command-header').addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragOffsetX = e.clientX - commandPanelElement.offsetLeft;
+        dragOffsetY = e.clientY - commandPanelElement.offsetTop;
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            commandPanelElement.style.left = `${e.clientX - dragOffsetX}px`;
+            commandPanelElement.style.top = `${e.clientY - dragOffsetY}px`;
+            commandPanelElement.style.bottom = 'auto';
+            commandPanelElement.style.right = 'auto';
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+    
+    // Minimize/restore panel
+    minimizeBtn.addEventListener('click', () => {
+        commandPanelElement.classList.toggle('minimized');
+        minimizeBtn.textContent = commandPanelElement.classList.contains('minimized') ? '+' : '−';
+    });
+    
+    // Close panel
+    closeBtn.addEventListener('click', () => {
+        commandPanelElement.style.display = 'none';
+    });
+    
+    // Execute command
+    function executeCommand() {
+        const command = commandInput.value.trim();
+        if (!command) return;
         
-        // Initialize UI
-        document.addEventListener('DOMContentLoaded', function() {
-            updateAllDisplays();
-            attachEventListeners();
-            applyShipPreset('fighter');
+        // Add to history
+        commandHistoryArray.unshift(command);
+        if (commandHistoryArray.length > 50) commandHistoryArray.pop();
+        
+        const historyItem = document.createElement('div');
+        historyItem.className = 'command-history-item';
+        historyItem.textContent = `> ${command}`;
+        historyItem.addEventListener('click', () => {
+            commandInput.value = command;
+            commandInput.focus();
+        });
+        commandHistory.prepend(historyItem);
+        
+        // Process command
+        processCommand(command);
+        
+        // Clear input
+        commandInput.value = '';
+    }
+    
+    executeBtn.addEventListener('click', executeCommand);
+    commandInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            executeCommand();
+        }
+    });
+    
+    // Update elements list
+    function updateElementsList() {
+        elementsList.innerHTML = '';
+        
+        const allElements = document.querySelectorAll('*');
+        const elementTypes = {};
+        
+        allElements.forEach(el => {
+            const tagName = el.tagName.toLowerCase();
+            if (!elementTypes[tagName]) {
+                elementTypes[tagName] = [];
+            }
+            elementTypes[tagName].push(el);
         });
         
-        function attachEventListeners() {
-            // Range input listeners
-            const ranges = document.querySelectorAll('input[type="range"]');
-            ranges.forEach(range => {
-                range.addEventListener('input', updateAllDisplays);
-            });
+        for (const [type, elements] of Object.entries(elementTypes)) {
+            const category = document.createElement('div');
+            category.innerHTML = `<strong>${type} (${elements.length})</strong>`;
+            category.style.marginTop = '10px';
+            category.style.marginBottom = '5px';
+            elementsList.appendChild(category);
             
-            // Ship type selector
-            document.querySelectorAll('.ship-type-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.ship-type-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    currentShipType = this.dataset.type;
-                    applyShipPreset(currentShipType);
-                    document.getElementById('shipClass').textContent = currentShipType.charAt(0).toUpperCase() + currentShipType.slice(1);
+            // Show first 5 elements of this type
+            const limit = Math.min(5, elements.length);
+            for (let i = 0; i < limit; i++) {
+                const el = elements[i];
+                const item = document.createElement('div');
+                item.className = 'element-item';
+                
+                let description = `<${type}`;
+                if (el.id) description += `#${el.id}`;
+                if (el.className) description += `.${el.className.replace(/\s+/g, '.')}`;
+                description += '>';
+                
+                // Add some text content if available
+                if (el.textContent && el.textContent.trim() && el.textContent.length < 50) {
+                    description += ` - "${el.textContent.trim()}"`;
+                }
+                
+                item.innerHTML = description;
+                item.addEventListener('click', () => {
+                    selectSpecificElement(el);
                 });
-            });
+                
+                elementsList.appendChild(item);
+            }
+            
+            if (elements.length > 5) {
+                const more = document.createElement('div');
+                more.className = 'element-item';
+                more.style.fontStyle = 'italic';
+                more.textContent = `... and ${elements.length - 5} more`;
+                elementsList.appendChild(more);
+            }
+        }
+    }
+    
+    // Update styles list for selected element
+    function updateStylesList() {
+        if (!selectedElement) {
+            stylesList.innerHTML = 'No element selected';
+            return;
         }
         
-        function applyShipPreset(type) {
-            const preset = shipPresets[type];
-            Object.keys(preset).forEach(key => {
-                const element = document.getElementById(key);
-                if (element) {
-                    element.value = preset[key];
-                }
-            });
-            updateAllDisplays();
-        }
+        stylesList.innerHTML = '';
         
-        function updateAllDisplays() {
-            // Update all range display values
-            const ranges = {
-                'hullLength': 'lengthValue',
-                'hullWidth': 'widthValue',
-                'hullHeight': 'heightValue',
-                'wingSpan': 'wingSpanValue',
-                'wingSweep': 'wingSweepValue',
-                'wingThickness': 'wingThicknessValue',
-                'engineCount': 'engineCountValue',
-                'engineSize': 'engineSizeValue',
-                'engineLength': 'engineLengthValue',
-                'hullSegments': 'hullSegmentsValue',
-                'surfaceDetail': 'surfaceDetailValue',
-                'randomization': 'randomizationValue'
-            };
-            
-            Object.keys(ranges).forEach(rangeId => {
-                const range = document.getElementById(rangeId);
-                const display = document.getElementById(ranges[rangeId]);
-                if (range && display) {
-                    display.textContent = range.value;
-                }
-            });
-        }
+        const computedStyle = window.getComputedStyle(selectedElement);
+        const styleProperties = [
+            'color', 'background-color', 'font-size', 'font-family', 'font-weight',
+            'width', 'height', 'padding', 'margin', 'border', 'border-radius',
+            'display', 'position', 'top', 'left', 'right', 'bottom', 'z-index',
+            'opacity', 'visibility', 'transform', 'transition', 'text-align',
+            'cursor', 'overflow', 'box-shadow', 'text-decoration'
+        ];
         
-        function randomizeAll() {
-            const ranges = document.querySelectorAll('input[type="range"]');
-            ranges.forEach(range => {
-                const min = parseFloat(range.min);
-                const max = parseFloat(range.max);
-                const step = parseFloat(range.step) || 1;
-                const randomValue = Math.floor((Math.random() * (max - min) / step + min / step)) * step;
-                range.value = randomValue;
-            });
+        styleProperties.forEach(prop => {
+            const item = document.createElement('div');
+            item.className = 'style-item';
             
-            // Randomize checkboxes
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = Math.random() > 0.5;
-            });
+            const value = computedStyle.getPropertyValue(prop);
             
-            updateAllDisplays();
-        }
-        
-        function generateSpaceship() {
-            const params = getParameters();
-            const geometry = generateSpaceshipGeometry(params);
-            currentPLYData = generatePLYFile(geometry);
-            
-            // Update stats
-            document.getElementById('vertexCount').textContent = geometry.vertices.length;
-            document.getElementById('faceCount').textContent = geometry.faces.length;
-            document.getElementById('fileSize').textContent = Math.round(currentPLYData.length / 1024) + ' KB';
-            
-            // Show preview
-            const downloadArea = document.getElementById('downloadArea');
-            downloadArea.innerHTML = `
-                <h4>PLY File Generated Successfully!</h4>
-                <p>Vertices: ${geometry.vertices.length} | Faces: ${geometry.faces.length}</p>
-                <p>Ready to download - Compatible with Blender, MeshLab, and game engines</p>
+            item.innerHTML = `
+                <div>${prop.replace(/-/g, ' ')}</div>
+                <div class="style-value">${value}</div>
             `;
-        }
-        
-        function getParameters() {
-            return {
-                hullLength: parseFloat(document.getElementById('hullLength').value),
-                hullWidth: parseFloat(document.getElementById('hullWidth').value),
-                hullHeight: parseFloat(document.getElementById('hullHeight').value),
-                wingSpan: parseFloat(document.getElementById('wingSpan').value),
-                wingSweep: parseFloat(document.getElementById('wingSweep').value),
-                wingThickness: parseFloat(document.getElementById('wingThickness').value),
-                engineCount: parseInt(document.getElementById('engineCount').value),
-                engineSize: parseFloat(document.getElementById('engineSize').value),
-                engineLength: parseFloat(document.getElementById('engineLength').value),
-                hullSegments: parseInt(document.getElementById('hullSegments').value),
-                surfaceDetail: parseInt(document.getElementById('surfaceDetail').value),
-                randomization: parseFloat(document.getElementById('randomization').value),
-                addBridge: document.getElementById('addBridge').checked,
-                addWeapons: document.getElementById('addWeapons').checked,
-                addSolar: document.getElementById('addSolar').checked,
-                addLandingGear: document.getElementById('addLandingGear').checked,
-                shipType: currentShipType
-            };
-        }
-        
-        function generateSpaceshipGeometry(params) {
-            const vertices = [];
-            const faces = [];
             
-            // Generate main hull
-            generateHull(vertices, faces, params);
-            
-            // Generate wings
-            if (params.wingSpan > 0) {
-                generateWings(vertices, faces, params);
-            }
-            
-            // Generate engines
-            generateEngines(vertices, faces, params);
-            
-            // Generate additional components
-            if (params.addBridge) {
-                generateBridge(vertices, faces, params);
-            }
-            
-            if (params.addWeapons) {
-                generateWeaponMounts(vertices, faces, params);
-            }
-            
-            if (params.addSolar) {
-                generateSolarPanels(vertices, faces, params);
-            }
-            
-            if (params.addLandingGear) {
-                generateLandingGear(vertices, faces, params);
-            }
-            
-            return { vertices, faces };
-        }
-        
-        function generateHull(vertices, faces, params) {
-            const segments = params.hullSegments;
-            const length = params.hullLength;
-            const width = params.hullWidth;
-            const height = params.hullHeight;
-            const randomFactor = params.randomization;
-            
-            // Generate hull profile points
-            for (let i = 0; i <= segments; i++) {
-                const t = i / segments;
-                const x = (t - 0.5) * length;
+            // Make it editable
+            item.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.className = 'style-input';
+                input.value = value;
                 
-                // Create hull cross-section (elliptical)
-                const hullProfile = Math.sin(Math.PI * t) * 0.8 + 0.2;
-                const currentWidth = width * hullProfile;
-                const currentHeight = height * hullProfile;
+                item.innerHTML = '';
+                item.appendChild(input);
+                input.focus();
+                input.select();
                 
-                // Generate cross-section vertices
-                const crossSectionVertices = 8;
-                for (let j = 0; j < crossSectionVertices; j++) {
-                    const angle = (j / crossSectionVertices) * Math.PI * 2;
-                    const y = Math.cos(angle) * currentWidth * (1 + (Math.random() - 0.5) * randomFactor);
-                    const z = Math.sin(angle) * currentHeight * (1 + (Math.random() - 0.5) * randomFactor);
-                    
-                    vertices.push([x, y, z]);
-                }
-            }
-            
-            // Generate faces for hull
-            for (let i = 0; i < segments; i++) {
-                for (let j = 0; j < 8; j++) {
-                    const curr = i * 8 + j;
-                    const next = i * 8 + ((j + 1) % 8);
-                    const currNext = (i + 1) * 8 + j;
-                    const nextNext = (i + 1) * 8 + ((j + 1) % 8);
-                    
-                    // Create quad faces
-                    faces.push([curr, next, nextNext]);
-                    faces.push([curr, nextNext, currNext]);
-                }
-            }
-        }
-        
-        function generateWings(vertices, faces, params) {
-            const wingSpan = params.wingSpan;
-            const sweep = params.wingSweep * Math.PI / 180;
-            const thickness = params.wingThickness;
-            const startIndex = vertices.length;
-            
-            // Wing root and tip positions
-            const rootX = -params.hullLength * 0.2;
-            const tipX = rootX - Math.tan(sweep) * wingSpan;
-            
-            // Generate wing vertices
-            const wingVertices = [
-                // Root leading edge
-                [rootX, 0, 0],
-                [rootX, wingSpan, 0],
-                // Root trailing edge
-                [rootX - params.hullLength * 0.3, 0, 0],
-                [tipX, wingSpan, 0],
-                // Top surface
-                [rootX, 0, thickness],
-                [rootX, wingSpan, thickness * 0.5],
-                [rootX - params.hullLength * 0.3, 0, thickness],
-                [tipX, wingSpan, thickness * 0.5],
-                // Bottom surface (mirrored)
-                [rootX, 0, -thickness],
-                [rootX, wingSpan, -thickness * 0.5],
-                [rootX - params.hullLength * 0.3, 0, -thickness],
-                [tipX, wingSpan, -thickness * 0.5]
-            ];
-            
-            // Add wing vertices (right wing)
-            wingVertices.forEach(v => vertices.push(v));
-            
-            // Add left wing (mirrored)
-            wingVertices.forEach(v => vertices.push([v[0], -v[1], v[2]]));
-            
-            // Generate wing faces
-            const wingFaces = [
-                // Right wing top
-                [0, 4, 5], [0, 5, 1],
-                [4, 6, 7], [4, 7, 5],
-                [1, 5, 7], [1, 7, 3],
-                [0, 2, 6], [0, 6, 4],
-                // Right wing bottom
-                [0, 9, 8], [0, 1, 9],
-                [8, 11, 10], [8, 9, 11],
-                [1, 11, 9], [1, 3, 11],
-                [0, 10, 2], [0, 8, 10]
-            ];
-            
-            // Add right wing faces
-            wingFaces.forEach(face => {
-                faces.push(face.map(i => i + startIndex));
+                const saveValue = () => {
+                    selectedElement.style[prop] = input.value;
+                    updateStylesList();
+                };
+                
+                input.addEventListener('blur', saveValue);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        saveValue();
+                    } else if (e.key === 'Escape') {
+                        updateStylesList();
+                    }
+                });
             });
             
-            // Add left wing faces (with corrected winding)
-            wingFaces.forEach(face => {
-                faces.push(face.map(i => i + startIndex + 12).reverse());
-            });
-        }
+            stylesList.appendChild(item);
+        });
+    }
+    
+    // Process commands
+    function processCommand(command) {
+        const parts = command.toLowerCase().split(' ');
+        const cmd = parts[0];
+        const args = parts.slice(1);
         
-        function generateEngines(vertices, faces, params) {
-            const engineCount = params.engineCount;
-            const engineSize = params.engineSize;
-            const engineLength = params.engineLength;
-            const startIndex = vertices.length;
+        switch (cmd) {
+            case 'help':
+                showHelp();
+                break;
+                
+            case 'select':
+                selectElement();
+                break;
+                
+            case 'hide':
+                hideElement();
+                break;
+                
+            case 'show':
+                showElement();
+                break;
+                
+            case 'color':
+                changeColor(args.join(' '));
+                break;
+                
+            case 'background':
+                changeBackground(args.join(' '));
+                break;
+                
+            case 'fontsize':
+                changeFontSize(args.join(' '));
+                break;
+                
+            case 'dark':
+                toggleDarkMode(true);
+                break;
+                
+            case 'light':
+                toggleDarkMode(false);
+                break;
+                
+            case 'reset':
+                resetStyles();
+                break;
+                
+            case 'info':
+                showPageInfo();
+                break;
+                
+            case 'elements':
+                listElements(args[0]);
+                break;
+                
+            case 'remove':
+                removeElement();
+                break;
+                
+            case 'disable':
+                toggleDisable(true);
+                break;
+                
+            case 'enable':
+                toggleDisable(false);
+                break;
+                
+            case 'width':
+                changeDimension('width', args.join(' '));
+                break;
+                
+            case 'height':
+                changeDimension('height', args.join(' '));
+                break;
+                
+            case 'padding':
+                changeSpacing('padding', args.join(' '));
+                break;
+                
+            case 'margin':
+                changeSpacing('margin', args.join(' '));
+                break;
+                
+            case 'border':
+                changeBorder(args.join(' '));
+                break;
+                
+            case 'opacity':
+                changeOpacity(args.join(' '));
+                break;
+                
+            case 'text':
+                changeText(args.join(' '));
+                break;
+                
+            case 'html':
+                changeHTML(args.join(' '));
+                break;
+                
+            case 'class':
+                changeClass(args.join(' '));
+                break;
+                
+            case 'id':
+                changeId(args.join(' '));
+                break;
+                
+            case 'scroll':
+                scrollToElement();
+                break;
+                
+            case 'focus':
+                focusElement();
+                break;
+                
+            case 'screenshot':
+                takeScreenshot();
+                break;
+                
+            case 'inspect':
+                inspectElement();
+                break;
+                
+            case 'parent':
+                selectParent();
+                break;
+                
+            case 'children':
+                selectChild();
+                break;
+                
+            case 'next':
+                selectNextSibling();
+                break;
+                
+            case 'prev':
+                selectPreviousSibling();
+                break;
+                
+            case 'toggle':
+                toggleAttribute(args[0]);
+                break;
+                
+            case 'refresh':
+                location.reload();
+                break;
+                
+            default:
+                commandOutput.textContent = `Unknown command: ${cmd}. Type 'help' for available commands.`;
+        }
+    }
+    
+    // Command implementations
+    function showHelp() {
+        const helpText = `Available commands:
+        
+help - Show this help
+select - Select an element by clicking on it
+hide - Hide selected element
+show - Show selected element
+color [value] - Change text color of selected element
+background [value] - Change background color of selected element
+fontsize [value] - Change font size of selected element
+dark - Enable dark mode
+light - Enable light mode
+reset - Reset all changes
+info - Show page information
+elements [tag] - List all elements of a specific type
+remove - Remove selected element
+disable - Disable selected element
+enable - Enable selected element
+width [value] - Change width of selected element
+height [value] - Change height of selected element
+padding [value] - Change padding of selected element
+margin [value] - Change margin of selected element
+border [value] - Change border of selected element
+opacity [value] - Change opacity of selected element (0-1)
+text [value] - Change text content of selected element
+html [value] - Change HTML content of selected element
+class [name] - Add class to selected element
+id [name] - Change ID of selected element
+scroll - Scroll to selected element
+focus - Focus on selected element
+screenshot - Take a screenshot of the page
+inspect - Inspect selected element (like browser dev tools)
+parent - Select parent of current element
+children - List children of current element
+next - Select next sibling element
+prev - Select previous sibling element
+toggle [attr] - Toggle boolean attribute (e.g., hidden, disabled)
+refresh - Reload the page`;
+        
+        commandOutput.textContent = helpText;
+    }
+    
+    function selectElement() {
+        commandOutput.textContent = 'Click on an element to select it...';
+        
+        document.addEventListener('click', function selectHandler(e) {
+            e.preventDefault();
+            e.stopPropagation();
             
-            for (let e = 0; e < engineCount; e++) {
-                const angle = (e / engineCount) * Math.PI * 2;
-                const radius = params.hullWidth * 0.8;
-                const engineY = Math.cos(angle) * radius;
-                const engineZ = Math.sin(angle) * radius * 0.5;
-                const engineX = params.hullLength * 0.3;
-                
-                // Generate engine geometry (cylinder)
-                const segments = 8;
-                const engineVertices = [];
-                
-                // Front cap
-                for (let i = 0; i < segments; i++) {
-                    const a = (i / segments) * Math.PI * 2;
-                    const y = Math.cos(a) * engineSize + engineY;
-                    const z = Math.sin(a) * engineSize + engineZ;
-                    engineVertices.push([engineX, y, z]);
-                }
-                
-                // Back cap
-                for (let i = 0; i < segments; i++) {
-                    const a = (i / segments) * Math.PI * 2;
-                    const y = Math.cos(a) * engineSize * 1.2 + engineY;
-                    const z = Math.sin(a) * engineSize * 1.2 + engineZ;
-                    engineVertices.push([engineX + engineLength, y, z]);
-                }
-                
-                // Add center points for caps
-                engineVertices.push([engineX, engineY, engineZ]); // Front center
-                engineVertices.push([engineX + engineLength, engineY, engineZ]); // Back center
-                
-                // Add vertices
-                const engineStartIndex = vertices.length;
-                engineVertices.forEach(v => vertices.push(v));
-                
-                // Generate engine faces
-                // Side faces
-                for (let i = 0; i < segments; i++) {
-                    const next = (i + 1) % segments;
-                    faces.push([
-                        engineStartIndex + i,
-                        engineStartIndex + next,
-                        engineStartIndex + next + segments
-                    ]);
-                    faces.push([
-                        engineStartIndex + i,
-                        engineStartIndex + next + segments,
-                        engineStartIndex + i + segments
-                    ]);
-                }
-                
-                // Front cap
-                for (let i = 0; i < segments; i++) {
-                    const next = (i + 1) % segments;
-                    faces.push([
-                        engineStartIndex + segments * 2,
-                        engineStartIndex + next,
-                        engineStartIndex + i
-                    ]);
-                }
-                
-                // Back cap
-                for (let i = 0; i < segments; i++) {
-                    const next = (i + 1) % segments;
-                    faces.push([
-                        engineStartIndex + segments * 2 + 1,
-                        engineStartIndex + i + segments,
-                        engineStartIndex + next + segments
-                    ]);
-                }
+            // Remove previous selection
+            if (selectedElement) {
+                selectedElement.classList.remove('highlight-element');
             }
-        }
-        
-        function generateBridge(vertices, faces, params) {
-            const startIndex = vertices.length;
-            const bridgeSize = params.hullWidth * 0.3;
-            const bridgeHeight = params.hullHeight * 0.6;
-            const bridgeX = -params.hullLength * 0.2;
             
-            // Simple bridge geometry (box on top of hull)
-            const bridgeVertices = [
-                [bridgeX - bridgeSize, -bridgeSize, bridgeHeight],
-                [bridgeX + bridgeSize, -bridgeSize, bridgeHeight],
-                [bridgeX + bridgeSize, bridgeSize, bridgeHeight],
-                [bridgeX - bridgeSize, bridgeSize, bridgeHeight],
-                [bridgeX - bridgeSize * 0.8, -bridgeSize * 0.8, bridgeHeight + bridgeSize],
-                [bridgeX + bridgeSize * 0.8, -bridgeSize * 0.8, bridgeHeight + bridgeSize],
-                [bridgeX + bridgeSize * 0.8, bridgeSize * 0.8, bridgeHeight + bridgeSize],
-                [bridgeX - bridgeSize * 0.8, bridgeSize * 0.8, bridgeHeight + bridgeSize]
-            ];
+            // Select new element
+            selectedElement = e.target;
+            selectedElement.classList.add('highlight-element');
             
-            bridgeVertices.forEach(v => vertices.push(v));
-            
-            // Bridge faces
-            const bridgeFaces = [
-                [0, 1, 2], [0, 2, 3], // Bottom
-                [4, 7, 6], [4, 6, 5], // Top
-                [0, 4, 5], [0, 5, 1], // Front
-                [2, 6, 7], [2, 7, 3], // Back
-                [1, 5, 6], [1, 6, 2], // Right
-                [0, 3, 7], [0, 7, 4]  // Left
-            ];
-            
-            bridgeFaces.forEach(face => {
-                faces.push(face.map(i => i + startIndex));
-            });
-        }
-        
-        function generateWeaponMounts(vertices, faces, params) {
-            const mountCount = Math.floor(params.surfaceDetail / 2) + 1;
-            
-            for (let m = 0; m < mountCount; m++) {
-                const startIndex = vertices.length;
-                const mountX = -params.hullLength * 0.1 + (m * params.hullLength * 0.3);
-                const mountY = (m % 2 === 0 ? 1 : -1) * params.hullWidth * 0.6;
-                const mountSize = params.hullHeight * 0.2;
-                
-                // Weapon mount geometry (small turret)
-                const mountVertices = [
-                    [mountX, mountY, 0],
-                    [mountX + mountSize, mountY, mountSize * 0.5],
-                    [mountX + mountSize * 2, mountY, 0],
-                    [mountX + mountSize, mountY, -mountSize * 0.5],
-                    [mountX + mountSize, mountY + mountSize * 0.3, 0]
-                ];
-                
-                mountVertices.forEach(v => vertices.push(v));
-                
-                // Mount faces
-                const mountFaces = [
-                    [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4],
-                    [0, 3, 2], [0, 2, 1]
-                ];
-                
-                mountFaces.forEach(face => {
-                    faces.push(face.map(i => i + startIndex));
+            // Store original styles
+            if (!originalStyles.has(selectedElement)) {
+                originalStyles.set(selectedElement, {
+                    color: selectedElement.style.color,
+                    backgroundColor: selectedElement.style.backgroundColor,
+                    fontSize: selectedElement.style.fontSize,
+                    display: selectedElement.style.display,
+                    width: selectedElement.style.width,
+                    height: selectedElement.style.height,
+                    padding: selectedElement.style.padding,
+                    margin: selectedElement.style.margin,
+                    border: selectedElement.style.border,
+                    opacity: selectedElement.style.opacity,
+                    disabled: selectedElement.disabled,
+                    className: selectedElement.className,
+                    id: selectedElement.id
                 });
             }
-        }
-        
-        function generateSolarPanels(vertices, faces, params) {
-            const panelCount = 2;
             
-            for (let p = 0; p < panelCount; p++) {
-                const startIndex = vertices.length;
-                const side = p === 0 ? 1 : -1;
-                const panelX = -params.hullLength * 0.3;
-                const panelY = side * params.hullWidth * 1.2;
-                const panelWidth = params.hullLength * 0.4;
-                const panelHeight = params.hullWidth * 0.8;
-                
-                // Solar panel vertices (thin rectangle)
-                const panelVertices = [
-                    [panelX, panelY, 0],
-                    [panelX + panelWidth, panelY, 0],
-                    [panelX + panelWidth, panelY, panelHeight],
-                    [panelX, panelY, panelHeight],
-                    [panelX, panelY + side * 0.5, 0],
-                    [panelX + panelWidth, panelY + side * 0.5, 0],
-                    [panelX + panelWidth, panelY + side * 0.5, panelHeight],
-                    [panelX, panelY + side * 0.5, panelHeight]
-                ];
-                
-                panelVertices.forEach(v => vertices.push(v));
-                
-                // Panel faces
-                const panelFaces = [
-                    [0, 1, 2], [0, 2, 3], // Front face
-                    [4, 7, 6], [4, 6, 5], // Back face
-                    [0, 4, 5], [0, 5, 1], // Bottom
-                    [3, 2, 6], [3, 6, 7], // Top
-                    [1, 5, 6], [1, 6, 2], // Right
-                    [0, 3, 7], [0, 7, 4]  // Left
-                ];
-                
-                panelFaces.forEach(face => {
-                    faces.push(face.map(i => i + startIndex));
-                });
+            commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
+            
+            // Update styles tab if active
+            if (document.querySelector('#styles-tab').classList.contains('active')) {
+                updateStylesList();
             }
+            
+            document.removeEventListener('click', selectHandler);
+        }, { once: true });
+    }
+    
+    function selectSpecificElement(element) {
+        // Remove previous selection
+        if (selectedElement) {
+            selectedElement.classList.remove('highlight-element');
         }
         
-        function generateLandingGear(vertices, faces, params) {
-            const gearCount = 3;
-            
-            for (let g = 0; g < gearCount; g++) {
-                const startIndex = vertices.length;
-                const angle = (g / gearCount) * Math.PI * 2;
-                const radius = params.hullWidth * 0.7;
-                const gearX = Math.cos(angle) * params.hullLength * 0.2;
-                const gearY = Math.sin(angle) * radius;
-                const gearZ = -params.hullHeight * 0.8;
-                const gearLength = params.hullHeight * 0.6;
-                
-                // Landing gear strut
-                const gearVertices = [
-                    [gearX, gearY, 0],
-                    [gearX, gearY + 2, gearZ],
-                    [gearX, gearY - 2, gearZ],
-                    [gearX + 2, gearY, gearZ],
-                    [gearX - 2, gearY, gearZ],
-                    [gearX, gearY, gearZ - gearLength * 0.3]
-                ];
-                
-                gearVertices.forEach(v => vertices.push(v));
-                
-                // Gear faces
-                const gearFaces = [
-                    [0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],
-                    [1, 5, 2], [2, 5, 3], [3, 5, 4], [4, 5, 1]
-                ];
-                
-                gearFaces.forEach(face => {
-                    faces.push(face.map(i => i + startIndex));
-                });
-            }
-        }
+        // Select new element
+        selectedElement = element;
+        selectedElement.classList.add('highlight-element');
         
-        function generatePLYFile(geometry) {
-            const vertices = geometry.vertices;
-            const faces = geometry.faces;
-            
-            let plyContent = 'ply\n';
-            plyContent += 'format ascii 1.0\n';
-            plyContent += 'comment Generated by Spaceship PLY Generator\n';
-            plyContent += `element vertex ${vertices.length}\n`;
-            plyContent += 'property float x\n';
-            plyContent += 'property float y\n';
-            plyContent += 'property float z\n';
-            plyContent += 'property uchar red\n';
-            plyContent += 'property uchar green\n';
-            plyContent += 'property uchar blue\n';
-            plyContent += `element face ${faces.length}\n`;
-            plyContent += 'property list uchar int vertex_indices\n';
-            plyContent += 'end_header\n';
-            
-            // Add vertices with colors
-            vertices.forEach((vertex, index) => {
-                const x = vertex[0].toFixed(6);
-                const y = vertex[1].toFixed(6);
-                const z = vertex[2].toFixed(6);
-                
-                // Generate colors based on position and ship type
-                let r, g, b;
-                if (currentShipType === 'fighter') {
-                    r = 180; g = 180; b = 200; // Light gray
-                } else if (currentShipType === 'cruiser') {
-                    r = 100; g = 120; b = 140; // Blue-gray
-                } else if (currentShipType === 'cargo') {
-                    r = 160; g = 140; b = 100; // Brown-gray
-                } else { // mothership
-                    r = 80; g = 80; b = 100; // Dark gray
-                }
-                
-                // Add some variation based on position
-                const variation = Math.sin(vertex[0] * 0.1) * 20;
-                r = Math.max(0, Math.min(255, r + variation));
-                g = Math.max(0, Math.min(255, g + variation));
-                b = Math.max(0, Math.min(255, b + variation));
-                
-                plyContent += `${x} ${y} ${z} ${Math.floor(r)} ${Math.floor(g)} ${Math.floor(b)}\n`;
+        // Store original styles
+        if (!originalStyles.has(selectedElement)) {
+            originalStyles.set(selectedElement, {
+                color: selectedElement.style.color,
+                backgroundColor: selectedElement.style.backgroundColor,
+                fontSize: selectedElement.style.fontSize,
+                display: selectedElement.style.display,
+                width: selectedElement.style.width,
+                height: selectedElement.style.height,
+                padding: selectedElement.style.padding,
+                margin: selectedElement.style.margin,
+                border: selectedElement.style.border,
+                opacity: selectedElement.style.opacity,
+                disabled: selectedElement.disabled,
+                className: selectedElement.className,
+                id: selectedElement.id
             });
-            
-            // Add faces
-            faces.forEach(face => {
-                plyContent += `3 ${face[0]} ${face[1]} ${face[2]}\n`;
+        }
+        
+        commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
+        
+        // Update styles tab if active
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+        
+        // Switch to styles tab
+        document.querySelector('[data-tab="styles"]').click();
+    }
+    
+    function hideElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.style.display = 'none';
+        commandOutput.textContent = `Element hidden: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function showElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.style.display = '';
+        commandOutput.textContent = `Element shown: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function changeColor(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a color value.';
+            return;
+        }
+        
+        selectedElement.style.color = value;
+        commandOutput.textContent = `Changed color to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeBackground(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a background color value.';
+            return;
+        }
+        
+        selectedElement.style.backgroundColor = value;
+        commandOutput.textContent = `Changed background color to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeFontSize(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a font size value.';
+            return;
+        }
+        
+        selectedElement.style.fontSize = value;
+        commandOutput.textContent = `Changed font size to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function toggleDarkMode(enable) {
+        if (enable) {
+            document.body.style.backgroundColor = '#121212';
+            document.body.style.color = '#e0e0e0';
+            commandOutput.textContent = 'Dark mode enabled';
+        } else {
+            document.body.style.backgroundColor = '';
+            document.body.style.color = '';
+            commandOutput.textContent = 'Light mode enabled';
+        }
+    }
+    
+    function resetStyles() {
+        // Reset all modified elements
+        for (const [element, styles] of originalStyles) {
+            element.style.color = styles.color;
+            element.style.backgroundColor = styles.backgroundColor;
+            element.style.fontSize = styles.fontSize;
+            element.style.display = styles.display;
+            element.style.width = styles.width;
+            element.style.height = styles.height;
+            element.style.padding = styles.padding;
+            element.style.margin = styles.margin;
+            element.style.border = styles.border;
+            element.style.opacity = styles.opacity;
+            element.disabled = styles.disabled;
+            element.className = styles.className;
+            element.id = styles.id;
+            element.classList.remove('highlight-element');
+        }
+        
+        // Reset body
+        document.body.style.backgroundColor = '';
+        document.body.style.color = '';
+        
+        originalStyles.clear();
+        selectedElement = null;
+        
+        commandOutput.textContent = 'All styles have been reset';
+    }
+    
+    function showPageInfo() {
+        const title = document.title;
+        const url = window.location.href;
+        const elementsCount = document.querySelectorAll('*').length;
+        const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+        
+        commandOutput.textContent = `Page Information:
+Title: ${title}
+URL: ${url}
+Total elements: ${elementsCount}
+Load time: ${loadTime}ms
+Viewport: ${window.innerWidth}x${window.innerHeight}
+User Agent: ${navigator.userAgent.substring(0, 60)}...`;
+    }
+    
+    function listElements(tag) {
+        const elements = tag ? document.querySelectorAll(tag) : document.querySelectorAll('*');
+        const elementTypes = {};
+        
+        elements.forEach(el => {
+            const tagName = el.tagName.toLowerCase();
+            elementTypes[tagName] = (elementTypes[tagName] || 0) + 1;
+        });
+        
+        let result = `Found ${elements.length} elements:\n\n`;
+        for (const [type, count] of Object.entries(elementTypes)) {
+            result += `${type}: ${count}\n`;
+        }
+        
+        commandOutput.textContent = result;
+    }
+    
+    function removeElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        const parent = selectedElement.parentNode;
+        const tagName = selectedElement.tagName.toLowerCase();
+        
+        selectedElement.remove();
+        originalStyles.delete(selectedElement);
+        selectedElement = null;
+        
+        commandOutput.textContent = `Removed element: <${tagName}>`;
+    }
+    
+    function toggleDisable(disable) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.disabled = disable;
+        commandOutput.textContent = `Element ${disable ? 'disabled' : 'enabled'}: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function changeDimension(dimension, value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = `Please provide a ${dimension} value.`;
+            return;
+        }
+        
+        selectedElement.style[dimension] = value;
+        commandOutput.textContent = `Changed ${dimension} to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeSpacing(property, value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = `Please provide a ${property} value.`;
+            return;
+        }
+        
+        selectedElement.style[property] = value;
+        commandOutput.textContent = `Changed ${property} to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeBorder(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a border value.';
+            return;
+        }
+        
+        selectedElement.style.border = value;
+        commandOutput.textContent = `Changed border to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeOpacity(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide an opacity value (0-1).';
+            return;
+        }
+        
+        const opacity = parseFloat(value);
+        if (isNaN(opacity) || opacity < 0 || opacity > 1) {
+            commandOutput.textContent = 'Opacity must be a number between 0 and 1.';
+            return;
+        }
+        
+        selectedElement.style.opacity = opacity;
+        commandOutput.textContent = `Changed opacity to: ${opacity}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeText(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide text content.';
+            return;
+        }
+        
+        selectedElement.textContent = value;
+        commandOutput.textContent = `Changed text content to: ${value}`;
+    }
+    
+    function changeHTML(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide HTML content.';
+            return;
+        }
+        
+        selectedElement.innerHTML = value;
+        commandOutput.textContent = `Changed HTML content`;
+    }
+    
+    function changeClass(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a class name.';
+            return;
+        }
+        
+        selectedElement.classList.add(value);
+        commandOutput.textContent = `Added class: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function changeId(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide an ID value.';
+            return;
+        }
+        
+        selectedElement.id = value;
+        commandOutput.textContent = `Changed ID to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+    }
+    
+    function scrollToElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        commandOutput.textContent = `Scrolled to element: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function focusElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (typeof selectedElement.focus === 'function') {
+            selectedElement.focus();
+            commandOutput.textContent = `Focused on element: <${selectedElement.tagName.toLowerCase()}>`;
+        } else {
+            commandOutput.textContent = 'Element cannot be focused';
+        }
+    }
+    
+    function takeScreenshot() {
+        commandOutput.textContent = 'Taking screenshot...';
+        
+        // Use html2canvas library if available, otherwise use a fallback
+        if (typeof html2canvas === 'function') {
+            html2canvas(document.body).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'screenshot.png';
+                link.href = canvas.toDataURL();
+                link.click();
+                commandOutput.textContent = 'Screenshot saved';
             });
+        } else {
+            // Fallback: create a simple canvas with the current viewport
+            const canvas = document.createElement('canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const ctx = canvas.getContext('2d');
             
-            return plyContent;
+            // Draw a simple representation
+            ctx.fillStyle = document.body.style.backgroundColor || '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = document.body.style.color || '#000000';
+            ctx.font = '16px Arial';
+            ctx.fillText('Screenshot of ' + document.title, 20, 30);
+            ctx.fillText(window.location.href, 20, 60);
+            
+            const link = document.createElement('a');
+            link.download = 'screenshot.png';
+            link.href = canvas.toDataURL();
+            link.click();
+            
+            commandOutput.textContent = 'Basic screenshot saved (for full screenshots, include html2canvas library)';
+        }
+    }
+    
+    function inspectElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
         }
         
-        function downloadPLY() {
-            if (!currentPLYData) {
-                alert('Please generate a spaceship first!');
-                return;
+        // Open browser's native inspector
+        if (typeof window.inspect === 'function') {
+            window.inspect(selectedElement);
+        } else {
+            // Fallback: log element details to console
+            console.log(selectedElement);
+            commandOutput.textContent = 'Element details logged to console. Press F12 to view.';
+        }
+    }
+    
+    function selectParent() {
+        if (!selectedElement || !selectedElement.parentNode) {
+            commandOutput.textContent = 'No parent element available.';
+            return;
+        }
+        
+        selectSpecificElement(selectedElement.parentNode);
+    }
+    
+    function selectChild() {
+        if (!selectedElement || !selectedElement.children.length) {
+            commandOutput.textContent = 'No child elements available.';
+            return;
+        }
+        
+        // List children
+        let childrenList = 'Child elements:\n';
+        Array.from(selectedElement.children).forEach((child, index) => {
+            childrenList += `${index}: <${child.tagName.toLowerCase()}${child.id ? `#${child.id}` : ''}${child.className ? `.${child.className.replace(/\s+/g, '.')}` : ''}>\n`;
+        });
+        
+        commandOutput.textContent = childrenList;
+        
+        // Ask which child to select
+        const childIndex = prompt('Enter index of child to select:');
+        if (childIndex !== null && !isNaN(childIndex)) {
+            const index = parseInt(childIndex);
+            if (index >= 0 && index < selectedElement.children.length) {
+                selectSpecificElement(selectedElement.children[index]);
             }
-            
-            const blob = new Blob([currentPLYData], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `spaceship_${currentShipType}_${Date.now()}.ply`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+        }
+    }
+    
+    function selectNextSibling() {
+        if (!selectedElement || !selectedElement.nextElementSibling) {
+            commandOutput.textContent = 'No next sibling element available.';
+            return;
         }
         
-        // Initialize with default spaceship
-        setTimeout(() => {
-            generateSpaceship();
-        }, 500);
-    </script>
-</body>
-</html>
+        selectSpecificElement(selectedElement.nextElementSibling);
+    }
+    
+    function selectPreviousSibling() {
+        if (!selectedElement || !selectedElement.previousElementSibling) {
+            commandOutput.textContent = 'No previous sibling element available.';
+            return;
+        }
+        
+        selectSpecificElement(selectedElement.previousElementSibling);
+    }
+    
+    function toggleAttribute(attr) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!attr) {
+            commandOutput.textContent = 'Please provide an attribute name to toggle.';
+            return;
+        }
+        
+        if (selectedElement.hasAttribute(attr)) {
+            selectedElement.removeAttribute(attr);
+            commandOutput.textContent = `Removed attribute: ${attr}`;
+        } else {
+            selectedElement.setAttribute(attr, '');
+            commandOutput.textContent = `Added attribute: ${attr}`;
+        }
+    }
+    
+    // Initialize with help text
+    commandOutput.textContent = 'Command Panel ready. Type "help" for available commands.';
+    
+    // Initialize elements list
+    updateElementsList();
+    
+    // Add keyboard shortcut to toggle panel (Ctrl+Shift+C)
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            if (commandPanelElement.style.display === 'none') {
+                commandPanelElement.style.display = 'flex';
+            } else {
+                commandPanelElement.style.display = 'none';
+            }
+        }
+    });
+})();
+</script>
