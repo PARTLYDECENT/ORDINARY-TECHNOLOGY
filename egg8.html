@@ -1,50 +1,439 @@
-// First add this to your GAME object at the top of the file
-GAME.alienBase = null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alien World PLY Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        h1 {
+            color: #4fc3f7;
+            text-align: center;
+        }
+        .container {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(79, 195, 247, 0.3);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #81c784;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #2a2a2a;
+            color: #e0e0e0;
+        }
+        button {
+            background-color: #4fc3f7;
+            color: #121212;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #29b6f6;
+        }
+        .preview {
+            margin-top: 20px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #555;
+            background-color: #000;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #2a2a2a;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Alien World PLY Generator</h1>
+        
+        <div class="form-group">
+            <label for="worldSize">World Size:</label>
+            <select id="worldSize">
+                <option value="32">Small (32x32)</option>
+                <option value="64" selected>Medium (64x64)</option>
+                <option value="128">Large (128x128)</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="terrainType">Terrain Type:</label>
+            <select id="terrainType">
+                <option value="mountains">Mountainous</option>
+                <option value="valleys" selected>Valleys & Canyons</option>
+                <option value="craters">Cratered</option>
+                <option value="volcanic">Volcanic</option>
+                <option value="floating">Floating Islands</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="colorScheme">Color Scheme:</label>
+            <select id="colorScheme">
+                <option value="earthlike" selected>Earth-like</option>
+                <option value="marslike">Mars-like</option>
+                <option value="alien">Alien Bioluminescent</option>
+                <option value="ice">Ice World</option>
+                <option value="desert">Desert World</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="heightScale">Height Scale:</label>
+            <input type="range" id="heightScale" min="0.1" max="2" step="0.1" value="1">
+            <span id="heightValue">1.0</span>
+        </div>
+        
+        <div class="form-group">
+            <label for="randomSeed">Random Seed:</label>
+            <input type="text" id="randomSeed" value="alienworld">
+        </div>
+        
+        <button id="generateBtn">Generate World</button>
+        <button id="downloadBtn" disabled>Download PLY</button>
+        
+        <div class="preview">
+            <canvas id="previewCanvas" width="400" height="400"></canvas>
+        </div>
+        
+        <div class="info">
+            <p>This generator creates procedural alien worlds and exports them as PLY files that can be opened in 3D software like Blender, MeshLab, or imported into game engines.</p>
+        </div>
+    </div>
 
-// Then add this to your existing keyboard controls section inside init()
-else if (key === '9') {
-    if (!GAME.alienBase) {
-        // Create a simple alien base
-        const geometry = new THREE.IcosahedronGeometry(200, 1);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x00ff88,
-            emissive: 0x004400,
-            emissiveIntensity: 0.5
+    <script>
+        // Simple noise function for terrain generation
+        function noise(x, y, seed) {
+            let n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+            return n - Math.floor(n);
+        }
+        
+        function smoothNoise(x, y, seed) {
+            const corners = (noise(x-1, y-1, seed) + noise(x+1, y-1, seed) + 
+                            noise(x-1, y+1, seed) + noise(x+1, y+1, seed)) / 16;
+            const sides = (noise(x-1, y, seed) + noise(x+1, y, seed) + 
+                          noise(x, y-1, seed) + noise(x, y+1, seed)) / 8;
+            const center = noise(x, y, seed) / 4;
+            return corners + sides + center;
+        }
+        
+        function interpolatedNoise(x, y, seed) {
+            const intX = Math.floor(x);
+            const fracX = x - intX;
+            const intY = Math.floor(y);
+            const fracY = y - intY;
+            
+            const v1 = smoothNoise(intX, intY, seed);
+            const v2 = smoothNoise(intX + 1, intY, seed);
+            const v3 = smoothNoise(intX, intY + 1, seed);
+            const v4 = smoothNoise(intX + 1, intY + 1, seed);
+            
+            const i1 = v1 * (1 - fracX) + v2 * fracX;
+            const i2 = v3 * (1 - fracX) + v4 * fracX;
+            
+            return i1 * (1 - fracY) + i2 * fracY;
+        }
+        
+        function perlinNoise(x, y, octaves, persistence, seed) {
+            let total = 0;
+            let frequency = 1;
+            let amplitude = 1;
+            let maxValue = 0;
+            
+            for (let i = 0; i < octaves; i++) {
+                total += interpolatedNoise(x * frequency, y * frequency, seed) * amplitude;
+                maxValue += amplitude;
+                amplitude *= persistence;
+                frequency *= 2;
+            }
+            
+            return total / maxValue;
+        }
+        
+        // Get color based on height and color scheme
+        function getColor(height, colorScheme) {
+            const h = Math.max(0, Math.min(1, height));
+            
+            switch(colorScheme) {
+                case 'earthlike':
+                    if (h < 0.3) return [0.1, 0.3, 0.7]; // Deep water
+                    if (h < 0.35) return [0.2, 0.5, 0.8]; // Shallow water
+                    if (h < 0.4) return [0.8, 0.7, 0.5]; // Beach
+                    if (h < 0.6) return [0.2, 0.6, 0.2]; // Grass
+                    if (h < 0.8) return [0.4, 0.4, 0.3]; // Rock
+                    return [0.9, 0.9, 0.9]; // Snow
+                    
+                case 'marslike':
+                    if (h < 0.4) return [0.6, 0.3, 0.1]; // Lowlands
+                    if (h < 0.7) return [0.7, 0.4, 0.2]; // Midlands
+                    return [0.8, 0.5, 0.3]; // Highlands
+                    
+                case 'alien':
+                    if (h < 0.3) return [0.1, 0.1, 0.4]; // Deep water
+                    if (h < 0.4) return [0.2, 0.2, 0.6]; // Shallow water
+                    if (h < 0.6) return [0.4, 0.7, 0.4]; // Bioluminescent flora
+                    if (h < 0.8) return [0.7, 0.3, 0.7]; // Crystal formations
+                    return [0.9, 0.6, 0.9]; // Energy peaks
+                    
+                case 'ice':
+                    if (h < 0.4) return [0.0, 0.2, 0.4]; // Deep ice
+                    if (h < 0.7) return [0.7, 0.8, 0.9]; // Ice
+                    return [0.9, 0.95, 1.0]; // Snow
+                    
+                case 'desert':
+                    if (h < 0.4) return [0.6, 0.4, 0.2]; // Sand
+                    if (h < 0.7) return [0.7, 0.5, 0.3]; // Dunes
+                    return [0.8, 0.6, 0.4]; // Rock
+                    
+                default:
+                    return [h, h, h]; // Grayscale
+            }
+        }
+        
+        // Generate terrain based on type
+        function generateTerrain(size, terrainType, seed) {
+            const terrain = [];
+            
+            for (let y = 0; y < size; y++) {
+                terrain[y] = [];
+                for (let x = 0; x < size; x++) {
+                    let height = 0;
+                    
+                    switch(terrainType) {
+                        case 'mountains':
+                            height = perlinNoise(x/10, y/10, 6, 0.5, seed) * 0.7 + 
+                                    perlinNoise(x/20, y/20, 4, 0.6, seed+1) * 0.3;
+                            break;
+                            
+                        case 'valleys':
+                            height = 0.5 - perlinNoise(x/15, y/15, 5, 0.5, seed) * 0.5;
+                            break;
+                            
+                        case 'craters':
+                            height = perlinNoise(x/20, y/20, 3, 0.4, seed) * 0.3;
+                            
+                            // Add craters
+                            const numCraters = Math.floor(size * size / 500);
+                            for (let i = 0; i < numCraters; i++) {
+                                const craterSeed = seed + i * 100;
+                                const cx = Math.floor(noise(craterSeed, 0, 0) * size);
+                                const cy = Math.floor(noise(0, craterSeed, 0) * size);
+                                const radius = 3 + noise(craterSeed, craterSeed, 0) * 7;
+                                
+                                const dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                                if (dist < radius) {
+                                    const craterDepth = (1 - dist/radius) * 0.3;
+                                    height = Math.max(0, height - craterDepth);
+                                }
+                            }
+                            break;
+                            
+                        case 'volcanic':
+                            height = perlinNoise(x/15, y/15, 4, 0.6, seed) * 0.4;
+                            
+                            // Add volcanoes
+                            const numVolcanoes = Math.floor(size * size / 1000);
+                            for (let i = 0; i < numVolcanoes; i++) {
+                                const volcanoSeed = seed + i * 100;
+                                const vx = Math.floor(noise(volcanoSeed, 0, 0) * size);
+                                const vy = Math.floor(noise(0, volcanoSeed, 0) * size);
+                                const radius = 5 + noise(volcanoSeed, volcanoSeed, 0) * 10;
+                                
+                                const dist = Math.sqrt((x - vx) * (x - vx) + (y - vy) * (y - vy));
+                                if (dist < radius) {
+                                    const volcanoHeight = (1 - dist/radius) * 0.6;
+                                    height = Math.min(1, height + volcanoHeight);
+                                }
+                            }
+                            break;
+                            
+                        case 'floating':
+                            height = perlinNoise(x/10, y/10, 5, 0.5, seed) * 0.4;
+                            
+                            // Create floating islands
+                            if (height > 0.3 && height < 0.7) {
+                                const islandSeed = seed + Math.floor(x/5) * 100 + Math.floor(y/5);
+                                const islandNoise = perlinNoise(x/5, y/5, 3, 0.7, islandSeed);
+                                if (islandNoise < 0.4) {
+                                    height = 0.1; // Lower areas between islands
+                                }
+                            }
+                            break;
+                            
+                        default:
+                            height = perlinNoise(x/20, y/20, 4, 0.5, seed);
+                    }
+                    
+                    terrain[y][x] = height;
+                }
+            }
+            
+            return terrain;
+        }
+        
+        // Generate vertices and faces for PLY
+        function generatePLYData(terrain, size, heightScale, colorScheme) {
+            const vertices = [];
+            const faces = [];
+            const colors = [];
+            
+            // Generate vertices
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const height = terrain[y][x] * heightScale;
+                    vertices.push(x - size/2, height * 20, y - size/2);
+                    
+                    const color = getColor(terrain[y][x], colorScheme);
+                    colors.push(color[0], color[1], color[2]);
+                }
+            }
+            
+            // Generate faces (two triangles per grid cell)
+            for (let y = 0; y < size - 1; y++) {
+                for (let x = 0; x < size - 1; x++) {
+                    const idx = y * size + x;
+                    const idxRight = idx + 1;
+                    const idxDown = idx + size;
+                    const idxDownRight = idx + size + 1;
+                    
+                    // First triangle
+                    faces.push([idx, idxRight, idxDown]);
+                    
+                    // Second triangle
+                    faces.push([idxRight, idxDownRight, idxDown]);
+                }
+            }
+            
+            return { vertices, faces, colors };
+        }
+        
+        // Convert data to PLY format
+        function createPLYFile(vertices, faces, colors) {
+            let ply = "ply\n";
+            ply += "format ascii 1.0\n";
+            ply += `element vertex ${vertices.length / 3}\n`;
+            ply += "property float x\n";
+            ply += "property float y\n";
+            ply += "property float z\n";
+            ply += "property float red\n";
+            ply += "property float green\n";
+            ply += "property float blue\n";
+            ply += `element face ${faces.length}\n`;
+            ply += "property list uchar int vertex_indices\n";
+            ply += "end_header\n";
+            
+            // Add vertices
+            for (let i = 0; i < vertices.length; i += 3) {
+                ply += `${vertices[i]} ${vertices[i+1]} ${vertices[i+2]} `;
+                ply += `${colors[i]} ${colors[i+1]} ${colors[i+2]}\n`;
+            }
+            
+            // Add faces
+            for (const face of faces) {
+                ply += `3 ${face[0]} ${face[1]} ${face[2]}\n`;
+            }
+            
+            return ply;
+        }
+        
+        // Draw preview on canvas
+        function drawPreview(terrain, size, colorScheme, canvas) {
+            const ctx = canvas.getContext('2d');
+            const cellSize = canvas.width / size;
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const height = terrain[y][x];
+                    const color = getColor(height, colorScheme);
+                    
+                    ctx.fillStyle = `rgb(${Math.floor(color[0]*255)}, ${Math.floor(color[1]*255)}, ${Math.floor(color[2]*255)})`;
+                    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+        
+        // Main variables
+        let currentPLY = null;
+        
+        // Event listeners
+        document.getElementById('heightScale').addEventListener('input', function() {
+            document.getElementById('heightValue').textContent = this.value;
         });
         
-        const alienBase = new THREE.Mesh(geometry, material);
-        alienBase.position.set(2000, 150, 2000);
-        alienBase.castShadow = true;
-        alienBase.receiveShadow = true;
-        
-        GAME.alienBase = alienBase;
-        scene.add(alienBase);
-        console.log('Alien base spawned at position:', alienBase.position);
-    }
-}
-
-// And add this to your animate() function to test alien NPC spawning
-if (GAME.alienBase && GAME.enemyNPCs.length < GAME.maxEnemyNPCs) {
-    if (Math.random() < 0.01) { // 1% chance per frame
-        const geometry = new THREE.OctahedronGeometry(15, 1);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x00ff88,
-            emissive: 0x004400
+        document.getElementById('generateBtn').addEventListener('click', function() {
+            const size = parseInt(document.getElementById('worldSize').value);
+            const terrainType = document.getElementById('terrainType').value;
+            const colorScheme = document.getElementById('colorScheme').value;
+            const heightScale = parseFloat(document.getElementById('heightScale').value);
+            const seed = document.getElementById('randomSeed').value;
+            
+            // Convert seed to number
+            const seedNum = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            
+            // Generate terrain
+            const terrain = generateTerrain(size, terrainType, seedNum);
+            
+            // Draw preview
+            const canvas = document.getElementById('previewCanvas');
+            drawPreview(terrain, size, colorScheme, canvas);
+            
+            // Generate PLY data
+            const { vertices, faces, colors } = generatePLYData(terrain, size, heightScale, colorScheme);
+            
+            // Create PLY file
+            currentPLY = createPLYFile(vertices, faces, colors);
+            
+            // Enable download button
+            document.getElementById('downloadBtn').disabled = false;
         });
         
-        const alien = new THREE.Mesh(geometry, material);
-        alien.position.copy(GAME.alienBase.position);
-        alien.position.y += 100;
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            if (!currentPLY) return;
+            
+            const blob = new Blob([currentPLY], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'alien_world.ply';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Clean up
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        });
         
-        alien.userData = {
-            speed: 3,
-            targetPoint: getRandomPatrolPoint(GAME.alienBase.position, 300),
-            isAlien: true,
-            health: 150
-        };
-        
-        scene.add(alien);
-        GAME.enemyNPCs.push(alien);
-        console.log('Alien NPC spawned');
-    }
-}
+        // Generate initial world
+        document.getElementById('generateBtn').click();
+    </script>
+</body>
+</html>
