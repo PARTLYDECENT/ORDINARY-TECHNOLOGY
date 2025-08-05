@@ -4653,114 +4653,782 @@ Let’s keep unlocking.</p>
 
 
 
-<button onclick="toggleMode()">🌐 切换颜色和语言 / Toggle Color + Language</button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 <script>
-  let toggled = false;
-
-  const colorMap = {
-    'red': 'blue',
-    'blue': 'red',
-    'black': 'white',
-    'white': 'black',
-    '#f00': '#00f',
-    '#00f': '#f00'
-  };
-
-  const dictionary = {
-    'Toggle Color + Language': '切换颜色和语言',
-    'Welcome to the future': '欢迎来到未来',
-    'Explore': '探索',
-    'Technology': '技术',
-    'Contact': '联系',
-    // Add more as needed
-  };
-
-  function swapColors(el) {
-    const styles = window.getComputedStyle(el);
-    ['color', 'backgroundColor'].forEach(prop => {
-      const current = styles[prop];
-      for (const [from, to] of Object.entries(colorMap)) {
-        if (current.includes(from)) {
-          el.style[prop] = to;
+// Drop-in Command Panel for HTML Sites
+(function() {
+    // Create command panel UI
+    const commandPanel = document.createElement('div');
+    commandPanel.id = 'command-panel';
+    commandPanel.innerHTML = `
+        <div id="command-header">
+            <span>Command Panel</span>
+            <button id="minimize-btn">−</button>
+        </div>
+        <div id="command-body">
+            <div id="command-output"></div>
+            <div id="command-input-container">
+                <input type="text" id="command-input" placeholder="Type command (help for options)">
+                <button id="execute-btn">Run</button>
+            </div>
+            <div id="command-history"></div>
+        </div>
+    `;
+    
+    // Style the command panel
+    const style = document.createElement('style');
+    style.textContent = `
+        #command-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 350px;
+            background-color: #2d2d30;
+            color: #d4d4d4;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            font-family: 'Consolas', 'Monaco', monospace;
+            z-index: 10000;
+            transition: all 0.3s ease;
         }
-      }
+        
+        #command-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: #007acc;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            cursor: move;
+        }
+        
+        #minimize-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #command-body {
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        #command-output {
+            background-color: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            min-height: 60px;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        
+        #command-input-container {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        #command-input {
+            flex: 1;
+            padding: 8px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        
+        #execute-btn {
+            margin-left: 8px;
+            padding: 8px 12px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        #command-history {
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .command-history-item {
+            padding: 4px 8px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .command-history-item:last-child {
+            border-bottom: none;
+        }
+        
+        #command-panel.minimized {
+            width: 200px;
+            height: 40px;
+        }
+        
+        #command-panel.minimized #command-body {
+            display: none;
+        }
+        
+        .highlight-element {
+            outline: 2px dashed #ff9900 !important;
+            outline-offset: 2px !important;
+        }
+    `;
+    
+    // Add to document
+    document.head.appendChild(style);
+    document.body.appendChild(commandPanel);
+    
+    // Command panel functionality
+    const commandInput = document.getElementById('command-input');
+    const executeBtn = document.getElementById('execute-btn');
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const commandOutput = document.getElementById('command-output');
+    const commandHistory = document.getElementById('command-history');
+    const commandPanelElement = document.getElementById('command-panel');
+    
+    let selectedElement = null;
+    let originalStyles = new Map();
+    
+    // Make panel draggable
+    let isDragging = false;
+    let dragOffsetX, dragOffsetY;
+    
+    document.getElementById('command-header').addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragOffsetX = e.clientX - commandPanelElement.offsetLeft;
+        dragOffsetY = e.clientY - commandPanelElement.offsetTop;
     });
-  }
-
-  function translateText(el) {
-    if (!el.children.length && el.textContent.trim()) {
-      const original = el.dataset.originalText || el.textContent.trim();
-      el.dataset.originalText = original;
-      el.textContent = toggled ? original : dictionary[original] || original;
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            commandPanelElement.style.left = `${e.clientX - dragOffsetX}px`;
+            commandPanelElement.style.top = `${e.clientY - dragOffsetY}px`;
+            commandPanelElement.style.bottom = 'auto';
+            commandPanelElement.style.right = 'auto';
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+    
+    // Minimize/restore panel
+    minimizeBtn.addEventListener('click', () => {
+        commandPanelElement.classList.toggle('minimized');
+        minimizeBtn.textContent = commandPanelElement.classList.contains('minimized') ? '+' : '−';
+    });
+    
+    // Execute command
+    function executeCommand() {
+        const command = commandInput.value.trim();
+        if (!command) return;
+        
+        // Add to history
+        const historyItem = document.createElement('div');
+        historyItem.className = 'command-history-item';
+        historyItem.textContent = `> ${command}`;
+        commandHistory.prepend(historyItem);
+        
+        // Process command
+        processCommand(command);
+        
+        // Clear input
+        commandInput.value = '';
     }
-  }
-
-  function toggleMode() {
-    document.querySelectorAll('*').forEach(el => {
-      swapColors(el);
-      translateText(el);
+    
+    executeBtn.addEventListener('click', executeCommand);
+    commandInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            executeCommand();
+        }
     });
-    toggled = !toggled;
-  }
+    
+    // Process commands
+    function processCommand(command) {
+        const parts = command.toLowerCase().split(' ');
+        const cmd = parts[0];
+        const args = parts.slice(1);
+        
+        switch (cmd) {
+            case 'help':
+                showHelp();
+                break;
+                
+            case 'select':
+                selectElement();
+                break;
+                
+            case 'hide':
+                hideElement();
+                break;
+                
+            case 'show':
+                showElement();
+                break;
+                
+            case 'color':
+                changeColor(args.join(' '));
+                break;
+                
+            case 'background':
+                changeBackground(args.join(' '));
+                break;
+                
+            case 'fontsize':
+                changeFontSize(args.join(' '));
+                break;
+                
+            case 'dark':
+                toggleDarkMode(true);
+                break;
+                
+            case 'light':
+                toggleDarkMode(false);
+                break;
+                
+            case 'reset':
+                resetStyles();
+                break;
+                
+            case 'info':
+                showPageInfo();
+                break;
+                
+            case 'elements':
+                listElements(args[0]);
+                break;
+                
+            case 'remove':
+                removeElement();
+                break;
+                
+            case 'disable':
+                toggleDisable(true);
+                break;
+                
+            case 'enable':
+                toggleDisable(false);
+                break;
+                
+            case 'width':
+                changeDimension('width', args.join(' '));
+                break;
+                
+            case 'height':
+                changeDimension('height', args.join(' '));
+                break;
+                
+            case 'padding':
+                changeSpacing('padding', args.join(' '));
+                break;
+                
+            case 'margin':
+                changeSpacing('margin', args.join(' '));
+                break;
+                
+            case 'border':
+                changeBorder(args.join(' '));
+                break;
+                
+            case 'opacity':
+                changeOpacity(args.join(' '));
+                break;
+                
+            case 'text':
+                changeText(args.join(' '));
+                break;
+                
+            case 'html':
+                changeHTML(args.join(' '));
+                break;
+                
+            case 'class':
+                changeClass(args.join(' '));
+                break;
+                
+            case 'id':
+                changeId(args.join(' '));
+                break;
+                
+            case 'scroll':
+                scrollToElement();
+                break;
+                
+            case 'focus':
+                focusElement();
+                break;
+                
+            case 'screenshot':
+                takeScreenshot();
+                break;
+                
+            default:
+                commandOutput.textContent = `Unknown command: ${cmd}. Type 'help' for available commands.`;
+        }
+    }
+    
+    // Command implementations
+    function showHelp() {
+        const helpText = `Available commands:
+        
+help - Show this help
+select - Select an element by clicking on it
+hide - Hide selected element
+show - Show selected element
+color [value] - Change text color of selected element
+background [value] - Change background color of selected element
+fontsize [value] - Change font size of selected element
+dark - Enable dark mode
+light - Enable light mode
+reset - Reset all changes
+info - Show page information
+elements [tag] - List all elements of a specific type
+remove - Remove selected element
+disable - Disable selected element
+enable - Enable selected element
+width [value] - Change width of selected element
+height [value] - Change height of selected element
+padding [value] - Change padding of selected element
+margin [value] - Change margin of selected element
+border [value] - Change border of selected element
+opacity [value] - Change opacity of selected element (0-1)
+text [value] - Change text content of selected element
+html [value] - Change HTML content of selected element
+class [name] - Add class to selected element
+id [name] - Change ID of selected element
+scroll - Scroll to selected element
+focus - Focus on selected element
+screenshot - Take a screenshot of the page`;
+        
+        commandOutput.textContent = helpText;
+    }
+    
+    function selectElement() {
+        commandOutput.textContent = 'Click on an element to select it...';
+        
+        document.addEventListener('click', function selectHandler(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Remove previous selection
+            if (selectedElement) {
+                selectedElement.classList.remove('highlight-element');
+            }
+            
+            // Select new element
+            selectedElement = e.target;
+            selectedElement.classList.add('highlight-element');
+            
+            // Store original styles
+            if (!originalStyles.has(selectedElement)) {
+                originalStyles.set(selectedElement, {
+                    color: selectedElement.style.color,
+                    backgroundColor: selectedElement.style.backgroundColor,
+                    fontSize: selectedElement.style.fontSize,
+                    display: selectedElement.style.display,
+                    width: selectedElement.style.width,
+                    height: selectedElement.style.height,
+                    padding: selectedElement.style.padding,
+                    margin: selectedElement.style.margin,
+                    border: selectedElement.style.border,
+                    opacity: selectedElement.style.opacity,
+                    disabled: selectedElement.disabled,
+                    className: selectedElement.className,
+                    id: selectedElement.id
+                });
+            }
+            
+            commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
+            
+            document.removeEventListener('click', selectHandler);
+        }, { once: true });
+    }
+    
+    function hideElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.style.display = 'none';
+        commandOutput.textContent = `Element hidden: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function showElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.style.display = '';
+        commandOutput.textContent = `Element shown: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function changeColor(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a color value.';
+            return;
+        }
+        
+        selectedElement.style.color = value;
+        commandOutput.textContent = `Changed color to: ${value}`;
+    }
+    
+    function changeBackground(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a background color value.';
+            return;
+        }
+        
+        selectedElement.style.backgroundColor = value;
+        commandOutput.textContent = `Changed background color to: ${value}`;
+    }
+    
+    function changeFontSize(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a font size value.';
+            return;
+        }
+        
+        selectedElement.style.fontSize = value;
+        commandOutput.textContent = `Changed font size to: ${value}`;
+    }
+    
+    function toggleDarkMode(enable) {
+        if (enable) {
+            document.body.style.backgroundColor = '#121212';
+            document.body.style.color = '#e0e0e0';
+            commandOutput.textContent = 'Dark mode enabled';
+        } else {
+            document.body.style.backgroundColor = '';
+            document.body.style.color = '';
+            commandOutput.textContent = 'Light mode enabled';
+        }
+    }
+    
+    function resetStyles() {
+        // Reset all modified elements
+        for (const [element, styles] of originalStyles) {
+            element.style.color = styles.color;
+            element.style.backgroundColor = styles.backgroundColor;
+            element.style.fontSize = styles.fontSize;
+            element.style.display = styles.display;
+            element.style.width = styles.width;
+            element.style.height = styles.height;
+            element.style.padding = styles.padding;
+            element.style.margin = styles.margin;
+            element.style.border = styles.border;
+            element.style.opacity = styles.opacity;
+            element.disabled = styles.disabled;
+            element.className = styles.className;
+            element.id = styles.id;
+            element.classList.remove('highlight-element');
+        }
+        
+        // Reset body
+        document.body.style.backgroundColor = '';
+        document.body.style.color = '';
+        
+        originalStyles.clear();
+        selectedElement = null;
+        
+        commandOutput.textContent = 'All styles have been reset';
+    }
+    
+    function showPageInfo() {
+        const title = document.title;
+        const url = window.location.href;
+        const elementsCount = document.querySelectorAll('*').length;
+        const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+        
+        commandOutput.textContent = `Page Information:
+Title: ${title}
+URL: ${url}
+Total elements: ${elementsCount}
+Load time: ${loadTime}ms
+Viewport: ${window.innerWidth}x${window.innerHeight}`;
+    }
+    
+    function listElements(tag) {
+        const elements = tag ? document.querySelectorAll(tag) : document.querySelectorAll('*');
+        const elementTypes = {};
+        
+        elements.forEach(el => {
+            const tagName = el.tagName.toLowerCase();
+            elementTypes[tagName] = (elementTypes[tagName] || 0) + 1;
+        });
+        
+        let result = `Found ${elements.length} elements:\n\n`;
+        for (const [type, count] of Object.entries(elementTypes)) {
+            result += `${type}: ${count}\n`;
+        }
+        
+        commandOutput.textContent = result;
+    }
+    
+    function removeElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        const parent = selectedElement.parentNode;
+        const tagName = selectedElement.tagName.toLowerCase();
+        
+        selectedElement.remove();
+        originalStyles.delete(selectedElement);
+        selectedElement = null;
+        
+        commandOutput.textContent = `Removed element: <${tagName}>`;
+    }
+    
+    function toggleDisable(disable) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.disabled = disable;
+        commandOutput.textContent = `Element ${disable ? 'disabled' : 'enabled'}: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function changeDimension(dimension, value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = `Please provide a ${dimension} value.`;
+            return;
+        }
+        
+        selectedElement.style[dimension] = value;
+        commandOutput.textContent = `Changed ${dimension} to: ${value}`;
+    }
+    
+    function changeSpacing(property, value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = `Please provide a ${property} value.`;
+            return;
+        }
+        
+        selectedElement.style[property] = value;
+        commandOutput.textContent = `Changed ${property} to: ${value}`;
+    }
+    
+    function changeBorder(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a border value.';
+            return;
+        }
+        
+        selectedElement.style.border = value;
+        commandOutput.textContent = `Changed border to: ${value}`;
+    }
+    
+    function changeOpacity(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide an opacity value (0-1).';
+            return;
+        }
+        
+        const opacity = parseFloat(value);
+        if (isNaN(opacity) || opacity < 0 || opacity > 1) {
+            commandOutput.textContent = 'Opacity must be a number between 0 and 1.';
+            return;
+        }
+        
+        selectedElement.style.opacity = opacity;
+        commandOutput.textContent = `Changed opacity to: ${opacity}`;
+    }
+    
+    function changeText(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide text content.';
+            return;
+        }
+        
+        selectedElement.textContent = value;
+        commandOutput.textContent = `Changed text content to: ${value}`;
+    }
+    
+    function changeHTML(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide HTML content.';
+            return;
+        }
+        
+        selectedElement.innerHTML = value;
+        commandOutput.textContent = `Changed HTML content`;
+    }
+    
+    function changeClass(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide a class name.';
+            return;
+        }
+        
+        selectedElement.classList.add(value);
+        commandOutput.textContent = `Added class: ${value}`;
+    }
+    
+    function changeId(value) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!value) {
+            commandOutput.textContent = 'Please provide an ID value.';
+            return;
+        }
+        
+        selectedElement.id = value;
+        commandOutput.textContent = `Changed ID to: ${value}`;
+    }
+    
+    function scrollToElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        commandOutput.textContent = `Scrolled to element: <${selectedElement.tagName.toLowerCase()}>`;
+    }
+    
+    function focusElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (typeof selectedElement.focus === 'function') {
+            selectedElement.focus();
+            commandOutput.textContent = `Focused on element: <${selectedElement.tagName.toLowerCase()}>`;
+        } else {
+            commandOutput.textContent = 'Element cannot be focused';
+        }
+    }
+    
+    function takeScreenshot() {
+        commandOutput.textContent = 'Taking screenshot...';
+        
+        // Use html2canvas library if available, otherwise use a fallback
+        if (typeof html2canvas === 'function') {
+            html2canvas(document.body).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'screenshot.png';
+                link.href = canvas.toDataURL();
+                link.click();
+                commandOutput.textContent = 'Screenshot saved';
+            });
+        } else {
+            // Fallback: create a simple canvas with the current viewport
+            const canvas = document.createElement('canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw a simple representation
+            ctx.fillStyle = document.body.style.backgroundColor || '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = document.body.style.color || '#000000';
+            ctx.font = '16px Arial';
+            ctx.fillText('Screenshot of ' + document.title, 20, 30);
+            ctx.fillText(window.location.href, 20, 60);
+            
+            const link = document.createElement('a');
+            link.download = 'screenshot.png';
+            link.href = canvas.toDataURL();
+            link.click();
+            
+            commandOutput.textContent = 'Basic screenshot saved (for full screenshots, include html2canvas library)';
+        }
+    }
+    
+    // Initialize with help text
+    commandOutput.textContent = 'Command Panel ready. Type "help" for available commands.';
+})();
 </script>
-
-<style>
-  body {
-    background-color: black;
-    color: red;
-    font-family: sans-serif;
-    padding: 2rem;
-  }
-
-  button {
-    background-color: red;
-    color: white;
-    border: none;
-    padding: 1rem;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-
-  button:hover {
-    background-color: blue;
-  }
-</style>
-
-<!-- Dummy Content -->
-<h1>Welcome to the future</h1>
-<p>Explore the unknown. Contact us for advanced technology solutions.</p>
-<button>Explore</button>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
