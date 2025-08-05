@@ -4672,8 +4672,19 @@ Let’s keep unlocking.</p>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 <script>
-// Drop-in Command Panel for HTML Sites
+// Drop-in Command Panel for HTML Sites - Fully Functional Version
 (function() {
     // Create command panel UI
     const commandPanel = document.createElement('div');
@@ -4682,6 +4693,7 @@ Let’s keep unlocking.</p>
         <div id="command-header">
             <span>Command Panel</span>
             <button id="minimize-btn">−</button>
+            <button id="close-btn">×</button>
         </div>
         <div id="command-body">
             <div id="command-output"></div>
@@ -4689,7 +4701,22 @@ Let’s keep unlocking.</p>
                 <input type="text" id="command-input" placeholder="Type command (help for options)">
                 <button id="execute-btn">Run</button>
             </div>
-            <div id="command-history"></div>
+            <div id="command-tabs">
+                <button class="tab-btn active" data-tab="history">History</button>
+                <button class="tab-btn" data-tab="elements">Elements</button>
+                <button class="tab-btn" data-tab="styles">Styles</button>
+            </div>
+            <div id="command-tab-content">
+                <div id="history-tab" class="tab-content active">
+                    <div id="command-history"></div>
+                </div>
+                <div id="elements-tab" class="tab-content">
+                    <div id="elements-list"></div>
+                </div>
+                <div id="styles-tab" class="tab-content">
+                    <div id="styles-list"></div>
+                </div>
+            </div>
         </div>
     `;
     
@@ -4700,14 +4727,17 @@ Let’s keep unlocking.</p>
             position: fixed;
             bottom: 20px;
             right: 20px;
-            width: 350px;
+            width: 400px;
+            max-height: 600px;
             background-color: #2d2d30;
             color: #d4d4d4;
             border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
             font-family: 'Consolas', 'Monaco', monospace;
             z-index: 10000;
             transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
         }
         
         #command-header {
@@ -4721,7 +4751,7 @@ Let’s keep unlocking.</p>
             cursor: move;
         }
         
-        #minimize-btn {
+        #minimize-btn, #close-btn {
             background: none;
             border: none;
             color: white;
@@ -4733,12 +4763,20 @@ Let’s keep unlocking.</p>
             display: flex;
             align-items: center;
             justify-content: center;
+            margin-left: 5px;
+        }
+        
+        #close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
         }
         
         #command-body {
             padding: 15px;
-            max-height: 400px;
-            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         #command-output {
@@ -4746,14 +4784,17 @@ Let’s keep unlocking.</p>
             padding: 10px;
             border-radius: 4px;
             margin-bottom: 10px;
-            min-height: 60px;
+            min-height: 80px;
             font-size: 14px;
             white-space: pre-wrap;
+            overflow-y: auto;
+            flex-shrink: 0;
         }
         
         #command-input-container {
             display: flex;
             margin-bottom: 10px;
+            flex-shrink: 0;
         }
         
         #command-input {
@@ -4776,19 +4817,67 @@ Let’s keep unlocking.</p>
             cursor: pointer;
         }
         
-        #command-history {
-            font-size: 12px;
-            max-height: 150px;
+        #command-tabs {
+            display: flex;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #3e3e42;
+            flex-shrink: 0;
+        }
+        
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #d4d4d4;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-right: 5px;
+        }
+        
+        .tab-btn.active {
+            border-bottom: 2px solid #007acc;
+            color: #007acc;
+        }
+        
+        #command-tab-content {
+            flex: 1;
             overflow-y: auto;
         }
         
-        .command-history-item {
-            padding: 4px 8px;
-            border-bottom: 1px solid #3e3e42;
+        .tab-content {
+            display: none;
+            height: 100%;
         }
         
-        .command-history-item:last-child {
+        .tab-content.active {
+            display: block;
+        }
+        
+        #command-history, #elements-list, #styles-list {
+            background-color: #1e1e1e;
+            border-radius: 4px;
+            padding: 10px;
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        .command-history-item, .element-item, .style-item {
+            padding: 6px 8px;
+            border-bottom: 1px solid #3e3e42;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .command-history-item:last-child, .element-item:last-child, .style-item:last-child {
             border-bottom: none;
+        }
+        
+        .element-item:hover, .style-item:hover {
+            background-color: #2a2d2e;
+        }
+        
+        .element-item.selected {
+            background-color: #094771;
         }
         
         #command-panel.minimized {
@@ -4804,6 +4893,31 @@ Let’s keep unlocking.</p>
             outline: 2px dashed #ff9900 !important;
             outline-offset: 2px !important;
         }
+        
+        .color-picker {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .style-value {
+            float: right;
+            color: #569cd6;
+        }
+        
+        .style-input {
+            width: 100%;
+            padding: 4px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 12px;
+        }
     `;
     
     // Add to document
@@ -4814,12 +4928,40 @@ Let’s keep unlocking.</p>
     const commandInput = document.getElementById('command-input');
     const executeBtn = document.getElementById('execute-btn');
     const minimizeBtn = document.getElementById('minimize-btn');
+    const closeBtn = document.getElementById('close-btn');
     const commandOutput = document.getElementById('command-output');
     const commandHistory = document.getElementById('command-history');
     const commandPanelElement = document.getElementById('command-panel');
+    const elementsList = document.getElementById('elements-list');
+    const stylesList = document.getElementById('styles-list');
     
     let selectedElement = null;
     let originalStyles = new Map();
+    let commandHistoryArray = [];
+    
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.getAttribute('data-tab');
+            
+            // Update active tab button
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update active tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            // Refresh content if needed
+            if (tabName === 'elements') {
+                updateElementsList();
+            } else if (tabName === 'styles' && selectedElement) {
+                updateStylesList();
+            }
+        });
+    });
     
     // Make panel draggable
     let isDragging = false;
@@ -4850,15 +4992,27 @@ Let’s keep unlocking.</p>
         minimizeBtn.textContent = commandPanelElement.classList.contains('minimized') ? '+' : '−';
     });
     
+    // Close panel
+    closeBtn.addEventListener('click', () => {
+        commandPanelElement.style.display = 'none';
+    });
+    
     // Execute command
     function executeCommand() {
         const command = commandInput.value.trim();
         if (!command) return;
         
         // Add to history
+        commandHistoryArray.unshift(command);
+        if (commandHistoryArray.length > 50) commandHistoryArray.pop();
+        
         const historyItem = document.createElement('div');
         historyItem.className = 'command-history-item';
         historyItem.textContent = `> ${command}`;
+        historyItem.addEventListener('click', () => {
+            commandInput.value = command;
+            commandInput.focus();
+        });
         commandHistory.prepend(historyItem);
         
         // Process command
@@ -4874,6 +5028,122 @@ Let’s keep unlocking.</p>
             executeCommand();
         }
     });
+    
+    // Update elements list
+    function updateElementsList() {
+        elementsList.innerHTML = '';
+        
+        const allElements = document.querySelectorAll('*');
+        const elementTypes = {};
+        
+        allElements.forEach(el => {
+            const tagName = el.tagName.toLowerCase();
+            if (!elementTypes[tagName]) {
+                elementTypes[tagName] = [];
+            }
+            elementTypes[tagName].push(el);
+        });
+        
+        for (const [type, elements] of Object.entries(elementTypes)) {
+            const category = document.createElement('div');
+            category.innerHTML = `<strong>${type} (${elements.length})</strong>`;
+            category.style.marginTop = '10px';
+            category.style.marginBottom = '5px';
+            elementsList.appendChild(category);
+            
+            // Show first 5 elements of this type
+            const limit = Math.min(5, elements.length);
+            for (let i = 0; i < limit; i++) {
+                const el = elements[i];
+                const item = document.createElement('div');
+                item.className = 'element-item';
+                
+                let description = `<${type}`;
+                if (el.id) description += `#${el.id}`;
+                if (el.className) description += `.${el.className.replace(/\s+/g, '.')}`;
+                description += '>';
+                
+                // Add some text content if available
+                if (el.textContent && el.textContent.trim() && el.textContent.length < 50) {
+                    description += ` - "${el.textContent.trim()}"`;
+                }
+                
+                item.innerHTML = description;
+                item.addEventListener('click', () => {
+                    selectSpecificElement(el);
+                });
+                
+                elementsList.appendChild(item);
+            }
+            
+            if (elements.length > 5) {
+                const more = document.createElement('div');
+                more.className = 'element-item';
+                more.style.fontStyle = 'italic';
+                more.textContent = `... and ${elements.length - 5} more`;
+                elementsList.appendChild(more);
+            }
+        }
+    }
+    
+    // Update styles list for selected element
+    function updateStylesList() {
+        if (!selectedElement) {
+            stylesList.innerHTML = 'No element selected';
+            return;
+        }
+        
+        stylesList.innerHTML = '';
+        
+        const computedStyle = window.getComputedStyle(selectedElement);
+        const styleProperties = [
+            'color', 'background-color', 'font-size', 'font-family', 'font-weight',
+            'width', 'height', 'padding', 'margin', 'border', 'border-radius',
+            'display', 'position', 'top', 'left', 'right', 'bottom', 'z-index',
+            'opacity', 'visibility', 'transform', 'transition', 'text-align',
+            'cursor', 'overflow', 'box-shadow', 'text-decoration'
+        ];
+        
+        styleProperties.forEach(prop => {
+            const item = document.createElement('div');
+            item.className = 'style-item';
+            
+            const value = computedStyle.getPropertyValue(prop);
+            
+            item.innerHTML = `
+                <div>${prop.replace(/-/g, ' ')}</div>
+                <div class="style-value">${value}</div>
+            `;
+            
+            // Make it editable
+            item.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.className = 'style-input';
+                input.value = value;
+                
+                item.innerHTML = '';
+                item.appendChild(input);
+                input.focus();
+                input.select();
+                
+                const saveValue = () => {
+                    selectedElement.style[prop] = input.value;
+                    updateStylesList();
+                };
+                
+                input.addEventListener('blur', saveValue);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        saveValue();
+                    } else if (e.key === 'Escape') {
+                        updateStylesList();
+                    }
+                });
+            });
+            
+            stylesList.appendChild(item);
+        });
+    }
     
     // Process commands
     function processCommand(command) {
@@ -4994,6 +5264,34 @@ Let’s keep unlocking.</p>
                 takeScreenshot();
                 break;
                 
+            case 'inspect':
+                inspectElement();
+                break;
+                
+            case 'parent':
+                selectParent();
+                break;
+                
+            case 'children':
+                selectChild();
+                break;
+                
+            case 'next':
+                selectNextSibling();
+                break;
+                
+            case 'prev':
+                selectPreviousSibling();
+                break;
+                
+            case 'toggle':
+                toggleAttribute(args[0]);
+                break;
+                
+            case 'refresh':
+                location.reload();
+                break;
+                
             default:
                 commandOutput.textContent = `Unknown command: ${cmd}. Type 'help' for available commands.`;
         }
@@ -5030,7 +5328,14 @@ class [name] - Add class to selected element
 id [name] - Change ID of selected element
 scroll - Scroll to selected element
 focus - Focus on selected element
-screenshot - Take a screenshot of the page`;
+screenshot - Take a screenshot of the page
+inspect - Inspect selected element (like browser dev tools)
+parent - Select parent of current element
+children - List children of current element
+next - Select next sibling element
+prev - Select previous sibling element
+toggle [attr] - Toggle boolean attribute (e.g., hidden, disabled)
+refresh - Reload the page`;
         
         commandOutput.textContent = helpText;
     }
@@ -5072,8 +5377,53 @@ screenshot - Take a screenshot of the page`;
             
             commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
             
+            // Update styles tab if active
+            if (document.querySelector('#styles-tab').classList.contains('active')) {
+                updateStylesList();
+            }
+            
             document.removeEventListener('click', selectHandler);
         }, { once: true });
+    }
+    
+    function selectSpecificElement(element) {
+        // Remove previous selection
+        if (selectedElement) {
+            selectedElement.classList.remove('highlight-element');
+        }
+        
+        // Select new element
+        selectedElement = element;
+        selectedElement.classList.add('highlight-element');
+        
+        // Store original styles
+        if (!originalStyles.has(selectedElement)) {
+            originalStyles.set(selectedElement, {
+                color: selectedElement.style.color,
+                backgroundColor: selectedElement.style.backgroundColor,
+                fontSize: selectedElement.style.fontSize,
+                display: selectedElement.style.display,
+                width: selectedElement.style.width,
+                height: selectedElement.style.height,
+                padding: selectedElement.style.padding,
+                margin: selectedElement.style.margin,
+                border: selectedElement.style.border,
+                opacity: selectedElement.style.opacity,
+                disabled: selectedElement.disabled,
+                className: selectedElement.className,
+                id: selectedElement.id
+            });
+        }
+        
+        commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
+        
+        // Update styles tab if active
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
+        
+        // Switch to styles tab
+        document.querySelector('[data-tab="styles"]').click();
     }
     
     function hideElement() {
@@ -5109,6 +5459,10 @@ screenshot - Take a screenshot of the page`;
         
         selectedElement.style.color = value;
         commandOutput.textContent = `Changed color to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeBackground(value) {
@@ -5124,6 +5478,10 @@ screenshot - Take a screenshot of the page`;
         
         selectedElement.style.backgroundColor = value;
         commandOutput.textContent = `Changed background color to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeFontSize(value) {
@@ -5139,6 +5497,10 @@ screenshot - Take a screenshot of the page`;
         
         selectedElement.style.fontSize = value;
         commandOutput.textContent = `Changed font size to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function toggleDarkMode(enable) {
@@ -5193,7 +5555,8 @@ Title: ${title}
 URL: ${url}
 Total elements: ${elementsCount}
 Load time: ${loadTime}ms
-Viewport: ${window.innerWidth}x${window.innerHeight}`;
+Viewport: ${window.innerWidth}x${window.innerHeight}
+User Agent: ${navigator.userAgent.substring(0, 60)}...`;
     }
     
     function listElements(tag) {
@@ -5252,6 +5615,10 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         
         selectedElement.style[dimension] = value;
         commandOutput.textContent = `Changed ${dimension} to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeSpacing(property, value) {
@@ -5267,6 +5634,10 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         
         selectedElement.style[property] = value;
         commandOutput.textContent = `Changed ${property} to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeBorder(value) {
@@ -5282,6 +5653,10 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         
         selectedElement.style.border = value;
         commandOutput.textContent = `Changed border to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeOpacity(value) {
@@ -5303,6 +5678,10 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         
         selectedElement.style.opacity = opacity;
         commandOutput.textContent = `Changed opacity to: ${opacity}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeText(value) {
@@ -5348,6 +5727,10 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         
         selectedElement.classList.add(value);
         commandOutput.textContent = `Added class: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function changeId(value) {
@@ -5363,6 +5746,10 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         
         selectedElement.id = value;
         commandOutput.textContent = `Changed ID to: ${value}`;
+        
+        if (document.querySelector('#styles-tab').classList.contains('active')) {
+            updateStylesList();
+        }
     }
     
     function scrollToElement() {
@@ -5425,37 +5812,111 @@ Viewport: ${window.innerWidth}x${window.innerHeight}`;
         }
     }
     
+    function inspectElement() {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        // Open browser's native inspector
+        if (typeof window.inspect === 'function') {
+            window.inspect(selectedElement);
+        } else {
+            // Fallback: log element details to console
+            console.log(selectedElement);
+            commandOutput.textContent = 'Element details logged to console. Press F12 to view.';
+        }
+    }
+    
+    function selectParent() {
+        if (!selectedElement || !selectedElement.parentNode) {
+            commandOutput.textContent = 'No parent element available.';
+            return;
+        }
+        
+        selectSpecificElement(selectedElement.parentNode);
+    }
+    
+    function selectChild() {
+        if (!selectedElement || !selectedElement.children.length) {
+            commandOutput.textContent = 'No child elements available.';
+            return;
+        }
+        
+        // List children
+        let childrenList = 'Child elements:\n';
+        Array.from(selectedElement.children).forEach((child, index) => {
+            childrenList += `${index}: <${child.tagName.toLowerCase()}${child.id ? `#${child.id}` : ''}${child.className ? `.${child.className.replace(/\s+/g, '.')}` : ''}>\n`;
+        });
+        
+        commandOutput.textContent = childrenList;
+        
+        // Ask which child to select
+        const childIndex = prompt('Enter index of child to select:');
+        if (childIndex !== null && !isNaN(childIndex)) {
+            const index = parseInt(childIndex);
+            if (index >= 0 && index < selectedElement.children.length) {
+                selectSpecificElement(selectedElement.children[index]);
+            }
+        }
+    }
+    
+    function selectNextSibling() {
+        if (!selectedElement || !selectedElement.nextElementSibling) {
+            commandOutput.textContent = 'No next sibling element available.';
+            return;
+        }
+        
+        selectSpecificElement(selectedElement.nextElementSibling);
+    }
+    
+    function selectPreviousSibling() {
+        if (!selectedElement || !selectedElement.previousElementSibling) {
+            commandOutput.textContent = 'No previous sibling element available.';
+            return;
+        }
+        
+        selectSpecificElement(selectedElement.previousElementSibling);
+    }
+    
+    function toggleAttribute(attr) {
+        if (!selectedElement) {
+            commandOutput.textContent = 'No element selected. Use "select" command first.';
+            return;
+        }
+        
+        if (!attr) {
+            commandOutput.textContent = 'Please provide an attribute name to toggle.';
+            return;
+        }
+        
+        if (selectedElement.hasAttribute(attr)) {
+            selectedElement.removeAttribute(attr);
+            commandOutput.textContent = `Removed attribute: ${attr}`;
+        } else {
+            selectedElement.setAttribute(attr, '');
+            commandOutput.textContent = `Added attribute: ${attr}`;
+        }
+    }
+    
     // Initialize with help text
     commandOutput.textContent = 'Command Panel ready. Type "help" for available commands.';
+    
+    // Initialize elements list
+    updateElementsList();
+    
+    // Add keyboard shortcut to toggle panel (Ctrl+Shift+C)
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            if (commandPanelElement.style.display === 'none') {
+                commandPanelElement.style.display = 'flex';
+            } else {
+                commandPanelElement.style.display = 'none';
+            }
+        }
+    });
 })();
 </script>
-
-
-
-
-
-
-
-
-
-
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
