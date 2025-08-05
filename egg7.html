@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Biome PLY Generator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(ellipse at center, #0f0f23 0%, #000 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffd93d);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 3s ease-in-out infinite;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .controls-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .control-section {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .control-section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #4ecdc4;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4ecdc4;
+            box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .generate-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            color: white;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.4);
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(255, 107, 107, 0.6);
+        }
+
+        .download-btn {
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            color: white;
+            box-shadow: 0 10px 30px rgba(78, 205, 196, 0.4);
+        }
+
+        .download-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(78, 205, 196, 0.6);
+        }
+
+        .download-btn:disabled {
+            background: #333;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 600px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .info-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .biome-legend, .terrain-stats {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 25px;
+        }
+
+        .legend-title, .stats-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #4ecdc4;
+        }
+
+        .biome-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .biome-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .biome-item:hover {
+            transform: scale(1.05);
+            background: rgba(255,255,255,0.1);
+        }
+
+        .biome-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 2px solid rgba(255,255,255,0.3);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .stats-content {
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
+            width: 0%;
+            transition: width 2s ease;
+        }
+
+        @media (max-width: 768px) {
+            .info-panel {
+                grid-template-columns: 1fr;
+            }
+            
+            .title {
+                font-size: 2.5rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">HYPERREAL BIOME GENERATOR</h1>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+        </div>
+        
+        <div class="controls-panel">
+            <div class="control-section">
+                <div class="section-title">🌍 Terrain Parameters</div>
+                <div class="control-group">
+                    <label for="resolution">Resolution:</label>
+                    <select id="resolution">
+                        <option value="128">128x128 (Fast)</option>
+                        <option value="256" selected>256x256 (Balanced)</option>
+                        <option value="512">512x512 (High Quality)</option>
+                        <option value="1024">1024x1024 (Ultra)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="heightScale">Height Amplification:</label>
+                    <input type="range" id="heightScale" min="10" max="100" value="45" step="1">
+                    <span id="heightScaleValue">45</span>
+                </div>
+                <div class="control-group">
+                    <label for="seed">World Seed:</label>
+                    <input type="number" id="seed" value="42069" min="1" max="999999">
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="section-title">🏔️ Geological Features</div>
+                <div class="control-group">
+                    <label for="continentalness">Continentalness:</label>
+                    <input type="range" id="continentalness" min="0" max="1" value="0.6" step="0.01">
+                    <span id="continentalnessValue">0.60</span>
+                </div>
+                <div class="control-group">
+                    <label for="erosion">Erosion Factor:</label>
+                    <input type="range" id="erosion" min="0" max="1" value="0.4" step="0.01">
+                    <span id="erosionValue">0.40</span>
+                </div>
+                <div class="control-group">
+                    <label for="ridges">Ridge Intensity:</label>
+                    <input type="range" id="ridges" min="0" max="1" value="0.3" step="0.01">
+                    <span id="ridgesValue">0.30</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="section-title">🌡️ Climate System</div>
+                <div class="control-group">
+                    <label for="temperature">Global Temperature:</label>
+                    <input type="range" id="temperature" min="-0.5" max="0.5" value="0" step="0.01">
+                    <span id="temperatureValue">0.00</span>
+                </div>
+                <div class="control-group">
+                    <label for="humidity">Humidity Levels:</label>
+                    <input type="range" id="humidity" min="0" max="1" value="0.5" step="0.01">
+                    <span id="humidityValue">0.50</span>
+                </div>
+                <div class="control-group">
+                    <label for="weirdness">Terrain Weirdness:</label>
+                    <input type="range" id="weirdness" min="0" max="1" value="0.2" step="0.01">
+                    <span id="weirdnessValue">0.20</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="section-title">⚙️ Advanced Settings</div>
+                <div class="control-group">
+                    <label for="octaves">Noise Octaves:</label>
+                    <input type="range" id="octaves" min="3" max="8" value="6" step="1">
+                    <span id="octavesValue">6</span>
+                </div>
+                <div class="control-group">
+                    <label for="lacunarity">Lacunarity:</label>
+                    <input type="range" id="lacunarity" min="1.5" max="3" value="2.1" step="0.1">
+                    <span id="lacunarityValue">2.1</span>
+                </div>
+                <div class="control-group">
+                    <label for="persistence">Persistence:</label>
+                    <input type="range" id="persistence" min="0.3" max="0.8" value="0.55" step="0.01">
+                    <span id="persistenceValue">0.55</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn generate-btn" onclick="generateHyperTerrain()">🚀 GENERATE WORLD</button>
+            <button class="btn download-btn" id="downloadBtn" onclick="downloadAdvancedPLY()" disabled>💾 EXPORT PLY</button>
+        </div>
+
+        <canvas id="canvas"></canvas>
+
+        <div class="info-panel">
+            <div class="biome-legend">
+                <div class="legend-title">🎨 Biome Distribution</div>
+                <div class="biome-grid" id="biomeGrid">
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #001122, #003366);"></div>Deep Ocean</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #2E8B57, #228B22);"></div>Temperate Forest</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #DAA520, #CD853F);"></div>Arid Desert</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #90EE90, #32CD32);"></div>Grasslands</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #696969, #2F4F4F);"></div>Alpine Peaks</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #E0FFFF, #B0E0E6);"></div>Frozen Tundra</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #006994, #4682B4);"></div>Flowing Rivers</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #556B2F, #6B8E23);"></div>Mystic Swamps</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #F4A460, #D2691E);"></div>Golden Savanna</div>
+                    <div class="biome-item"><div class="biome-color" style="background: linear-gradient(45deg, #F0F8FF, #E6E6FA);"></div>Glacial Ice</div>
+                </div>
+            </div>
+
+            <div class="terrain-stats">
+                <div class="stats-title">📊 World Statistics</div>
+                <div class="stats-content" id="terrainStats">
+                    Generate terrain to view detailed statistics...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let scene, camera, renderer, mesh, controls;
+        let worldData = null;
+        let isGenerating = false;
+
+        // Advanced biome system with realistic parameters
+        const BIOMES = {
+            deep_ocean: { 
+                color: [0x001122, 0x003366], 
+                heightRange: [-1, 0.15], 
+                tempRange: [-1, 1], 
+                humidRange: [0.8, 1] 
+            },
+            temperate_forest: { 
+                color: [0x2E8B57, 0x228B22], 
+                heightRange: [0.2, 0.7], 
+                tempRange: [0.2, 0.7], 
+                humidRange: [0.6, 0.9] 
+            },
+            arid_desert: { 
+                color: [0xDAA520, 0xCD853F], 
+                heightRange: [0.15, 0.5], 
+                tempRange: [0.7, 1], 
+                humidRange: [0, 0.2] 
+            },
+            grasslands: { 
+                color: [0x90EE90, 0x32CD32], 
+                heightRange: [0.15, 0.4], 
+                tempRange: [0.3, 0.8], 
+                humidRange: [0.3, 0.7] 
+            },
+            alpine_peaks: { 
+                color: [0x696969, 0x2F4F4F], 
+                heightRange: [0.8, 1], 
+                tempRange: [-1, 0.3], 
+                humidRange: [0.4, 0.8] 
+            },
+            frozen_tundra: { 
+                color: [0xE0FFFF, 0xB0E0E6], 
+                heightRange: [0.15, 0.6], 
+                tempRange: [-1, 0.1], 
+                humidRange: [0.2, 0.6] 
+            },
+            flowing_rivers: { 
+                color: [0x006994, 0x4682B4], 
+                heightRange: [0.1, 0.25], 
+                tempRange: [-1, 1], 
+                humidRange: [0.9, 1] 
+            },
+            mystic_swamps: { 
+                color: [0x556B2F, 0x6B8E23], 
+                heightRange: [0.05, 0.3], 
+                tempRange: [0.4, 0.9], 
+                humidRange: [0.8, 1] 
+            },
+            golden_savanna: { 
+                color: [0xF4A460, 0xD2691E], 
+                heightRange: [0.2, 0.5], 
+                tempRange: [0.6, 0.9], 
+                humidRange: [0.2, 0.5] 
+            },
+            glacial_ice: { 
+                color: [0xF0F8FF, 0xE6E6FA], 
+                heightRange: [0.6, 1], 
+                tempRange: [-1, -0.3], 
+                humidRange: [0.3, 0.7] 
+            }
+        };
+
+        // Sophisticated noise functions
+        class NoiseGenerator {
+            constructor(seed) {
+                this.seed = seed;
+                this.gradients = this.generateGradients();
+            }
+
+            generateGradients() {
+                const gradients = new Array(256);
+                for (let i = 0; i < 256; i++) {
+                    const angle = (this.hash(i + this.seed) / 255) * Math.PI * 2;
+                    gradients[i] = { x: Math.cos(angle), y: Math.sin(angle) };
+                }
+                return gradients;
+            }
+
+            hash(n) {
+                n = ((n << 13) ^ n);
+                return (n * (n * n * 15731 + 789221) + 1376312589) & 0xff;
+            }
+
+            fade(t) {
+                return t * t * t * (t * (t * 6 - 15) + 10);
+            }
+
+            lerp(a, b, t) {
+                return a + t * (b - a);
+            }
+
+            gradient(hash, x, y) {
+                const grad = this.gradients[hash & 255];
+                return grad.x * x + grad.y * y;
+            }
+
+            perlin(x, y) {
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                
+                x -= Math.floor(x);
+                y -= Math.floor(y);
+                
+                const u = this.fade(x);
+                const v = this.fade(y);
+                
+                const a = this.hash(X) + Y;
+                const b = this.hash(X + 1) + Y;
+                
+                return this.lerp(
+                    this.lerp(
+                        this.gradient(this.hash(a), x, y),
+                        this.gradient(this.hash(b), x - 1, y),
+                        u
+                    ),
+                    this.lerp(
+                        this.gradient(this.hash(a + 1), x, y - 1),
+                        this.gradient(this.hash(b + 1), x - 1, y - 1),
+                        u
+                    ),
+                    v
+                );
+            }
+
+            fractalNoise(x, y, octaves, lacunarity, persistence) {
+                let value = 0;
+                let amplitude = 1;
+                let frequency = 1;
+                let maxValue = 0;
+
+                for (let i = 0; i < octaves; i++) {
+                    value += this.perlin(x * frequency, y * frequency) * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    frequency *= lacunarity;
+                }
+
+                return value / maxValue;
+            }
+
+            ridgedNoise(x, y, octaves, lacunarity, persistence) {
+                let value = 0;
+                let amplitude = 1;
+                let frequency = 1;
+                let maxValue = 0;
+
+                for (let i = 0; i < octaves; i++) {
+                    let n = Math.abs(this.perlin(x * frequency, y * frequency));
+                    n = 1 - n;
+                    n = n * n;
+                    value += n * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    frequency *= lacunarity;
+                }
+
+                return value / maxValue;
+            }
+        }
+
+        function updateSliderValues() {
+            document.getElementById('heightScaleValue').textContent = document.getElementById('heightScale').value;
+            document.getElementById('continentalnessValue').textContent = parseFloat(document.getElementById('continentalness').value).toFixed(2);
+            document.getElementById('erosionValue').textContent = parseFloat(document.getElementById('erosion').value).toFixed(2);
+            document.getElementById('ridgesValue').textContent = parseFloat(document.getElementById('ridges').value).toFixed(2);
+            document.getElementById('temperatureValue').textContent = parseFloat(document.getElementById('temperature').value).toFixed(2);
+            document.getElementById('humidityValue').textContent = parseFloat(document.getElementById('humidity').value).toFixed(2);
+            document.getElementById('weirdnessValue').textContent = parseFloat(document.getElementById('weirdness').value).toFixed(2);
+            document.getElementById('octavesValue').textContent = document.getElementById('octaves').value;
+            document.getElementById('lacunarityValue').textContent = parseFloat(document.getElementById('lacunarity').value).toFixed(1);
+            document.getElementById('persistenceValue').textContent = parseFloat(document.getElementById('persistence').value).toFixed(2);
+        }
+
+        function initThreeJS() {
+            const canvas = document.getElementById('canvas');
+            scene = new THREE.Scene();
+            
+            // Epic gradient background
+            const gradientTexture = createGradientTexture();
+            scene.background = gradientTexture;
+
+            camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 2000);
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: canvas, 
+                antialias: true,
+                powerPreference: "high-performance"
+            });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Advanced lighting system
+            const ambientLight = new THREE.AmbientLight(0x404080, 0.3);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffdd88, 1.2);
+            sunLight.position.set(100, 200, 50);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 500;
+            sunLight.shadow.camera.left = -200;
+            sunLight.shadow.camera.right = 200;
+            sunLight.shadow.camera.top = 200;
+            sunLight.shadow.camera.bottom = -200;
+            scene.add(sunLight);
+
+            const fillLight = new THREE.DirectionalLight(0x88ccff, 0.4);
+            fillLight.position.set(-50, 50, -50);
+            scene.add(fillLight);
+
+            camera.position.set(150, 100, 150);
+            camera.lookAt(0, 0, 0);
+
+            // Mouse controls for camera
+            let mouseX = 0, mouseY = 0;
+            let targetRotationX = 0, targetRotationY = 0;
+            
+            canvas.addEventListener('mousemove', (event) => {
+                if (event.buttons === 1) {
+                    mouseX = (event.clientX - canvas.offsetLeft) / canvas.clientWidth;
+                    mouseY = (event.clientY - canvas.offsetTop) / canvas.clientHeight;
+                    targetRotationX = (mouseX - 0.5) * Math.PI * 2;
+                    targetRotationY = Math.max(-Math.PI/3, Math.min(Math.PI/3, (mouseY - 0.5) * Math.PI));
+                }
+            });
+
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                if (mesh) {
+                    mesh.rotation.y += 0.003;
+                    
+                    // Smooth camera movement
+                    const radius = 200;
+                    camera.position.x = Math.cos(mesh.rotation.y + targetRotationX) * radius;
+                    camera.position.z = Math.sin(mesh.rotation.y + targetRotationX) * radius;
+                    camera.position.y = 50 + Math.sin(targetRotationY) * 100;
+                    camera.lookAt(0, 0, 0);
+                }
+                
+                renderer.render(scene, camera);
+            }
+            
+            animate();
+        }
+
+        function createGradientTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+            gradient.addColorStop(0, '#87CEEB'); // Sky blue
+            gradient.addColorStop(0.3, '#98D8E8');
+            gradient.addColorStop(0.7, '#F7DC6F');
+            gradient.addColorStop(1, '#F39C12'); // Sunset orange
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 512, 512);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        function determineBiome(height, temperature, humidity, weirdness) {
+            // Normalize values
+            height = (height + 1) / 2;
+            temperature = (temperature + 1) / 2;
+            humidity = Math.max(0, Math.min(1, humidity));
+            
+            let bestBiome = 'grasslands';
+            let bestScore = -Infinity;
+
+            for (const [biomeName, biome] of Object.entries(BIOMES)) {
+                let score = 0;
+                
+                // Height compatibility
+                if (height >= biome.heightRange[0] && height <= biome.heightRange[1]) {
+                    score += 100;
+                } else {
+                    const heightDist = Math.min(
+                        Math.abs(height - biome.heightRange[0]),
+                        Math.abs(height - biome.heightRange[1])
+                    );
+                    score -= heightDist * 50;
+                }
+                
+                // Temperature compatibility
+                const tempNorm = (temperature - 0.5) * 2; // Convert to -1 to 1
+                if (tempNorm >= biome.tempRange[0] && tempNorm <= biome.tempRange[1]) {
+                    score += 80;
+                } else {
+                    const tempDist = Math.min(
+                        Math.abs(tempNorm - biome.tempRange[0]),
+                        Math.abs(tempNorm - biome.tempRange[1])
+                    );
+                    score -= tempDist * 40;
+                }
+                
+                // Humidity compatibility
+                if (humidity >= biome.humidRange[0] && humidity <= biome.humidRange[1]) {
+                    score += 60;
+                } else {
+                    const humidDist = Math.min(
+                        Math.abs(humidity - biome.humidRange[0]),
+                        Math.abs(humidity - biome.humidRange[1])
+                    );
+                    score -= humidDist * 30;
+                }
+                
+                // Weirdness factor
+                score += (Math.random() - 0.5) * weirdness * 20;
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestBiome = biomeName;
+                }
+            }
+
+            return bestBiome;
+        }
+
+        async function generateHyperTerrain() {
+            if (isGenerating) return;
+            isGenerating = true;
+            
+            const progressBar = document.getElementById('progressBar');
+            const generateBtn = document.querySelector('.generate-btn');
+            
+            generateBtn.textContent = '🔄 GENERATING...';
+            generateBtn.disabled = true;
+
+            // Get parameters
+            const resolution = parseInt(document.getElementById('resolution').value);
+            const heightScale = parseFloat(document.getElementById('heightScale').value);
+            const seed = parseInt(document.getElementById('seed').value);
+            const continentalness = parseFloat(document.getElementById('continentalness').value);
+            const erosion = parseFloat(document.getElementById('erosion').value);
+            const ridges = parseFloat(document.getElementById('ridges').value);
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const humidity = parseFloat(document.getElementById('humidity').value);
+            const weirdness = parseFloat(document.getElementById('weirdness').value);
+            const octaves = parseInt(document.getElementById('octaves').value);
+            const lacunarity = parseFloat(document.getElementById('lacunarity').value);
+            const persistence = parseFloat(document.getElementById('persistence').value);
+
+            // Initialize noise generators
+            const heightNoise = new NoiseGenerator(seed);
+            const tempNoise = new NoiseGenerator(seed + 1000);
+            const humidNoise = new NoiseGenerator(seed + 2000);
+            const erosionNoise = new NoiseGenerator(seed + 3000);
+            const ridgeNoise = new NoiseGenerator(seed + 4000);
+
+            // Clear existing mesh
+            if (mesh) {
+                scene.remove(mesh);
+            }
+
+            // Generate terrain data
+            const vertices = [];
+            const colors = [];
+            const indices = [];
+            const biomeStats = {};
+            const heightMap = [];
+
+            const scale = 0.01; // Base noise scale
+            const step = 100 / (resolution - 1); // World space step
+
+            for (let y = 0; y < resolution; y++) {
+                heightMap[y] = [];
+                progressBar.style.width = `${(y / resolution) * 50}%`;
+                await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI updates
+
+                for (let x = 0; x < resolution; x++) {
+                    const worldX = (x - resolution / 2) * step;
+                    const worldZ = (y - resolution / 2) * step;
+                    const nx = x * scale;
+                    const ny = y * scale;
+
+                    // Generate base terrain height using multiple noise layers
+                    let baseHeight = heightNoise.fractalNoise(nx, ny, octaves, lacunarity, persistence);
+                    
+                    // Continental shelf effect
+                    const continentNoise = heightNoise.fractalNoise(nx * 0.3, ny * 0.3, 3, 2.0, 0.6);
+                    baseHeight += (continentNoise - 0.5) * continentalness * 2;
+                    
+                    // Erosion patterns
+                    const erosionPattern = erosionNoise.fractalNoise(nx * 2, ny * 2, 4, 2.2, 0.5);
+                    baseHeight -= erosionPattern * erosion * 0.5;
+                    
+                    // Ridge systems
+                    const ridgePattern = ridgeNoise.ridgedNoise(nx * 1.5, ny * 1.5, 3, 2.1, 0.7);
+                    baseHeight += ridgePattern * ridges * 0.8;
+                    
+                    // Apply height scaling
+                    const finalHeight = baseHeight * heightScale;
+                    heightMap[y][x] = finalHeight;
+                    
+                    // Generate climate data
+                    let tempValue = tempNoise.fractalNoise(nx * 0.5, ny * 0.5, 4, 2.0, 0.6);
+                    tempValue += temperature; // Global temperature offset
+                    tempValue -= (Math.abs(finalHeight) / heightScale) * 0.3; // Altitude cooling
+                    
+                    let humidValue = humidNoise.fractalNoise(nx * 0.7, ny * 0.7, 4, 2.1, 0.55);
+                    humidValue = (humidValue + 1) / 2; // Normalize to 0-1
+                    humidValue *= humidity + 0.5; // Global humidity modifier
+                    
+                    // Determine biome
+                    const biome = determineBiome(finalHeight / heightScale, tempValue, humidValue, weirdness);
+                    biomeStats[biome] = (biomeStats[biome] || 0) + 1;
+
+                    // Add vertex
+                    vertices.push(worldX, finalHeight, worldZ);
+                    
+                    // Generate biome color with variation
+                    const biomeData = BIOMES[biome];
+                    const colorVariation = (Math.random() - 0.5) * 0.3;
+                    const baseColor = new THREE.Color(biomeData.color[0]);
+                    const accentColor = new THREE.Color(biomeData.color[1]);
+                    const finalColor = baseColor.lerp(accentColor, Math.random() * 0.7 + colorVariation);
+                    
+                    // Height-based lighting
+                    const lightIntensity = Math.max(0.3, Math.min(1.2, 0.8 + (finalHeight / heightScale) * 0.4));
+                    finalColor.multiplyScalar(lightIntensity);
+                    
+                    colors.push(finalColor.r, finalColor.g, finalColor.b);
+                }
+            }
+
+            // Generate mesh faces with proper winding
+            for (let y = 0; y < resolution - 1; y++) {
+                progressBar.style.width = `${50 + (y / (resolution - 1)) * 50}%`;
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                for (let x = 0; x < resolution - 1; x++) {
+                    const i = y * resolution + x;
+                    const i1 = i + 1;
+                    const i2 = i + resolution;
+                    const i3 = i + resolution + 1;
+
+                    // Create triangles with proper normals
+                    indices.push(i, i2, i1);
+                    indices.push(i1, i2, i3);
+                }
+            }
+
+            // Create advanced Three.js geometry
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            // Advanced material with realistic shading
+            const material = new THREE.MeshLambertMaterial({ 
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                transparent: false,
+                wireframe: false
+            });
+
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            // Store world data for PLY export
+            worldData = {
+                vertices: vertices,
+                colors: colors,
+                indices: indices,
+                resolution: resolution,
+                heightMap: heightMap,
+                biomeStats: biomeStats
+            };
+
+            // Update statistics
+            updateTerrainStats(biomeStats, resolution, heightScale);
+            
+            progressBar.style.width = '100%';
+            setTimeout(() => {
+                progressBar.style.width = '0%';
+                generateBtn.textContent = '🚀 GENERATE WORLD';
+                generateBtn.disabled = false;
+                document.getElementById('downloadBtn').disabled = false;
+                isGenerating = false;
+            }, 500);
+        }
+
+        function updateTerrainStats(biomeStats, resolution, heightScale) {
+            const totalCells = resolution * resolution;
+            const totalVertices = worldData.vertices.length / 3;
+            const totalFaces = worldData.indices.length / 3;
+            
+            let minHeight = Infinity, maxHeight = -Infinity, avgHeight = 0;
+            for (let i = 1; i < worldData.vertices.length; i += 3) {
+                const h = worldData.vertices[i];
+                minHeight = Math.min(minHeight, h);
+                maxHeight = Math.max(maxHeight, h);
+                avgHeight += h;
+            }
+            avgHeight /= totalVertices;
+
+            let statsHtml = `
+                <div style="font-size: 0.9rem; line-height: 1.8;">
+                    <div style="color: #4ecdc4; font-weight: bold; margin-bottom: 10px;">WORLD METRICS</div>
+                    Resolution: ${resolution}×${resolution}<br>
+                    Vertices: ${totalVertices.toLocaleString()}<br>
+                    Triangles: ${totalFaces.toLocaleString()}<br>
+                    Min Height: ${minHeight.toFixed(1)}m<br>
+                    Max Height: ${maxHeight.toFixed(1)}m<br>
+                    Avg Height: ${avgHeight.toFixed(1)}m<br>
+                    <br>
+                    <div style="color: #4ecdc4; font-weight: bold; margin-bottom: 10px;">BIOME COVERAGE</div>
+            `;
+
+            Object.entries(biomeStats)
+                .sort(([,a], [,b]) => b - a)
+                .forEach(([biome, count]) => {
+                    const percentage = ((count / totalCells) * 100).toFixed(1);
+                    const biomeName = biome.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    statsHtml += `${biomeName}: ${percentage}%<br>`;
+                });
+
+            statsHtml += `</div>`;
+            document.getElementById('terrainStats').innerHTML = statsHtml;
+        }
+
+        function downloadAdvancedPLY() {
+            if (!worldData) {
+                alert('Please generate terrain first!');
+                return;
+            }
+
+            const { vertices, colors, indices, resolution } = worldData;
+            const vertexCount = vertices.length / 3;
+            const faceCount = indices.length / 3;
+
+            let plyContent = `ply
+format ascii 1.0
+comment Generated by Hyperreal Biome Generator
+comment Resolution: ${resolution}x${resolution}
+comment Vertices: ${vertexCount}
+comment Faces: ${faceCount}
+element vertex ${vertexCount}
+property float x
+property float y
+property float z
+property uchar red
+property uchar green
+property uchar blue
+property float nx
+property float ny
+property float nz
+element face ${faceCount}
+property list uchar int vertex_indices
+end_header
+`;
+
+            // Calculate vertex normals for better PLY compatibility
+            const normals = new Float32Array(vertices.length);
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+            const normalAttribute = geometry.getAttribute('normal');
+
+            // Add vertices with colors and normals
+            for (let i = 0; i < vertexCount; i++) {
+                const x = vertices[i * 3];
+                const y = vertices[i * 3 + 1];
+                const z = vertices[i * 3 + 2];
+                const r = Math.round(Math.min(255, Math.max(0, colors[i * 3] * 255)));
+                const g = Math.round(Math.min(255, Math.max(0, colors[i * 3 + 1] * 255)));
+                const b = Math.round(Math.min(255, Math.max(0, colors[i * 3 + 2] * 255)));
+                const nx = normalAttribute.getX(i);
+                const ny = normalAttribute.getY(i);
+                const nz = normalAttribute.getZ(i);
+                
+                plyContent += `${x.toFixed(3)} ${y.toFixed(3)} ${z.toFixed(3)} ${r} ${g} ${b} ${nx.toFixed(6)} ${ny.toFixed(6)} ${nz.toFixed(6)}\n`;
+            }
+
+            // Add faces
+            for (let i = 0; i < faceCount; i++) {
+                const f1 = indices[i * 3];
+                const f2 = indices[i * 3 + 1];
+                const f3 = indices[i * 3 + 2];
+                plyContent += `3 ${f1} ${f2} ${f3}\n`;
+            }
+
+            // Create and download file
+            const blob = new Blob([plyContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            const seed = document.getElementById('seed').value;
+            a.download = `hyperreal_world_${resolution}x${resolution}_seed${seed}_${timestamp}.ply`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize everything
+        window.addEventListener('load', () => {
+            initThreeJS();
+            updateSliderValues();
+            
+            // Add event listeners for sliders
+            const sliders = ['heightScale', 'continentalness', 'erosion', 'ridges', 'temperature', 'humidity', 'weirdness', 'octaves', 'lacunarity', 'persistence'];
+            sliders.forEach(id => {
+                document.getElementById(id).addEventListener('input', updateSliderValues);
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const canvas = document.getElementById('canvas');
+            camera.aspect = canvas.clientWidth / canvas.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        });
+    </script>
+</body>
+</html>
