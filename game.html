@@ -3,1086 +3,589 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Void Command Terminal</title>
+    <title>Axiom Core Interface</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Deep Space Terminal Palette */
-            --hue1: 195; /* Cryogenic Blue */
-            --hue2: 260; /* Quantum Purple */
-            --hue3: 330; /* Radiation Red */
-            --hue4: 140; /* Biohazard Green */
+            /* Axiom Core Palette */
+            --hue-axiom-cyan: 195;
+            --hue-quantum-violet: 260;
+            --hue-warning-amber: 35;
+            --hue-sentinel-green: 140;
 
-            --terminal-dark: hsl(var(--hue2), 45%, 3%);
-            --terminal-grid: hsl(var(--hue2), 35%, 10%);
-            --terminal-accent: hsl(var(--hue1), 90%, 60%);
+            --bg-deep-space: hsl(var(--hue-quantum-violet), 45%, 4%);
+            --bg-grid: hsla(var(--hue-quantum-violet), 35%, 10%, 0.5);
+            --accent-primary: hsl(var(--hue-axiom-cyan), 90%, 60%);
+            --accent-secondary: hsl(var(--hue-warning-amber), 95%, 65%);
             
-            --glow-primary: hsla(var(--hue1), 90%, 60%, 0.7);
-            --glow-secondary: hsla(var(--hue3), 80%, 60%, 0.6);
-            --glow-tertiary: hsla(var(--hue4), 85%, 55%, 0.5);
+            --glow-primary: hsla(var(--hue-axiom-cyan), 90%, 60%, 0.7);
+            --glow-secondary: hsla(var(--hue-warning-amber), 85%, 60%, 0.6);
+            --glow-tertiary: hsla(var(--hue-sentinel-green), 85%, 55%, 0.5);
             
-            --scan-line: hsla(var(--hue1), 50%, 80%, 0.08);
-            --terminal-text: hsla(var(--hue1), 90%, 85%, 0.9);
+            --scan-line: hsla(var(--hue-axiom-cyan), 50%, 80%, 0.07);
+            --text-primary: hsla(var(--hue-axiom-cyan), 90%, 85%, 0.95);
+            --text-secondary: hsla(var(--hue-axiom-cyan), 70%, 70%, 0.8);
             
-            --hologram-glow: 0 0 25px hsla(var(--hue1), 90%, 60%, 0.6),
-                            0 0 40px hsla(var(--hue1), 90%, 60%, 0.3);
-            --scanner-glow: 0 0 15px hsla(var(--hue4), 90%, 55%, 0.5);
+            --hologram-glow: 0 0 25px hsla(var(--hue-axiom-cyan), 90%, 60%, 0.6), 0 0 40px hsla(var(--hue-axiom-cyan), 90%, 60%, 0.3);
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        @keyframes terminalBoot {
-            0% { opacity: 0; transform: scale(0.94); }
-            5% { opacity: 0.2; }
-            10% { opacity: 0.1; }
-            14% { opacity: 0.7; }
-            20% { opacity: 0.2; }
-            25% { opacity: 1; transform: scale(1.02); }
-            30% { transform: scale(0.98); }
-            40% { transform: scale(1.01); }
-            50% { transform: scale(0.99); }
-            70% { transform: scale(1); }
+        /* --- KEYFRAME ANIMATIONS --- */
+        @keyframes interfaceBoot {
+            0% { opacity: 0; transform: scale(0.96); filter: blur(3px); }
+            80% { opacity: 1; filter: blur(0); }
+            100% { transform: scale(1); }
         }
-
         @keyframes scanLine {
             0% { transform: translateY(-100%); }
             100% { transform: translateY(100vh); }
         }
-
-        @keyframes flickerText {
-            0%, 100% { opacity: 1; }
-            6% { opacity: 0.85; }
-            8% { opacity: 1; }
-            10% { opacity: 0.9; }
-            20% { opacity: 1; }
-            89% { opacity: 1; }
-            91% { opacity: 0.9; }
-            93% { opacity: 1; }
-            94% { opacity: 0.92; }
+        @keyframes textFlicker {
+            0%, 100% { opacity: 1; text-shadow: 0 0 5px var(--glow-primary); }
+            50% { opacity: 0.85; text-shadow: 0 0 8px var(--glow-primary); }
         }
-
-        @keyframes hexaRotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulseBorder {
+            0%, 100% { border-color: hsla(var(--hue-axiom-cyan), 80%, 70%, 0.3); }
+            50% { border-color: hsla(var(--hue-axiom-cyan), 90%, 80%, 0.6); }
         }
-
-        @keyframes pulseOutline {
-            0%, 100% { border-color: hsla(var(--hue1), 80%, 70%, 0.2); }
-            50% { border-color: hsla(var(--hue1), 90%, 80%, 0.5); }
+        @keyframes glitchAppear {
+            0% { opacity: 0; clip-path: inset(50% 0 50% 0); }
+            40% { opacity: 0.8; clip-path: inset(50% 0 50% 0); }
+            50% { clip-path: inset(20% 0 60% 0); }
+            70% { clip-path: inset(40% 0 10% 0); }
+            100% { opacity: 1; clip-path: inset(0 0 0 0); }
         }
+        @keyframes drawCorner { from { stroke-dashoffset: 200; } to { stroke-dashoffset: 0; } }
 
-        @keyframes terminalBackgroundShift {
-            0% { 
-                background-position: 0% 0%;
-                filter: hue-rotate(0deg);
-            }
-            50% { 
-                filter: hue-rotate(10deg);
-            }
-            100% { 
-                background-position: 100% 100%;
-                filter: hue-rotate(0deg);
-            }
-        }
-
-        @keyframes scrollArrow {
-            0% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(18px); opacity: 0.7; }
-        }
-
+        /* --- CORE LAYOUT & BACKGROUND --- */
         body {
-            background-color: var(--terminal-dark);
-            color: var(--terminal-text);
+            background-color: var(--bg-deep-space);
+            color: var(--text-primary);
             font-family: 'Share Tech Mono', monospace;
             min-height: 100vh;
             overflow-x: hidden;
-            /* Allow vertical scrolling so users can reach the games grid below the shader */
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
             text-shadow: 0 0 5px var(--glow-primary);
-            animation: terminalBoot 2s ease-out forwards;
+            animation: interfaceBoot 1.5s ease-out forwards;
         }
 
-        /* Hexagon Grid Background */
-        body::before {
+        .background-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            background: 
+                radial-gradient(ellipse at 15% 85%, hsla(var(--hue-quantum-violet), 50%, 30%, 0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 85% 15%, hsla(var(--hue-axiom-cyan), 60%, 25%, 0.35) 0%, transparent 60%);
+            opacity: 0.7;
+            animation: textFlicker 20s infinite alternate;
+        }
+
+        body::before { /* Grid */
             content: '';
             position: fixed;
             inset: 0;
             background-image: 
-                repeating-linear-gradient(
-                    to right,
-                    transparent,
-                    transparent 50px,
-                    hsla(var(--hue2), 60%, 50%, 0.03) 50px,
-                    hsla(var(--hue2), 60%, 50%, 0.03) 51px
-                ),
-                repeating-linear-gradient(
-                    to bottom,
-                    transparent,
-                    transparent 50px,
-                    hsla(var(--hue2), 60%, 50%, 0.03) 50px,
-                    hsla(var(--hue2), 60%, 50%, 0.03) 51px
-                ),
-                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><path d="M15,0 L45,0 L60,26 L45,52 L15,52 L0,26 Z" fill="none" stroke="rgba(120,200,255,0.05)" stroke-width="0.5"/></svg>');
-            background-size: 100% 100%, 100% 100%, 80px 90px;
-            opacity: 0.8;
+                linear-gradient(rgba(20, 80, 120, 0.1) 1px, transparent 1px), 
+                linear-gradient(90deg, rgba(20, 80, 120, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.5;
             z-index: 0;
-            animation: terminalBackgroundShift 120s linear infinite alternate;
         }
 
-        /* Scan Line Effect */
-        body::after {
+        body::after { /* Scanline */
             content: '';
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 5px;
+            top: 0; left: 0;
+            width: 100%; height: 4px;
             background: var(--scan-line);
             z-index: 12;
             box-shadow: 0 0 15px var(--glow-primary);
-            animation: scanLine 8s linear infinite;
-            opacity: 0.6;
+            animation: scanLine 7s linear infinite;
+            opacity: 0.8;
         }
 
-        /* Terminal Background with Radial Gradient Effects */
-        .background-layer {
-            position: fixed;
-            inset: 0;
-            z-index: 1;
-            background: 
-                radial-gradient(ellipse at 30% 20%, hsla(var(--hue1), 90%, 20%, 0.7) 0%, transparent 70%),
-                radial-gradient(ellipse at 70% 80%, hsla(var(--hue3), 80%, 25%, 0.6) 0%, transparent 70%),
-                radial-gradient(ellipse at 65% 35%, hsla(var(--hue4), 70%, 20%, 0.5) 0%, transparent 65%),
-                radial-gradient(circle at 50% 50%, hsla(var(--hue2), 40%, 10%, 0.8) 0%, var(--terminal-dark) 100%);
-            opacity: 0.9;
-            filter: contrast(1.2);
-            animation: terminalBackgroundShift 60s ease-in-out infinite alternate;
-            will-change: transform;
-            pointer-events: none;
-        }
-
-        /* Terminal Display Frame */
-        .terminal-frame {
+        /* --- MAIN INTERFACE FRAME --- */
+        .interface-container {
             position: relative;
             z-index: 10;
-            padding: 30px;
-            background-color: hsla(var(--hue2), 40%, 6%, 0.7);
-            border: 1px solid hsla(var(--hue1), 80%, 70%, 0.2);
-            border-radius: 10px;
-            box-shadow: 0 0 30px hsla(var(--hue1), 90%, 40%, 0.3),
-                        inset 0 0 20px hsla(var(--hue2), 70%, 5%, 0.9);
-            backdrop-filter: blur(2px);
-            animation: pulseOutline 8s infinite;
-            max-width: 900px;
-            width: 90%;
+            padding: 2rem;
+            background-color: hsla(var(--hue-quantum-violet), 30%, 8%, 0.8);
+            border: 1px solid hsla(var(--hue-axiom-cyan), 80%, 70%, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 0 40px hsla(var(--hue-axiom-cyan), 70%, 40%, 0.25), inset 0 0 25px hsla(var(--hue-quantum-violet), 70%, 5%, 0.9);
+            backdrop-filter: blur(5px);
+            animation: pulseBorder 6s infinite;
+            max-width: 1000px;
+            width: 95%;
+            display: flex;
+            gap: 2rem;
         }
 
-        /* Display Header */
-        .terminal-header {
+        /* Decorative Corner Brackets */
+        .corner-bracket {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            stroke: var(--accent-primary);
+            stroke-width: 2px;
+            fill: none;
+            stroke-dasharray: 200;
+            animation: drawCorner 2s ease-out 0.5s forwards;
+        }
+        .corner-bracket.top-left { top: -2px; left: -2px; }
+        .corner-bracket.top-right { top: -2px; right: -2px; transform: rotate(90deg); }
+        .corner-bracket.bottom-left { bottom: -2px; left: -2px; transform: rotate(-90deg); }
+        .corner-bracket.bottom-right { bottom: -2px; right: -2px; transform: rotate(180deg); }
+
+        /* --- HEADER & STATUS --- */
+        .interface-header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 1.5rem;
             position: relative;
-            padding-bottom: 15px;
-            border-bottom: 1px solid hsla(var(--hue1), 80%, 60%, 0.15);
+            padding-bottom: 1rem;
+            border-bottom: 1px solid hsla(var(--hue-axiom-cyan), 80%, 60%, 0.15);
+            animation: textFlicker 8s infinite;
         }
-
-        .terminal-header::before {
-            content: "VOID COMMAND SYSTEM v3.8.5";
-            display: block;
-            font-size: 0.9rem;
-            letter-spacing: 2px;
-            color: hsla(var(--hue1), 90%, 75%, 0.9);
-            margin-bottom: 8px;
-            animation: flickerText 10s infinite;
+        .interface-header h1 {
+            font-family: 'Oxanium', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+            color: var(--text-primary);
+            text-transform: uppercase;
         }
-
-        .terminal-header::after {
-            content: "• QUANTUM SECURED LAUNCH INTERFACE •";
-            display: block;
-            font-size: 0.65rem;
+        .interface-header .subtitle {
+            font-size: 0.7rem;
             letter-spacing: 1px;
-            color: hsla(var(--hue4), 90%, 70%, 0.8);
-            margin-top: 5px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
         }
+        
+        /* --- LAUNCHER & BRIEFING COLUMNS --- */
+        .launcher-column { flex: 0 0 300px; }
+        .briefing-column { flex: 1; }
 
-        /* Game Orbs Container */
+        /* --- GAME ORBS --- */
         .game-launchers {
-            position: relative;
-            z-index: 10;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            gap: 25px;
-            padding: 15px 5px;
+            gap: 20px;
             justify-items: center;
         }
-
-        /* Hexagonal Game Orbs */
         .game-orb {
-            width: 95px;
-            height: 110px;
-            background: linear-gradient(45deg, 
-                      hsla(var(--hue2), 70%, 10%, 0.8),
-                      hsla(var(--hue1), 70%, 20%, 0.7) 50%,
-                      hsla(var(--hue2), 70%, 10%, 0.8));
+            width: 110px; height: 125px;
+            background: linear-gradient(160deg, hsla(var(--hue-quantum-violet), 70%, 12%, 0.8), hsla(var(--hue-axiom-cyan), 70%, 18%, 0.7));
             position: relative;
             clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
             cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             font-family: 'Oxanium', sans-serif;
             text-align: center;
-            border: 1px solid hsla(var(--hue1), 80%, 60%, 0.3);
-            box-shadow: 0 0 10px hsla(var(--hue1), 80%, 50%, 0.2),
-                        inset 0 0 15px hsla(var(--hue2), 70%, 10%, 0.9);
-            will-change: transform, box-shadow, background;
+            border: 1px solid hsla(var(--hue-axiom-cyan), 80%, 60%, 0.3);
+            box-shadow: 0 0 10px hsla(var(--hue-axiom-cyan), 80%, 50%, 0.1), inset 0 0 15px hsla(var(--hue-quantum-violet), 70%, 10%, 0.9);
+            will-change: transform, box-shadow;
         }
-
-        /* Orb Pseudo-elements for Additional Visual Effects */
-        .game-orb::before {
-            content: '';
-            position: absolute;
-            inset: 3px;
-            background: radial-gradient(circle at 30% 30%, 
-                         hsla(var(--hue1), 90%, 40%, 0.3) 0%, 
-                         transparent 70%);
-            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            z-index: -1;
-            opacity: 0.7;
-            transition: opacity 0.4s ease;
-        }
-
-        .game-orb::after {
-            content: '';
-            position: absolute;
-            width: 70%;
-            height: 70%;
-            background: conic-gradient(
-                from 0deg,
-                hsla(var(--hue1), 90%, 60%, 0) 0%,
-                hsla(var(--hue1), 90%, 60%, 0.2) 25%,
-                hsla(var(--hue1), 90%, 60%, 0.3) 50%,
-                hsla(var(--hue1), 90%, 60%, 0.2) 75%,
-                hsla(var(--hue1), 90%, 60%, 0) 100%
-            );
-            border-radius: 50%;
-            transform: scale(0);
-            transition: transform 0.5s ease-out;
-            filter: blur(5px);
-            z-index: -1;
-        }
-
-        .game-orb span {
-            font-size: 2rem;
-            margin-bottom: 8px;
-            line-height: 1;
-            display: block;
-            filter: drop-shadow(0 0 5px var(--glow-primary));
-            position: relative;
-            z-index: 2;
-            transition: transform 0.3s ease, filter 0.3s ease;
-        }
-
-        .orb-label {
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: hsla(var(--hue1), 90%, 85%, 0.9);
-            font-weight: 600;
-            position: relative;
-            z-index: 2;
-            transition: color 0.3s ease;
-        }
-
-        /* Core ID Indicator */
-        .orb-label::after {
-            content: attr(data-core-id);
-            position: absolute;
-            bottom: -12px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.45rem;
-            color: hsla(var(--hue4), 90%, 70%, 0.7);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        /* Hover & Focus Effects */
-        .game-orb:hover,
-        .game-orb:focus-visible {
+        .game-orb:hover, .game-orb:focus-visible {
             outline: none;
-            transform: translateY(-8px) scale(1.1);
-            background: linear-gradient(45deg, 
-                      hsla(var(--hue2), 80%, 15%, 0.9),
-                      hsla(var(--hue1), 80%, 30%, 0.8) 50%,
-                      hsla(var(--hue2), 80%, 15%, 0.9));
-            box-shadow: 0 0 15px hsla(var(--hue1), 90%, 60%, 0.5),
-                        0 0 30px hsla(var(--hue1), 90%, 60%, 0.3),
-                        inset 0 0 20px hsla(var(--hue1), 80%, 30%, 0.3);
-            border-color: hsla(var(--hue1), 90%, 75%, 0.5);
+            transform: translateY(-10px) scale(1.1);
+            background: linear-gradient(160deg, hsla(var(--hue-quantum-violet), 80%, 18%, 0.9), hsla(var(--hue-axiom-cyan), 80%, 25%, 0.8));
+            box-shadow: 0 0 20px hsla(var(--hue-axiom-cyan), 90%, 60%, 0.5), 0 0 35px hsla(var(--hue-axiom-cyan), 90%, 60%, 0.3), inset 0 0 20px hsla(var(--hue-axiom-cyan), 80%, 30%, 0.3);
+            border-color: hsla(var(--hue-axiom-cyan), 90%, 75%, 0.6);
         }
-
-        .game-orb:hover::before,
-        .game-orb:focus-visible::before {
-            opacity: 1;
-        }
-
-        .game-orb:hover::after,
-        .game-orb:focus-visible::after {
-            transform: scale(1.5);
-        }
-
-        .game-orb:hover span,
-        .game-orb:focus-visible span {
-            transform: scale(1.1) translateY(-2px);
-            filter: drop-shadow(0 0 8px var(--glow-primary));
-        }
-
-        .game-orb:hover .orb-label,
-        .game-orb:focus-visible .orb-label {
-            color: hsla(var(--hue1), 100%, 95%, 1);
-        }
-
-        .game-orb:hover .orb-label::after,
-        .game-orb:focus-visible .orb-label::after {
-            opacity: 1;
-        }
-
-        /* Active/Click Effect */
         .game-orb:active {
-            transform: translateY(-4px) scale(1.05);
+            transform: translateY(-5px) scale(1.05);
             transition-duration: 0.1s;
-            box-shadow: 0 0 25px hsla(var(--hue1), 90%, 60%, 0.7),
-                        inset 0 0 30px hsla(var(--hue1), 80%, 40%, 0.5);
         }
-
-        /* Status Indicators */
-        .terminal-status {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid hsla(var(--hue1), 80%, 60%, 0.15);
-            font-size: 0.65rem;
-            color: hsla(var(--hue1), 80%, 70%, 0.7);
+        .game-orb .orb-icon {
+            font-size: 2.5rem; line-height: 1; margin-bottom: 12px;
+            filter: drop-shadow(0 0 6px var(--glow-primary));
+            transition: transform 0.3s ease;
         }
-
-        .status-left, .status-right {
-            display: flex;
-            gap: 15px;
+        .game-orb:hover .orb-icon { transform: scale(1.15); }
+        .orb-label {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--text-primary); font-weight: 600;
+            transition: color 0.3s ease;
+            padding: 0 5px;
         }
-
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        .orb-label .core-id {
+            display: block; font-size: 0.55rem; color: var(--text-secondary);
+            opacity: 0; transition: opacity 0.3s ease; margin-top: 4px;
         }
+        .game-orb:hover .orb-label .core-id { opacity: 1; }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: hsla(var(--hue4), 90%, 60%, 0.8);
-            box-shadow: 0 0 5px hsla(var(--hue4), 90%, 60%, 0.6);
+        /* --- MISSION BRIEFING PANEL --- */
+        .mission-briefing {
+            background: hsla(var(--hue-quantum-violet), 25%, 10%, 0.5);
+            border: 1px solid hsla(var(--hue-axiom-cyan), 80%, 60%, 0.2);
+            border-radius: 8px;
+            padding: 1.5rem;
+            height: 100%;
             position: relative;
         }
-
-        .status-dot.pulse {
-            animation: statusPulse 2s infinite alternate;
+        #briefing-title {
+            color: var(--accent-secondary);
+            font-family: 'Oxanium', sans-serif;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 8px var(--glow-secondary);
         }
-
-        @keyframes statusPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        #briefing-text, #briefing-data {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
         }
-
-        /* Rotation Animation for Scanner Indicator */
-        .scanner-status::before {
-            content: '';
+        #briefing-data {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid hsla(var(--hue-axiom-cyan), 80%, 60%, 0.15);
+            font-size: 0.8rem;
+            white-space: pre;
+        }
+        .typewriter-cursor {
             display: inline-block;
             width: 10px;
-            height: 10px;
-            margin-right: 5px;
-            border: 1px solid hsla(var(--hue4), 90%, 70%, 0.6);
-            border-top: 1px solid hsla(var(--hue1), 90%, 80%, 0.9);
-            border-radius: 50%;
-            animation: hexaRotate 2s linear infinite;
+            background-color: var(--accent-primary);
+            animation: textFlicker 1s infinite;
         }
 
-        /* Responsive Adjustments */
-        @media (max-width: 700px) {
-            .game-launchers {
-                grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
-                gap: 20px;
-            }
-            .game-orb {
-                width: 85px;
-                height: 95px;
-            }
-            .game-orb span {
-                font-size: 1.8rem;
-            }
-            .orb-label {
-                font-size: 0.6rem;
-            }
-            .terminal-status {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .status-left, .status-right {
-                justify-content: space-between;
-            }
+        /* --- SYSTEM STATUS FOOTER --- */
+        .system-status {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid hsla(var(--hue-axiom-cyan), 80%, 60%, 0.15);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
         }
-
-        @media (max-width: 450px) {
-            .terminal-frame {
-                padding: 20px 15px;
-            }
-            .game-launchers {
-                grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-                gap: 15px;
-            }
-            .game-orb {
-                width: 70px;
-                height: 80px;
-            }
-            .game-orb span {
-                font-size: 1.4rem;
-            }
-            .orb-label {
-                font-size: 0.55rem;
-            }
+        #status-text::before {
+            content: 'SYS_STATUS::';
+            color: hsla(var(--hue-sentinel-green), 90%, 70%, 0.8);
+            margin-right: 8px;
         }
-
-        /* --- Animated Orb Tooltip --- */
-        .orb-tooltip {
-            position: absolute;
-            left: 50%;
-            top: -18px;
-            transform: translate(-50%, -100%) scale(0.95);
-            min-width: 170px;
-            background: linear-gradient(135deg, hsla(var(--hue1),90%,18%,0.98), hsla(var(--hue2),80%,12%,0.98));
-            color: #bff;
-            border: 1px solid hsla(var(--hue1),80%,70%,0.18);
-            border-radius: 8px;
-            box-shadow: 0 0 18px var(--glow-primary), 0 0 2px #000;
-            padding: 13px 18px 13px 15px;
-            font-size: 0.92rem;
-            font-family: 'Share Tech Mono', monospace;
-            z-index: 30;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.22s cubic-bezier(.4,1.6,.6,1), transform 0.22s cubic-bezier(.4,1.6,.6,1);
-            animation: flickerText 7s infinite;
-        }
-        .orb-tooltip.visible {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translate(-50%, -120%) scale(1.04);
-        }
-        .orb-tooltip .tooltip-title {
-            font-weight: bold;
-            color: #fff;
-            margin-bottom: 4px;
-            font-size: 1.05em;
-        }
-        .orb-tooltip .tooltip-desc {
-            margin-bottom: 8px;
-            color: #bff;
-            font-size: 0.97em;
-        }
-        .orb-tooltip .dig-btn {
-            background: linear-gradient(90deg, hsla(var(--hue1),90%,40%,0.7), hsla(var(--hue2),80%,30%,0.7));
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 4px 13px;
-            font-size: 0.93em;
-            cursor: pointer;
-            box-shadow: 0 0 6px var(--glow-primary);
-            transition: background 0.2s, box-shadow 0.2s;
-        }
-        .orb-tooltip .dig-btn:hover {
-            background: linear-gradient(90deg, hsla(var(--hue1),100%,60%,0.9), hsla(var(--hue2),100%,50%,0.9));
-            box-shadow: 0 0 12px var(--glow-primary);
-        }
-        /* --- Dig Modal --- */
-        .dig-modal {
+        
+        /* --- OVERLAYS & MODALS --- */
+        .overlay {
             position: fixed;
             inset: 0;
-            background: rgba(10,18,40,0.93);
-            z-index: 200;
             display: flex;
             align-items: center;
             justify-content: center;
-            animation: terminalBoot 0.5s;
+            flex-direction: column;
+            background: rgba(10, 10, 25, 0.98);
+            z-index: 200;
+            transition: opacity 0.5s ease;
         }
-        .dig-modal-content {
-            background: linear-gradient(120deg, hsla(var(--hue1),90%,12%,0.98), hsla(var(--hue2),80%,10%,0.98));
-            border-radius: 12px;
-            box-shadow: 0 0 30px var(--glow-primary), 0 0 2px #000;
-            padding: 32px 28px 22px 28px;
-            min-width: 320px;
-            max-width: 95vw;
-            max-height: 80vh;
-            overflow-y: auto;
-            position: relative;
-        }
-        .dig-modal-close {
-            position: absolute;
-            top: 10px;
-            right: 12px;
-            background: none;
+        #play-button {
+            background: linear-gradient(45deg, var(--accent-primary), hsl(var(--hue-axiom-cyan), 95%, 70%));
+            color: var(--bg-deep-space);
+            font-family: 'Oxanium', sans-serif;
+            font-size: 2rem;
+            padding: 1rem 3rem;
             border: none;
-            color: #bff;
-            font-size: 1.3em;
+            border-radius: 8px;
+            text-transform: uppercase;
+            box-shadow: 0 0 25px var(--glow-primary);
             cursor: pointer;
-            filter: drop-shadow(0 0 4px var(--glow-primary));
-            transition: color 0.2s;
+            transition: all 0.2s ease;
         }
-        .dig-modal-close:hover {
-            color: #fff;
+        #play-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 35px var(--glow-primary);
         }
-        #dig-modal-body {
-            font-family: 'Share Tech Mono', monospace;
-            color: #bff;
-            font-size: 1.05em;
+        #play-overlay .prompt-text {
+            margin-top: 1.5rem;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            opacity: 0.7;
+        }
+
+        /* Alien Transmission Overlay */
+        #alien-transmission {
+            color: hsl(var(--hue-sentinel-green), 90%, 60%);
+            text-shadow: 0 0 10px var(--glow-tertiary);
+            font-size: 1.5rem;
+            line-height: 1.2;
+            text-align: center;
+            padding: 2rem;
+            font-family: monospace;
+            animation: glitchAppear 1s forwards, textFlicker 2s infinite;
+        }
+
+        /* --- RESPONSIVE DESIGN --- */
+        @media (max-width: 850px) {
+            .interface-container {
+                flex-direction: column;
+            }
+            .launcher-column { flex: 1; }
+        }
+        @media (max-width: 480px) {
+            .interface-container { padding: 1rem; }
+            .game-launchers { gap: 15px; }
+            .game-orb { width: 90px; height: 105px; }
+            .game-orb .orb-icon { font-size: 2rem; }
+            .orb-label { font-size: 0.65rem; }
+            .interface-header h1 { font-size: 1rem; }
+            #briefing-title { font-size: 1rem; }
+            #briefing-text, #briefing-data { font-size: 0.8rem; }
+            .system-status { font-size: 0.65rem; }
         }
     </style>
 </head>
-<body style="overflow-x:hidden;">
-    <!-- Main Shader Scene -->
-    <canvas id="shader-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2;display:block;"></canvas>
-    <div class="shader-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3;pointer-events:none;"></div>
+<body>
+    <div class="background-overlay"></div>
 
-    <div class="background-layer"></div>
-
-    <!-- Play Button Overlay -->
-    <div id="play-overlay" style="position:fixed;inset:0;z-index:200;background:rgba(10,10,30,0.98);display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:'Share Tech Mono',monospace;color:#8ff;letter-spacing:2px;font-size:1.2rem;transition:opacity 0.7s;opacity:1;pointer-events:auto;">
-        <button id="play-btn" style="background:linear-gradient(90deg,#0ff,#08f);color:#222;font-size:2.2rem;padding:22px 48px;border:none;border-radius:12px;box-shadow:0 0 24px #0ff8;cursor:pointer;transition:background 0.2s,box-shadow 0.2s;">▶ Play</button>
-        <div style="margin-top:18px;font-size:1.1rem;opacity:0.7;">Activate Terminal</div>
+    <div id="play-overlay" class="overlay">
+        <button id="play-button">Engage</button>
+        <div class="prompt-text">Initialize Axiom Core</div>
     </div>
 
-    <!-- Boot/Loading Overlay -->
-    <div id="boot-overlay" style="position:fixed;inset:0;z-index:100;background:rgba(10,10,30,0.98);display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:'Share Tech Mono',monospace;color:#8ff;letter-spacing:2px;font-size:1.2rem;transition:opacity 0.7s;opacity:1;pointer-events:auto;">
-        <div style="margin-bottom:18px;">
-            <span style="font-size:2.2rem;filter:drop-shadow(0 0 12px #0ff8);">⏳</span>
-        </div>
-        <div id="boot-message">Initializing Quantum Terminal...</div>
+    <div id="boot-overlay" class="overlay" style="opacity: 0; pointer-events: none;">
+        <div id="boot-message" style="font-size: 1.2rem; letter-spacing: 2px;">Establishing Quantum Link...</div>
     </div>
 
-    <!-- Animated Scroll Down Prompt -->
-    <div id="scroll-down-prompt" style="position:fixed;top:38px;left:50%;transform:translateX(-50%);z-index:20;display:flex;flex-direction:column;align-items:center;pointer-events:auto;">
-        <span style="color:#bfc7d6;font-size:1.1rem;text-shadow:0 0 8px #fff8;letter-spacing:1px;animation:flickerText 6s infinite;">Scroll Down</span>
-        <svg width="32" height="32" viewBox="0 0 32 32" style="margin-top:2px;animation:scrollArrow 1.5s infinite alternate;filter:drop-shadow(0 0 8px #fff8);">
-            <polyline points="8,12 16,22 24,12" fill="none" stroke="#bfc7d6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-    </div>
-
-
-
-
-
-
-
+    <div id="alien-transmission" class="overlay" style="display: none;"></div>
     
-    <!-- Alien Transmission Overlay -->
-    <div id="alien-transmission" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:30;display:none;align-items:center;justify-content:center;pointer-events:none;"></div>
+    <main class="interface-container" style="visibility: hidden;">
+        <svg class="corner-bracket top-left" viewBox="0 0 100 100"><polyline points="0,100 0,0 100,0"></polyline></svg>
+        <svg class="corner-bracket top-right" viewBox="0 0 100 100"><polyline points="0,100 0,0 100,0"></polyline></svg>
+        <svg class="corner-bracket bottom-left" viewBox="0 0 100 100"><polyline points="0,100 0,0 100,0"></polyline></svg>
+        <svg class="corner-bracket bottom-right" viewBox="0 0 100 100"><polyline points="0,100 0,0 100,0"></polyline></svg>
 
-    <!-- Main Content Below Shader -->
-    <main id="main-content" style="position:relative;z-index:10;max-width:1100px;margin:0 auto;padding-top:100vh;">
-        <div class="advanced-lower-section" style="display:flex;gap:36px;align-items:flex-start;justify-content:center;">
-            <div class="games-column" style="flex:0 0 260px;display:flex;flex-direction:column;gap:18px;">
-                <div class="terminal-frame" style="background:rgba(10,18,40,0.85);box-shadow:0 0 40px #0ff2,0 0 2px #000;padding:18px 12px;">
-                    <div class="terminal-header"></div>
-                    <div class="game-launchers">
-                        <button class="game-orb" data-url="./ordinary-recycling/index.html" aria-label="Launch Containment Scenario" data-orb="contain">
-                            <span>☣️</span>
-                            <div class="orb-label" data-core-id="CTN-6382">ORDINARY RECYCLING</div>
-                        </button>
+        <section class="launcher-column">
+            <header class="interface-header">
+                <h1>AXIOM CORE</h1>
+                <div class="subtitle">Simulation & Strategy Interface</div>
+            </header>
 
-                        <button class="game-orb" data-url="https://upit.com/up/OrdinaryDefense1" aria-label="Launch Defense Grid Scenario" data-orb="defense">
-                            <span>🛡️</span>
-                            <div class="orb-label" data-core-id="DEF-9104">ORDINARY DEFENSE</div>
-                        </button>
-
-                        <button class="game-orb" data-url="./game/index.html" aria-label="Launch Hive Prediction Scenario" data-orb="predict">
-                            <span>🐝</span>
-                            <div class="orb-label" data-core-id="HIV-3571">ORDINARY TECHNOLOGY MARS BETA</div>
-                        </button>
-
-                        <button class="game-orb" data-url="./game2/index.html" aria-label="Launch Void Navigation Scenario" data-orb="navigate">
-                            <span>🌌</span>
-                            <div class="orb-label" data-core-id="VID-7294">Navigate</div>
-                        </button>
-
-                        <button class="game-orb" data-url="./new_game_1/index.html" aria-label="Launch Hydro Flux Scenario" data-orb="hydro">
-                            <span>💧</span>
-                            <div class="orb-label" data-core-id="HYD-1853">HydroFlux</div>
-                        </button>
-
-                        <button class="game-orb" data-url="./new_game_2/index.html" aria-label="Launch Crystal Rift Scenario" data-orb="rift">
-                            <span>💎</span>
-                            <div class="orb-label" data-core-id="RFT-4276">RiftRun</div>
-                        </button>
-                    </div>
+            <div class="game-launchers">
                 </div>
-            </div>
-            <div class="games-explanation" style="flex:1;max-width:520px;min-height:320px;background:rgba(18,22,32,0.85);border-radius:12px;box-shadow:0 0 24px #0ff3,0 0 2px #000;padding:32px 28px 22px 28px;overflow-y:auto;max-height:420px;">
-                <div style="font-family:'Share Tech Mono',monospace;color:#bff;font-size:1.13em;line-height:1.7;">
-                    <h2 style="color:#8ff;margin-bottom:12px;font-size:1.3em;">About the Games</h2>
-                    <p>Welcome to the <b>Void Command Terminal</b>! Currently, there are <b>3 unique games</b> available for you to launch and explore:</p>
-                    <ul style="margin:14px 0 18px 18px;">
-                        <li><b>Containment</b>: Secure anomalies and protect the station.</li>
-                        <li><b>Defense Grid</b>: Repel threats and maintain shield integrity.</li>
-                        <li><b>Hive Prediction</b>: Analyze and predict swarm movements.</li>
-                    </ul>
-                    <p>More games are in development—<b>at least 3 more</b> are coming soon! Stay tuned for new scenarios and challenges.</p>
-                    <div style="margin:22px 0 0 0;padding:14px 0 0 0;border-top:1px solid #2af6;">
-                        <b>Want to contribute a game or idea?</b><br>
-                        Contact <b>Damion Richeter</b> on Facebook.<br>
-                        <span style="font-size:0.98em;opacity:0.7;">(We welcome creative coders, artists, and testers!)</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Dig Deeper Modal and status bar remain outside this section -->
-        <div id="dig-modal" class="dig-modal" tabindex="-1" aria-modal="true" style="display:none;">
-            <div class="dig-modal-content">
-                <button class="dig-modal-close" aria-label="Close">✖</button>
-                <div id="dig-modal-body"></div>
-            </div>
-        </div>
 
-        <div class="terminal-status">
-            <div class="status-left">
+            <footer class="system-status">
+                <div id="status-text">SYSTEM NOMINAL</div>
+                <div id="system-clock"></div>
+            </footer>
+        </section>
+
+        <section class="briefing-column">
+            <div class="mission-briefing">
+                <svg class="corner-bracket top-left" style="width:20px;height:20px;stroke-width:1px;"><polyline points="0,100 0,0 100,0"></polyline></svg>
+                <svg class="corner-bracket top-right" style="width:20px;height:20px;stroke-width:1px;"><polyline points="0,100 0,0 100,0"></polyline></svg>
+                
+                <h2 id="briefing-title">SELECT SCENARIO</h2>
+                <p id="briefing-text">Awaiting directive... Hover over a simulation orb to view mission parameters.<span class="typewriter-cursor">&nbsp;</span></p>
+                <div id="briefing-data"></div>
             </div>
-        </div>
-        <div class="status-right">
-            <div class="status-indicator">
-                <span>SECTOR: DELTA-IV</span>
-            </div>
-            <div class="status-indicator">
-                <span>NODE: 192.3.45</span>
-            </div>
-        </div>
+        </section>
     </main>
 
     <script>
-        // --- Audio asset URLs ---
-        const WARP_SOUND_URL = './warp_sound2.mp3';
-        const BOOT_SOUND_URL = './warp_sound3.mp3'; // Example boot sound
-        const CLICK_SOUND_URL = './warp_sound4.mp3'; // Example click sound
-        const ERROR_SOUND_URL = './warp_sound5.mp3'; // Example error sound
+    document.addEventListener('DOMContentLoaded', () => {
 
-        // --- Utility: Play a sound with fallback ---
-        function playSound(url, volume = 0.3) {
-            try {
-                const audio = new Audio(url);
-                audio.volume = volume;
-                audio.play();
-            } catch (e) {}
-        }
+        // --- CORE ELEMENTS ---
+        const playButton = document.getElementById('play-button');
+        const playOverlay = document.getElementById('play-overlay');
+        const bootOverlay = document.getElementById('boot-overlay');
+        const mainContainer = document.querySelector('.interface-container');
+        const gameLaunchersContainer = document.querySelector('.game-launchers');
+        const briefingTitle = document.getElementById('briefing-title');
+        const briefingText = document.getElementById('briefing-text');
+        const briefingData = document.getElementById('briefing-data');
+        const statusText = document.getElementById('status-text');
+        const systemClock = document.getElementById('system-clock');
 
-        // --- Boot/Loading Overlay Animation ---
-        function hideBootOverlay() {
-            const overlay = document.getElementById('boot-overlay');
-            if (overlay) {
-                overlay.style.opacity = '0';
-                overlay.style.pointerEvents = 'none';
-                setTimeout(() => overlay.style.display = 'none', 800);
-            }
-        }
-
-        // --- Placeholder for future modals (settings, help, etc.) ---
-        function showModal(id) {
-            // To be implemented in next steps
-        }
-
-        // --- Placeholder for dynamic status/tooltips ---
-        function updateStatus() {
-            // To be implemented in next steps
-        }
-
-        // --- Orb Descriptions and Deep Info ---
-        const orbData = {
-            contain: {
-                title: 'Containment Protocol',
-                desc: 'Engage hazardous anomaly containment. Secure, isolate, and neutralize threats to the station.',
-                deep: `<b>Containment Scenario</b><br><br>Deploy advanced quantum fields and AI drones to contain unpredictable anomalies. Only the most vigilant operators succeed.<br><br><i>Core ID: CTN-6382</i>`
-            },
-            defense: {
-                title: 'Defense Grid',
-                desc: 'Activate defense systems. Repel incoming threats and maintain shield integrity.',
-                deep: `<b>Defense Grid Scenario</b><br><br>Coordinate automated turrets, energy barriers, and tactical AI to defend the void station.<br><br><i>Core ID: DEF-9104</i>`
-            },
-            predict: {
-                title: 'Hive Prediction',
-                desc: 'Analyze swarm patterns. Predict and preempt hive movements in the sector.',
-                deep: `<b>Hive Prediction Scenario</b><br><br>Utilize neural analytics to forecast hive activity and prevent incursions.<br><br><i>Core ID: HIV-3571</i>`
-            },
-            navigate: {
-                title: 'Void Navigation',
-                desc: 'Chart a safe course through the void. Avoid hazards and optimize travel time.',
-                deep: `<b>Void Navigation Scenario</b><br><br>Plot hyperspace jumps, dodge anomalies, and reach your destination unscathed.<br><br><i>Core ID: VID-7294</i>`
-            },
-            hydro: {
-                title: 'HydroFlux',
-                desc: 'Manage hydro resources. Balance extraction, purification, and distribution.',
-                deep: `<b>HydroFlux Scenario</b><br><br>Oversee water cycles, prevent contamination, and ensure station survival.<br><br><i>Core ID: HYD-1853</i>`
-            },
-            rift: {
-                title: 'Crystal Rift',
-                desc: 'Explore the rift. Harvest rare crystals and avoid unstable zones.',
-                deep: `<b>Crystal Rift Scenario</b><br><br>Navigate shifting terrain, extract resources, and escape before the rift collapses.<br><br><i>Core ID: RFT-4276</i>`
-            }
+        // --- AUDIO ASSETS (placeholders) ---
+        const sfx = {
+            boot: new Audio('./sfx/boot_sequence.mp3'),
+            hover: new Audio('./sfx/ui_hover.mp3'),
+            launch: new Audio('./sfx/sim_launch.mp3'),
+            glitch: new Audio('./sfx/transmission_glitch.mp3'),
         };
-
-        // --- Tooltip Logic ---
-        let tooltipEl = null;
-        let tooltipTimeout = null;
-        function showOrbTooltip(orbBtn) {
-            const orbKey = orbBtn.getAttribute('data-orb');
-            const data = orbData[orbKey];
-            if (!data) return;
-            if (!tooltipEl) {
-                tooltipEl = document.createElement('div');
-                tooltipEl.className = 'orb-tooltip';
-                document.body.appendChild(tooltipEl);
-            }
-            tooltipEl.innerHTML = `
-                <div class="tooltip-title">${data.title}</div>
-                <div class="tooltip-desc">${data.desc}</div>
-                <button class="dig-btn" tabindex="0">Dig Deeper</button>
-            `;
-            // Position tooltip above orb
-            const rect = orbBtn.getBoundingClientRect();
-            tooltipEl.style.left = `${rect.left + rect.width/2}px`;
-            tooltipEl.style.top = `${rect.top - 8}px`;
-            tooltipEl.classList.add('visible');
-            // Dig Deeper button logic
-            tooltipEl.querySelector('.dig-btn').onclick = (e) => {
-                e.stopPropagation();
-                openDigModal(orbKey);
-                hideOrbTooltip();
-            };
-        }
-        function hideOrbTooltip() {
-            if (tooltipEl) {
-                tooltipEl.classList.remove('visible');
-            }
-        }
-
-        // --- Dig Modal Logic ---
-        function openDigModal(orbKey) {
-            const data = orbData[orbKey];
-            if (!data) return;
-            const modal = document.getElementById('dig-modal');
-            const body = document.getElementById('dig-modal-body');
-            body.innerHTML = data.deep;
-            modal.style.display = 'flex';
-            setTimeout(() => modal.focus(), 10);
-            // Trap focus
-            modal.onkeydown = (e) => {
-                if (e.key === 'Escape') closeDigModal();
-            };
-        }
-        function closeDigModal() {
-            const modal = document.getElementById('dig-modal');
-            modal.style.display = 'none';
-        }
-
-        // --- Play Overlay Logic ---
-        function startTerminal() {
-            playSound(WARP_SOUND_URL, 0.7);
-            document.getElementById('play-overlay').style.opacity = '0';
-            document.getElementById('play-overlay').style.pointerEvents = 'none';
-            setTimeout(() => {
-                document.getElementById('play-overlay').style.display = 'none';
-                // Now show boot overlay and continue as before
-                playSound(WARP_SOUND_URL, 0.25);
-                setTimeout(() => {
-                    hideBootOverlay();
-                }, 1800);
-            }, 700);
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            // Hide everything until play is pressed
-            document.getElementById('boot-overlay').style.display = 'none';
-            document.getElementById('main-content').style.display = 'none';
-            document.getElementById('scroll-down-prompt').style.display = 'none';
-            // Play button logic
-            document.getElementById('play-btn').onclick = () => {
-                document.getElementById('boot-overlay').style.display = '';
-                document.getElementById('main-content').style.display = '';
-                document.getElementById('scroll-down-prompt').style.display = '';
-                startTerminal();
-            };
-
-            // Play boot sound and show overlay
-            playSound(BOOT_SOUND_URL, 0.25);
-            setTimeout(() => {
-                hideBootOverlay();
-            }, 1800);
-
-            // Add click event listener to the container using event delegation
-            const terminalFrame = document.querySelector('.terminal-frame');
-            if (terminalFrame) {
-                terminalFrame.addEventListener('click', (e) => {
-                    const targetOrb = e.target.closest('.game-orb');
-                    if (targetOrb) {
-                        playSound(CLICK_SOUND_URL, 0.18);
-                        const url = targetOrb.getAttribute('data-url');
-                        if (url) {
-                            window.open(url, '_blank', 'noopener,noreferrer');
-                        } else {
-                            playSound(ERROR_SOUND_URL, 0.22);
-                        }
-                    }
-                });
-            }
-
-            // Tooltip event listeners
-            document.querySelectorAll('.game-orb').forEach(orbBtn => {
-                orbBtn.addEventListener('mouseenter', () => {
-                    clearTimeout(tooltipTimeout);
-                    showOrbTooltip(orbBtn);
-                });
-                orbBtn.addEventListener('mouseleave', () => {
-                    tooltipTimeout = setTimeout(hideOrbTooltip, 80);
-                });
-                orbBtn.addEventListener('focus', () => {
-                    clearTimeout(tooltipTimeout);
-                    showOrbTooltip(orbBtn);
-                });
-                orbBtn.addEventListener('blur', () => {
-                    tooltipTimeout = setTimeout(hideOrbTooltip, 80);
-                });
-            });
-            // Modal close logic
-            document.querySelector('.dig-modal-close').onclick = closeDigModal;
-            document.getElementById('dig-modal').addEventListener('mousedown', (e) => {
-                if (e.target === e.currentTarget) closeDigModal();
-            });
-        });
-
-        // --- Custom Shader Scene ---
-        // --- Multiple Shaders Support ---
-        const fragShaders = [
-            // Shader 1: Fluidic deep space fog/porthole/planet (fixed)
-            `precision mediump float;
-            uniform float u_time;
-            uniform vec2 u_res;
-            uniform vec2 u_mouse;
-            float random(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
-            float noise(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); float a = random(i); float b = random(i + vec2(1.0, 0.0)); float c = random(i + vec2(0.0, 1.0)); float d = random(i + vec2(1.0, 1.0)); vec2 uu = f * f * (3.0 - 2.0 * f); return mix(a, b, uu.x) + (c - a) * uu.y * (1.0 - uu.x) + (d - b) * uu.x * uu.y; }
-            float fbm(vec2 p) { float f = 0.0; float amp = 0.5; for(int i=0;i<6;i++) { f += amp * noise(p); p *= 2.0; amp *= 0.55; } return f; }
-            vec2 curl(vec2 p, float t) { float eps = 0.01; float n1 = fbm(p + vec2(0.0, eps) + t); float n2 = fbm(p - vec2(0.0, eps) + t); float a = (n1 - n2) / (2.0 * eps); n1 = fbm(p + vec2(eps, 0.0) + t); n2 = fbm(p - vec2(eps, 0.0) + t); float b = (n1 - n2) / (2.0 * eps); return vec2(a, -b); }
-            void main() { vec2 uv = gl_FragCoord.xy / u_res.xy; uv = uv * 2.0 - 1.0; uv.x *= u_res.x / u_res.y; vec2 mouse = (u_mouse / u_res) * 2.0 - 1.0; mouse.y = -mouse.y; uv += mouse * 0.13; float r = length(uv); float vignette = smoothstep(0.95, 0.7, 1.0 - r); float rim = smoothstep(0.98, 0.95, 1.0 - r) - smoothstep(1.0, 0.98, 1.0 - r); float glass = smoothstep(0.99, 0.97, 1.0 - r); float cycle = mod(u_time, 60.0); float speed = 0.08 + 0.18 * pow(sin(3.14159 * cycle / 60.0), 2.0); float t = u_time * speed; vec2 flow = curl(uv * 1.2, t * 0.25); vec2 flow2 = curl(uv * 2.5 + flow * 0.5, t * 0.4); vec2 adv_uv = uv + flow * 0.18 + flow2 * 0.09; float fog = fbm(adv_uv * 2.7 + t * 0.18) * 0.7 + fbm(adv_uv * 7.0 - t * 0.12) * 0.3; float fog2 = fbm(adv_uv * 1.2 - t * 0.09 + 10.0) * 0.5; float deep = pow(fog, 2.0) * 1.2 + pow(fog2, 1.5) * 0.7; vec3 fogCol = mix(vec3(0.04,0.05,0.08), vec3(0.18,0.22,0.28), deep); fogCol = mix(fogCol, vec3(0.45,0.48,0.55), pow(deep,1.7)); fogCol = mix(fogCol, vec3(0.7,0.8,0.95), pow(deep,3.5)); float streaks = sin(adv_uv.y * 18.0 + t * 1.2) * 0.12 + sin(adv_uv.x * 24.0 - t * 0.7) * 0.08; fogCol += streaks * vec3(0.18,0.22,0.35); vec2 planetPos = vec2(-0.38 + 0.09*sin(t*0.18), -0.22 + 0.07*cos(t*0.13)); float planetR = 0.33; float d = length(uv - planetPos); float planet = smoothstep(planetR, planetR-0.03, d); float atmo = smoothstep(planetR+0.04, planetR, d); vec3 planetCol = mix(vec3(0.08,0.09,0.13), vec3(0.18,0.19,0.22), 0.7 + 0.3*sin(t*0.2)); planetCol += atmo * vec3(0.18,0.22,0.35) * 0.3; fogCol = mix(fogCol, planetCol, planet); fogCol += atmo * 0.08; vec3 rimCol = mix(vec3(0.18,0.19,0.22), vec3(0.38,0.41,0.45), 0.5 + 0.5*sin(u_time*0.1)); fogCol = mix(fogCol, rimCol, rim); fogCol += glass * vec3(0.7,0.8,0.95) * 0.04 * (0.7 + 0.3*sin(u_time)); fogCol *= vignette; fogCol *= 0.98 + 0.02*sin(gl_FragCoord.y*2.0 + u_time*2.0); gl_FragColor = vec4(fogCol, 1.0); }
-            `,
-            // Shader 2: A pretty good, different effect (nebula with color cycling and stars)
-            `precision mediump float;
-            uniform float u_time;
-            uniform vec2 u_res;
-
-            float random(vec2 p) {
-                return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453);
-            }
-            float noise(vec2 p) {
-                vec2 i = floor(p);
-                vec2 f = fract(p);
-                float a = random(i);
-                float b = random(i + vec2(1.0, 0.0));
-                float c = random(i + vec2(0.0, 1.0));
-                float d = random(i + vec2(1.0, 1.0));
-                vec2 u = f * f * (3.0 - 2.0 * f);
-                return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-            }
-            float fbm(vec2 p) {
-                float f = 0.0;
-                float amp = 0.5;
-                for(int i=0;i<5;i++) {
-                    f += amp * noise(p);
-                    p *= 2.0;
-                    amp *= 0.5;
-                }
-                return f;
-            }
-            void main() {
-                vec2 uv = gl_FragCoord.xy / u_res.xy;
-                uv = uv * 2.0 - 1.0;
-                uv.x *= u_res.x / u_res.y;
-                float t = u_time * 0.12;
-                float n = fbm(uv * 2.5 + t);
-                float n2 = fbm(uv * 6.0 - t * 0.7);
-                float neb = n * 0.7 + n2 * 0.3;
-                float colorShift = 0.5 + 0.5 * sin(u_time * 0.1);
-                vec3 col = mix(vec3(0.08,0.09,0.13), vec3(0.2,0.3,0.5), neb);
-                col = mix(col, vec3(0.7,0.4,0.9), pow(neb,2.0) * colorShift);
-                col = mix(col, vec3(0.9,0.8,0.5), pow(neb,3.0) * (1.0-colorShift));
-                // Add stars
-                float stars = 0.0;
-                for (int i = 0; i < 30; i++) {
-                    float a = float(i) * 12.0;
-                    float r = 0.5 + float(i) * 0.022;
-                    vec2 pos = vec2(cos(a + t * float(i)), sin(a + t * float(i))) * r;
-                    float d = length(uv - pos);
-                    stars += smoothstep(0.01, 0.0, d);
-                }
-                col += stars * vec3(1.0,1.0,1.0);
-                // Vignette
-                float vign = smoothstep(1.0, 0.7, 1.0 - length(uv));
-                col *= vign;
-                gl_FragColor = vec4(col, 1.0);
-            }`
+        Object.values(sfx).forEach(sound => { sound.volume = 0.3; });
+        sfx.hover.volume = 0.1;
+        sfx.launch.volume = 0.4;
+        
+        // --- DATA ---
+        const gameData = [
+            { id: 'AC-7701', name: 'Anomaly Containment', icon: '☣️', url: './game1/index.html', brief: 'A critical radiation leak has been detected in Sector-Gamma. Deploy containment fields to isolate and neutralize the anomaly before a cascading failure occurs.', dataStream: 'STATUS: CRITICAL\nTHREAT: Unstable Particle Decay\nOBJECTIVE: Deploy & Maintain Fields' },
+            { id: 'ADG-8210', name: 'Aegis Defense', icon: '🛡️', url: './game2/index.html', brief: 'Hostile signatures detected on approach vector. Man the Aegis Defense Grid, manage power distribution, and repel all incoming threats. Station integrity is paramount.', dataStream: 'STATUS: HIGH-ALERT\nTHREAT: Unknown Hostiles\nOBJECTIVE: Repel All Waves' },
+            { id: 'HMP-3571', name: 'Hive-Mind Predictor', icon: '🐝', url: './game3/index.html', brief: 'The Swarm exhibits complex, coordinated behavior. Interface with the Hive-Mind Prediction engine to analyze their patterns and anticipate their next strategic move.', dataStream: 'STATUS: ANALYTICAL\nTHREAT: Bio-Mechanical Swarm\nOBJECTIVE: Forecast Swarm Trajectory' },
+            { id: 'VD-0921', name: 'Void Drifter', icon: '🌌', url: './game4/index.html', brief: 'Navigate your scout vessel through the treacherous asteroid field of the Kepler-Abyss. Use sensor data to plot a safe course, manage fuel, and reach the extraction point.', dataStream: 'STATUS: HAZARDOUS\nTHREAT: Gravitational Anomalies\nOBJECTIVE: Navigate to Beacon' },
+            { id: 'CF-1853', name: 'Cryo-Fluidics', icon: '💧', url: './game5/index.html', brief: 'The station\'s primary life support cooler is failing. Reroute cryo-fluid through auxiliary conduits to prevent a core meltdown. Every second counts.', dataStream: 'STATUS: URGENT\nTHREAT: Core Overheating\nOBJECTIVE: Stabilize Coolant Flow' },
+            { id: 'SM-4276', name: 'Subspace Mining', icon: '💎', url: './game6/index.html', brief: 'A rare crystalline formation has been detected in an unstable subspace rift. Pilot a mining drone, extract the maximum yield, and escape before the rift collapses.', dataStream: 'STATUS: UNSTABLE\nTHREAT: Rift Collapse Imminent\nOBJECTIVE: Extract Resources & Escape' },
         ];
 
-        let currentShaderIdx = 0;
-        let shaderSwitchTime = 60; // seconds per shader
-        let lastSwitch = 0;
+        let typeWriterTimeout, dataStreamInterval;
 
-        function createShader(gl, type, source) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error('Shader compile error:', gl.getShaderInfoLog(shader), '\nShader source:', source);
-                gl.deleteShader(shader);
-                return null;
-            }
-            return shader;
+        // --- UI INITIALIZATION ---
+        function initInterface() {
+            playOverlay.style.opacity = '0';
+            playOverlay.style.pointerEvents = 'none';
+            bootOverlay.style.opacity = '1';
+            bootOverlay.style.pointerEvents = 'auto';
+
+            playSound(sfx.boot);
+
+            setTimeout(() => {
+                bootOverlay.style.opacity = '0';
+                bootOverlay.style.pointerEvents = 'none';
+                mainContainer.style.visibility = 'visible';
+                populateLaunchers();
+                startSystemMonitors();
+            }, 2500);
         }
 
-        function compileShader(idx) {
-            if (prog) gl.deleteProgram(prog);
-            vs = createShader(gl, gl.VERTEX_SHADER, `attribute vec2 a_position; void main() { gl_Position = vec4(a_position, 0, 1); }`);
-            fs = createShader(gl, gl.FRAGMENT_SHADER, fragShaders[idx]);
-            if (!vs || !fs) {
-                console.error('Shader creation failed for index', idx);
-                return false;
-            }
-            prog = gl.createProgram();
-            gl.attachShader(prog, vs);
-            gl.attachShader(prog, fs);
-            gl.linkProgram(prog);
-            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-                console.error('Program link error:', gl.getProgramInfoLog(prog), '\nShader source:', fragShaders[idx]);
-                gl.deleteProgram(prog);
-                return false;
-            }
-            gl.useProgram(prog);
-            const pos = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, pos);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-            const loc = gl.getAttribLocation(prog, 'a_position');
-            gl.enableVertexAttribArray(loc);
-            gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-            u_time = gl.getUniformLocation(prog, 'u_time');
-            u_res = gl.getUniformLocation(prog, 'u_res');
-            u_mouse = gl.getUniformLocation(prog, 'u_mouse');
-            return true;
-        }
-
-        function startShaderScene() {
-            const canvas = document.getElementById('shader-canvas');
-            const gl = canvas.getContext('webgl');
-            if (!gl) return;
-            let vs, fs, prog;
-            let u_time, u_res, u_mouse;
-            let mouse = [0, 0];
-            function compileShader(idx) {
-                if (prog) gl.deleteProgram(prog);
-                vs = createShader(gl, gl.VERTEX_SHADER, `attribute vec2 a_position; void main() { gl_Position = vec4(a_position, 0, 1); }`);
-                fs = createShader(gl, gl.FRAGMENT_SHADER, fragShaders[idx]);
-                if (!vs || !fs) {
-                    console.error('Shader creation failed for index', idx);
-                    return false;
-                }
-                prog = gl.createProgram();
-                gl.attachShader(prog, vs);
-                gl.attachShader(prog, fs);
-                gl.linkProgram(prog);
-                if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-                    console.error('Program link error:', gl.getProgramInfoLog(prog), '\nShader source:', fragShaders[idx]);
-                    gl.deleteProgram(prog);
-                    return false;
-                }
-                gl.useProgram(prog);
-                const pos = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, pos);
-                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-                const loc = gl.getAttribLocation(prog, 'a_position');
-                gl.enableVertexAttribArray(loc);
-                gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-                u_time = gl.getUniformLocation(prog, 'u_time');
-                u_res = gl.getUniformLocation(prog, 'u_res');
-                u_mouse = gl.getUniformLocation(prog, 'u_mouse');
-                return true;
-            }
-            canvas.addEventListener('mousemove', e => {
-                mouse = [e.clientX, canvas.height - e.clientY];
+        function populateLaunchers() {
+            gameData.forEach(game => {
+                const orb = document.createElement('button');
+                orb.className = 'game-orb';
+                orb.dataset.id = game.id;
+                orb.innerHTML = `
+                    <div class="orb-icon">${game.icon}</div>
+                    <div class="orb-label">
+                        ${game.name}
+                        <span class="core-id">CORE ID: ${game.id}</span>
+                    </div>
+                `;
+                gameLaunchersContainer.appendChild(orb);
             });
-            function resize() {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                gl.viewport(0, 0, canvas.width, canvas.height);
-            }
-            window.addEventListener('resize', resize);
-            resize();
-            compileShader(currentShaderIdx);
-            let start = null;
-            function render(ts) {
-                if (!start) start = ts;
-                let t = (ts - start) * 0.001;
-                // Switch shader after shaderSwitchTime
-                if (t - lastSwitch > shaderSwitchTime) {
-                    let attempts = 0;
-                    do {
-                        currentShaderIdx = (currentShaderIdx + 1) % fragShaders.length;
-                        attempts++;
-                    } while (!compileShader(currentShaderIdx) && attempts < fragShaders.length);
-                    lastSwitch = t;
-                }
-                gl.useProgram(prog);
-                gl.uniform1f(u_time, t);
-                gl.uniform2f(u_res, canvas.width, canvas.height);
-                if (u_mouse) gl.uniform2f(u_mouse, mouse[0], mouse[1]);
-                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-                requestAnimationFrame(render);
-            }
-            requestAnimationFrame(render);
+            addEventListeners();
         }
-        document.addEventListener('DOMContentLoaded', startShaderScene);
+
+        // --- DYNAMIC CONTENT & EFFECTS ---
+        function updateBriefing(gameId) {
+            const game = gameData.find(g => g.id === gameId);
+            if (!game) return;
+
+            briefingTitle.textContent = game.name;
+            
+            // Typewriter effect for the briefing text
+            clearTimeout(typeWriterTimeout);
+            clearInterval(dataStreamInterval);
+            briefingText.innerHTML = '';
+            let i = 0;
+            function typeWriter() {
+                if (i < game.brief.length) {
+                    briefingText.innerHTML += game.brief.charAt(i);
+                    i++;
+                    typeWriterTimeout = setTimeout(typeWriter, 15);
+                } else {
+                    briefingText.innerHTML = game.brief; // Clean up cursor
+                    startDataStream(game.dataStream);
+                }
+            }
+            typeWriter();
+        }
+
+        function startDataStream(data) {
+            const lines = data.split('\n');
+            let currentLine = 0;
+            briefingData.innerHTML = '';
+
+            dataStreamInterval = setInterval(() => {
+                if (currentLine < lines.length) {
+                    briefingData.innerHTML += lines[currentLine] + '\n';
+                    currentLine++;
+                } else {
+                    clearInterval(dataStreamInterval);
+                }
+            }, 400);
+        }
+
+        function resetBriefing() {
+            clearTimeout(typeWriterTimeout);
+            clearInterval(dataStreamInterval);
+            briefingTitle.textContent = 'SELECT SCENARIO';
+            briefingText.innerHTML = 'Awaiting directive... Hover over a simulation orb to view mission parameters.<span class="typewriter-cursor">&nbsp;</span>';
+            briefingData.textContent = '';
+        }
+
+        // --- SYSTEM MONITORS & RANDOM EVENTS ---
+        function startSystemMonitors() {
+            // System Clock
+            setInterval(() => {
+                const now = new Date();
+                systemClock.textContent = `UTC ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+            }, 1000);
+
+            // System Status Cycle
+            const statuses = ['SYSTEM NOMINAL', 'QUANTUM LINK STABLE', 'ALL CHANNELS OPEN', 'MONITORING FOR ANOMALIES', 'WARNING: ENERGY FLUX DETECTED'];
+            let statusIndex = 0;
+            setInterval(() => {
+                statusIndex = (statusIndex + 1) % statuses.length;
+                const newStatus = statuses[statusIndex];
+                statusText.textContent = newStatus;
+                statusText.style.color = newStatus.includes('WARNING') ? 'var(--accent-secondary)' : 'hsla(var(--hue-sentinel-green), 90%, 70%, 0.8)';
+            }, 7000);
+
+            // Random Alien Transmission
+            setInterval(() => {
+                if (Math.random() < 0.1) { // 10% chance every 20 seconds
+                    triggerAlienTransmission();
+                }
+            }, 20000);
+        }
+        
+        function triggerAlienTransmission() {
+            const transmissionOverlay = document.getElementById('alien-transmission');
+            const messages = [
+                '⏁⊑⟒ ⎐⍜⟟⎅ ⌇⏁⏃⍀⟒⌇ ⏚⏃☊☍',
+                'WE SEE YOU',
+                'THEY ARE COMING',
+                'SIGNAL LOST... ORIGIN UNKNOWN',
+                '...IS ANYONE THERE...?'
+            ];
+            transmissionOverlay.textContent = messages[Math.floor(Math.random() * messages.length)];
+            transmissionOverlay.style.display = 'flex';
+            playSound(sfx.glitch);
+            setTimeout(() => {
+                transmissionOverlay.style.display = 'none';
+            }, 3000 + Math.random() * 2000);
+        }
+
+        // --- EVENT HANDLERS ---
+        function addEventListeners() {
+            playButton.addEventListener('click', initInterface);
+
+            document.querySelectorAll('.game-orb').forEach(orb => {
+                orb.addEventListener('mouseenter', () => {
+                    playSound(sfx.hover);
+                    updateBriefing(orb.dataset.id);
+                });
+
+                orb.addEventListener('click', () => {
+                    const game = gameData.find(g => g.id === orb.dataset.id);
+                    if (game && game.url) {
+                        playSound(sfx.launch);
+                        window.open(game.url, '_blank', 'noopener,noreferrer');
+                    }
+                });
+            });
+
+            gameLaunchersContainer.addEventListener('mouseleave', resetBriefing);
+        }
+
+        // --- UTILITIES ---
+        function playSound(audio) {
+            // This allows rapid re-triggering of sounds
+            audio.currentTime = 0;
+            audio.play().catch(e => { /* Ignore play errors if user hasn't interacted */ });
+        }
+
+        // --- STARTUP ---
+        addEventListeners(); // Initial listener for the play button
+    });
     </script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
 </body>
 </html>
