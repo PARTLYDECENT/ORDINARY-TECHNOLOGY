@@ -7,14 +7,14 @@
     "use strict";
 
     // --- Core Variable Declarations ---
-    const webglCanvas = document.getElementById('webglCanvas');
+    const webglCanvas = document.getElementById(\'webglCanvas\');
     let gl = null;
     let program = null;
     let animationFrameId = null;
 
     // --- Error Handling and Initialization Check ---
     if (!webglCanvas) {
-        console.error("[FATAL] WebGL Canvas element with id 'webglCanvas' not found in DOM. Aborting.");
+        console.error("[FATAL] WebGL Canvas element with id \'webglCanvas\' not found in DOM. Aborting.");
         return;
     }
 
@@ -25,9 +25,9 @@
         webglCanvas.width = window.innerWidth;
         webglCanvas.height = window.innerHeight;
 
-        gl = webglCanvas.getContext('webgl2') ||
-             webglCanvas.getContext('webgl') ||
-             webglCanvas.getContext('experimental-web-gl');
+        gl = webglCanvas.getContext(\'webgl2\') ||
+             webglCanvas.getContext(\'webgl\') ||
+             webglCanvas.getContext(\'experimental-web-gl\');
 
         if (!gl) {
             throw new Error("WebGL is not supported or the context could not be created.");
@@ -40,7 +40,7 @@
         }
     } catch (e) {
         console.error("[FATAL] WebGL Initialization Error:", e);
-        if (document.body) document.body.style.backgroundColor = '#050511';
+        if (document.body) document.body.style.backgroundColor = \'#050511\';
         return;
     }
 
@@ -95,161 +95,167 @@
         mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, s, -s, c); }
 
         // =========================================================================================
-        // [COLOR PALETTES]
+        // [COLOR PALETTES] - Adjusted for uncanny, dark, alien vibes
         // =========================================================================================
-        vec3 neonPink = vec3(1.0, 0.1, 0.8);
-        vec3 neonBlue = vec3(0.1, 0.8, 1.0);
-        vec3 neonGreen = vec3(0.1, 1.0, 0.3);
-        vec3 deepPurple = vec3(0.3, 0.1, 0.8);
-        vec3 fireOrange = vec3(1.0, 0.4, 0.1);
-        vec3 iceBlue = vec3(0.4, 0.9, 1.0);
-        vec3 acidGreen = vec3(0.7, 1.0, 0.2);
-        vec3 darkBg = vec3(0.02, 0.02, 0.1);
+        vec3 voidBlack = vec3(0.01, 0.01, 0.03);
+        vec3 sicklyGreen = vec3(0.2, 0.8, 0.3);
+        vec3 decayingRed = vec3(0.7, 0.1, 0.1);
+        vec3 alienBlue = vec3(0.1, 0.4, 0.7);
+        vec3 corruptedPurple = vec3(0.4, 0.1, 0.5);
+        vec3 staticWhite = vec3(0.9, 0.9, 0.9);
+        vec3 deepViolet = vec3(0.2, 0.0, 0.4);
+        vec3 eerieYellow = vec3(0.8, 0.7, 0.1);
 
         // =========================================================================================
-        // [EFFECT FUNCTIONS]
+        // [EFFECT FUNCTIONS] - New shaders for uncanny, dark backrooms alien vibes
         // =========================================================================================
 
-        vec3 plasmaStorm(vec2 uv, float t) {
-            float v1 = sin(uv.x * 8.0 + t * 2.0);
-            float v2 = sin(10.0 * (uv.x * sin(t * 0.5) + uv.y * cos(t * 0.7)) + t * 1.5);
-            float v3 = sin(sqrt(50.0 * dot(uv, uv) + 1.0) + t * 3.0);
-            float plasma = (v1 + v2 + v3) / 3.0;
-            return mix(neonPink, neonBlue, sin(plasma * PI + t) * 0.5 + 0.5);
-        }
-
-        vec3 crystalCave(vec2 uv, float t) {
-            vec2 p = uv * 6.0;
-            p = rot(t * 0.3) * p;
-            float crystal = 0.0;
-            for(int i = 0; i < 6; i++) {
-                float angle = float(i) * PI / 3.0 + t * 0.5;
-                vec2 dir = vec2(cos(angle), sin(angle));
-                crystal = max(crystal, 1.0 / (1.0 + abs(dot(p, dir)) * 3.0));
-            }
-            float shimmer = sin(crystal * 15.0 + t * 4.0) * 0.5 + 0.5;
-            return mix(iceBlue, neonGreen, shimmer) * crystal * 2.0;
-        }
-
-        vec3 vortexGalaxy(vec2 uv, float t) {
-            float angle = atan(uv.y, uv.x) + t * 0.5;
-            float radius = length(uv);
-            angle += sin(radius * 4.0 - t * 2.0) * 0.5;
-            float spiral = sin(angle * 3.0 + radius * 8.0 - t * 2.0) * 0.5 + 0.5;
-            float glow = exp(-radius * 1.5) * 2.0;
-            return mix(deepPurple, fireOrange, spiral) * glow;
-        }
-
-        vec3 quantumField(vec2 uv, float t) {
+        vec3 liminalCorridor(vec2 uv, float t) {
             vec2 p = uv * 5.0;
-            float quantum = 0.0;
-            for(int i = 0; i < 4; i++) {
-                vec2 offset = vec2(hash(vec2(float(i))), hash(vec2(float(i) + 50.0))) * 4.0 - 2.0;
-                offset *= sin(t * 0.8 + float(i)) * 0.5 + 0.5;
-                quantum += exp(-length(p - offset * 2.0)) * (sin(t * 3.0 + float(i)) * 0.5 + 0.5);
-            }
-            float interference = sin(quantum * 12.0 + t * 5.0);
-            return vec3(quantum, quantum * interference, quantum * cos(t + length(uv))) * 1.5;
+            p.x += t * 0.1;
+            float d = abs(sin(p.x * 0.5 + p.y * 0.2) + cos(p.y * 0.7 - p.x * 0.3)) * 0.5;
+            float corridor = fbm(p * 0.8 + d * 0.5);
+            corridor = pow(corridor, 2.0) * 2.0;
+            vec3 color = mix(voidBlack, decayingRed, corridor);
+            color = mix(color, sicklyGreen, sin(t * 0.5 + uv.x * 3.0) * 0.2 + 0.2);
+            return color;
         }
 
-        vec3 electricWeb(vec2 uv, float t) {
-            vec2 grid = fract(uv * 12.0 + t * 0.2) - 0.5;
-            float line = min(abs(grid.x), abs(grid.y));
-            line = 1.0 - smoothstep(0.0, 0.1, line);
-            float pulse = sin(t * 4.0 + length(uv) * 8.0) * 0.5 + 0.5;
-            float spark = hash(floor(uv * 12.0 + t * 0.2)) > 0.95 ? 1.0 : 0.0;
-            return (neonBlue * line * pulse + neonPink * spark) * 2.0;
-        }
-
-        vec3 liquidMetal(vec2 uv, float t) {
-            vec2 p = uv * 3.0 + vec2(sin(t * 0.4), cos(t * 0.6)) * 0.5;
-            float n1 = fbm(p + t * 0.3);
-            float n2 = fbm(p * 1.5 - t * 0.2);
-            float metal = sin(n1 * 8.0 + n2 * 6.0 + t * 2.0) * 0.5 + 0.5;
-            vec3 silver = vec3(0.8, 0.9, 1.0);
-            vec3 gold = vec3(1.0, 0.8, 0.3);
-            return mix(silver, gold, metal) * (0.5 + metal * 0.5);
-        }
-
-        vec3 dimensionalRift(vec2 uv, float t) {
-            float rift = abs(uv.x + sin(uv.y * 5.0 + t) * 0.2);
-            rift = 1.0 - smoothstep(0.0, 0.15, rift);
-            vec2 bg_uv = uv * 2.0 + vec2(t * 0.5, 0);
-            float bg = fbm(bg_uv);
-            vec3 bg_color = mix(darkBg, deepPurple, bg);
-            vec3 rift_color = mix(neonPink, vec3(1.0), sin(t * 10.0 + uv.y * 15.0) * 0.5 + 0.5);
-            return mix(bg_color, rift_color, rift * 2.0);
-        }
-
-        vec3 cosmicDust(vec2 uv, float t) {
-            vec2 p = uv * 8.0;
-            float dust = 0.0;
-            for(int i = 0; i < 5; i++) {
-                vec2 offset = vec2(hash(vec2(float(i) * 17.3)), hash(vec2(float(i) * 23.7))) * 6.0 - 3.0;
-                offset += vec2(sin(t * 0.3 + float(i)), cos(t * 0.4 + float(i))) * 2.0;
-                float size = 0.5 + hash(vec2(float(i) * 41.2)) * 1.5;
-                dust += exp(-length(p - offset) * size) * (0.5 + sin(t * 2.0 + float(i)) * 0.5);
-            }
-            return mix(darkBg, mix(fireOrange, iceBlue, sin(t + length(uv)) * 0.5 + 0.5), dust);
-        }
-
-        vec3 neuralNetwork(vec2 uv, float t) {
-            vec2 cell = floor(uv * 8.0);
-            vec2 fpos = fract(uv * 8.0);
-            float minDist = 8.0;
-            vec2 nearestPoint;
-            for(int x = -1; x <= 1; x++) {
-                for(int y = -1; y <= 1; y++) {
-                    vec2 neighbor = vec2(x, y);
-                    vec2 point = vec2(hash(cell + neighbor), hash(cell + neighbor + vec2(100.0)));
-                    point = 0.5 + 0.3 * sin(t * 0.5 + point * TWO_PI);
-                    float dist = length(neighbor + point - fpos);
-                    if(dist < minDist) {
-                        minDist = dist;
-                        nearestPoint = cell + neighbor + point;
-                    }
-                }
-            }
-            float connection = 1.0 - smoothstep(0.0, 0.3, minDist);
-            float pulse = sin(t * 3.0 + nearestPoint.x + nearestPoint.y) * 0.5 + 0.5;
-            return mix(acidGreen, neonBlue, pulse) * connection * 1.5;
-        }
-
-        vec3 timeWarp(vec2 uv, float t) {
-            float radius = length(uv);
-            float angle = atan(uv.y, uv.x);
-            angle += sin(radius * 6.0 - t * 3.0) * (1.0 - radius);
-            vec2 warped = vec2(cos(angle), sin(angle)) * radius;
-            float warp = fbm(warped * 4.0 + t * 0.2);
-            float time_distort = sin(warp * 10.0 + t * 4.0) * 0.5 + 0.5;
-            return mix(deepPurple, fireOrange, time_distort) * (1.0 - radius * 0.5);
-        }
-
-        vec3 holographicGlitch(vec2 uv, float t) {
-            vec2 originalUV = uv;
-            float glitch_intensity = sin(t * 7.0) * 0.5 + 0.5;
-            uv.x += sin(t * 23.0 + uv.y * 50.0) * 0.01 * glitch_intensity;
-            
-            float holo = sin(uv.y * 100.0 + t * 5.0) * 0.5 + 0.5;
-            vec3 r_channel = vec3(holo + 0.02, 0, 0);
-            vec3 g_channel = vec3(0, holo, 0);
-            vec3 b_channel = vec3(0, 0, holo - 0.02);
-            
-            float scan = sin(originalUV.y * 200.0 + t * 10.0) * 0.1 + 0.9;
-            return (r_channel + g_channel + b_channel) * scan * neonBlue;
-        }
-
-        vec3 fractalFlame(vec2 uv, float t) {
+        vec3 eldritchTentacles(vec2 uv, float t) {
             vec2 p = uv * 4.0;
-            p = rot(t * 0.2) * p;
-            float flame = 0.0;
-            for(int i = 0; i < 6; i++) {
-                p = abs(p) - 0.8;
-                p = rot(0.8 + sin(t * 0.3) * 0.4) * p;
-                flame += 1.0 / (1.0 + length(p) * float(i + 1));
+            p = rot(t * 0.05) * p;
+            float tentacle = 0.0;
+            for(int i = 0; i < 5; i++) {
+                p = abs(p) / dot(p, p) - 0.7;
+                p = rot(sin(t * 0.1 + float(i)) * 0.5) * p;
+                tentacle += exp(-length(p) * 0.8);
             }
-            float flicker = sin(t * 8.0 + length(uv) * 10.0) * 0.2 + 0.8;
-            return mix(fireOrange, neonPink, flame * 0.5) * flame * flicker;
+            tentacle = fract(tentacle * 0.5 + t * 0.02);
+            vec3 color = mix(corruptedPurple, alienBlue, tentacle);
+            color *= (sin(length(uv) * 10.0 + t * 2.0) * 0.1 + 0.9);
+            return color;
+        }
+
+        vec3 glitchedReality(vec2 uv, float t) {
+            vec2 p = uv * 7.0;
+            float glitch = 0.0;
+            glitch += sin(p.x * 10.0 + t * 5.0) * 0.1;
+            glitch += cos(p.y * 15.0 - t * 7.0) * 0.08;
+            glitch += fbm(p * 2.0 + t * 0.3) * 0.2;
+            
+            vec2 distortedUV = uv + vec2(glitch, glitch * 0.5);
+            float staticNoise = hash(floor(distortedUV * 100.0 + t * 100.0));
+            vec3 color = mix(voidBlack, staticWhite, staticNoise * 0.3);
+            color = mix(color, decayingRed, abs(sin(glitch * 20.0)) * 0.5);
+            return color;
+        }
+
+        vec3 bioLuminescentSwamp(vec2 uv, float t) {
+            vec2 p = uv * 6.0;
+            float swamp = 0.0;
+            for(int i = 0; i < 3; i++) {
+                p = p * 1.8 + vec2(sin(t * 0.2 + float(i)), cos(t * 0.3 + float(i))) * 0.5;
+                swamp += noise(p);
+            }
+            swamp = fract(swamp * 0.7 + t * 0.05);
+            vec3 color = mix(sicklyGreen, alienBlue, swamp);
+            color *= (0.5 + sin(length(uv) * 5.0 + t * 3.0) * 0.5);
+            return color;
+        }
+
+        vec3 crystallineVoid(vec2 uv, float t) {
+            vec2 p = uv * 8.0;
+            p = rot(t * 0.07) * p;
+            float crystal = 0.0;
+            for(int i = 0; i < 4; i++) {
+                p = abs(p) / dot(p, p) - 0.5;
+                crystal += exp(-length(p) * 0.6);
+            }
+            crystal = fract(crystal * 0.3 + t * 0.01);
+            vec3 color = mix(deepViolet, staticWhite, crystal);
+            color *= (0.7 + sin(t * 0.8 + uv.y * 7.0) * 0.3);
+            return color;
+        }
+
+        vec3 parasiticGrowth(vec2 uv, float t) {
+            vec2 p = uv * 5.0;
+            float growth = 0.0;
+            for(int i = 0; i < 4; i++) {
+                p = p * 1.5 + vec2(cos(t * 0.15 + float(i)), sin(t * 0.25 + float(i))) * 0.3;
+                growth += fbm(p);
+            }
+            growth = fract(growth * 0.6 + t * 0.03);
+            vec3 color = mix(decayingRed, sicklyGreen, growth);
+            color *= (0.6 + cos(length(uv) * 8.0 - t * 2.0) * 0.4);
+            return color;
+        }
+
+        vec3 spectralEchoes(vec2 uv, float t) {
+            vec2 p = uv * 6.0;
+            float echo = 0.0;
+            for(int i = 0; i < 5; i++) {
+                vec2 offset = vec2(sin(t * 0.1 + float(i)), cos(t * 0.15 + float(i))) * 0.2;
+                echo += noise(p + offset);
+            }
+            echo = fract(echo * 0.4 + t * 0.02);
+            vec3 color = mix(alienBlue, corruptedPurple, echo);
+            color *= (0.8 + sin(uv.x * 12.0 + t * 4.0) * 0.2);
+            return color;
+        }
+
+        vec3 voidGate(vec2 uv, float t) {
+            vec2 p = uv * 4.0;
+            float gate = 0.0;
+            gate += 1.0 / (1.0 + pow(length(p - vec2(0.0, 0.0)), 2.0) * 5.0);
+            gate += sin(p.x * 3.0 + t * 0.5) * 0.2;
+            gate += cos(p.y * 4.0 - t * 0.7) * 0.2;
+            gate = pow(gate, 3.0);
+            vec3 color = mix(voidBlack, deepViolet, gate);
+            color = mix(color, eerieYellow, sin(t * 0.9 + length(uv) * 6.0) * 0.3 + 0.3);
+            return color;
+        }
+
+        vec3 alienGlyphs(vec2 uv, float t) {
+            vec2 p = uv * 10.0;
+            float glyph = 0.0;
+            for(int i = 0; i < 3; i++) {
+                p = rot(t * 0.03 + float(i) * PI / 2.0) * p;
+                glyph += hash(floor(p));
+            }
+            glyph = fract(glyph * 0.7 + t * 0.01);
+            vec3 color = mix(sicklyGreen, alienBlue, glyph);
+            color *= (0.5 + cos(p.x * 2.0 + p.y * 2.0 + t * 1.5) * 0.5);
+            return color;
+        }
+
+        vec3 pulsatingAbyss(vec2 uv, float t) {
+            float r = length(uv);
+            float a = atan(uv.y, uv.x);
+            float pulse = sin(r * 15.0 - t * 2.0) * 0.5 + 0.5;
+            pulse *= (0.5 + sin(a * 5.0 + t * 0.8) * 0.5);
+            vec3 color = mix(voidBlack, corruptedPurple, pulse);
+            color = mix(color, decayingRed, sin(t * 1.2 + r * 10.0) * 0.2 + 0.2);
+            return color;
+        }
+
+        vec3 shiftingDimensions(vec2 uv, float t) {
+            vec2 p = uv * 5.0;
+            float shift = 0.0;
+            shift += fbm(p + vec2(sin(t * 0.1), cos(t * 0.15)));
+            shift += noise(p * 2.0 + t * 0.2);
+            shift = fract(shift * 0.5 + t * 0.01);
+            vec3 color = mix(deepViolet, eerieYellow, shift);
+            color *= (0.7 + sin(uv.x * 8.0 + uv.y * 8.0 + t * 3.0) * 0.3);
+            return color;
+        }
+
+        vec3 corruptedStatic(vec2 uv, float t) {
+            vec2 p = uv * 20.0;
+            float staticVal = hash(floor(p + t * 50.0));
+            staticVal = pow(staticVal, 3.0);
+            vec3 color = mix(voidBlack, staticWhite, staticVal);
+            color = mix(color, decayingRed, abs(sin(t * 10.0 + uv.x * 30.0)) * 0.2);
+            return color;
         }
 
         // =========================================================================================
@@ -264,54 +270,54 @@
             float phaseProgress = fract(phase);
             int phaseIndex = int(floor(phase));
 
-            vec3 color = darkBg;
+            vec3 color = voidBlack;
 
             // Phase dispatcher with completely new effects
             if (phaseIndex == 0) {
-                color = plasmaStorm(uv, u_time);
+                color = liminalCorridor(uv, u_time);
             }
             else if (phaseIndex == 1) {
-                color = crystalCave(uv, u_time);
+                color = eldritchTentacles(uv, u_time);
             }
             else if (phaseIndex == 2) {
-                color = vortexGalaxy(uv, u_time);
+                color = glitchedReality(uv, u_time);
             }
             else if (phaseIndex == 3) {
-                color = quantumField(uv, u_time);
+                color = bioLuminescentSwamp(uv, u_time);
             }
             else if (phaseIndex == 4) {
-                color = electricWeb(uv, u_time);
+                color = crystallineVoid(uv, u_time);
             }
             else if (phaseIndex == 5) {
-                color = liquidMetal(uv, u_time);
+                color = parasiticGrowth(uv, u_time);
             }
             else if (phaseIndex == 6) {
-                color = dimensionalRift(uv, u_time);
+                color = spectralEchoes(uv, u_time);
             }
             else if (phaseIndex == 7) {
-                color = cosmicDust(uv, u_time);
+                color = voidGate(uv, u_time);
             }
             else if (phaseIndex == 8) {
-                color = neuralNetwork(uv, u_time);
+                color = alienGlyphs(uv, u_time);
             }
             else if (phaseIndex == 9) {
-                color = timeWarp(uv, u_time);
+                color = pulsatingAbyss(uv, u_time);
             }
             else if (phaseIndex == 10) {
-                color = holographicGlitch(uv, u_time);
+                color = shiftingDimensions(uv, u_time);
             }
             else if (phaseIndex == 11) {
-                color = fractalFlame(uv, u_time);
+                color = corruptedStatic(uv, u_time);
             }
             else if (phaseIndex >= 12) {
-                // Additional creative variations
+                // Additional creative variations (mix and match for more uniqueness)
                 float selector = mod(float(phaseIndex - 12), 3.0);
                 if (selector < 1.0) {
-                    color = mix(plasmaStorm(uv, u_time), crystalCave(uv * 0.5, u_time), 0.5);
+                    color = mix(liminalCorridor(uv, u_time), glitchedReality(uv * 0.8, u_time), 0.6);
                 } else if (selector < 2.0) {
-                    color = mix(quantumField(uv, u_time), electricWeb(uv, u_time), sin(u_time) * 0.5 + 0.5);
+                    color = mix(eldritchTentacles(uv, u_time), bioLuminescentSwamp(uv, u_time), sin(u_time) * 0.5 + 0.5);
                 } else {
-                    color = mix(vortexGalaxy(uv, u_time), fractalFlame(uv * 1.5, u_time), 0.7);
+                    color = mix(crystallineVoid(uv, u_time), parasiticGrowth(uv * 1.2, u_time), 0.7);
                 }
             }
 
@@ -320,7 +326,7 @@
             mouse_pos.y *= -1.0; // Correct mouse Y
             float mouse_dist = length(uv - mouse_pos);
             float mouse_effect = exp(-mouse_dist * 3.0) * u_intensity * 0.5;
-            color += neonPink * mouse_effect;
+            color += eerieYellow * mouse_effect;
 
             // Intensity modulation
             color *= u_intensity;
@@ -349,11 +355,11 @@
         gl.compileShader(shader);
 
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
+            const shaderType = type === gl.VERTEX_SHADER ? \'Vertex\' : \'Fragment\';
             const infoLog = gl.getShaderInfoLog(shader);
-            const sourceWithLines = source.split('\n').map((line, index) => `${index + 1}: ${line}`).join('\n');
-            console.error(`>>> SHADER COMPILE ERROR (${shaderType}):\n${infoLog}`);
-            console.error(`--- Shader Source (${shaderType}) ---\n${sourceWithLines}\n---`);
+            const sourceWithLines = source.split(\'\\n\').map((line, index) => `${index + 1}: ${line}`).join(\'\\n\');
+            console.error(`>>> SHADER COMPILE ERROR (${shaderType}):\\n${infoLog}`);
+            console.error(`--- Shader Source (${shaderType}) ---\\n${sourceWithLines}\\n---`);
             gl.deleteShader(shader);
             throw new Error(`Shader compilation failed: ${shaderType}`);
         }
@@ -370,7 +376,7 @@
 
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             const infoLog = gl.getProgramInfoLog(program);
-            console.error('>>> PROGRAM LINK ERROR:', infoLog);
+            console.error(\'>>> PROGRAM LINK ERROR:\', infoLog);
             gl.deleteProgram(program);
             throw new Error("Shader program linking failed.");
         }
@@ -471,7 +477,7 @@
     };
 
     window.shaderMouse = { x: 0.5, y: 0.5 };
-    window.addEventListener('mousemove', (e) => {
+    window.addEventListener(\'mousemove\', (e) => {
         window.shaderMouse.x = e.clientX / window.innerWidth;
         window.shaderMouse.y = 1.0 - (e.clientY / window.innerHeight);
     });
