@@ -1117,407 +1117,585 @@ function copyImageUrl(url) {
 
 
 
-
 	
 	
 
 
-	
-<div id="alienTerrain" style="width:100%;height:500px;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-  <div id="startScreen" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg, #0a0a1a 0%, #1a0a2a 50%, #2a0a3a 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:1000;transition:opacity 1s ease-out;">
-    <h1 style="color:#00ffaa;font-size:48px;margin:0;text-shadow:0 0 20px #00ffaa;font-family:Arial,sans-serif;letter-spacing:3px;">ALIEN WORLD</h1>
-    <p style="color:#ffffff;font-size:18px;margin:20px 0;text-align:center;font-family:Arial,sans-serif;">Journey to an unknown planet</p>
-    <button id="startButton" style="background:linear-gradient(45deg, #00ffaa, #0088ff);border:none;color:#ffffff;font-size:20px;padding:15px 30px;border-radius:25px;cursor:pointer;font-family:Arial,sans-serif;box-shadow:0 5px 15px rgba(0,255,170,0.3);transition:all 0.3s ease;">BEGIN EXPLORATION</button>
+	<div id="alienBackrooms" style="width:100%;height:600px;position:relative;overflow:hidden;border:2px solid #333;background:#000;">
+  <!-- Start Screen -->
+  <div id="startScreen" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:1000;transition:opacity 2s ease-out;">
+    <div style="text-align:center;opacity:0.9;">
+      <h1 style="color:#00ff88;font-size:32px;margin:0;text-shadow:0 0 20px #00ff88;letter-spacing:2px;font-weight:normal;font-family:monospace;">4D SHIFT WALKER</h1>
+      <p style="color:#666;font-size:14px;margin:20px 0;text-align:center;max-width:400px;line-height:1.6;font-family:monospace;">Reality.exe has stopped responding. Walking through impossible dimensions where geometry breaks and shaders become reality.</p>
+      <button id="startButton" style="background:linear-gradient(45deg, #00ff88, #0088ff);border:none;color:#000;font-size:16px;padding:12px 24px;cursor:pointer;font-family:monospace;transition:all 0.3s ease;letter-spacing:1px;border-radius:5px;">ENTER THE GRID</button>
+    </div>
   </div>
-  <div id="sceneIndicator" style="position:absolute;top:20px;right:20px;color:#00ffaa;font-family:Arial,sans-serif;z-index:100;font-size:14px;">Scene 1/3</div>
-  <div id="nextButton" style="position:absolute;bottom:20px;right:20px;background:rgba(0,255,170,0.3);border:2px solid #00ffaa;color:#00ffaa;padding:10px 20px;border-radius:20px;cursor:pointer;font-family:Arial,sans-serif;z-index:100;opacity:0;transition:opacity 0.5s ease;">Next Scene</div>
+  
+  <!-- Walking UI -->
+  <div id="walkingUI" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#00ff88;font-family:monospace;z-index:100;font-size:12px;text-align:center;opacity:0;">
+    <div>W A S D - NAVIGATE | MOUSE - LOOK AROUND</div>
+    <div style="margin-top:5px;">[SHIFT] - RUN | [SPACE] - PHASE SHIFT</div>
+  </div>
+  
+  <!-- Navigation UI -->
+  <div id="levelIndicator" style="position:absolute;top:15px;left:15px;color:#00ff88;font-family:monospace;z-index:100;font-size:12px;background:rgba(0,0,0,0.8);padding:8px 12px;border:1px solid #00ff88;text-shadow:0 0 10px #00ff88;">DIMENSION 1/4</div>
+  <div id="nextButton" style="position:absolute;bottom:15px;right:15px;background:linear-gradient(45deg, #00ff88, #0088ff);border:none;color:#000;padding:8px 16px;cursor:pointer;font-family:monospace;z-index:100;opacity:0;transition:opacity 0.5s ease;font-size:12px;letter-spacing:1px;border-radius:3px;">PHASE SHIFT</div>
+  
+  <!-- Glitch effect overlay -->
+  <div id="glitchOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:50;opacity:0;background:linear-gradient(90deg, transparent, rgba(0,255,136,0.1), transparent);transition:opacity 0.3s;"></div>
+  
+  <!-- Info panel -->
+  <div id="infoPanel" style="position:absolute;top:60px;left:15px;background:rgba(0,0,0,0.8);border:1px solid #00ff88;padding:15px;max-width:300px;color:#00ff88;font-family:monospace;font-size:11px;z-index:100;opacity:0;transition:opacity 0.5s;">
+    <div id="logText">Initializing 4D walker protocol...</div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-let scene, camera, renderer, currentScene = 0, animationId;
-let terrain, planet, crystals = [], particles = [];
+let scene, camera, renderer, currentDimension = 0, animationId;
+let walkingSpeed = 0.1, isWalking = false, mouseX = 0, mouseY = 0;
+let gridMeshes = [], shaderMaterials = [];
+let controls = { w: false, a: false, s: false, d: false, shift: false, space: false };
 
-// Enhanced noise function for terrain generation
-function noise2D(x, y) {
-  let n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-  return (n - Math.floor(n));
-}
+// 4D Shader materials
+const shaderTime = { value: 0 };
 
-function octaveNoise(x, y, octaves = 4, persistence = 0.5) {
-  let total = 0;
-  let frequency = 1;
-  let amplitude = 1;
-  let maxValue = 0;
+const fragmentShaders = {
+  hypercube: `
+    uniform float time;
+    varying vec2 vUv;
+    
+    void main() {
+      vec2 p = vUv * 2.0 - 1.0;
+      float d = length(p);
+      
+      // 4D hypercube projection
+      float w = sin(time * 0.5) * 0.5;
+      vec4 pos4d = vec4(p.x, p.y, d, w);
+      
+      // Project to 3D
+      vec3 projected = pos4d.xyz / (1.0 + pos4d.w * 0.5);
+      
+      float intensity = 1.0 - length(projected.xy);
+      intensity = pow(intensity, 2.0);
+      
+      vec3 color = vec3(0.0, intensity * (0.5 + 0.5 * sin(time + d * 10.0)), intensity * 0.8);
+      gl_FragColor = vec4(color, intensity * 0.8);
+    }
+  `,
   
-  for (let i = 0; i < octaves; i++) {
-    total += noise2D(x * frequency, y * frequency) * amplitude;
-    maxValue += amplitude;
-    amplitude *= persistence;
-    frequency *= 2;
-  }
+  tesseract: `
+    uniform float time;
+    varying vec2 vUv;
+    
+    void main() {
+      vec2 p = vUv * 4.0 - 2.0;
+      float t = time * 0.3;
+      
+      // 4D tesseract wireframe
+      vec4 pos = vec4(p.x, p.y, sin(t), cos(t));
+      
+      // 4D to 3D projection
+      float w = 1.0 + pos.w * 0.3;
+      vec3 proj = pos.xyz / w;
+      
+      // Grid lines
+      vec2 grid = abs(fract(proj.xy * 8.0) - 0.5);
+      float line = min(grid.x, grid.y);
+      line = 1.0 - smoothstep(0.0, 0.05, line);
+      
+      vec3 color = mix(
+        vec3(0.1, 0.0, 0.3),
+        vec3(0.0, 1.0, 0.5),
+        line * (0.7 + 0.3 * sin(time * 2.0 + length(p)))
+      );
+      
+      gl_FragColor = vec4(color, 0.9);
+    }
+  `,
   
-  return total / maxValue;
-}
+  spacetime: `
+    uniform float time;
+    varying vec2 vUv;
+    
+    void main() {
+      vec2 p = vUv * 6.0 - 3.0;
+      float t = time * 0.2;
+      
+      // Spacetime curvature
+      float curve = sin(p.x * 0.5 + t) * cos(p.y * 0.3 + t * 1.1);
+      vec2 warped = p + vec2(curve * 0.3, curve * 0.2);
+      
+      // 4D Klein bottle projection
+      float u = warped.x;
+      float v = warped.y;
+      float w1 = sin(u + t) * cos(v + t * 0.7);
+      float w2 = cos(u * 0.7 + t * 1.3) * sin(v * 0.9 + t);
+      
+      vec4 klein = vec4(u, v, w1, w2);
+      float intensity = 0.5 + 0.5 * sin(length(klein.xyz) * 2.0 - t * 3.0);
+      
+      vec3 color = vec3(
+        0.8 * intensity,
+        0.2 + 0.6 * intensity,
+        1.0 * intensity
+      );
+      
+      gl_FragColor = vec4(color, 0.7);
+    }
+  `,
+  
+  quantum: `
+    uniform float time;
+    varying vec2 vUv;
+    
+    void main() {
+      vec2 p = vUv * 8.0 - 4.0;
+      float t = time * 0.4;
+      
+      // Quantum field fluctuations
+      vec4 quantum = vec4(p.x, p.y, sin(t + p.x), cos(t * 1.2 + p.y));
+      
+      // Probability wave
+      float prob = sin(quantum.x * quantum.y + quantum.z * quantum.w + t * 2.0);
+      prob = abs(prob);
+      
+      // Uncertainty principle visualization
+      vec2 uncertainty = vec2(
+        sin(p.x * 3.0 + t * 1.5),
+        cos(p.y * 2.5 + t * 1.8)
+      );
+      
+      float field = prob * length(uncertainty);
+      
+      vec3 color = vec3(
+        field * (0.5 + 0.5 * sin(t * 3.0)),
+        field * 0.8,
+        field * (0.7 + 0.3 * cos(t * 2.5))
+      );
+      
+      gl_FragColor = vec4(color, field * 0.6);
+    }
+  `
+};
 
 window.addEventListener('DOMContentLoaded', () => {
-  const container = document.getElementById('alienTerrain');
+  const container = document.getElementById('alienBackrooms');
   const startScreen = document.getElementById('startScreen');
   const startButton = document.getElementById('startButton');
   const nextButton = document.getElementById('nextButton');
-  const sceneIndicator = document.getElementById('sceneIndicator');
+  const levelIndicator = document.getElementById('levelIndicator');
+  const walkingUI = document.getElementById('walkingUI');
+  const glitchOverlay = document.getElementById('glitchOverlay');
+  const infoPanel = document.getElementById('infoPanel');
+  const logText = document.getElementById('logText');
   
   // Initialize Three.js
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  camera = new THREE.PerspectiveCamera(90, container.clientWidth / container.clientHeight, 0.1, 1000);
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.setClearColor(0x000000);
   container.appendChild(renderer.domElement);
   
-  // Start button hover effect
-  startButton.addEventListener('mouseenter', () => {
-    startButton.style.transform = 'scale(1.05)';
-    startButton.style.boxShadow = '0 8px 25px rgba(0,255,170,0.5)';
+  // Mouse controls for looking around
+  let isMouseDown = false;
+  renderer.domElement.addEventListener('mousedown', (e) => { isMouseDown = true; });
+  renderer.domElement.addEventListener('mouseup', (e) => { isMouseDown = false; });
+  renderer.domElement.addEventListener('mousemove', (e) => {
+    if (isMouseDown || true) { // Always allow mouse look
+      mouseX += (e.clientX / container.clientWidth - 0.5) * 0.01;
+      mouseY += (e.clientY / container.clientHeight - 0.5) * 0.01;
+      mouseY = Math.max(-Math.PI/3, Math.min(Math.PI/3, mouseY));
+    }
   });
   
-  startButton.addEventListener('mouseleave', () => {
-    startButton.style.transform = 'scale(1)';
-    startButton.style.boxShadow = '0 5px 15px rgba(0,255,170,0.3)';
+  // Keyboard controls
+  document.addEventListener('keydown', (e) => {
+    switch(e.code) {
+      case 'KeyW': controls.w = true; break;
+      case 'KeyA': controls.a = true; break;
+      case 'KeyS': controls.s = true; break;
+      case 'KeyD': controls.d = true; break;
+      case 'ShiftLeft': controls.shift = true; break;
+      case 'Space': controls.space = true; e.preventDefault(); break;
+    }
   });
   
-  // Scene transitions
+  document.addEventListener('keyup', (e) => {
+    switch(e.code) {
+      case 'KeyW': controls.w = false; break;
+      case 'KeyA': controls.a = false; break;
+      case 'KeyS': controls.s = false; break;
+      case 'KeyD': controls.d = false; break;
+      case 'ShiftLeft': controls.shift = false; break;
+      case 'Space': controls.space = false; break;
+    }
+  });
+  
   startButton.addEventListener('click', () => {
     startScreen.style.opacity = '0';
     setTimeout(() => {
       startScreen.style.display = 'none';
-      setupScene1();
+      setupDimension1();
+      walkingUI.style.opacity = '1';
+      infoPanel.style.opacity = '1';
       animate();
-    }, 1000);
+      updateLog(0);
+    }, 2000);
   });
   
   nextButton.addEventListener('click', () => {
-    currentScene++;
-    if (currentScene === 1) {
-      setupScene2();
-    } else if (currentScene === 2) {
-      setupScene3();
-    }
-    sceneIndicator.textContent = `Scene ${currentScene + 1}/3`;
-    
-    if (currentScene === 2) {
-      nextButton.style.opacity = '0';
-      setTimeout(() => {
-        nextButton.textContent = 'Restart';
-        nextButton.style.opacity = '1';
-      }, 500);
-    } else if (currentScene > 2) {
-      location.reload();
-    }
+    triggerGlitch();
+    setTimeout(() => {
+      currentDimension++;
+      if (currentDimension === 1) setupDimension2();
+      else if (currentDimension === 2) setupDimension3();
+      else if (currentDimension === 3) setupDimension4();
+      
+      levelIndicator.textContent = `DIMENSION ${currentDimension + 1}/4`;
+      updateLog(currentDimension);
+      
+      if (currentDimension === 3) {
+        nextButton.textContent = 'REALITY BREACH';
+      } else if (currentDimension > 3) {
+        location.reload();
+      }
+    }, 500);
   });
-  
-  // Scene 1: Alien Planet Surface
-  function setupScene1() {
+
+  function triggerGlitch() {
+    glitchOverlay.style.opacity = '1';
+    setTimeout(() => glitchOverlay.style.opacity = '0', 300);
+  }
+
+  function updateLog(dim) {
+    const logs = [
+      "DIMENSION 1: Hypercube corridors detected. Reality matrix unstable. 4D projections bleeding through space-time fabric.",
+      "DIMENSION 2: Tesseract grid active. Geometric impossibilities confirmed. Walking through folded space-time.",
+      "DIMENSION 3: Klein bottle topology engaged. Spacetime curvature extreme. Inside and outside lose meaning.",
+      "DIMENSION 4: Quantum field visualization. Probability waves collapsing. You exist in superposition."
+    ];
+    logText.innerHTML = logs[dim];
+  }
+
+  // Dimension 1: Hypercube Corridors
+  function setupDimension1() {
     clearScene();
     
-    // Alien sky with gradient
-    const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-    const skyMaterial = new THREE.ShaderMaterial({
+    // Infinite corridor with hypercube shader floor
+    const floorGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+    const floorMaterial = new THREE.ShaderMaterial({
+      uniforms: { time: shaderTime },
       vertexShader: `
-        varying vec3 vWorldPosition;
+        varying vec2 vUv;
         void main() {
-          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-          vWorldPosition = worldPosition.xyz;
+          vUv = uv;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
-      fragmentShader: `
-        varying vec3 vWorldPosition;
+      fragmentShader: fragmentShaders.hypercube,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+    
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -5;
+    scene.add(floor);
+    shaderMaterials.push(floorMaterial);
+    
+    // Grid walls
+    for (let i = 0; i < 20; i++) {
+      const wallGeometry = new THREE.PlaneGeometry(10, 8);
+      const wallMaterial = new THREE.MeshBasicMaterial({
+        color: 0x001133,
+        transparent: true,
+        opacity: 0.3,
+        wireframe: true
+      });
+      
+      const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+      wall.position.set(
+        Math.sin(i * 0.3) * 20,
+        0,
+        -i * 8
+      );
+      wall.rotation.y = i * 0.1;
+      scene.add(wall);
+      gridMeshes.push(wall);
+    }
+    
+    // Glowing grid ceiling
+    const ceilingGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
+    const ceilingMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff88,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.2
+    });
+    const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = 8;
+    scene.add(ceiling);
+    
+    camera.position.set(0, 2, 10);
+    nextButton.style.opacity = '1';
+  }
+
+  // Dimension 2: Tesseract Grid
+  function setupDimension2() {
+    clearScene();
+    
+    // Tesseract shader floor
+    const floorGeometry = new THREE.PlaneGeometry(150, 150, 75, 75);
+    const floorMaterial = new THREE.ShaderMaterial({
+      uniforms: { time: shaderTime },
+      vertexShader: `
+        varying vec2 vUv;
+        uniform float time;
         void main() {
-          vec3 color1 = vec3(0.1, 0.0, 0.3);
-          vec3 color2 = vec3(0.3, 0.0, 0.6);
-          vec3 color3 = vec3(0.6, 0.2, 0.8);
-          float h = normalize(vWorldPosition).y;
-          vec3 color = mix(color1, color2, max(0.0, h));
-          color = mix(color, color3, max(0.0, h - 0.5) * 2.0);
-          gl_FragColor = vec4(color, 1.0);
+          vUv = uv;
+          vec3 pos = position;
+          pos.z += sin(pos.x * 0.1 + time) * 2.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
       `,
-      side: THREE.BackSide
-    });
-    const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-    scene.add(sky);
-    
-    // Enhanced terrain with better noise
-    const terrainGeometry = new THREE.PlaneGeometry(200, 200, 150, 150);
-    const terrainMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a0080,
-      wireframe: false,
-      flatShading: true,
-      metalness: 0.3,
-      roughness: 0.7
-    });
-    
-    terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
-    terrain.rotation.x = -Math.PI / 2;
-    
-    // Generate more realistic terrain
-    for (let i = 0; i < terrainGeometry.attributes.position.count; i++) {
-      const x = terrainGeometry.attributes.position.getX(i) / 20;
-      const y = terrainGeometry.attributes.position.getY(i) / 20;
-      const height = octaveNoise(x, y, 6, 0.6) * 15 + 
-                   octaveNoise(x * 2, y * 2, 4, 0.3) * 8;
-      terrainGeometry.attributes.position.setZ(i, height);
-    }
-    terrainGeometry.computeVertexNormals();
-    scene.add(terrain);
-    
-    // Add alien crystals
-    for (let i = 0; i < 15; i++) {
-      const crystalGeometry = new THREE.ConeGeometry(Math.random() * 2 + 1, Math.random() * 8 + 4, 6);
-      const crystalMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(Math.random() * 0.3 + 0.7, 0.8, 0.6),
-        transparent: true,
-        opacity: 0.8,
-        emissive: new THREE.Color().setHSL(Math.random() * 0.3 + 0.7, 0.5, 0.2)
-      });
-      const crystal = new THREE.Mesh(crystalGeometry, crystalMaterial);
-      crystal.position.set(
-        (Math.random() - 0.5) * 150,
-        crystal.geometry.parameters.height / 2,
-        (Math.random() - 0.5) * 150
-      );
-      crystal.rotation.y = Math.random() * Math.PI * 2;
-      crystals.push(crystal);
-      scene.add(crystal);
-    }
-    
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x330066, 0.4);
-    scene.add(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xff0080, 0.8);
-    directionalLight.position.set(50, 50, 50);
-    scene.add(directionalLight);
-    
-    camera.position.set(0, 25, 60);
-    camera.lookAt(0, 0, 0);
-    
-    nextButton.style.opacity = '1';
-  }
-  
-  // Scene 2: Alien Planet in Space
-  function setupScene2() {
-    clearScene();
-    
-    // Space background
-    scene.background = new THREE.Color(0x000011);
-    
-    // Create alien planet
-    const planetGeometry = new THREE.SphereGeometry(25, 64, 64);
-    const planetMaterial = new THREE.MeshStandardMaterial({
-      color: 0x6600cc,
-      roughness: 0.8,
-      metalness: 0.2
-    });
-    
-    // Add surface detail to planet
-    const positions = planetGeometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      const vertex = new THREE.Vector3(
-        positions.getX(i),
-        positions.getY(i),
-        positions.getZ(i)
-      );
-      const noise = octaveNoise(vertex.x * 0.1, vertex.y * 0.1, 4, 0.5) * 2;
-      vertex.normalize().multiplyScalar(25 + noise);
-      positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
-    }
-    planetGeometry.computeVertexNormals();
-    
-    planet = new THREE.Mesh(planetGeometry, planetMaterial);
-    scene.add(planet);
-    
-    // Add atmosphere
-    const atmosphereGeometry = new THREE.SphereGeometry(27, 32, 32);
-    const atmosphereMaterial = new THREE.MeshBasicMaterial({
-      color: 0x8800ff,
+      fragmentShader: fragmentShaders.tesseract,
       transparent: true,
-      opacity: 0.3,
-      side: THREE.BackSide
+      side: THREE.DoubleSide
     });
-    const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-    scene.add(atmosphere);
     
-    // Add stars
-    const starGeometry = new THREE.BufferGeometry();
-    const starPositions = [];
-    for (let i = 0; i < 2000; i++) {
-      starPositions.push(
-        (Math.random() - 0.5) * 1000,
-        (Math.random() - 0.5) * 1000,
-        (Math.random() - 0.5) * 1000
-      );
-    }
-    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
-    const stars = new THREE.Points(starGeometry, starMaterial);
-    scene.add(stars);
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -3;
+    scene.add(floor);
+    shaderMaterials.push(floorMaterial);
     
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x220044, 0.3);
-    scene.add(ambientLight);
-    
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-    sunLight.position.set(100, 50, 50);
-    scene.add(sunLight);
-    
-    camera.position.set(0, 0, 80);
-    camera.lookAt(0, 0, 0);
-    
-    nextButton.style.opacity = '1';
-  }
-  
-  // Scene 3: Alien City/Structure
-  function setupScene3() {
-    clearScene();
-    
-    // Dark alien sky
-    scene.background = new THREE.Color(0x0a0a2a);
-    
-    // Create alien structures
-    for (let i = 0; i < 12; i++) {
-      const height = Math.random() * 30 + 10;
-      const radius = Math.random() * 3 + 2;
-      const segments = Math.floor(Math.random() * 3) + 4;
-      
-      const structureGeometry = new THREE.CylinderGeometry(radius, radius * 1.5, height, segments);
-      const structureMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(Math.random() * 0.3 + 0.6, 0.7, 0.4),
-        emissive: new THREE.Color().setHSL(Math.random() * 0.3 + 0.6, 0.5, 0.1),
-        metalness: 0.8,
-        roughness: 0.2
+    // 4D cube projections
+    for (let i = 0; i < 15; i++) {
+      const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const cubeMaterial = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(0.5, 1.0, 0.5),
+        wireframe: true,
+        transparent: true,
+        opacity: 0.4
       });
       
-      const structure = new THREE.Mesh(structureGeometry, structureMaterial);
-      structure.position.set(
+      const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+      cube.position.set(
         (Math.random() - 0.5) * 80,
-        height / 2,
+        Math.random() * 10 + 2,
         (Math.random() - 0.5) * 80
       );
-      scene.add(structure);
+      cube.userData = { rotSpeed: Math.random() * 0.02 + 0.01 };
+      scene.add(cube);
+      gridMeshes.push(cube);
     }
     
-    // Add floating particles
-    for (let i = 0; i < 50; i++) {
-      const particleGeometry = new THREE.SphereGeometry(0.2, 8, 8);
-      const particleMaterial = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6),
+    camera.position.set(0, 5, 15);
+    nextButton.style.opacity = '1';
+  }
+
+  // Dimension 3: Klein Bottle Spacetime
+  function setupDimension3() {
+    clearScene();
+    
+    // Curved spacetime floor
+    const floorGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
+    const floorMaterial = new THREE.ShaderMaterial({
+      uniforms: { time: shaderTime },
+      vertexShader: `
+        varying vec2 vUv;
+        uniform float time;
+        void main() {
+          vUv = uv;
+          vec3 pos = position;
+          float curve = sin(pos.x * 0.05 + time * 0.5) * cos(pos.z * 0.05 + time * 0.3) * 5.0;
+          pos.y = curve;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: fragmentShaders.spacetime,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+    
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    scene.add(floor);
+    shaderMaterials.push(floorMaterial);
+    
+    // Impossible geometry structures
+    for (let i = 0; i < 12; i++) {
+      const torusGeometry = new THREE.TorusGeometry(3, 1, 8, 16);
+      const torusMaterial = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(0.7, 0.8, 0.6),
+        wireframe: true,
         transparent: true,
-        opacity: 0.7
+        opacity: 0.5
+      });
+      
+      const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+      torus.position.set(
+        Math.sin(i * 0.5) * 30,
+        Math.cos(i * 0.7) * 15 + 10,
+        Math.cos(i * 0.3) * 40
+      );
+      torus.userData = { 
+        rotSpeed: Math.random() * 0.03 + 0.01,
+        axis: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize()
+      };
+      scene.add(torus);
+      gridMeshes.push(torus);
+    }
+    
+    camera.position.set(0, 8, 20);
+    nextButton.style.opacity = '1';
+  }
+
+  // Dimension 4: Quantum Field
+  function setupDimension4() {
+    clearScene();
+    
+    // Quantum probability field floor
+    const floorGeometry = new THREE.SphereGeometry(50, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    const floorMaterial = new THREE.ShaderMaterial({
+      uniforms: { time: shaderTime },
+      vertexShader: `
+        varying vec2 vUv;
+        uniform float time;
+        void main() {
+          vUv = uv;
+          vec3 pos = position;
+          float quantum = sin(pos.x * 0.1 + time) * cos(pos.z * 0.1 + time * 1.3) * 3.0;
+          pos.y += quantum;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: fragmentShaders.quantum,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+    
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.position.y = -20;
+    scene.add(floor);
+    shaderMaterials.push(floorMaterial);
+    
+    // Quantum particle systems
+    for (let i = 0; i < 100; i++) {
+      const particleGeometry = new THREE.SphereGeometry(0.2, 6, 6);
+      const particleMaterial = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(Math.random(), 0.8, 0.7),
+        transparent: true,
+        opacity: 0.6
       });
       
       const particle = new THREE.Mesh(particleGeometry, particleMaterial);
       particle.position.set(
         (Math.random() - 0.5) * 100,
-        Math.random() * 40 + 5,
+        Math.random() * 30 + 5,
         (Math.random() - 0.5) * 100
       );
       particle.userData = {
         velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.02,
-          (Math.random() - 0.5) * 0.02,
-          (Math.random() - 0.5) * 0.02
-        )
+          (Math.random() - 0.5) * 0.1,
+          (Math.random() - 0.5) * 0.1,
+          (Math.random() - 0.5) * 0.1
+        ),
+        phase: Math.random() * Math.PI * 2
       };
-      particles.push(particle);
       scene.add(particle);
+      gridMeshes.push(particle);
     }
     
-    // Ground
-    const groundGeometry = new THREE.PlaneGeometry(200, 200);
-    const groundMaterial = new THREE.MeshStandardMaterial({
-      color: 0x2a1040,
-      roughness: 0.9,
-      metalness: 0.1
-    });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
-    
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x330066, 0.6);
-    scene.add(ambientLight);
-    
-    const spotLight = new THREE.SpotLight(0x00ffaa, 1, 100, Math.PI / 4, 0.5);
-    spotLight.position.set(0, 50, 0);
-    scene.add(spotLight);
-    
-    camera.position.set(0, 20, 50);
-    camera.lookAt(0, 10, 0);
-    
+    camera.position.set(0, 10, 25);
     nextButton.style.opacity = '1';
   }
-  
+
   function clearScene() {
     while (scene.children.length > 0) {
       scene.remove(scene.children[0]);
     }
-    crystals = [];
-    particles = [];
+    gridMeshes = [];
+    shaderMaterials = [];
   }
-  
+
+  function updateMovement() {
+    const speed = controls.shift ? walkingSpeed * 3 : walkingSpeed;
+    const direction = new THREE.Vector3();
+    
+    if (controls.w) direction.z -= speed;
+    if (controls.s) direction.z += speed;
+    if (controls.a) direction.x -= speed;
+    if (controls.d) direction.x += speed;
+    
+    // Apply rotation to movement direction
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), mouseX);
+    
+    camera.position.add(direction);
+    
+    // Apply mouse look
+    camera.rotation.y = mouseX;
+    camera.rotation.x = mouseY;
+    
+    // Phase shift effect
+    if (controls.space) {
+      camera.position.y += Math.sin(Date.now() * 0.01) * 0.2;
+      triggerGlitch();
+    }
+  }
+
+  let time = 0;
   function animate() {
     animationId = requestAnimationFrame(animate);
+    time += 0.016;
+    shaderTime.value = time;
     
-    if (currentScene === 0) {
-      // Terrain animation
-      if (terrain) {
-        terrain.rotation.z += 0.0005;
-        terrain.rotation.y += 0.001;
-      }
-      
-      // Crystal glow animation
-      crystals.forEach((crystal, index) => {
-        const time = Date.now() * 0.001;
-        crystal.material.emissive.setHSL(
-          (time + index) * 0.1 % 1,
-          0.5,
-          0.2 + Math.sin(time + index) * 0.1
-        );
-        crystal.rotation.y += 0.01;
+    updateMovement();
+    
+    // Dimension-specific animations
+    if (currentDimension === 1) {
+      gridMeshes.forEach((mesh, i) => {
+        mesh.rotation.z += 0.01;
+        mesh.position.y += Math.sin(time * 2 + i) * 0.02;
       });
     }
     
-    if (currentScene === 1) {
-      // Planet rotation
-      if (planet) {
-        planet.rotation.y += 0.005;
-        planet.rotation.x += 0.002;
-      }
+    if (currentDimension === 2) {
+      gridMeshes.forEach((mesh, i) => {
+        mesh.rotation.x += mesh.userData.rotSpeed;
+        mesh.rotation.y += mesh.userData.rotSpeed * 0.7;
+        mesh.rotation.z += mesh.userData.rotSpeed * 0.5;
+      });
     }
     
-    if (currentScene === 2) {
-      // Particle movement
-      particles.forEach(particle => {
-        particle.position.add(particle.userData.velocity);
+    if (currentDimension === 3) {
+      gridMeshes.forEach((mesh, i) => {
+        mesh.rotateOnAxis(mesh.userData.axis, mesh.userData.rotSpeed);
+        mesh.position.y += Math.sin(time * 1.5 + i * 0.5) * 0.05;
+      });
+    }
+    
+    if (currentDimension === 4) {
+      gridMeshes.forEach((mesh, i) => {
+        // Quantum uncertainty
+        const uncertainty = Math.sin(time * 3 + mesh.userData.phase) * 0.5;
+        mesh.position.add(mesh.userData.velocity.clone().multiplyScalar(uncertainty));
         
-        // Boundary check
-        if (Math.abs(particle.position.x) > 50 || 
-            Math.abs(particle.position.z) > 50 ||
-            particle.position.y > 45 || particle.position.y < 5) {
-          particle.userData.velocity.multiplyScalar(-1);
-        }
+        // Probability wave collapse
+        mesh.material.opacity = 0.3 + 0.4 * Math.abs(Math.sin(time * 2 + i));
         
-        // Glow effect
-        const time = Date.now() * 0.001;
-        particle.material.opacity = 0.5 + Math.sin(time * 2 + particle.position.x) * 0.2;
+        // Boundary conditions
+        if (Math.abs(mesh.position.x) > 50) mesh.userData.velocity.x *= -1;
+        if (Math.abs(mesh.position.z) > 50) mesh.userData.velocity.z *= -1;
+        if (mesh.position.y > 40 || mesh.position.y < 5) mesh.userData.velocity.y *= -1;
       });
     }
     
     renderer.render(scene, camera);
   }
-  
+
   // Handle window resize
   window.addEventListener('resize', () => {
     if (renderer) {
@@ -1528,7 +1706,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
-
 	
 
 
@@ -1538,6 +1715,33 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
 
 
 <!-- START: Drop-in Autoplay Music Script -->
@@ -1589,83 +1793,84 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 
+<section id="interactive-showcase">
+    <h2 class="scroll-reveal">HISTORICAL ARCHIVE :: ANOMALIES DETECTED</h2>
+    <div class="showcase-grid scroll-reveal">
 
+        <div class="showcase-item" onclick="handleShowcaseClick('tucker_torpedo')">
+            <div class="showcase-image"><img src="advert4.jpg" alt="Tucker 48 Automobile"></div>
+            <div class="showcase-content real-world-content">
+                <h3 class="showcase-title">GHOST_ENGINE_PROTOCOL</h3>
+                <p>The 1948 Tucker Sedan was a car decades ahead of its time, featuring fuel injection, a padded dashboard, and a center "cyclops" headlight that turned with the steering wheel. Only 51 were ever made before the company collapsed under a controversial SEC investigation, which many allege was orchestrated by the established "Big Three" automakers in Detroit.</p>
+                <hr class="content-divider">
+                <h4>CLASSIFIED MEMO: The Helicopter Engine</h4>
+                <p class="life-hack-tip">The Tucker's massive rear-mounted flat-six engine was a converted Franklin aircraft engine originally designed for a Bell helicopter. It had to be heavily modified for water-cooling, presenting immense engineering challenges that fueled rumors of the car's inviability.</p>
+                <button class="showcase-button">Examine Blueprints</button>
+            </div>
+        </div>
 
-	
-  <section id="interactive-showcase">
-      <h2 class="scroll-reveal">SYSTEM MODULES :: INTERFACE ACTIVE</h2> 
-      <div class="showcase-grid scroll-reveal"> 
-        <div class="showcase-item" onclick="handleShowcaseClick('quantum_nexus')">
-            <div class="showcase-image"><img src="advert4.jpg" alt="Quantum Computing Visual"></div>
+        <div class="showcase-item" onclick="handleShowcaseClick('chrysler_turbine')">
+            <div class="showcase-image"><img src="advert1.jpg" alt="Chrysler Turbine Car"></div>
             <div class="showcase-content real-world-content">
-              <h3 class="showcase-title">QUANTUM_NEXUS_PROTOCOL</h3>
-              <p>Microsoft's Majorana 1 processor represents a quantum leap in 2025, utilizing topological qubits that are intrinsically fault-tolerant. These hardware-protected qubits can maintain quantum states at higher temperatures, making quantum computers more practical and accessible. <a href='https://www.microsoft.com/quantum' target='_blank' style='color:var(--secondary);'>Explore the revolution...</a></p>
-              <hr class="content-divider">
-              <h4>Mind-Bending Fact: Quantum Entanglement</h4>
-              <p class="life-hack-tip">Einstein called it "spooky action at a distance" - when two particles become entangled, measuring one instantly affects the other, regardless of the distance between them. This phenomenon powers quantum computing!</p>
-              <button class="showcase-button">Initialize Quantum Link</button>
+                <h3 class="showcase-title">PROJECT_WHIRLWIND</h3>
+                <p>From 1963 to 1964, Chrysler built 55 revolutionary turbine-powered cars and loaned them to the public in a unique user program. The engines could run on almost any flammable liquid—from diesel and gasoline to peanut oil and tequila. After the program ended, Chrysler inexplicably repossessed and destroyed almost all of them.</p>
+                <hr class="content-divider">
+                <h4>DECLASSIFIED DOSSIER: The Great Crushing</h4>
+                <p>Why were they destroyed? Theories abound. The official reason cited high manufacturing costs and emissions issues. The conspiracy theory suggests the government wanted them gone to avoid paying import tariffs on their Italian-made bodies, while others believe the oil industry quietly pressured Chrysler to kill a technology that threatened the gasoline engine monopoly.</p>
+                <button class="showcase-button">Access Program Logs</button>
             </div>
         </div>
-        <div class="showcase-item" onclick="handleShowcaseClick('ai_convergence')">
-            <div class="showcase-image"><img src="advert1.jpg" alt="AI Neural Network Visual"></div>
-            <div class="showcase-content real-world-content">
-              <h3 class="showcase-title">AI_CONVERGENCE_MATRIX</h3>
-              <p>Small Language Models (SLMs) are transforming AI in 2025, offering efficient, climate-friendly alternatives to massive models. These compact AI systems run locally on devices, providing privacy and speed while consuming a fraction of the energy of their giant counterparts.</p>
-              <hr class="content-divider">
-              <h4>Tech Insight: AI Drug Discovery</h4>
-              <p>AlphaFold's protein folding predictions have accelerated drug discovery by decades. AI now designs new molecules in hours rather than years, potentially solving diseases that have plagued humanity for millennia.</p>
-              <button class="showcase-button">Access Neural Grid</button>
-            </div>
-        </div>
-        <div class="showcase-item" onclick="handleShowcaseClick('bio_synthesis')">
-            <div class="showcase-image"><img src="advert2.jpg" alt="Bioengineering Visual"></div>
-            <div class="showcase-content real-world-content">
-              <h3 class="showcase-title">BIO_SYNTHESIS_LAB</h3>
-              <p>CRISPR-Cas systems have evolved beyond gene editing in 2025. Scientists are now using programmable biological circuits to create living medicines - engineered bacteria that can detect and treat diseases from inside the human body, acting as microscopic doctors.</p>
-              <hr class="content-divider">
-              <h4>Breakthrough: Methane-Reducing Supplements</h4>
-              <p class="life-hack-tip">A simple feed supplement for cows can reduce methane emissions by up to 30%. This could significantly impact climate change since livestock produces 14.5% of global greenhouse gas emissions!</p>
-              <button class="showcase-button">Activate Bio-Circuits</button>
-            </div>
-        </div>
-        <div class="showcase-item" onclick="handleShowcaseClick('stellar_observatory')">
-            <div class="showcase-image"><img src="advert3.jpg" alt="Space Observatory Visual"></div>
-            <div class="showcase-content real-world-content">
-              <h3 class="showcase-title">STELLAR_OBSERVATORY_LINK</h3>
-              <p>The Vera Rubin Observatory has begun its Legacy Survey of Space and Time, capturing the entire visible southern sky every few nights. This will create an unprecedented 10-year time-lapse movie of the universe, revealing dark matter, dark energy, and potentially hazardous asteroids.</p>
-              <hr class="content-divider">
-              <h4>Cosmic Scale: Observable Universe</h4>
-              <p class="news-snippet">The observable universe contains an estimated 2 trillion galaxies, each with billions of stars. Yet this represents only 5% of the universe - the rest is mysterious dark matter and dark energy that we're just beginning to understand.</p>
-              <button class="showcase-button">Initiate Deep Space Scan</button>
-            </div>
-        </div>
-        <div class="showcase-item" onclick="handleShowcaseClick('neural_defense')">
-            <div class="showcase-image"><img src="placeholder advert5.jpg" alt="Cybersecurity AI Visual"></div> 
-            <div class="showcase-content real-world-content">
-              <h3 class="showcase-title">NEURAL_DEFENSE_GRID</h3>
-              <p>Advanced AI systems in 2025 can detect deepfakes and synthetic media in real-time, analyzing micro-expressions, lighting inconsistencies, and temporal artifacts invisible to human eyes. The arms race between creation and detection continues at lightning speed.</p>
-              <hr class="content-divider">
-              <h4>Security Tip: Quantum-Safe Encryption</h4>
-              <p class="life-hack-tip">Start using post-quantum cryptography now. When quantum computers mature, they'll break current encryption methods instantly. Future-proof your digital security today!</p>
-              <button class="showcase-button">Deploy Countermeasures</button>
-            </div>
-        </div>
-        <div class="showcase-item" onclick="handleShowcaseClick('regenerative_protocol')">
-            <div class="showcase-image"><img src="placeholder advert6.jpg" alt="Medical Regeneration Visual"></div> 
-            <div class="showcase-content real-world-content">
-              <h3 class="showcase-title">REGENERATIVE_PROTOCOL</h3>
-              <p>Breakthrough cyclic peptides developed at Max Planck Institute directly target fibrotic diseases by stopping excessive scar tissue formation. This could revolutionize treatment for conditions like liver cirrhosis and pulmonary fibrosis, offering hope where none existed before.</p>
-              <hr class="content-divider">
-              <h4>Medical Marvel: Bioprinted Organs</h4>
-              <p>Scientists have successfully bioprinted functional heart tissue that beats synchronously. We're approaching a future where replacement organs can be grown from your own cells, eliminating rejection risks and organ shortages.</p>
-              <button class="showcase-button">Activate Regeneration</button>
-            </div>
-        </div>
-      </div>
-  </section>
 
+        <div class="showcase-item" onclick="handleShowcaseClick('operation_ajax')">
+            <div class="showcase-image"><img src="advert2.jpg" alt="Mercedes-Benz 600 Grosser"></div>
+            <div class="showcase-content real-world-content">
+                <h3 class="showcase-title">OPERATION_AJAX_DOSSIER</h3>
+                <p>In 1953, the CIA and MI6 orchestrated a coup in Iran to overthrow Prime Minister Mossadegh and restore the power of the Shah, Mohammad Reza Pahlavi. The operation relied heavily on convoys of vehicles to create chaos and project power, cementing a new pro-Western regime funded by oil revenue.</p>
+                <hr class="content-divider">
+                <h4>COVERT ASSET LOG: The Shah's Armor</h4>
+                <p class="life-hack-tip">After being installed, the Shah became a prolific car collector. His vehicle of choice, the imposing Mercedes-Benz 600 Grosser, became a symbol of his Western-backed authority. The same automotive industry that benefited from his oil policies also supplied the very symbols of the power that the covert operation had granted him.</p>
+                <button class="showcase-button">Open Intelligence File</button>
+            </div>
+        </div>
 
+        <div class="showcase-item" onclick="handleShowcaseClick('gm_ev1')">
+            <div class="showcase-image"><img src="advert3.jpg" alt="GM EV1 Electric Car"></div>
+            <div class="showcase-content real-world-content">
+                <h3 class="showcase-title">ELECTRIC_GHOST_PROTOCOL</h3>
+                <p>In the late 1990s, General Motors created the EV1, the first mass-produced electric vehicle from a major automaker. The cars were leased to enthusiastic drivers in a high-profile program. Then, GM abruptly cancelled the project, recalled every single car against the will of their drivers, and had them systematically crushed in the desert.</p>
+                <hr class="content-divider">
+                <h4>EVIDENCE LOG 77B: Who Killed the Electric Car?</h4>
+                <p class="news-snippet">GM claimed the program wasn't profitable. But evidence suggests a conspiracy between oil companies, GM's fear of losing its profitable combustion engine parts business, and a lack of government support. The EV1's destruction remains one of the most debated mysteries in modern automotive history.</p>
+                <button class="showcase-button">Initiate Deep Scan</button>
+            </div>
+        </div>
 
+        <div class="showcase-item" onclick="handleShowcaseClick('the_dale')">
+            <div class="showcase-image"><img src="placeholder_advert5.jpg" alt="The Dale Automobile Concept"></div>
+            <div class="showcase-content real-world-content">
+                <h3 class="showcase-title">PHANTOM_FUEL_CELL</h3>
+                <p>Amid the 1970s oil crisis, a mysterious entrepreneur named Liz Carmichael promised a miracle: "The Dale," a radical three-wheeled car that would get 70 MPG. It garnered millions in investment and national media attention. The only problem? The car was a complete sham, and Liz Carmichael was a fugitive on the run from the FBI.</p>
+                <hr class="content-divider">
+                <h4>COUNTER-INTELLIGENCE NOTE: A Master of Deception</h4>
+                <p class="life-hack-tip">The prototypes were barely functional mockups with lawnmower engines. Carmichael, a transgender woman, was actually Jerry Dean Michael, wanted for fraud. Her story is a bizarre saga of hype, identity, and one of the boldest automotive scams ever attempted.</p>
+                <button class="showcase-button">Deploy Countermeasures</button>
+            </div>
+        </div>
+
+        <div class="showcase-item" onclick="handleShowcaseClick('stratos_zero')">
+            <div class="showcase-image"><img src="placeholder_advert6.jpg" alt="Lancia Stratos Zero Concept Car"></div>
+            <div class="showcase-content real-world-content">
+                <h3 class="showcase-title">PROJECT_WEDGE</h3>
+                <p>The 1970 Lancia Stratos Zero was a concept car so impossibly futuristic it looked like a landed spacecraft. At just 33 inches tall, it had no doors; the driver entered by lifting the hinged front windshield. It was a masterpiece of radical design that seemed destined to remain a museum piece.</p>
+                <hr class="content-divider">
+                <h4>FIELD REPORT: The Factory Infiltration</h4>
+                <p>To win the Lancia contract, designer Nuccio Bertone drove the functional prototype directly to the Lancia factory. When he arrived, the security barrier was closing. Without hesitating, he drove the wedge-shaped car *under* the barrier, stunning Lancia executives and securing the deal that led to the legendary Stratos rally car.</p>
+                <button class="showcase-button">Activate Infiltration</button>
+            </div>
+        </div>
+
+    </div>
+</section>
 
  <h1 class="glitch-effect" data-text="//Ordinary//">//BABYLON.PANEL//</h1>
 
