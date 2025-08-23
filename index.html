@@ -6122,6 +6122,21 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
 
 
 
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+
 <div id="haptic-piano-container">
   <div class="piano-widget">
     <h3 class="piano-title">🎹 Haptic Piano</h3>
@@ -6350,6 +6365,8 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
   let alienMode = false;
   let easterEggCount = 0;
   let cosmicMode = false;
+  let hapticInitialized = false;
+  let isMobileDevice = false;
   
   // Note frequencies (C4 = 261.63 Hz)
   const noteFrequencies = {
@@ -6371,42 +6388,101 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
   const whiteKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
   const blackKeys = ['C#', 'D#', null, 'F#', 'G#', 'A#', null]; // null for gaps
   
-  // Initialize audio context
+  // Initialize audio context and haptic detection
   function initAudio() {
     if (!audioContext) {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
+    
+    // Detect if this is a mobile device with haptic support
+    if (!hapticInitialized) {
+      isMobileDevice = 'maxTouchPoints' in navigator && navigator.maxTouchPoints > 0;
+      hapticInitialized = true;
+      
+      // Update haptic button based on actual capability
+      const hapticToggle = document.getElementById('haptic-toggle');
+      if (!isMobileDevice || !navigator.vibrate) {
+        hapticToggle.textContent = 'Haptics: N/A';
+        hapticToggle.disabled = true;
+        hapticToggle.style.opacity = '0.6';
+        hapticEnabled = false;
+      }
+    }
+    
     return audioContext;
   }
   
   // Play note with haptic feedback
   function playNote(note, octave = currentOctave) {
     const ctx = initAudio();
-    const freq = noteFrequencies[note] * Math.pow(2, octave - 4);
+    let freq = noteFrequencies[note] * Math.pow(2, octave - 4);
+    
+    // Alien mode frequency modulation
+    if (alienMode || octave === 'alien') {
+      freq *= (Math.random() * 0.5 + 0.75); // Random pitch variation
+      freq += Math.sin(Date.now() * 0.01) * 50; // Wobble effect
+    }
     
     // Create oscillator for sound
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
     
-    oscillator.connect(gainNode);
+    // Add some cosmic effects for high octaves
+    if (octave >= 10 || alienMode) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 2000 + Math.random() * 1000;
+      
+      oscillator.connect(filter);
+      filter.connect(gainNode);
+    } else {
+      oscillator.connect(gainNode);
+    }
+    
     gainNode.connect(ctx.destination);
     
     oscillator.frequency.value = freq;
-    oscillator.type = 'triangle'; // Smoother sound than square wave
+    
+    // Different waveforms based on mode
+    if (alienMode || octave === 'alien') {
+      const waveforms = ['square', 'sawtooth', 'triangle', 'sine'];
+      oscillator.type = waveforms[Math.floor(Math.random() * waveforms.length)];
+    } else if (octave >= 8) {
+      oscillator.type = 'square'; // More digital sound for high octaves
+    } else {
+      oscillator.type = 'triangle'; // Smoother sound for normal octaves
+    }
     
     // Envelope for natural sound
     const now = ctx.currentTime;
+    const baseVolume = alienMode ? 0.2 : 0.3;
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+    gainNode.gain.linearRampToValueAtTime(baseVolume, now + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
     
     oscillator.start(now);
     oscillator.stop(now + 0.5);
     
-    // Haptic feedback
-    if (hapticEnabled && navigator.vibrate) {
-      const intensity = note.includes('#') ? 20 : 30; // Shorter vibration for black keys
-      navigator.vibrate(intensity);
+    // Enhanced haptic feedback - only on actual mobile devices
+    if (hapticEnabled && isMobileDevice && navigator.vibrate) {
+      let pattern;
+      if (alienMode || octave === 'alien') {
+        pattern = [15, 8, 25, 8, 35, 8, 15]; // Complex alien pattern
+      } else if (octave >= 10) {
+        pattern = [8, 4, 8, 4, 8, 4, 8]; // High frequency buzz pattern
+      } else if (octave <= 1) {
+        pattern = [120]; // Long rumble for deep bass
+      } else if (octave >= 8) {
+        pattern = [12, 6, 12]; // Medium buzz for cosmic sounds  
+      } else {
+        pattern = note.includes('#') ? [25] : [40]; // Standard patterns
+      }
+      
+      try {
+        navigator.vibrate(pattern);
+      } catch (e) {
+        console.log('Vibration failed:', e);
+      }
     }
   }
   
@@ -6470,6 +6546,15 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
   function activateKey(keyElement) {
     keyElement.classList.add('active');
     const note = keyElement.dataset.note;
+    
+    // Easter egg visual effects
+    if (cosmicMode) {
+      keyElement.style.boxShadow = '0 0 20px #00ffff, inset 0 0 20px rgba(0, 255, 255, 0.3)';
+      setTimeout(() => {
+        keyElement.style.boxShadow = '';
+      }, 300);
+    }
+    
     playNote(note);
   }
   
@@ -6492,6 +6577,36 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
       }
     });
     
+    // Easter egg button
+    const easterEggBtn = document.getElementById('easter-egg-btn');
+    easterEggBtn.addEventListener('click', () => {
+      easterEggCount++;
+      
+      if (easterEggCount === 1) {
+        easterEggBtn.textContent = '🛸';
+      } else if (easterEggCount === 3) {
+        easterEggBtn.textContent = '👽';
+        alienMode = true;
+        document.querySelector('.piano-keyboard').classList.add('alien-mode');
+      } else if (easterEggCount === 5) {
+        easterEggBtn.textContent = '🌌';
+        cosmicMode = true;
+        document.getElementById('haptic-piano-container').classList.add('cosmic-mode');
+      } else if (easterEggCount === 7) {
+        easterEggBtn.textContent = '🔮';
+        // Secret melody
+        playAlienMelody();
+      } else if (easterEggCount >= 10) {
+        // Reset everything
+        easterEggCount = 0;
+        alienMode = false;
+        cosmicMode = false;
+        easterEggBtn.textContent = '🥚';
+        document.querySelector('.piano-keyboard').classList.remove('alien-mode');
+        document.getElementById('haptic-piano-container').classList.remove('cosmic-mode');
+      }
+    });
+    
     // Check if vibration is supported
     if (!navigator.vibrate) {
       hapticToggle.textContent = 'Haptics: N/A';
@@ -6502,8 +6617,37 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
     // Octave selector
     const octaveSelect = document.getElementById('octave-select');
     octaveSelect.addEventListener('change', (e) => {
-      currentOctave = parseInt(e.target.value);
+      const value = e.target.value;
+      if (value === 'alien') {
+        alienMode = true;
+        currentOctave = 4; // Base octave for alien mode
+        document.querySelector('.piano-keyboard').classList.add('alien-mode');
+      } else {
+        alienMode = false;
+        currentOctave = parseFloat(value);
+        document.querySelector('.piano-keyboard').classList.remove('alien-mode');
+      }
     });
+  }
+  
+  // Secret alien melody
+  function playAlienMelody() {
+    const melody = ['C', 'E', 'G', 'C', 'A', 'F', 'D', 'G'];
+    const oldMode = alienMode;
+    alienMode = true;
+    
+    melody.forEach((note, index) => {
+      setTimeout(() => {
+        playNote(note, 6 + Math.random() * 4);
+        if (navigator.vibrate) {
+          navigator.vibrate([30, 10, 30, 10, 30]);
+        }
+      }, index * 300);
+    });
+    
+    setTimeout(() => {
+      alienMode = oldMode;
+    }, melody.length * 300);
   }
   
   // Computer keyboard support
@@ -6546,24 +6690,16 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
     setupControls();
     setupKeyboardControls();
     
-    // Add a small note about keyboard controls
+    // Add a small note about keyboard controls and easter egg
     const container = document.getElementById('haptic-piano-container');
     const note = document.createElement('div');
     note.style.cssText = 'text-align: center; color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-top: 10px;';
-    note.textContent = 'Use Q-U keys on your keyboard to play notes!';
+    note.innerHTML = 'Use Q-U keys to play notes! 🎹<br><small style="opacity: 0.6;">Psst... click the egg button multiple times... 👀</small>';
     container.appendChild(note);
   }
   
 })();
 </script></div>
-
-
-
-
-
-
-
-
 
 
 
