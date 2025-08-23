@@ -36,8 +36,7 @@
 <script src="https://cdn.tailwindcss.com"></script>	
 	
 	
-	
-	
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 	
 	
 	
@@ -6128,7 +6127,217 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
 
 
 
+(() => {
+    // --- CONFIGURATION ---
+    const PIANO_CONTAINER_ID = 'haptic-piano-container';
 
+    // --- SCRIPT LOGIC (Do not edit below this line) ---
+
+    // Wait for the DOM to be fully loaded before running the script
+    document.addEventListener('DOMContentLoaded', () => {
+        const pianoContainer = document.getElementById(PIANO_CONTAINER_ID);
+
+        // Check if the container element exists
+        if (!pianoContainer) {
+            console.error(`Haptic Piano Error: Container element with id "${PIANO_CONTAINER_ID}" not found.`);
+            return;
+        }
+
+        // Check if Tone.js is loaded
+        if (typeof Tone === 'undefined') {
+            console.error('Haptic Piano Error: Tone.js is not loaded. Please include the Tone.js library in your HTML.');
+            return;
+        }
+
+        // --- INJECT STYLES AND FONTS ---
+        function injectDependencies() {
+            // Inject Google Fonts
+            const fontLink1 = document.createElement('link');
+            fontLink1.rel = 'preconnect';
+            fontLink1.href = 'https://fonts.googleapis.com';
+            document.head.appendChild(fontLink1);
+
+            const fontLink2 = document.createElement('link');
+            fontLink2.rel = 'preconnect';
+            fontLink2.href = 'https://fonts.gstatic.com';
+            fontLink2.crossOrigin = true;
+            document.head.appendChild(fontLink2);
+
+            const fontLink3 = document.createElement('link');
+            fontLink3.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap';
+            fontLink3.rel = 'stylesheet';
+            document.head.appendChild(fontLink3);
+
+            // Inject CSS styles
+            const styles = `
+                #${PIANO_CONTAINER_ID} {
+                    font-family: 'Inter', sans-serif;
+                    -webkit-tap-highlight-color: transparent;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    background-color: #111827;
+                    overflow: hidden;
+                }
+                #piano {
+                    display: flex;
+                    position: relative;
+                    border-radius: 1rem;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 255, 255, 0.1);
+                    background: linear-gradient(to bottom, #374151, #1f2937);
+                    padding: 1.5rem;
+                    transform: perspective(800px) rotateX(15deg);
+                }
+                .key {
+                    cursor: pointer;
+                    user-select: none;
+                    border: 2px solid #111827;
+                    transition: all 0.1s ease-out;
+                }
+                .white {
+                    width: 60px;
+                    height: 250px;
+                    background: linear-gradient(to bottom, #f9fafb, #e5e7eb);
+                    border-radius: 0 0 8px 8px;
+                    margin: 0 2px;
+                    box-shadow: inset 0 -5px 10px rgba(0,0,0,0.1);
+                }
+                .black {
+                    width: 38px;
+                    height: 150px;
+                    background: linear-gradient(to bottom, #2d3748, #1a202c);
+                    border-radius: 0 0 6px 6px;
+                    position: absolute;
+                    z-index: 10;
+                    box-shadow: inset 0 -4px 8px rgba(0,0,0,0.3), 0 2px 3px rgba(0,0,0,0.5);
+                }
+                .black[data-note="C#4"] { left: 63px; }
+                .black[data-note="D#4"] { left: 127px; }
+                .black[data-note="F#4"] { left: 255px; }
+                .black[data-note="G#4"] { left: 319px; }
+                .black[data-note="A#4"] { left: 383px; }
+                .black[data-note="C#5"] { left: 511px; }
+                .black[data-note="D#5"] { left: 575px; }
+                .key.pressed {
+                    transform: translateY(4px);
+                    box-shadow: none;
+                }
+                .white.pressed {
+                    background: linear-gradient(to bottom, #e5e7eb, #d1d5db);
+                }
+                .black.pressed {
+                    background: linear-gradient(to bottom, #1a202c, #111827);
+                    height: 148px;
+                }
+                @media (max-width: 768px) {
+                    #piano { transform: perspective(600px) rotateX(10deg) scale(0.9); padding: 1rem; }
+                    .white { width: 50px; height: 220px; }
+                    .black { width: 30px; height: 130px; }
+                    .black[data-note="C#4"] { left: 50px; }
+                    .black[data-note="D#4"] { left: 104px; }
+                    .black[data-note="F#4"] { left: 212px; }
+                    .black[data-note="G#4"] { left: 266px; }
+                    .black[data-note="A#4"] { left: 320px; }
+                    .black[data-note="C#5"] { left: 428px; }
+                    .black[data-note="D#5"] { left: 482px; }
+                }
+                @media (max-width: 480px) {
+                    #piano { transform: perspective(400px) rotateX(5deg) scale(0.75); padding: 0.75rem; }
+                    .white { width: 45px; height: 200px; }
+                    .black { width: 28px; height: 120px; }
+                    .black[data-note="C#4"] { left: 45px; }
+                    .black[data-note="D#4"] { left: 94px; }
+                    .black[data-note="F#4"] { left: 188px; }
+                    .black[data-note="G#4"] { left: 237px; }
+                    .black[data-note="A#4"] { left: 286px; }
+                    .black[data-note="C#5"] { left: 380px; }
+                    .black[data-note="D#5"] { left: 429px; }
+                }
+            `;
+            const styleSheet = document.createElement("style");
+            styleSheet.type = "text/css";
+            styleSheet.innerText = styles;
+            document.head.appendChild(styleSheet);
+        }
+
+        // --- PIANO SETUP ---
+        const notes = [
+            { note: 'C4', type: 'white' }, { note: 'C#4', type: 'black' },
+            { note: 'D4', type: 'white' }, { note: 'D#4', type: 'black' },
+            { note: 'E4', type: 'white' },
+            { note: 'F4', type: 'white' }, { note: 'F#4', type: 'black' },
+            { note: 'G4', type: 'white' }, { note: 'G#4', type: 'black' },
+            { note: 'A4', type: 'white' }, { note: 'A#4', type: 'black' },
+            { note: 'B4', type: 'white' },
+            { note: 'C5', type: 'white' }, { note: 'C#5', type: 'black' },
+            { note: 'D5', type: 'white' }, { note: 'D#5', type: 'black' },
+            { note: 'E5', type: 'white' }
+        ];
+
+        // Create the piano div
+        const piano = document.createElement('div');
+        piano.id = 'piano';
+        pianoContainer.appendChild(piano);
+
+        // Create a synth with Tone.js
+        const synth = new Tone.Synth({
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
+        }).toDestination();
+
+        // Generate the piano keys
+        notes.forEach(({ note, type }) => {
+            const keyElement = document.createElement('div');
+            keyElement.className = `key ${type}`;
+            keyElement.dataset.note = note;
+            piano.appendChild(keyElement);
+        });
+
+        // --- EVENT HANDLING ---
+        function playNote(note, element) {
+            synth.triggerAttack(note, Tone.now());
+            if (window.navigator && window.navigator.vibrate) {
+                window.navigator.vibrate(50);
+            }
+            element.classList.add('pressed');
+        }
+
+        function releaseNote(element) {
+            synth.triggerRelease(Tone.now());
+            element.classList.remove('pressed');
+        }
+
+        function addEventListeners() {
+            piano.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('key')) {
+                    playNote(e.target.dataset.note, e.target);
+                }
+            });
+
+            piano.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (e.target.classList.contains('key')) {
+                    playNote(e.target.dataset.note, e.target);
+                }
+            }, { passive: false });
+
+            document.addEventListener('mouseup', () => {
+                const pressedKey = piano.querySelector('.key.pressed');
+                if (pressedKey) releaseNote(pressedKey);
+            });
+
+            document.addEventListener('touchend', () => {
+                const pressedKey = piano.querySelector('.key.pressed');
+                if (pressedKey) releaseNote(pressedKey);
+            });
+        }
+
+        // --- INITIALIZE ---
+        injectDependencies();
+        addEventListeners();
+    });
+})();
 
 
 
