@@ -1,6 +1,6 @@
 // =================================================================================================
 // [SYSTEM BOOTSTRAP] :: IMMEDIATE-INVOKED FUNCTION EXPRESSION (IIFE)
-// Backrooms Alien World WebGL rendering system with otherworldly horror effects
+// Alien Encounters WebGL rendering system with real-world alien event narratives
 // Only the `window.updateShader` function is intentionally exposed for external control.
 // =================================================================================================
 (function() {
@@ -11,12 +11,91 @@
     let gl = null;
     let program = null;
     let animationFrameId = null;
+    let currentShaderIndex = 0;
+    let shaderTransitionTime = 0;
+    let lastShaderChange = 0;
 
     // --- Error Handling and Initialization Check ---
     if (!webglCanvas) {
         console.error("[FATAL] WebGL Canvas element with id 'webglCanvas' not found in DOM. Aborting.");
         return;
     }
+
+    // =================================================================================================
+    // [ALIEN ENCOUNTERS DATABASE] :: REAL-WORLD EVENTS AND NARRATIVES
+    // =================================================================================================
+    const alienEncounters = [
+        {
+            name: "Betty and Barney Hill Abduction",
+            year: 1961,
+            location: "New Hampshire, USA",
+            description: "The first widely publicized alien abduction case. Betty and Barney Hill claimed to have been taken aboard a spacecraft by grey aliens who performed medical examinations. Their account, revealed through hypnosis, became the template for countless abduction stories.",
+            keywords: ["grey aliens", "medical examination", "hypnosis", "star map", "missing time"]
+        },
+        {
+            name: "Travis Walton Abduction",
+            year: 1975,
+            location: "Arizona, USA",
+            description: "Logger Travis Walton disappeared for five days after encountering a UFO. He claimed to have awakened on an alien craft, describing tall pale beings and advanced technology. Six witnesses saw the initial encounter.",
+            keywords: ["logger", "five days", "tall beings", "advanced technology", "multiple witnesses"]
+        },
+        {
+            name: "Roswell Incident",
+            year: 1947,
+            location: "New Mexico, USA",
+            description: "A military balloon crash was initially reported as a 'flying disc' recovery. Decades later, conspiracy theories emerged claiming alien bodies were recovered and covered up by the government.",
+            keywords: ["military", "flying disc", "government coverup", "alien bodies", "conspiracy"]
+        },
+        {
+            name: "Phoenix Lights",
+            year: 1997,
+            location: "Arizona, USA",
+            description: "Thousands witnessed a massive V-shaped craft with lights moving silently across the Phoenix sky. The military claimed it was flares, but many witnesses described a solid craft blocking out stars.",
+            keywords: ["V-shaped craft", "thousands of witnesses", "silent movement", "blocking stars", "flares explanation"]
+        },
+        {
+            name: "Rendlesham Forest Incident",
+            year: 1980,
+            location: "Suffolk, England",
+            description: "US military personnel at RAF Bentwaters reported encountering a triangular craft in the forest. Deputy Base Commander Charles Halt recorded strange lights and radiation readings over multiple nights.",
+            keywords: ["military personnel", "triangular craft", "radiation readings", "multiple nights", "forest encounter"]
+        },
+        {
+            name: "Belgian UFO Wave",
+            year: 1989,
+            location: "Belgium",
+            description: "Over 13,000 people reported triangular UFOs over Belgium. F-16 jets were scrambled to intercept, with radar operators confirming objects performing impossible maneuvers at incredible speeds.",
+            keywords: ["13000 witnesses", "triangular UFOs", "F-16 intercept", "impossible maneuvers", "radar confirmation"]
+        },
+        {
+            name: "Antônio Vilas-Boas Encounter",
+            year: 1957,
+            location: "Brazil",
+            description: "Brazilian farmer claimed to have been abducted and subjected to medical experiments, including alleged breeding attempts with a humanoid female. One of the earliest detailed abduction accounts.",
+            keywords: ["Brazilian farmer", "medical experiments", "breeding attempts", "humanoid female", "early abduction"]
+        },
+        {
+            name: "Miracle of the Sun",
+            year: 1917,
+            location: "Fátima, Portugal",
+            description: "70,000 people witnessed the sun appear to dance and change colors in the sky. While officially a religious miracle, some ufologists interpret it as a mass UFO sighting.",
+            keywords: ["70000 witnesses", "dancing sun", "changing colors", "religious miracle", "mass sighting"]
+        },
+        {
+            name: "Kenneth Arnold Sighting",
+            year: 1947,
+            location: "Washington State, USA",
+            description: "Pilot Kenneth Arnold reported nine crescent-shaped objects flying at incredible speeds near Mount Rainier. His description of their movement as 'like saucers skipping on water' coined the term 'flying saucer'.",
+            keywords: ["pilot witness", "crescent-shaped", "incredible speeds", "Mount Rainier", "flying saucer term"]
+        },
+        {
+            name: "Foo Fighters",
+            year: 1944,
+            location: "European Theater, WWII",
+            description: "Allied pilots reported mysterious glowing orbs following their aircraft during bombing missions. These 'foo fighters' displayed intelligent behavior and were immune to weapons fire.",
+            keywords: ["WWII pilots", "glowing orbs", "following aircraft", "intelligent behavior", "immune to weapons"]
+        }
+    ];
 
     // =================================================================================================
     // [CONTEXT INITIALIZATION] :: ATTEMPT TO SECURE WEBGL2/WEBGL1 CONTEXT
@@ -34,9 +113,9 @@
         }
 
         if (gl instanceof WebGL2RenderingContext) {
-            console.log("[INFO] Interdimensional portal (WebGL2) initialized successfully.");
+            console.log("[INFO] Alien encounter visualization (WebGL2) initialized successfully.");
         } else {
-            console.log("[WARN] Backrooms breach (WebGL1) detected. Some eldritch features may be limited.");
+            console.log("[WARN] Basic encounter rendering (WebGL1) detected. Some effects may be limited.");
         }
     } catch (e) {
         console.error("[FATAL] Dimensional rift error:", e);
@@ -45,7 +124,7 @@
     }
 
     // =================================================================================================
-    // [SHADER SOURCE CODE] :: GLSL 3.00 ES - BACKROOMS ALIEN WORLD EFFECTS
+    // [SHADER SOURCE CODE] :: GLSL 3.00 ES - ALIEN ENCOUNTER EFFECTS
     // =================================================================================================
 
     const vertexShaderSource = `#version 300 es
@@ -63,12 +142,13 @@
         uniform vec2 u_mouse;
         uniform float u_intensity;
         uniform float u_speed;
+        uniform int u_shader_index;
+        uniform float u_transition;
 
         out vec4 outColor;
 
         const float PI = 3.14159265359;
         const float TWO_PI = 6.28318530718;
-        const float TOTAL_PHASES_F = 15.0;
 
         // =========================================================================================
         // [UTILITY FUNCTIONS]
@@ -95,406 +175,605 @@
         mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, s, -s, c); }
 
         // =========================================================================================
-        // [ALIEN BACKROOMS COLOR PALETTE]
+        // [ALIEN ENCOUNTER COLOR PALETTES]
         // =========================================================================================
-        vec3 alienYellow = vec3(0.9, 0.9, 0.3);
-        vec3 sickGreen = vec3(0.4, 0.7, 0.2);
-        vec3 voidBlack = vec3(0.02, 0.02, 0.02);
-        vec3 entityRed = vec3(0.8, 0.1, 0.1);
-        vec3 fluorescent = vec3(0.95, 0.95, 0.7);
-        vec3 moldGreen = vec3(0.2, 0.4, 0.1);
-        vec3 dampWall = vec3(0.6, 0.55, 0.4);
-        vec3 bloodStain = vec3(0.4, 0.1, 0.05);
-        vec3 alienSlime = vec3(0.1, 0.8, 0.4);
-        vec3 dimensionRift = vec3(0.7, 0.1, 0.9);
+        vec3 greyAlienSkin = vec3(0.7, 0.75, 0.8);
+        vec3 alienEyes = vec3(0.1, 0.1, 0.1);
+        vec3 ufoMetal = vec3(0.6, 0.65, 0.7);
+        vec3 plasmaBlue = vec3(0.2, 0.6, 1.0);
+        vec3 energyGreen = vec3(0.3, 0.9, 0.4);
+        vec3 warningRed = vec3(1.0, 0.2, 0.1);
+        vec3 starfield = vec3(0.9, 0.95, 1.0);
+        vec3 deepSpace = vec3(0.02, 0.02, 0.05);
+        vec3 abductionBeam = vec3(0.8, 0.9, 1.0);
+        vec3 forestGreen = vec3(0.1, 0.3, 0.1);
 
         // =========================================================================================
-        // [BACKROOMS ALIEN WORLD EFFECTS]
+        // [SHADER 1: BETTY AND BARNEY HILL - GREY ALIEN EXAMINATION]
         // =========================================================================================
-
-        vec3 endlessOffice(vec2 uv, float t) {
-            vec2 grid = floor(uv * 8.0);
-            vec2 cellUV = fract(uv * 8.0);
+        vec3 greyAlienExamination(vec2 uv, float t) {
+            // Medical examination room atmosphere
+            vec2 p = uv * 2.0;
             
-            // Fluorescent lighting flicker
-            float flicker = sin(t * 15.0 + grid.x + grid.y) * 0.1 + 0.9;
+            // Sterile white examination light
+            float examLight = exp(-length(p) * 0.8) * (sin(t * 4.0) * 0.1 + 0.9);
             
-            // Wall pattern with water damage
-            float wall = smoothstep(0.05, 0.1, min(cellUV.x, 1.0 - cellUV.x)) * 
-                        smoothstep(0.05, 0.1, min(cellUV.y, 1.0 - cellUV.y));
-            float damage = fbm(grid * 0.3 + t * 0.1) > 0.6 ? 1.0 : 0.0;
+            // Grey alien silhouettes
+            vec2 alienPos1 = vec2(-0.8, 0.2) + vec2(sin(t * 0.3), cos(t * 0.2)) * 0.1;
+            vec2 alienPos2 = vec2(0.8, -0.1) + vec2(cos(t * 0.4), sin(t * 0.3)) * 0.1;
             
-            vec3 wallColor = mix(dampWall, moldGreen, damage * 0.7);
-            vec3 lightColor = fluorescent * flicker;
+            float alien1 = exp(-length(p - alienPos1) * 3.0);
+            float alien2 = exp(-length(p - alienPos2) * 2.5);
             
-            return mix(voidBlack, wallColor, wall) + lightColor * (1.0 - wall) * 0.3;
+            // Large black eyes
+            vec2 eye1 = alienPos1 + vec2(0.0, 0.1);
+            vec2 eye2 = alienPos2 + vec2(0.0, 0.1);
+            float eyes = exp(-length(p - eye1) * 15.0) + exp(-length(p - eye2) * 15.0);
+            
+            // Medical instruments scanning
+            float scan = sin(p.x * 10.0 + t * 3.0) * sin(p.y * 8.0 + t * 2.0);
+            scan = smoothstep(0.7, 1.0, scan) * 0.3;
+            
+            vec3 base = mix(deepSpace, greyAlienSkin, examLight * 0.3);
+            vec3 aliens = greyAlienSkin * (alien1 + alien2);
+            vec3 eyeColor = alienEyes * eyes * 2.0;
+            vec3 scanColor = plasmaBlue * scan;
+            
+            return base + aliens + eyeColor + scanColor + abductionBeam * examLight * 0.2;
         }
 
-        vec3 alienInfestation(vec2 uv, float t) {
-            vec2 p = uv * 6.0;
-            float slime = 0.0;
+        // =========================================================================================
+        // [SHADER 2: TRAVIS WALTON - FOREST ABDUCTION BEAM]
+        // =========================================================================================
+        vec3 forestAbduction(vec2 uv, float t) {
+            vec2 p = uv * 1.5;
             
-            for(int i = 0; i < 5; i++) {
-                vec2 center = vec2(hash(vec2(float(i))), hash(vec2(float(i) + 50.0))) * 4.0 - 2.0;
-                center += vec2(sin(t * 0.5 + float(i)), cos(t * 0.7 + float(i))) * 0.5;
-                
-                float blob = exp(-length(p - center) * 2.0);
-                float pulse = sin(t * 3.0 + float(i)) * 0.5 + 0.5;
-                slime += blob * pulse;
-            }
-            
-            float veins = sin(p.x * 8.0 + t) * sin(p.y * 6.0 + t * 0.8) * 0.5 + 0.5;
-            veins *= exp(-length(uv) * 0.8);
-            
-            return mix(voidBlack, alienSlime, slime) + entityRed * veins * 0.5;
-        }
-
-        vec3 dimensionalCorridor(vec2 uv, float t) {
-            float perspective = 1.0 / (abs(uv.y) + 0.1);
-            vec2 corridor = vec2(uv.x * perspective, t * 0.5 + perspective * 0.1);
-            
-            // Ceiling tiles
-            vec2 tile = fract(corridor * vec2(4.0, 20.0));
-            float tilePattern = step(0.95, tile.x) + step(0.95, tile.y);
-            
-            // Wall decay
-            float decay = fbm(corridor * 2.0) * smoothstep(0.0, 0.8, abs(uv.x));
-            
-            // Distant entity presence
-            float entity = sin(t * 4.0 + corridor.y * 10.0) * 0.5 + 0.5;
-            entity *= exp(-corridor.y * 0.5) * smoothstep(0.8, 1.0, abs(uv.x));
-            
-            vec3 base = mix(dampWall, moldGreen, decay);
-            return base * (1.0 - tilePattern * 0.3) + entityRed * entity * 0.7;
-        }
-
-        vec3 liminalPool(vec2 uv, float t) {
-            vec2 p = uv * 3.0;
-            
-            // Water ripples
-            float ripple1 = sin(length(p) * 6.0 - t * 4.0) * 0.5 + 0.5;
-            float ripple2 = sin(length(p + vec2(1.0)) * 8.0 - t * 3.0) * 0.3 + 0.7;
-            
-            // Submerged entities
-            float entityGlow = 0.0;
-            for(int i = 0; i < 3; i++) {
-                vec2 pos = vec2(sin(t * 0.3 + float(i)), cos(t * 0.4 + float(i))) * 1.5;
-                entityGlow += exp(-length(p - pos) * 1.5) * (sin(t * 5.0 + float(i)) * 0.5 + 0.5);
-            }
-            
-            float depth = smoothstep(0.5, 2.0, length(uv));
-            vec3 water = mix(alienSlime, voidBlack, depth) * ripple1 * ripple2;
-            
-            return water + entityRed * entityGlow * 0.8;
-        }
-
-        vec3 entityStalking(vec2 uv, float t) {
-            float distance = length(uv);
-            float angle = atan(uv.y, uv.x);
-            
-            // Entity silhouette
-            float entityShape = 0.0;
-            float entityDist = 1.5 + sin(t * 0.8) * 0.3;
-            if(distance > entityDist - 0.1 && distance < entityDist + 0.1) {
-                float bodyNoise = fbm(vec2(angle * 3.0, t * 2.0)) * 0.3;
-                entityShape = smoothstep(0.05, 0.0, abs(distance - entityDist - bodyNoise));
-            }
-            
-            // Breathing/movement
-            float breathe = sin(t * 6.0) * 0.02;
-            entityShape *= (1.0 + breathe);
-            
-            // Entity eyes
-            vec2 eyePos1 = vec2(0.3, 0.1) + vec2(sin(t), cos(t * 0.7)) * 0.05;
-            vec2 eyePos2 = vec2(-0.3, 0.1) + vec2(sin(t), cos(t * 0.7)) * 0.05;
-            float eyes = exp(-length(uv - eyePos1) * 20.0) + exp(-length(uv - eyePos2) * 20.0);
-            
-            vec3 base = mix(voidBlack, dampWall, fbm(uv * 2.0 + t * 0.1) * 0.3);
-            return base + entityRed * (entityShape * 2.0 + eyes * 3.0);
-        }
-
-        vec3 glitchedReality(vec2 uv, float t) {
-            vec2 originalUV = uv;
-            
-            // Digital corruption
-            float corruption = sin(t * 20.0 + uv.y * 100.0) * 0.01;
-            uv.x += corruption * (sin(t * 13.0) * 0.5 + 0.5);
-            
-            // Pixelation effect
-            vec2 pixelUV = floor(uv * 32.0) / 32.0;
-            float pixelNoise = hash(pixelUV + floor(t * 4.0));
-            
-            // Reality tears
-            float tear = abs(sin(originalUV.x * 5.0 + t * 2.0) + sin(originalUV.y * 7.0 + t * 1.5));
-            tear = smoothstep(0.1, 0.0, tear - 1.8);
-            
-            vec3 glitched = mix(dampWall, alienYellow, pixelNoise) * (1.0 - tear);
-            vec3 void_color = dimensionRift * tear * 2.0;
-            
-            return glitched + void_color;
-        }
-
-        vec3 moldInfestation(vec2 uv, float t) {
-            vec2 p = uv * 8.0;
-            
-            // Mold growth pattern
-            float mold = fbm(p + t * 0.05);
-            mold = smoothstep(0.3, 0.8, mold);
-            
-            // Spore clouds
-            float spores = 0.0;
-            for(int i = 0; i < 4; i++) {
-                vec2 sporeCenter = vec2(sin(t * 0.2 + float(i)), cos(t * 0.3 + float(i))) * 2.0;
-                spores += exp(-length(p - sporeCenter) * 0.5) * sin(t * 4.0 + float(i));
-            }
-            spores = clamp(spores, 0.0, 1.0);
-            
-            // Wall base
-            vec3 wall = mix(dampWall, bloodStain, fbm(p * 0.5));
-            vec3 moldColor = mix(moldGreen, sickGreen, sin(t + mold * 5.0) * 0.5 + 0.5);
-            
-            return mix(wall, moldColor, mold) + alienYellow * spores * 0.3;
-        }
-
-        vec3 backroomsMaze(vec2 uv, float t) {
-            vec2 maze = floor(uv * 6.0);
-            vec2 cell = fract(uv * 6.0);
-            
-            // Maze generation
-            float wallX = hash(maze) > 0.4 ? 1.0 : 0.0;
-            float wallY = hash(maze + vec2(100.0)) > 0.4 ? 1.0 : 0.0;
-            
-            float wall = 0.0;
-            if(cell.x < 0.1 || cell.x > 0.9) wall = wallX;
-            if(cell.y < 0.1 || cell.y > 0.9) wall = wallY;
-            
-            // Lighting from above
-            float lighting = smoothstep(0.2, 0.8, cell.y) * fluorescent.r;
-            lighting *= sin(t * 8.0 + maze.x + maze.y) * 0.1 + 0.9; // Flicker
-            
-            // Mysterious shadows
-            float shadow = fbm(maze * 0.2 + t * 0.05);
-            
-            vec3 wallColor = mix(dampWall, voidBlack, shadow);
-            return mix(voidBlack * lighting, wallColor, wall);
-        }
-
-        vec3 alienPortal(vec2 uv, float t) {
-            float radius = length(uv);
-            float angle = atan(uv.y, uv.x);
-            
-            // Portal ring
-            float portal = smoothstep(0.02, 0.0, abs(radius - 0.8));
-            portal += smoothstep(0.01, 0.0, abs(radius - 0.6)) * 0.5;
-            
-            // Portal interior swirl
-            angle += radius * 5.0 - t * 3.0;
-            float swirl = sin(angle * 4.0 + radius * 10.0) * 0.5 + 0.5;
-            float interior = smoothstep(0.6, 0.0, radius) * swirl;
-            
-            // Otherworldly energy
-            float energy = sin(t * 10.0 + radius * 20.0) * 0.5 + 0.5;
-            energy *= exp(-radius * 2.0);
-            
-            vec3 base = mix(voidBlack, dampWall, fbm(uv * 3.0));
-            vec3 portalColor = dimensionRift * portal * 3.0;
-            vec3 interiorColor = mix(alienSlime, dimensionRift, interior) * interior;
-            
-            return base + portalColor + interiorColor + alienYellow * energy * 0.5;
-        }
-
-        vec3 entitySwarm(vec2 uv, float t) {
-            vec2 p = uv * 4.0;
-            float swarm = 0.0;
-            
-            // Multiple entities moving in patterns
+            // Forest silhouette
+            float trees = 0.0;
             for(int i = 0; i < 8; i++) {
-                float fi = float(i);
-                vec2 motion = vec2(
-                    sin(t * 0.8 + fi) * 2.0,
-                    cos(t * 0.6 + fi * 0.7) * 2.0
-                );
-                
-                float entity = exp(-length(p - motion) * 4.0);
-                float pulse = sin(t * 8.0 + fi) * 0.5 + 0.5;
-                swarm += entity * pulse;
+                float x = float(i) * 0.3 - 1.2;
+                float treeHeight = 0.5 + sin(float(i)) * 0.3;
+                float tree = smoothstep(0.05, 0.0, abs(p.x - x)) * 
+                           smoothstep(treeHeight, treeHeight - 0.1, p.y + 0.8);
+                trees += tree;
             }
             
-            // Swarm communication/energy
-            float communication = sin(swarm * 10.0 + t * 5.0);
+            // UFO hovering above
+            vec2 ufoPos = vec2(sin(t * 0.2) * 0.3, 0.6);
+            float ufo = smoothstep(0.15, 0.1, length(p - ufoPos));
             
-            vec3 background = mix(voidBlack, moldGreen, fbm(uv * 2.0 + t * 0.1) * 0.2);
-            return background + entityRed * swarm * 1.5 + alienSlime * communication * 0.3;
-        }
-
-        vec3 liminalStairwell(vec2 uv, float t) {
-            // Infinite staircase perspective
-            float y = uv.y + t * 0.3;
-            float stair = mod(y * 8.0, 1.0);
-            stair = step(0.7, stair);
+            // Abduction beam
+            float beamWidth = 0.3 + sin(t * 2.0) * 0.1;
+            float beam = smoothstep(beamWidth, beamWidth - 0.05, abs(p.x - ufoPos.x));
+            beam *= smoothstep(ufoPos.y, ufoPos.y - 0.1, p.y);
+            beam *= smoothstep(-0.8, -0.6, p.y);
             
-            // Side walls
-            float wall = smoothstep(0.0, 0.1, abs(uv.x) - 0.6);
+            // Human figure in beam
+            vec2 humanPos = vec2(ufoPos.x, -0.3 + sin(t * 1.0) * 0.1);
+            float human = exp(-length(p - humanPos) * 8.0);
             
-            // Handrail
-            float rail = smoothstep(0.02, 0.0, abs(abs(uv.x) - 0.65));
+            // Particle effects in beam
+            float particles = 0.0;
+            for(int i = 0; i < 5; i++) {
+                vec2 particlePos = vec2(ufoPos.x + sin(t * 2.0 + float(i)) * 0.1, 
+                                      -0.8 + mod(t * 0.5 + float(i) * 0.2, 1.4));
+                particles += exp(-length(p - particlePos) * 20.0);
+            }
             
-            // Lighting from top
-            float light = exp(-y * 0.5) * fluorescent.r;
-            light *= sin(t * 6.0 + y * 5.0) * 0.1 + 0.9;
+            vec3 base = mix(deepSpace, forestGreen, trees);
+            vec3 ufoColor = ufoMetal * ufo * 2.0;
+            vec3 beamColor = abductionBeam * beam * 0.8;
+            vec3 humanColor = vec3(0.8, 0.6, 0.4) * human;
+            vec3 particleColor = starfield * particles;
             
-            // Entity presence in darkness
-            float entityPresence = smoothstep(1.0, 2.0, y) * 
-                                 sin(t * 4.0 + uv.x * 10.0) * 0.5 + 0.5;
-            
-            vec3 base = mix(dampWall, moldGreen, wall * 0.3);
-            base *= light + 0.1;
-            base += bloodStain * rail;
-            
-            return base + entityRed * entityPresence * 0.8;
-        }
-
-        vec3 alienHive(vec2 uv, float t) {
-            vec2 p = uv * 6.0;
-            
-            // Hexagonal hive pattern
-            vec2 hex = vec2(p.x + p.y * 0.5, p.y * 0.866);
-            vec2 hexCell = floor(hex);
-            vec2 hexUV = fract(hex);
-            
-            // Hive cell
-            float cell = length(hexUV - 0.5);
-            cell = smoothstep(0.4, 0.3, cell);
-            
-            // Alien activity
-            float activity = hash(hexCell);
-            activity *= sin(t * 3.0 + hexCell.x + hexCell.y) * 0.5 + 0.5;
-            
-            // Secreted substances
-            float secretion = fbm(p + t * 0.1) * cell;
-            
-            vec3 hiveColor = mix(moldGreen, alienSlime, activity);
-            vec3 secretionColor = mix(sickGreen, alienYellow, secretion);
-            
-            return mix(voidBlack, hiveColor, cell) + secretionColor * secretion * 0.5;
+            return base + ufoColor + beamColor + humanColor + particleColor;
         }
 
         // =========================================================================================
-        // [MAIN SHADER LOGIC]
+        // [SHADER 3: ROSWELL - CRASHED UFO AND GOVERNMENT COVERUP]
+        // =========================================================================================
+        vec3 roswellCrash(vec2 uv, float t) {
+            vec2 p = uv * 2.0;
+            
+            // Desert landscape
+            float desert = smoothstep(-0.5, -0.3, p.y) * 
+                          (noise(p * 3.0) * 0.3 + 0.7);
+            
+            // Crashed UFO debris
+            vec2 crashSite = vec2(0.2, -0.2);
+            float wreckage = 0.0;
+            for(int i = 0; i < 6; i++) {
+                vec2 debrisPos = crashSite + vec2(sin(float(i)) * 0.4, cos(float(i)) * 0.2);
+                float debris = exp(-length(p - debrisPos) * 4.0) * 
+                              (noise(debrisPos * 10.0 + t) * 0.5 + 0.5);
+                wreckage += debris;
+            }
+            
+            // Military vehicles
+            vec2 militaryPos1 = vec2(-0.8, -0.4);
+            vec2 militaryPos2 = vec2(0.8, -0.3);
+            float military = smoothstep(0.1, 0.05, length(p - militaryPos1)) +
+                           smoothstep(0.1, 0.05, length(p - militaryPos2));
+            
+            // Searchlights
+            float searchlight1 = max(0.0, dot(normalize(p - militaryPos1), vec2(0.7, 0.7))) * 
+                               exp(-length(p - militaryPos1) * 1.5);
+            float searchlight2 = max(0.0, dot(normalize(p - militaryPos2), vec2(-0.7, 0.7))) * 
+                               exp(-length(p - militaryPos2) * 1.5);
+            
+            // Alien body (covered)
+            vec2 bodyPos = crashSite + vec2(0.1, 0.1);
+            float alienBody = exp(-length(p - bodyPos) * 12.0) * 
+                            sin(t * 3.0 + length(p - bodyPos) * 10.0);
+            
+            vec3 base = mix(deepSpace, vec3(0.4, 0.3, 0.2), desert);
+            vec3 wreckageColor = ufoMetal * wreckage;
+            vec3 militaryColor = vec3(0.2, 0.4, 0.2) * military;
+            vec3 lightColor = abductionBeam * (searchlight1 + searchlight2) * 0.5;
+            vec3 bodyColor = greyAlienSkin * abs(alienBody) * 0.3;
+            
+            return base + wreckageColor + militaryColor + lightColor + bodyColor;
+        }
+
+        // =========================================================================================
+        // [SHADER 4: PHOENIX LIGHTS - MASSIVE V-SHAPED CRAFT]
+        // =========================================================================================
+        vec3 phoenixLights(vec2 uv, float t) {
+            vec2 p = uv * 1.2;
+            
+            // City skyline silhouette
+            float city = 0.0;
+            for(int i = 0; i < 12; i++) {
+                float x = float(i) * 0.2 - 1.2;
+                float buildingHeight = 0.2 + sin(float(i) * 2.0) * 0.3;
+                float building = smoothstep(0.02, 0.0, abs(p.x - x)) * 
+                               smoothstep(buildingHeight, buildingHeight - 0.05, p.y + 0.8);
+                city += building;
+            }
+            
+            // V-shaped craft
+            vec2 craftCenter = vec2(0.0, 0.3);
+            float vShape = 0.0;
+            
+            // Left wing of V
+            for(int i = 0; i < 5; i++) {
+                vec2 lightPos = craftCenter + vec2(-0.8 + float(i) * 0.2, -float(i) * 0.1);
+                float light = exp(-length(p - lightPos) * 8.0);
+                vShape += light;
+            }
+            
+            // Right wing of V
+            for(int i = 0; i < 5; i++) {
+                vec2 lightPos = craftCenter + vec2(0.8 - float(i) * 0.2, -float(i) * 0.1);
+                float light = exp(-length(p - lightPos) * 8.0);
+                vShape += light;
+            }
+            
+            // Craft body blocking stars
+            float craftBody = 0.0;
+            for(int i = 0; i < 10; i++) {
+                vec2 bodyPos = craftCenter + vec2((float(i) - 4.5) * 0.15, -abs(float(i) - 4.5) * 0.05);
+                craftBody += smoothstep(0.08, 0.05, length(p - bodyPos));
+            }
+            
+            // Stars being blocked
+            float stars = 0.0;
+            for(int i = 0; i < 20; i++) {
+                vec2 starPos = vec2(hash(vec2(float(i))) * 2.0 - 1.0, 
+                                  hash(vec2(float(i) + 100.0)) * 2.0 - 1.0);
+                stars += exp(-length(p - starPos) * 50.0) * (1.0 - craftBody);
+            }
+            
+            vec3 base = mix(deepSpace, vec3(0.1, 0.1, 0.2), city * 0.5);
+            vec3 craftLights = warningRed * vShape * 2.0;
+            vec3 starColor = starfield * stars;
+            vec3 cityLights = vec3(1.0, 0.8, 0.4) * city * 0.3;
+            
+            return base + craftLights + starColor + cityLights;
+        }
+
+        // =========================================================================================
+        // [SHADER 5: RENDLESHAM FOREST - TRIANGULAR CRAFT IN WOODS]
+        // =========================================================================================
+        vec3 rendleshamForest(vec2 uv, float t) {
+            vec2 p = uv * 2.0;
+            
+            // Dense forest
+            float forest = 0.0;
+            for(int i = 0; i < 15; i++) {
+                vec2 treePos = vec2(sin(float(i) * 2.3) * 1.5, cos(float(i) * 1.7) * 1.2);
+                float tree = exp(-length(p - treePos) * 2.0) * 
+                           (noise(treePos * 5.0) * 0.5 + 0.5);
+                forest += tree;
+            }
+            
+            // Triangular craft
+            vec2 craftPos = vec2(sin(t * 0.1) * 0.2, 0.1);
+            
+            // Triangle vertices
+            vec2 v1 = craftPos + vec2(0.0, 0.2);
+            vec2 v2 = craftPos + vec2(-0.2, -0.1);
+            vec2 v3 = craftPos + vec2(0.2, -0.1);
+            
+            float triangle = exp(-length(p - v1) * 15.0) + 
+                           exp(-length(p - v2) * 15.0) + 
+                           exp(-length(p - v3) * 15.0);
+            
+            // Craft interior glow
+            float interior = 0.0;
+            vec2 center = (v1 + v2 + v3) / 3.0;
+            interior = exp(-length(p - center) * 5.0);
+            
+            // Military personnel with flashlights
+            vec2 soldier1 = vec2(-0.5, -0.4) + vec2(sin(t * 0.5), 0.0) * 0.1;
+            vec2 soldier2 = vec2(0.6, -0.3) + vec2(cos(t * 0.4), 0.0) * 0.1;
+            
+            float flashlight1 = max(0.0, dot(normalize(p - soldier1), normalize(craftPos - soldier1))) * 
+                              exp(-length(p - soldier1) * 2.0);
+            float flashlight2 = max(0.0, dot(normalize(p - soldier2), normalize(craftPos - soldier2))) * 
+                              exp(-length(p - soldier2) * 2.0);
+            
+            // Radiation effect
+            float radiation = sin(length(p - craftPos) * 10.0 - t * 5.0) * 
+                            exp(-length(p - craftPos) * 3.0) * 0.3;
+            
+            vec3 base = mix(deepSpace, forestGreen, forest * 0.8);
+            vec3 craftColor = energyGreen * (triangle + interior) * 1.5;
+            vec3 lightColor = abductionBeam * (flashlight1 + flashlight2) * 0.4;
+            vec3 radiationColor = warningRed * abs(radiation);
+            
+            return base + craftColor + lightColor + radiationColor;
+        }
+
+        // =========================================================================================
+        // [SHADER 6: BELGIAN UFO WAVE - F-16 INTERCEPT]
+        // =========================================================================================
+        vec3 belgianWave(vec2 uv, float t) {
+            vec2 p = uv * 1.8;
+            
+            // Night sky with clouds
+            float clouds = fbm(p * 2.0 + t * 0.1) * 0.3;
+            
+            // Large triangular UFO
+            vec2 ufoPos = vec2(sin(t * 0.3) * 0.4, 0.2);
+            
+            // Triangle with lights at corners
+            vec2 tri1 = ufoPos + vec2(0.0, 0.3);
+            vec2 tri2 = ufoPos + vec2(-0.25, -0.15);
+            vec2 tri3 = ufoPos + vec2(0.25, -0.15);
+            
+            float triLights = exp(-length(p - tri1) * 12.0) + 
+                            exp(-length(p - tri2) * 12.0) + 
+                            exp(-length(p - tri3) * 12.0);
+            
+            // UFO body
+            float ufoBody = smoothstep(0.3, 0.25, length(p - ufoPos));
+            
+            // F-16 jets pursuing
+            vec2 jet1Pos = ufoPos + vec2(-0.8, -0.5) + vec2(sin(t * 2.0), cos(t * 1.5)) * 0.2;
+            vec2 jet2Pos = ufoPos + vec2(0.8, -0.6) + vec2(cos(t * 1.8), sin(t * 1.3)) * 0.2;
+            
+            float jets = exp(-length(p - jet1Pos) * 25.0) + exp(-length(p - jet2Pos) * 25.0);
+            
+            // Jet exhaust
+            float exhaust1 = exp(-length(p - (jet1Pos - vec2(0.1, 0.0))) * 15.0);
+            float exhaust2 = exp(-length(p - (jet2Pos - vec2(0.1, 0.0))) * 15.0);
+            
+            // Radar sweep effect
+            float angle = atan(p.y - ufoPos.y, p.x - ufoPos.x);
+            float radar = sin(angle * 4.0 + t * 8.0) * 
+                         exp(-length(p - ufoPos) * 1.0) * 0.2;
+            
+            // Impossible maneuver trail
+            float trail = 0.0;
+            for(int i = 0; i < 8; i++) {
+                float ti = t - float(i) * 0.1;
+                vec2 trailPos = vec2(sin(ti * 2.0) * 0.5, cos(ti * 3.0) * 0.3);
+                trail += exp(-length(p - trailPos) * 8.0) * (1.0 - float(i) / 8.0);
+            }
+            
+            vec3 base = mix(deepSpace, vec3(0.05, 0.05, 0.1), clouds);
+            vec3 ufoColor = energyGreen * (triLights + ufoBody) * 2.0;
+            vec3 jetColor = starfield * jets * 3.0;
+            vec3 exhaustColor = warningRed * (exhaust1 + exhaust2) * 2.0;
+            vec3 radarColor = plasmaBlue * abs(radar);
+            vec3 trailColor = energyGreen * trail * 0.5;
+            
+            return base + ufoColor + jetColor + exhaustColor + radarColor + trailColor;
+        }
+
+        // =========================================================================================
+        // [SHADER 7: ANTÔNIO VILAS-BOAS - BRAZILIAN FARM ENCOUNTER]
+        // =========================================================================================
+        vec3 brazilianEncounter(vec2 uv, float t) {
+            vec2 p = uv * 2.0;
+            
+            // Farm landscape
+            float farmland = smoothstep(-0.6, -0.4, p.y) * 
+                           (noise(p * 4.0) * 0.2 + 0.8);
+            
+            // Farmhouse silhouette
+            vec2 housePos = vec2(-0.8, -0.3);
+            float house = smoothstep(0.1, 0.08, length(p - housePos));
+            
+            // UFO landing
+            vec2 ufoPos = vec2(0.3, -0.1);
+            float ufo = smoothstep(0.2, 0.15, length(p - ufoPos));
+            
+            // Landing legs
+            for(int i = 0; i < 3; i++) {
+                float angle = float(i) * TWO_PI / 3.0;
+                vec2 legPos = ufoPos + vec2(cos(angle), sin(angle)) * 0.15;
+                legPos.y -= 0.1;
+                ufo += smoothstep(0.02, 0.01, length(p - legPos));
+            }
+            
+            // Humanoid figures
+            vec2 alien1 = ufoPos + vec2(-0.2, -0.2);
+            vec2 alien2 = ufoPos + vec2(0.2, -0.25);
+            vec2 farmer = vec2(0.0, -0.4) + vec2(sin(t * 2.0), 0.0) * 0.05;
+            
+            float beings = exp(-length(p - alien1) * 10.0) + 
+                          exp(-length(p - alien2) * 10.0) + 
+                          exp(-length(p - farmer) * 8.0);
+            
+            // Strange lights from UFO
+            float lights = 0.0;
+            for(int i = 0; i < 6; i++) {
+                float angle = float(i) * TWO_PI / 6.0 + t;
+                vec2 lightPos = ufoPos + vec2(cos(angle), sin(angle)) * 0.1;
+                lights += exp(-length(p - lightPos) * 20.0);
+            }
+            
+            // Tractor beam effect
+            float beam = smoothstep(0.15, 0.1, abs(p.x - ufoPos.x)) * 
+                        smoothstep(ufoPos.y, ufoPos.y - 0.1, p.y) * 
+                        smoothstep(-0.5, -0.3, p.y);
+            
+            vec3 base = mix(deepSpace, vec3(0.2, 0.3, 0.1), farmland);
+            vec3 ufoColor = ufoMetal * ufo * 2.0;
+            vec3 beingColor = vec3(0.8, 0.6, 0.4) * beings;
+            vec3 lightColor = energyGreen * lights * 2.0;
+            vec3 beamColor = abductionBeam * beam * 0.6;
+            vec3 houseColor = vec3(0.3, 0.2, 0.1) * house;
+            
+            return base + ufoColor + beingColor + lightColor + beamColor + houseColor;
+        }
+
+        // =========================================================================================
+        // [SHADER 8: MIRACLE OF THE SUN - MASS SIGHTING]
+        // =========================================================================================
+        vec3 miracleOfSun(vec2 uv, float t) {
+            vec2 p = uv * 1.5;
+            
+            // Crowd of people
+            float crowd = 0.0;
+            for(int i = 0; i < 20; i++) {
+                vec2 personPos = vec2((float(i) - 10.0) * 0.15, -0.6 + sin(float(i)) * 0.1);
+                crowd += exp(-length(p - personPos) * 15.0);
+            }
+            
+            // Dancing sun
+            vec2 sunPos = vec2(sin(t * 0.5) * 0.3, 0.4 + cos(t * 0.7) * 0.2);
+            float sun = exp(-length(p - sunPos) * 2.0);
+            
+            // Color changes
+            float colorCycle = sin(t * 2.0) * 0.5 + 0.5;
+            vec3 sunColor = mix(vec3(1.0, 1.0, 0.3), vec3(1.0, 0.3, 0.3), colorCycle);
+            sunColor = mix(sunColor, vec3(0.3, 1.0, 0.3), sin(t * 3.0 + PI) * 0.5 + 0.5);
+            
+            // Rays emanating
+            float rays = 0.0;
+            for(int i = 0; i < 12; i++) {
+                float angle = float(i) * TWO_PI / 12.0 + t;
+                vec2 rayDir = vec2(cos(angle), sin(angle));
+                float ray = max(0.0, dot(normalize(p - sunPos), rayDir)) * 
+                           exp(-length(p - sunPos) * 0.8);
+                rays += ray;
+            }
+            
+            // Spiral motion
+            float spiral = sin(length(p - sunPos) * 8.0 - t * 4.0) * 
+                          exp(-length(p - sunPos) * 1.5) * 0.3;
+            
+            // Atmospheric distortion
+            vec2 distorted = p + vec2(sin(p.y * 5.0 + t * 2.0), cos(p.x * 4.0 + t * 1.5)) * 0.1;
+            float atmosphere = fbm(distorted * 3.0) * 0.2;
+            
+            vec3 base = mix(vec3(0.6, 0.8, 1.0), vec3(0.9, 0.9, 0.7), atmosphere);
+            vec3 sunEffect = sunColor * (sun * 3.0 + rays * 0.5);
+            vec3 spiralColor = sunColor * abs(spiral);
+            vec3 crowdColor = vec3(0.2, 0.1, 0.05) * crowd;
+            
+            return base + sunEffect + spiralColor + crowdColor;
+        }
+
+        // =========================================================================================
+        // [SHADER 9: KENNETH ARNOLD - FLYING SAUCERS]
+        // =========================================================================================
+        vec3 flyingSaucers(vec2 uv, float t) {
+            vec2 p = uv * 2.0;
+            
+            // Mountain silhouette (Mount Rainier)
+            float mountains = 0.0;
+            for(int i = 0; i < 8; i++) {
+                float x = float(i) * 0.3 - 1.2;
+                float height = 0.3 + sin(float(i) * 1.5) * 0.4;
+                float mountain = smoothstep(height, height - 0.1, p.y + 0.8) * 
+                               exp(-pow(p.x - x, 2.0) * 8.0);
+                mountains += mountain;
+            }
+            
+            // Nine crescent-shaped objects
+            float saucers = 0.0;
+            for(int i = 0; i < 9; i++) {
+                float formation = float(i) - 4.0;
+                vec2 saucerPos = vec2(formation * 0.2 + sin(t * 2.0 + float(i)) * 0.1, 
+                                    0.2 + cos(t * 1.5 + float(i) * 0.5) * 0.1);
+                
+                // Crescent shape
+                float saucer = smoothstep(0.08, 0.05, length(p - saucerPos));
+                float cutout = smoothstep(0.06, 0.03, length(p - (saucerPos + vec2(0.02, 0.0))));
+                saucer = saucer - cutout * 0.7;
+                
+                saucers += max(0.0, saucer);
+            }
+            
+            // Motion blur effect
+            float blur = 0.0;
+            for(int i = 0; i < 9; i++) {
+                for(int j = 0; j < 5; j++) {
+                    float formation = float(i) - 4.0;
+                    float timeOffset = float(j) * 0.02;
+                    vec2 blurPos = vec2(formation * 0.2 + sin(t * 2.0 + float(i) - timeOffset) * 0.1, 
+                                      0.2 + cos(t * 1.5 + float(i) * 0.5 - timeOffset) * 0.1);
+                    blur += exp(-length(p - blurPos) * 20.0) * (1.0 - float(j) / 5.0) * 0.3;
+                }
+            }
+            
+            // Pilot's aircraft
+            vec2 planePos = vec2(-0.8, -0.2);
+            float plane = smoothstep(0.05, 0.03, length(p - planePos));
+            
+            // Sky gradient
+            float skyGradient = smoothstep(-1.0, 1.0, p.y);
+            
+            vec3 base = mix(vec3(0.4, 0.6, 0.9), vec3(0.8, 0.9, 1.0), skyGradient);
+            vec3 mountainColor = vec3(0.2, 0.3, 0.4) * mountains;
+            vec3 saucerColor = ufoMetal * saucers * 3.0;
+            vec3 blurColor = ufoMetal * blur;
+            vec3 planeColor = vec3(0.6, 0.6, 0.6) * plane * 2.0;
+            
+            return base + mountainColor + saucerColor + blurColor + planeColor;
+        }
+
+        // =========================================================================================
+        // [SHADER 10: FOO FIGHTERS - WWII AERIAL MYSTERY]
+        // =========================================================================================
+        vec3 fooFighters(vec2 uv, float t) {
+            vec2 p = uv * 2.0;
+            
+            // Bomber aircraft formation
+            float bombers = 0.0;
+            for(int i = 0; i < 5; i++) {
+                vec2 bomberPos = vec2((float(i) - 2.0) * 0.3, -0.1 + sin(float(i) + t * 0.5) * 0.05);
+                bombers += smoothstep(0.06, 0.04, length(p - bomberPos));
+            }
+            
+            // Foo fighter orbs
+            float fooFighters = 0.0;
+            for(int i = 0; i < 8; i++) {
+                vec2 fooPos = vec2(sin(t * 1.5 + float(i)) * 0.8, 
+                                 cos(t * 1.2 + float(i) * 0.7) * 0.6);
+                
+                // Glowing orb
+                float orb = exp(-length(p - fooPos) * 8.0);
+                
+                // Pulsing effect
+                orb *= sin(t * 4.0 + float(i)) * 0.3 + 0.7;
+                
+                fooFighters += orb;
+            }
+            
+            // Anti-aircraft fire
+            float aaFire = 0.0;
+            for(int i = 0; i < 6; i++) {
+                vec2 firePos = vec2((float(i) - 2.5) * 0.4, -0.8 + mod(t * 2.0 + float(i), 1.0) * 1.6);
+                aaFire += exp(-length(p - firePos) * 12.0) * 
+                         (1.0 - mod(t * 2.0 + float(i), 1.0));
+            }
+            
+            // Explosions (ineffective against foo fighters)
+            float explosions = 0.0;
+            for(int i = 0; i < 4; i++) {
+                vec2 explPos = vec2(sin(t * 3.0 + float(i) * 2.0) * 0.6, 
+                                  cos(t * 2.5 + float(i) * 1.5) * 0.4);
+                float expl = exp(-length(p - explPos) * 5.0) * 
+                           sin(t * 8.0 + float(i)) * 0.5 + 0.5;
+                explosions += expl;
+            }
+            
+            // Night sky with searchlights
+            float searchlights = 0.0;
+            for(int i = 0; i < 3; i++) {
+                float angle = float(i) * TWO_PI / 3.0 + t * 0.5;
+                vec2 lightDir = vec2(cos(angle), sin(angle));
+                searchlights += max(0.0, dot(normalize(p), lightDir)) * 
+                              exp(-length(p) * 0.5) * 0.3;
+            }
+            
+            vec3 base = mix(deepSpace, vec3(0.05, 0.05, 0.1), searchlights);
+            vec3 bomberColor = vec3(0.4, 0.4, 0.4) * bombers * 2.0;
+            vec3 fooColor = energyGreen * fooFighters * 2.0;
+            vec3 fireColor = warningRed * aaFire;
+            vec3 explColor = vec3(1.0, 0.6, 0.2) * explosions;
+            
+            return base + bomberColor + fooColor + fireColor + explColor;
+        }
+
+        // =========================================================================================
+        // [MAIN SHADER LOGIC WITH TRANSITIONS]
         // =========================================================================================
         void main() {
             vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
-            vec2 originalUV = gl_FragCoord.xy / u_resolution.xy;
-
-            float time_warp = u_time * 0.4 * u_speed;
-            float phase = mod(time_warp, TOTAL_PHASES_F);
-            float phaseProgress = fract(phase);
-            int phaseIndex = int(floor(phase));
-
-            vec3 color = voidBlack;
-
-            // Phase dispatcher with backrooms alien effects
-            if (phaseIndex == 0) {
-                color = endlessOffice(uv, u_time);
+            
+            float time_warp = u_time * 0.3 * u_speed;
+            
+            vec3 color = deepSpace;
+            
+            // Shader selection based on index
+            if (u_shader_index == 0) {
+                color = greyAlienExamination(uv, time_warp);
+            } else if (u_shader_index == 1) {
+                color = forestAbduction(uv, time_warp);
+            } else if (u_shader_index == 2) {
+                color = roswellCrash(uv, time_warp);
+            } else if (u_shader_index == 3) {
+                color = phoenixLights(uv, time_warp);
+            } else if (u_shader_index == 4) {
+                color = rendleshamForest(uv, time_warp);
+            } else if (u_shader_index == 5) {
+                color = belgianWave(uv, time_warp);
+            } else if (u_shader_index == 6) {
+                color = brazilianEncounter(uv, time_warp);
+            } else if (u_shader_index == 7) {
+                color = miracleOfSun(uv, time_warp);
+            } else if (u_shader_index == 8) {
+                color = flyingSaucers(uv, time_warp);
+            } else if (u_shader_index == 9) {
+                color = fooFighters(uv, time_warp);
             }
-            else if (phaseIndex == 1) {
-                color = alienInfestation(uv, u_time);
-            }
-            else if (phaseIndex == 2) {
-                color = dimensionalCorridor(uv, u_time);
-            }
-            else if (phaseIndex == 3) {
-                color = liminalPool(uv, u_time);
-            }
-            else if (phaseIndex == 4) {
-                color = entityStalking(uv, u_time);
-            }
-            else if (phaseIndex == 5) {
-                color = glitchedReality(uv, u_time);
-            }
-            else if (phaseIndex == 6) {
-                color = moldInfestation(uv, u_time);
-            }
-            else if (phaseIndex == 7) {
-                color = backroomsMaze(uv, u_time);
-            }
-            else if (phaseIndex == 8) {
-                color = alienPortal(uv, u_time);
-            }
-            else if (phaseIndex == 9) {
-                color = entitySwarm(uv, u_time);
-            }
-            else if (phaseIndex == 10) {
-                color = liminalStairwell(uv, u_time);
-            }
-            else if (phaseIndex == 11) {
-                color = alienHive(uv, u_time);
-            }
-            else if (phaseIndex >= 12) {
-                // Hybrid nightmare combinations
-                float selector = mod(float(phaseIndex - 12), 3.0);
-                if (selector < 1.0) {
-                    color = mix(endlessOffice(uv, u_time), entityStalking(uv * 0.8, u_time), 0.6);
-                } else if (selector < 2.0) {
-                    color = mix(alienInfestation(uv, u_time), glitchedReality(uv, u_time), sin(u_time) * 0.5 + 0.5);
-                } else {
-                    color = mix(liminalPool(uv, u_time), alienHive(uv * 1.3, u_time), 0.7);
-                }
-            }
-
-            // Mouse interaction - entity following
-            vec2 mouse_pos = u_mouse * 2.0 - 1.0;
-            mouse_pos.y *= -1.0;
-            float mouse_dist = length(uv - mouse_pos);
-            float entity_follow = exp(-mouse_dist * 2.0) * u_intensity * 0.3;
-            color += entityRed * entity_follow;
-
-            // Intensity modulation
+            
+            // Apply intensity and transition effects
             color *= u_intensity;
-
-            // Eerie vignette
-            float vignette = smoothstep(1.5, 0.3, length(uv));
-            color *= vignette * 0.8 + 0.2;
-
-            // CRT/Security camera effect
-            float scanline = sin(originalUV.y * u_resolution.y * 2.0) * 0.03 + 0.97;
-            color *= scanline;
-
-            // Film grain for that found footage feel
-            float grain = hash(originalUV + u_time) * 0.05 + 0.95;
-            color *= grain;
-
-            outColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+            
+            // Smooth transition between shaders
+            color = mix(color, color * 1.2, u_transition);
+            
+            // Final color output
+            outColor = vec4(color, 1.0);
         }
     `;
 
     // =================================================================================================
-    // [WEBGL UTILITY FUNCTIONS] :: SAME AS ORIGINAL
+    // [SHADER COMPILATION AND PROGRAM CREATION]
     // =================================================================================================
-
     function createShader(type, source) {
         const shader = gl.createShader(type);
-        if (!shader) { throw new Error(`Failed to create shader object (type: ${type})`); }
-
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
 
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
             const infoLog = gl.getShaderInfoLog(shader);
-            const sourceWithLines = source.split('\n').map((line, index) => `${index + 1}: ${line}`).join('\n');
-            console.error(`>>> SHADER COMPILE ERROR (${shaderType}):\n${infoLog}`);
-            console.error(`--- Shader Source (${shaderType}) ---\n${sourceWithLines}\n---`);
+            console.error('>>> SHADER COMPILE ERROR:', infoLog);
             gl.deleteShader(shader);
-            throw new Error(`Shader compilation failed: ${shaderType}`);
+            throw new Error("Shader compilation failed.");
         }
         return shader;
     }
 
     function createProgram(vertexShader, fragmentShader) {
         const program = gl.createProgram();
-        if (!program) { throw new Error("Failed to create shader program object."); }
-
         gl.attachShader(program, vertexShader);
         gl.attachShader(program, fragmentShader);
         gl.linkProgram(program);
@@ -509,7 +788,7 @@
     }
 
     // =================================================================================================
-    // [WEBGL STATE & SETUP] :: SAME STRUCTURE AS ORIGINAL
+    // [WEBGL STATE & SETUP]
     // =================================================================================================
 
     let positionAttributeLocation = -1;
@@ -518,6 +797,8 @@
     let mouseUniformLocation = null;
     let intensityUniformLocation = null;
     let speedUniformLocation = null;
+    let shaderIndexUniformLocation = null;
+    let transitionUniformLocation = null;
     let positionBuffer = null;
     let startTime = performance.now();
 
@@ -535,6 +816,8 @@
             mouseUniformLocation = gl.getUniformLocation(program, "u_mouse");
             intensityUniformLocation = gl.getUniformLocation(program, "u_intensity");
             speedUniformLocation = gl.getUniformLocation(program, "u_speed");
+            shaderIndexUniformLocation = gl.getUniformLocation(program, "u_shader_index");
+            transitionUniformLocation = gl.getUniformLocation(program, "u_transition");
 
             positionBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -554,7 +837,7 @@
     }
 
     // =================================================================================================
-    // [RENDER LOOP] :: SAME AS ORIGINAL
+    // [RENDER LOOP WITH SHADER CYCLING]
     // =================================================================================================
     function render(now) {
         if (!program) {
@@ -564,6 +847,21 @@
         }
 
         let time = (now - startTime) * 0.001;
+
+        // Auto-cycle through shaders every 15 seconds
+        if (time - lastShaderChange > 15.0) {
+            currentShaderIndex = (currentShaderIndex + 1) % 10;
+            lastShaderChange = time;
+            shaderTransitionTime = time;
+            
+            // Display encounter info
+            const encounter = alienEncounters[currentShaderIndex];
+            console.log(`[ENCOUNTER] ${encounter.year} - ${encounter.name} (${encounter.location})`);
+            console.log(`[DESCRIPTION] ${encounter.description}`);
+        }
+
+        // Calculate transition effect
+        let transition = Math.min(1.0, (time - shaderTransitionTime) / 2.0);
 
         const currentWidth = window.innerWidth;
         const currentHeight = window.innerHeight;
@@ -587,6 +885,8 @@
         gl.uniform2f(mouseUniformLocation, mx, my);
         gl.uniform1f(intensityUniformLocation, window.shaderIntensity !== undefined ? window.shaderIntensity : 1.0);
         gl.uniform1f(speedUniformLocation, window.shaderSpeed !== undefined ? window.shaderSpeed : 1.0);
+        gl.uniform1i(shaderIndexUniformLocation, currentShaderIndex);
+        gl.uniform1f(transitionUniformLocation, transition);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -594,11 +894,29 @@
     }
 
     // =================================================================================================
-    // [GLOBAL INTERFACE & EVENT LISTENERS] :: SAME AS ORIGINAL
+    // [GLOBAL INTERFACE & EVENT LISTENERS]
     // =================================================================================================
 
-    window.updateShader = function(newShaderCode) {
-        console.warn("Dynamic shader updates are complex and not fully implemented in this version.");
+    window.updateShader = function(shaderIndex) {
+        if (shaderIndex >= 0 && shaderIndex < 10) {
+            currentShaderIndex = shaderIndex;
+            shaderTransitionTime = performance.now() * 0.001 - startTime * 0.001;
+            lastShaderChange = shaderTransitionTime;
+            
+            const encounter = alienEncounters[currentShaderIndex];
+            console.log(`[MANUAL SWITCH] ${encounter.year} - ${encounter.name} (${encounter.location})`);
+        }
+    };
+
+    window.getEncounterInfo = function(index) {
+        if (index >= 0 && index < alienEncounters.length) {
+            return alienEncounters[index];
+        }
+        return null;
+    };
+
+    window.getAllEncounters = function() {
+        return alienEncounters;
     };
 
     window.shaderMouse = { x: 0.5, y: 0.5 };
@@ -607,11 +925,22 @@
         window.shaderMouse.y = 1.0 - (e.clientY / window.innerHeight);
     });
 
+    // Keyboard controls for manual shader switching
+    window.addEventListener('keydown', (e) => {
+        if (e.key >= '0' && e.key <= '9') {
+            const index = parseInt(e.key);
+            if (index < 10) {
+                window.updateShader(index);
+            }
+        }
+    });
+
     if (setupWebGL()) {
-        console.log("[INFO] Backrooms dimensional breach successful. Entity detection active.");
+        console.log("[INFO] Alien encounter visualization system initialized successfully.");
+        console.log("[CONTROLS] Press 0-9 to manually switch between encounters, or wait for auto-cycling.");
         animationFrameId = requestAnimationFrame(render);
     } else {
-        console.error("[FATAL] Failed to establish interdimensional connection. Reality remains stable.");
+        console.error("[FATAL] Failed to establish alien encounter visualization. Reality remains mundane.");
     }
 
 })();
