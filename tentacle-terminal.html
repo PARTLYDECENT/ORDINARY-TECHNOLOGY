@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Mobile Racing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #speedometer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+        }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 200px;
+            pointer-events: auto;
+        }
+
+        .control-btn {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            touch-action: manipulation;
+            user-select: none;
+            backdrop-filter: blur(10px);
+            transition: all 0.1s ease;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        #gasBtn {
+            right: 30px;
+            bottom: 30px;
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+        }
+
+        #brakeBtn {
+            right: 130px;
+            bottom: 30px;
+            background: linear-gradient(145deg, #f44336, #d32f2f);
+        }
+
+        #leftBtn {
+            left: 30px;
+            bottom: 120px;
+            background: linear-gradient(145deg, #FF9800, #F57C00);
+        }
+
+        #rightBtn {
+            left: 130px;
+            bottom: 120px;
+            background: linear-gradient(145deg, #FF9800, #F57C00);
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #restartBtn {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin-top: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            z-index: 200;
+        }
+
+        #startBtn {
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin-top: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui">
+            <div id="speedometer">Speed: 0 mph</div>
+            <div id="score">Distance: 0m</div>
+            
+            <div id="controls">
+                <button class="control-btn" id="leftBtn">←</button>
+                <button class="control-btn" id="rightBtn">→</button>
+                <button class="control-btn" id="brakeBtn">🛑</button>
+                <button class="control-btn" id="gasBtn">⚡</button>
+            </div>
+            
+            <div id="gameOver">
+                <h2>Game Over!</h2>
+                <p>Final Distance: <span id="finalScore">0</span>m</p>
+                <button id="restartBtn">Restart Game</button>
+            </div>
+            
+            <div id="instructions">
+                <h2>🏎️ 3D Racing Game</h2>
+                <p>Use the control buttons to drive:</p>
+                <p>← → Steer left/right</p>
+                <p>⚡ Accelerate</p>
+                <p>🛑 Brake</p>
+                <p><strong>Avoid the obstacles and drive as far as you can!</strong></p>
+                <button id="startBtn">Start Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        class MobileRacingGame {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.car = null;
+                this.road = [];
+                this.obstacles = [];
+                this.trees = [];
+                
+                this.gameRunning = false;
+                this.gameSpeed = 0;
+                this.carSpeed = 0;
+                this.carPosition = 0;
+                this.distance = 0;
+                this.maxSpeed = 8;
+                
+                this.controls = {
+                    left: false,
+                    right: false,
+                    gas: false,
+                    brake: false
+                };
+                
+                this.init();
+                this.setupControls();
+                this.setupUI();
+            }
+            
+            init() {
+                // Create scene
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
+                
+                // Create camera
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 8, 12);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Create renderer
+                const canvas = document.getElementById('gameCanvas');
+                this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setClearColor(0x87ceeb);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                // Add lighting
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 20, 5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+                
+                this.createCar();
+                this.createRoad();
+                this.createEnvironment();
+                
+                window.addEventListener('resize', () => this.onWindowResize(), false);
+            }
+            
+            createCar() {
+                const carGroup = new THREE.Group();
+                
+                // Car body
+                const bodyGeometry = new THREE.BoxGeometry(2, 0.8, 4);
+                const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff4444 });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 0.4;
+                body.castShadow = true;
+                carGroup.add(body);
+                
+                // Car roof
+                const roofGeometry = new THREE.BoxGeometry(1.8, 0.6, 2);
+                const roofMaterial = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = 1;
+                roof.position.z = -0.5;
+                roof.castShadow = true;
+                carGroup.add(roof);
+                
+                // Wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+                const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                
+                const positions = [
+                    [-1.2, 0, 1.5], [1.2, 0, 1.5],
+                    [-1.2, 0, -1.5], [1.2, 0, -1.5]
+                ];
+                
+                positions.forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(...pos);
+                    wheel.castShadow = true;
+                    carGroup.add(wheel);
+                });
+                
+                carGroup.position.set(0, 0.2, 0);
+                this.car = carGroup;
+                this.scene.add(carGroup);
+            }
+            
+            createRoad() {
+                const roadGeometry = new THREE.PlaneGeometry(12, 400);
+                const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+                
+                for (let i = 0; i < 3; i++) {
+                    const roadSegment = new THREE.Mesh(roadGeometry, roadMaterial);
+                    roadSegment.rotation.x = -Math.PI / 2;
+                    roadSegment.position.z = i * 400 - 200;
+                    roadSegment.receiveShadow = true;
+                    this.road.push(roadSegment);
+                    this.scene.add(roadSegment);
+                }
+                
+                // Road lines
+                for (let i = 0; i < 20; i++) {
+                    const lineGeometry = new THREE.PlaneGeometry(0.2, 4);
+                    const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                    const line = new THREE.Mesh(lineGeometry, lineMaterial);
+                    line.rotation.x = -Math.PI / 2;
+                    line.position.set(0, 0.01, i * 20 - 200);
+                    this.scene.add(line);
+                }
+            }
+            
+            createEnvironment() {
+                // Trees
+                for (let i = 0; i < 50; i++) {
+                    const treeGroup = new THREE.Group();
+                    
+                    // Trunk
+                    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 3);
+                    const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                    trunk.position.y = 1.5;
+                    treeGroup.add(trunk);
+                    
+                    // Leaves
+                    const leavesGeometry = new THREE.SphereGeometry(1.5, 8, 6);
+                    const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+                    const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                    leaves.position.y = 3.5;
+                    treeGroup.add(leaves);
+                    
+                    const side = Math.random() < 0.5 ? -1 : 1;
+                    treeGroup.position.set(
+                        side * (8 + Math.random() * 5),
+                        0,
+                        (Math.random() - 0.5) * 400
+                    );
+                    
+                    this.trees.push(treeGroup);
+                    this.scene.add(treeGroup);
+                }
+                
+                this.createObstacles();
+            }
+            
+            createObstacles() {
+                for (let i = 0; i < 15; i++) {
+                    const obstacleGeometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                    const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+                    const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+                    
+                    obstacle.position.set(
+                        (Math.random() - 0.5) * 8,
+                        0.75,
+                        -50 - i * 25
+                    );
+                    obstacle.castShadow = true;
+                    
+                    this.obstacles.push(obstacle);
+                    this.scene.add(obstacle);
+                }
+            }
+            
+            setupControls() {
+                // Touch controls
+                const addTouchListeners = (element, onStart, onEnd) => {
+                    element.addEventListener('touchstart', onStart, { passive: false });
+                    element.addEventListener('touchend', onEnd, { passive: false });
+                    element.addEventListener('mousedown', onStart);
+                    element.addEventListener('mouseup', onEnd);
+                };
+                
+                addTouchListeners(
+                    document.getElementById('leftBtn'),
+                    (e) => { e.preventDefault(); this.controls.left = true; },
+                    (e) => { e.preventDefault(); this.controls.left = false; }
+                );
+                
+                addTouchListeners(
+                    document.getElementById('rightBtn'),
+                    (e) => { e.preventDefault(); this.controls.right = true; },
+                    (e) => { e.preventDefault(); this.controls.right = false; }
+                );
+                
+                addTouchListeners(
+                    document.getElementById('gasBtn'),
+                    (e) => { e.preventDefault(); this.controls.gas = true; },
+                    (e) => { e.preventDefault(); this.controls.gas = false; }
+                );
+                
+                addTouchListeners(
+                    document.getElementById('brakeBtn'),
+                    (e) => { e.preventDefault(); this.controls.brake = true; },
+                    (e) => { e.preventDefault(); this.controls.brake = false; }
+                );
+            }
+            
+            setupUI() {
+                document.getElementById('startBtn').onclick = () => {
+                    document.getElementById('instructions').style.display = 'none';
+                    this.startGame();
+                };
+                
+                document.getElementById('restartBtn').onclick = () => {
+                    this.restartGame();
+                };
+            }
+            
+            startGame() {
+                this.gameRunning = true;
+                this.animate();
+            }
+            
+            restartGame() {
+                this.gameRunning = true;
+                this.carSpeed = 0;
+                this.carPosition = 0;
+                this.distance = 0;
+                this.car.position.set(0, 0.2, 0);
+                
+                // Reset obstacles
+                this.obstacles.forEach((obstacle, i) => {
+                    obstacle.position.z = -50 - i * 25;
+                });
+                
+                document.getElementById('gameOver').style.display = 'none';
+                this.animate();
+            }
+            
+            update() {
+                if (!this.gameRunning) return;
+                
+                // Car movement
+                if (this.controls.gas) {
+                    this.carSpeed = Math.min(this.carSpeed + 0.15, this.maxSpeed);
+                } else if (this.controls.brake) {
+                    this.carSpeed = Math.max(this.carSpeed - 0.3, 0);
+                } else {
+                    this.carSpeed *= 0.98; // Natural deceleration
+                }
+                
+                if (this.controls.left) {
+                    this.carPosition = Math.max(this.carPosition - 0.15, -4);
+                    this.car.rotation.z = 0.1;
+                } else if (this.controls.right) {
+                    this.carPosition = Math.min(this.carPosition + 0.15, 4);
+                    this.car.rotation.z = -0.1;
+                } else {
+                    this.car.rotation.z *= 0.9;
+                }
+                
+                this.car.position.x = this.carPosition;
+                this.distance += this.carSpeed * 0.5;
+                
+                // Move environment
+                this.road.forEach(segment => {
+                    segment.position.z += this.carSpeed;
+                    if (segment.position.z > 200) {
+                        segment.position.z -= 1200;
+                    }
+                });
+                
+                this.obstacles.forEach(obstacle => {
+                    obstacle.position.z += this.carSpeed;
+                    obstacle.rotation.y += 0.05;
+                    
+                    if (obstacle.position.z > 50) {
+                        obstacle.position.z -= 400;
+                        obstacle.position.x = (Math.random() - 0.5) * 8;
+                    }
+                    
+                    // Collision detection
+                    const distance = Math.sqrt(
+                        Math.pow(this.car.position.x - obstacle.position.x, 2) +
+                        Math.pow(this.car.position.z - obstacle.position.z, 2)
+                    );
+                    
+                    if (distance < 2) {
+                        this.gameOver();
+                    }
+                });
+                
+                this.trees.forEach(tree => {
+                    tree.position.z += this.carSpeed;
+                    if (tree.position.z > 200) {
+                        tree.position.z -= 400;
+                    }
+                });
+                
+                // Update camera
+                this.camera.position.x = this.car.position.x * 0.3;
+                
+                // Update UI
+                document.getElementById('speedometer').textContent = 
+                    `Speed: ${Math.floor(this.carSpeed * 10)} mph`;
+                document.getElementById('score').textContent = 
+                    `Distance: ${Math.floor(this.distance)}m`;
+            }
+            
+            gameOver() {
+                this.gameRunning = false;
+                document.getElementById('finalScore').textContent = Math.floor(this.distance);
+                document.getElementById('gameOver').style.display = 'block';
+            }
+            
+            animate() {
+                if (!this.gameRunning) return;
+                
+                requestAnimationFrame(() => this.animate());
+                this.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+        
+        // Start the game when page loads
+        window.addEventListener('load', () => {
+            new MobileRacingGame();
+        });
+    </script>
+</body>
+</html>
