@@ -82,15 +82,16 @@
             pointer-events: auto;
         }
         
-        /* MODIFIED: Added a zone for the joystick */
+        /* MODIFIED: Joystick zone is now a wide "pill" shape to suggest horizontal movement */
         #joystick-zone {
             position: absolute;
             bottom: 30px;
-            left: 30px;
-            width: 150px;
-            height: 150px;
+            left: 5%; /* Use percentage for better scaling */
+            width: 40%; /* Make it wider */
+            max-width: 200px; /* But not too wide on large screens */
+            height: 100px;
             background: rgba(0,0,0,0.2);
-            border-radius: 50%;
+            border-radius: 50px;
         }
 
         .control-btn {
@@ -117,50 +118,17 @@
 
         #gasBtn {
             right: 30px;
-            bottom: 120px; /* MODIFIED: Moved up */
+            bottom: 120px;
             background: linear-gradient(145deg, #4CAF50, #45a049);
         }
 
         #brakeBtn {
-            right: 30px; /* MODIFIED: Moved to same column as gas */
+            right: 30px;
             bottom: 30px;
             background: linear-gradient(145deg, #f44336, #d32f2f);
         }
         
-        /* MODIFIED: No longer need left/right buttons */
-        #leftBtn, #rightBtn {
-            display: none;
-        }
-
-        #gameOver {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 30px;
-            border-radius: 20px;
-            text-align: center;
-            display: none;
-            backdrop-filter: blur(20px);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-
-        #restartBtn {
-            background: linear-gradient(145deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            margin-top: 15px;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            pointer-events: auto;
-        }
-
-        #instructions {
+        #gameOver, #instructions {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -172,11 +140,12 @@
             text-align: center;
             backdrop-filter: blur(20px);
             border: 2px solid rgba(255, 255, 255, 0.2);
-            z-index: 200;
         }
 
-        #startBtn {
-            background: linear-gradient(145deg, #4CAF50, #45a049);
+        #gameOver { display: none; }
+        #instructions { z-index: 200; }
+
+        #restartBtn, #startBtn {
             color: white;
             border: none;
             padding: 15px 30px;
@@ -187,6 +156,9 @@
             cursor: pointer;
             pointer-events: auto;
         }
+
+        #startBtn { background: linear-gradient(145deg, #4CAF50, #45a049); }
+        #restartBtn { background: linear-gradient(145deg, #667eea, #764ba2); }
     </style>
 </head>
 <body>
@@ -206,7 +178,7 @@
             <div id="gameOver">
                 <h2>Game Over!</h2>
                 <p>Final Distance: <span id="finalScore">0</span>m</p>
-                <button id="restartBtn">Restart Game</button>
+                <button id="restartBtn">Restart</button>
             </div>
             
             <div id="instructions">
@@ -230,33 +202,16 @@
     <script>
         class MobileRacingGame {
             constructor() {
-                this.scene = null;
-                this.camera = null;
-                this.renderer = null;
-                this.car = null;
-                this.carModel = null;
-                this.wheels = [];
-                this.road = [];
-                this.obstacles = [];
-                this.trees = [];
+                this.scene = null; this.camera = null; this.renderer = null; this.car = null;
+                this.wheels = []; this.road = []; this.obstacles = []; this.trees = [];
                 
-                this.gameRunning = false;
-                this.gameSpeed = 0;
-                this.carSpeed = 0;
-                this.carPosition = 0;
-                this.distance = 0;
-                this.maxSpeed = 4; // MODIFIED: Halved from 8 to 4
-                this.wheelRotation = 0;
+                this.gameRunning = false; this.carSpeed = 0; this.carPosition = 0; this.distance = 0;
+                this.maxSpeed = 4; this.wheelRotation = 0;
                 
-                // ADDED: Property for engine sound
-                this.engineSound = null;
+                // MODIFIED: Get the engine sound element right away
+                this.engineSound = document.getElementById('engineSound');
 
-                this.controls = {
-                    left: false,
-                    right: false,
-                    gas: false,
-                    brake: false
-                };
+                this.controls = { left: false, right: false, gas: false, brake: false };
                 
                 this.gltfLoader = new THREE.GLTFLoader();
                 this.rgbeLoader = new THREE.RGBELoader();
@@ -267,219 +222,40 @@
             }
             
             init() {
-                // Create scene
                 this.scene = new THREE.Scene();
                 this.scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
-                
-                // Create camera
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, 8, 12);
                 this.camera.lookAt(0, 0, 0);
-                
-                // Create renderer
                 const canvas = document.getElementById('gameCanvas');
                 this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
                 this.renderer.setClearColor(0x87ceeb);
                 this.renderer.shadowMap.enabled = true;
-                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
                 this.renderer.toneMappingExposure = 0.6;
-                
-                // Load HDR skybox
                 this.loadSkybox();
-                
-                // Add lighting
                 const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
                 this.scene.add(ambientLight);
-                
                 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
                 directionalLight.position.set(10, 20, 5);
                 directionalLight.castShadow = true;
-                directionalLight.shadow.mapSize.width = 2048;
-                directionalLight.shadow.mapSize.height = 2048;
                 this.scene.add(directionalLight);
-                
                 this.loadCarModel();
                 this.createRoad();
                 this.createEnvironment();
-                
                 window.addEventListener('resize', () => this.onWindowResize(), false);
             }
             
-            loadSkybox() {
-                this.rgbeLoader.load(
-                    'sky.hdr',
-                    (texture) => {
-                        texture.mapping = THREE.EquirectangularReflectionMapping;
-                        this.scene.background = texture;
-                        this.scene.environment = texture;
-                    },
-                    undefined,
-                    (error) => {
-                        console.log('HDR skybox not found, using default sky');
-                        const skyGeometry = new THREE.SphereGeometry(500, 32, 15);
-                        const skyMaterial = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.BackSide });
-                        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-                        this.scene.add(sky);
-                    }
-                );
-            }
-            
-            loadCarModel() {
-                this.gltfLoader.load(
-                    'car.glb',
-                    (gltf) => {
-                        this.carModel = gltf.scene;
-                        this.carModel.scale.setScalar(1);
-                        this.carModel.position.set(0, 0, 0);
-                        this.carModel.traverse((child) => {
-                            if (child.isMesh) {
-                                child.castShadow = true;
-                                child.receiveShadow = true;
-                            }
-                        });
-                        this.createCarWithWheels();
-                    },
-                    undefined,
-                    (error) => {
-                        console.log('GLB car model not found, using default car');
-                        this.createBasicCar();
-                    }
-                );
-            }
-            
-            createCarWithWheels() {
-                const carGroup = new THREE.Group();
-                carGroup.add(this.carModel);
-                
-                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-                const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                
-                const wheelPositions = [
-                    [-1.2, 0, 1.5], [1.2, 0, 1.5],
-                    [-1.2, 0, -1.5], [1.2, 0, -1.5]
-                ];
-                
-                wheelPositions.forEach(pos => {
-                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                    wheel.rotation.z = Math.PI / 2;
-                    wheel.position.set(...pos);
-                    wheel.castShadow = true;
-                    this.wheels.push(wheel);
-                    carGroup.add(wheel);
-                });
-                
-                carGroup.position.set(0, 0.2, 0);
-                this.car = carGroup;
-                this.scene.add(carGroup);
-            }
-            
-            createBasicCar() {
-                const carGroup = new THREE.Group();
-                const bodyGeometry = new THREE.BoxGeometry(2, 0.8, 4);
-                const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff4444 });
-                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-                body.position.y = 0.4;
-                body.castShadow = true;
-                carGroup.add(body);
-                
-                const roofGeometry = new THREE.BoxGeometry(1.8, 0.6, 2);
-                const roofMaterial = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
-                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-                roof.position.y = 1;
-                roof.position.z = -0.5;
-                roof.castShadow = true;
-                carGroup.add(roof);
-                
-                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-                const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                
-                const wheelPositions = [
-                    [-1.2, 0, 1.5], [1.2, 0, 1.5],
-                    [-1.2, 0, -1.5], [1.2, 0, -1.5]
-                ];
-                
-                wheelPositions.forEach(pos => {
-                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                    wheel.rotation.z = Math.PI / 2;
-                    wheel.position.set(...pos);
-                    wheel.castShadow = true;
-                    this.wheels.push(wheel);
-                    carGroup.add(wheel);
-                });
-                
-                carGroup.position.set(0, 0.2, 0);
-                this.car = carGroup;
-                this.scene.add(carGroup);
-            }
-            
-            createRoad() {
-                const roadGeometry = new THREE.PlaneGeometry(12, 400);
-                const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                
-                for (let i = 0; i < 3; i++) {
-                    const roadSegment = new THREE.Mesh(roadGeometry, roadMaterial);
-                    roadSegment.rotation.x = -Math.PI / 2;
-                    roadSegment.position.z = i * 400 - 200;
-                    roadSegment.receiveShadow = true;
-                    this.road.push(roadSegment);
-                    this.scene.add(roadSegment);
-                }
-                
-                for (let i = 0; i < 20; i++) {
-                    const lineGeometry = new THREE.PlaneGeometry(0.2, 4);
-                    const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                    const line = new THREE.Mesh(lineGeometry, lineMaterial);
-                    line.rotation.x = -Math.PI / 2;
-                    line.position.set(0, 0.01, i * 20 - 200);
-                    this.scene.add(line);
-                }
-            }
-            
-            createEnvironment() {
-                for (let i = 0; i < 50; i++) {
-                    const treeGroup = new THREE.Group();
-                    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 3);
-                    const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-                    trunk.position.y = 1.5;
-                    treeGroup.add(trunk);
-                    
-                    const leavesGeometry = new THREE.SphereGeometry(1.5, 8, 6);
-                    const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-                    const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-                    leaves.position.y = 3.5;
-                    treeGroup.add(leaves);
-                    
-                    const side = Math.random() < 0.5 ? -1 : 1;
-                    treeGroup.position.set(
-                        side * (8 + Math.random() * 5), 0, (Math.random() - 0.5) * 400
-                    );
-                    
-                    this.trees.push(treeGroup);
-                    this.scene.add(treeGroup);
-                }
-                this.createObstacles();
-            }
-            
-            createObstacles() {
-                for (let i = 0; i < 15; i++) {
-                    const obstacleGeometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-                    const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0xff6600 });
-                    const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
-                    
-                    obstacle.position.set((Math.random() - 0.5) * 8, 0.75, -50 - i * 25);
-                    obstacle.castShadow = true;
-                    
-                    this.obstacles.push(obstacle);
-                    this.scene.add(obstacle);
-                }
-            }
+            loadSkybox(){ /* ... code unchanged ... */ this.rgbeLoader.load('sky.hdr',t=>{t.mapping=THREE.EquirectangularReflectionMapping,this.scene.background=t,this.scene.environment=t},void 0,e=>{console.log("HDR skybox not found"),this.scene.add(new THREE.Mesh(new THREE.SphereGeometry(500,32,15),new THREE.MeshBasicMaterial({color:10672365,side:THREE.BackSide})))})}
+            loadCarModel(){ /* ... code unchanged ... */ this.gltfLoader.load('car.glb',t=>{this.carModel=t.scene,this.carModel.scale.setScalar(1),this.carModel.position.set(0,0,0),this.carModel.traverse(t=>{t.isMesh&&(t.castShadow=!0,t.receiveShadow=!0)}),this.createCarWithWheels()},void 0,e=>{console.log("GLB car model not found"),this.createBasicCar()})}
+            createCarWithWheels(){const t=new THREE.Group;t.add(this.carModel);const e=new THREE.CylinderGeometry(.4,.4,.3,16),o=new THREE.MeshLambertMaterial({color:3355443});[[-1.2,0,1.5],[1.2,0,1.5],[-1.2,0,-1.5],[1.2,0,-1.5]].forEach(s=>{const i=new THREE.Mesh(e,o);i.rotation.z=Math.PI/2,i.position.set(...s),i.castShadow=!0,this.wheels.push(i),t.add(i)}),t.position.set(0,.2,0),this.car=t,this.scene.add(t)}
+            createBasicCar(){/* ... code unchanged ... */ const t=new THREE.Group,e=new THREE.Mesh(new THREE.BoxGeometry(2,.8,4),new THREE.MeshLambertMaterial({color:16729156}));e.position.y=.4,e.castShadow=!0,t.add(e);const o=new THREE.Mesh(new THREE.BoxGeometry(1.8,.6,2),new THREE.MeshLambertMaterial({color:13382451}));o.position.y=1,o.position.z=-.5,o.castShadow=!0,t.add(o);const s=new THREE.CylinderGeometry(.4,.4,.3,16),i=new THREE.MeshLambertMaterial({color:3355443});[[-1.2,0,1.5],[1.2,0,1.5],[-1.2,0,-1.5],[1.2,0,-1.5]].forEach(e=>{const o=new THREE.Mesh(s,i);o.rotation.z=Math.PI/2,o.position.set(...e),o.castShadow=!0,this.wheels.push(o),t.add(o)}),t.position.set(0,.2,0),this.car=t,this.scene.add(t)}
+            createRoad(){for(let t=0;t<3;t++){const e=new THREE.Mesh(new THREE.PlaneGeometry(12,400),new THREE.MeshLambertMaterial({color:4473924}));e.rotation.x=-Math.PI/2,e.position.z=400*t-200,e.receiveShadow=!0,this.road.push(e),this.scene.add(e)}for(let t=0;t<20;t++){const e=new THREE.Mesh(new THREE.PlaneGeometry(.2,4),new THREE.MeshBasicMaterial({color:16777215}));e.rotation.x=-Math.PI/2,e.position.set(0,.01,20*t-200),this.scene.add(e)}}
+            createEnvironment(){for(let t=0;t<50;t++){const e=new THREE.Group,o=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,3),new THREE.MeshLambertMaterial({color:9127187}));o.position.y=1.5,e.add(o);const s=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,6),new THREE.MeshLambertMaterial({color:2263842}));s.position.y=3.5,e.add(s);const i=.5>Math.random()?-1:1;e.position.set(i*(8+5*Math.random()),0,400*(Math.random()-.5)),this.trees.push(e),this.scene.add(e)}this.createObstacles()}
+            createObstacles(){for(let t=0;t<15;t++){const e=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,1.5),new THREE.MeshLambertMaterial({color:16737792}));e.position.set(8*(Math.random()-.5),.75,-50-25*t),e.castShadow=!0,this.obstacles.push(e),this.scene.add(e)}}
             
             setupControls() {
-                // MODIFIED: This function now sets up the joystick and buttons
-                
                 // --- Joystick Setup ---
                 const joystickZone = document.getElementById('joystick-zone');
                 const joystickOptions = {
@@ -487,21 +263,23 @@
                     mode: 'static',
                     position: { left: '50%', top: '50%' },
                     color: 'rgba(255, 255, 255, 0.5)',
-                    size: 100,
-                    lockX: false, // Allow horizontal movement
-                    lockY: true   // Lock vertical movement
+                    shape: 'square', // Helps visually for horizontal movement
+                    lockY: true,     // Restricts joystick to the X-axis
+                    size: 80
                 };
                 const manager = nipplejs.create(joystickOptions);
 
+                // MODIFIED: This logic is more reliable for left/right
                 manager.on('move', (evt, data) => {
-                    if (data.direction) {
-                        if (data.direction.x === 'left') {
-                            this.controls.left = true;
-                            this.controls.right = false;
-                        } else if (data.direction.x === 'right') {
-                            this.controls.left = false;
-                            this.controls.right = true;
-                        }
+                    const angle = data.angle.degree;
+                    // Check if the joystick is moved into the left-side hemisphere
+                    if (angle > 90 && angle < 270) {
+                        this.controls.left = true;
+                        this.controls.right = false;
+                    // Otherwise, it's in the right-side hemisphere
+                    } else {
+                        this.controls.left = false;
+                        this.controls.right = true;
                     }
                 });
 
@@ -518,10 +296,23 @@
                     element.addEventListener('mouseup', onEnd);
                 };
                 
+                // MODIFIED: Gas pedal now controls the engine sound directly
                 addTouchListeners(
                     document.getElementById('gasBtn'),
-                    (e) => { e.preventDefault(); this.controls.gas = true; },
-                    (e) => { e.preventDefault(); this.controls.gas = false; }
+                    (e) => { 
+                        e.preventDefault(); 
+                        this.controls.gas = true; 
+                        // Play sound if it's currently paused
+                        if (this.engineSound.paused) {
+                            this.engineSound.play().catch(e => console.error("Audio play failed:", e));
+                        }
+                    },
+                    (e) => { 
+                        e.preventDefault(); 
+                        this.controls.gas = false; 
+                        // Pause the sound when gas is released
+                        this.engineSound.pause();
+                    }
                 );
                 
                 addTouchListeners(
@@ -534,14 +325,8 @@
             setupUI() {
                 document.getElementById('startBtn').onclick = () => {
                     document.getElementById('instructions').style.display = 'none';
-                    
-                    // ADDED: Initialize and play engine sound on game start
-                    this.engineSound = document.getElementById('engineSound');
-                    this.engineSound.play().catch(e => console.log("Audio play failed, user needs to interact first."));
-
                     this.startGame();
                 };
-                
                 document.getElementById('restartBtn').onclick = () => {
                     this.restartGame();
                 };
@@ -553,19 +338,9 @@
             }
             
             restartGame() {
-                this.gameRunning = true;
-                this.carSpeed = 0;
-                this.carPosition = 0;
-                this.distance = 0;
+                this.gameRunning = true; this.carSpeed = 0; this.carPosition = 0; this.distance = 0;
                 this.car.position.set(0, 0.2, 0);
-                
-                // ADDED: Play sound again on restart
-                if(this.engineSound) this.engineSound.play();
-
-                this.obstacles.forEach((obstacle, i) => {
-                    obstacle.position.z = -50 - i * 25;
-                });
-                
+                this.obstacles.forEach((o, i) => { o.position.z = -50 - i * 25; });
                 document.getElementById('gameOver').style.display = 'none';
                 this.animate();
             }
@@ -573,69 +348,32 @@
             update() {
                 if (!this.gameRunning) return;
                 
-                // MODIFIED: All speed/movement values are halved for slower gameplay
-                if (this.controls.gas) {
-                    this.carSpeed = Math.min(this.carSpeed + 0.05, this.maxSpeed);
-                } else if (this.controls.brake) {
-                    this.carSpeed = Math.max(this.carSpeed - 0.15, 0);
-                } else {
-                    this.carSpeed = Math.max(this.carSpeed - 0.025, 0);
-                }
+                if (this.controls.gas) { this.carSpeed = Math.min(this.carSpeed + 0.05, this.maxSpeed); }
+                else if (this.controls.brake) { this.carSpeed = Math.max(this.carSpeed - 0.15, 0); }
+                else { this.carSpeed = Math.max(this.carSpeed - 0.025, 0); }
                 
-                if (this.controls.left) {
-                    this.carPosition = Math.max(this.carPosition - 0.075, -4);
-                    this.car.rotation.z = 0.1;
-                } else if (this.controls.right) {
-                    this.carPosition = Math.min(this.carPosition + 0.075, 4);
-                    this.car.rotation.z = -0.1;
-                } else {
-                    this.car.rotation.z *= 0.9;
-                }
+                if (this.controls.left) { this.carPosition = Math.max(this.carPosition - 0.075, -4); this.car.rotation.z = 0.1; }
+                else if (this.controls.right) { this.carPosition = Math.min(this.carPosition + 0.075, 4); this.car.rotation.z = -0.1; }
+                else { this.car.rotation.z *= 0.9; }
                 
                 this.car.position.x = this.carPosition;
                 this.distance += this.carSpeed * 0.5;
                 
-                // ADDED: Update engine sound volume based on car speed
-                if (this.engineSound) {
-                    // Set volume between 20% (idle) and 100% (max speed)
-                    this.engineSound.volume = Math.max(0.2, this.carSpeed / this.maxSpeed);
-                }
-
                 if (this.carSpeed > 0) {
                     this.wheelRotation += this.carSpeed * 0.1;
-                    this.wheels.forEach(wheel => {
-                        wheel.rotation.x = this.wheelRotation;
-                    });
+                    this.wheels.forEach(w => { w.rotation.x = this.wheelRotation; });
                 }
                 
-                this.road.forEach(segment => {
-                    segment.position.z += this.carSpeed;
-                    if (segment.position.z > 200) segment.position.z -= 1200;
+                this.road.forEach(s => { s.position.z += this.carSpeed; if (s.position.z > 200) s.position.z -= 1200; });
+                
+                this.obstacles.forEach(o => {
+                    o.position.z += this.carSpeed; o.rotation.y += 0.05;
+                    if (o.position.z > 50) { o.position.z -= 400; o.position.x = (Math.random() - 0.5) * 8; }
+                    const dist = this.car.position.distanceTo(o.position);
+                    if (dist < 2) { this.gameOver(); }
                 });
                 
-                this.obstacles.forEach(obstacle => {
-                    obstacle.position.z += this.carSpeed;
-                    obstacle.rotation.y += 0.05;
-                    
-                    if (obstacle.position.z > 50) {
-                        obstacle.position.z -= 400;
-                        obstacle.position.x = (Math.random() - 0.5) * 8;
-                    }
-                    
-                    const distance = Math.sqrt(
-                        Math.pow(this.car.position.x - obstacle.position.x, 2) +
-                        Math.pow(this.car.position.z - obstacle.position.z, 2)
-                    );
-                    
-                    if (distance < 2) {
-                        this.gameOver();
-                    }
-                });
-                
-                this.trees.forEach(tree => {
-                    tree.position.z += this.carSpeed;
-                    if (tree.position.z > 200) tree.position.z -= 400;
-                });
+                this.trees.forEach(t => { t.position.z += this.carSpeed; if (t.position.z > 200) t.position.z -= 400; });
                 
                 this.camera.position.x = this.car.position.x * 0.3;
                 
@@ -645,17 +383,14 @@
             
             gameOver() {
                 this.gameRunning = false;
-
-                // ADDED: Pause engine sound on game over
-                if(this.engineSound) this.engineSound.pause();
-
+                // MODIFIED: Make sure sound is stopped on game over
+                this.engineSound.pause(); 
                 document.getElementById('finalScore').textContent = Math.floor(this.distance);
                 document.getElementById('gameOver').style.display = 'block';
             }
             
             animate() {
                 if (!this.gameRunning) return;
-                
                 requestAnimationFrame(() => this.animate());
                 this.update();
                 this.renderer.render(this.scene, this.camera);
@@ -668,9 +403,7 @@
             }
         }
         
-        window.addEventListener('load', () => {
-            new MobileRacingGame();
-        });
+        window.addEventListener('load', () => { new MobileRacingGame(); });
     </script>
 </body>
 </html>
