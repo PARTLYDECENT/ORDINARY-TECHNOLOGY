@@ -81,18 +81,6 @@
             height: 200px;
             pointer-events: auto;
         }
-        
-        /* MODIFIED: Joystick zone is now a wide "pill" shape to suggest horizontal movement */
-        #joystick-zone {
-            position: absolute;
-            bottom: 30px;
-            left: 5%; /* Use percentage for better scaling */
-            width: 40%; /* Make it wider */
-            max-width: 200px; /* But not too wide on large screens */
-            height: 100px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 50px;
-        }
 
         .control-btn {
             position: absolute;
@@ -114,6 +102,16 @@
         .control-btn:active {
             transform: scale(0.95);
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        #leftBtn {
+            left: 30px;
+            bottom: 30px;
+        }
+
+        #rightBtn {
+            left: 120px;
+            bottom: 30px;
         }
 
         #gasBtn {
@@ -170,7 +168,8 @@
             <div id="score">Distance: 0m</div>
             
             <div id="controls">
-                <div id="joystick-zone"></div>
+                <button class="control-btn" id="leftBtn">⬅️</button>
+                <button class="control-btn" id="rightBtn">➡️</button>
                 <button class="control-btn" id="brakeBtn">🛑</button>
                 <button class="control-btn" id="gasBtn">⚡</button>
             </div>
@@ -183,9 +182,7 @@
             
             <div id="instructions">
                 <h2>🏎️ 3D Racing Game</h2>
-                <p>Use the joystick to steer left/right.</p>
-                <p>⚡ Accelerate</p>
-                <p>🛑 Brake</p>
+                <p>Use the buttons to steer, accelerate and brake.</p>
                 <p><strong>Avoid the obstacles and drive as far as you can!</strong></p>
                 <button id="startBtn">Start Game</button>
             </div>
@@ -197,7 +194,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 
     <script>
         class MobileRacingGame {
@@ -208,7 +204,6 @@
                 this.gameRunning = false; this.carSpeed = 0; this.carPosition = 0; this.distance = 0;
                 this.maxSpeed = 4; this.wheelRotation = 0;
                 
-                // MODIFIED: Get the engine sound element right away
                 this.engineSound = document.getElementById('engineSound');
 
                 this.controls = { left: false, right: false, gas: false, brake: false };
@@ -256,39 +251,6 @@
             createObstacles(){for(let t=0;t<15;t++){const e=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,1.5),new THREE.MeshLambertMaterial({color:16737792}));e.position.set(8*(Math.random()-.5),.75,-50-25*t),e.castShadow=!0,this.obstacles.push(e),this.scene.add(e)}}
             
             setupControls() {
-                // --- Joystick Setup ---
-                const joystickZone = document.getElementById('joystick-zone');
-                const joystickOptions = {
-                    zone: joystickZone,
-                    mode: 'static',
-                    position: { left: '50%', top: '50%' },
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    shape: 'square', // Helps visually for horizontal movement
-                    lockY: true,     // Restricts joystick to the X-axis
-                    size: 80
-                };
-                const manager = nipplejs.create(joystickOptions);
-
-                // MODIFIED: This logic is more reliable for left/right
-                manager.on('move', (evt, data) => {
-                    const angle = data.angle.degree;
-                    // Check if the joystick is moved into the left-side hemisphere
-                    if (angle > 90 && angle < 270) {
-                        this.controls.left = true;
-                        this.controls.right = false;
-                    // Otherwise, it's in the right-side hemisphere
-                    } else {
-                        this.controls.left = false;
-                        this.controls.right = true;
-                    }
-                });
-
-                manager.on('end', () => {
-                    this.controls.left = false;
-                    this.controls.right = false;
-                });
-
-                // --- Button Setup ---
                 const addTouchListeners = (element, onStart, onEnd) => {
                     element.addEventListener('touchstart', onStart, { passive: false });
                     element.addEventListener('touchend', onEnd, { passive: false });
@@ -296,13 +258,23 @@
                     element.addEventListener('mouseup', onEnd);
                 };
                 
-                // MODIFIED: Gas pedal now controls the engine sound directly
+                addTouchListeners(
+                    document.getElementById('leftBtn'),
+                    (e) => { e.preventDefault(); this.controls.left = true; },
+                    (e) => { e.preventDefault(); this.controls.left = false; }
+                );
+
+                addTouchListeners(
+                    document.getElementById('rightBtn'),
+                    (e) => { e.preventDefault(); this.controls.right = true; },
+                    (e) => { e.preventDefault(); this.controls.right = false; }
+                );
+
                 addTouchListeners(
                     document.getElementById('gasBtn'),
                     (e) => { 
                         e.preventDefault(); 
                         this.controls.gas = true; 
-                        // Play sound if it's currently paused
                         if (this.engineSound.paused) {
                             this.engineSound.play().catch(e => console.error("Audio play failed:", e));
                         }
@@ -310,7 +282,6 @@
                     (e) => { 
                         e.preventDefault(); 
                         this.controls.gas = false; 
-                        // Pause the sound when gas is released
                         this.engineSound.pause();
                     }
                 );
@@ -334,6 +305,7 @@
             
             startGame() {
                 this.gameRunning = true;
+                this.particleTrail = new ParticleTrail(this.scene, this.car);
                 this.animate();
             }
             
@@ -379,11 +351,14 @@
                 
                 document.getElementById('speedometer').textContent = `Speed: ${Math.floor(this.carSpeed * 10)} mph`;
                 document.getElementById('score').textContent = `Distance: ${Math.floor(this.distance)}m`;
+
+                if (this.particleTrail) {
+                    this.particleTrail.update();
+                }
             }
             
             gameOver() {
                 this.gameRunning = false;
-                // MODIFIED: Make sure sound is stopped on game over
                 this.engineSound.pause(); 
                 document.getElementById('finalScore').textContent = Math.floor(this.distance);
                 document.getElementById('gameOver').style.display = 'block';
@@ -400,6 +375,62 @@
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+
+        class ParticleTrail {
+            constructor(scene, vehicle) {
+                this.scene = scene;
+                this.vehicle = vehicle;
+                this.particles = [];
+                this.particleCount = 100;
+                this.particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+                this.particleMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true });
+
+                for (let i = 0; i < this.particleCount; i++) {
+                    const particle = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
+                    particle.visible = false;
+                    this.scene.add(particle);
+                    this.particles.push({
+                        mesh: particle,
+                        life: 0,
+                        velocity: new THREE.Vector3()
+                    });
+                }
+            }
+
+            update() {
+                const now = performance.now();
+                this.particles.forEach(p => {
+                    if (p.life > 0) {
+                        p.mesh.position.add(p.velocity);
+                        p.life -= 0.01;
+                        p.mesh.material.opacity = p.life;
+                        if (p.life <= 0) {
+                            p.mesh.visible = false;
+                        }
+                    }
+                });
+
+                if (Math.random() > 0.5) { // Emit particles intermittently
+                    this.emitParticle();
+                }
+            }
+
+            emitParticle() {
+                const inactiveParticle = this.particles.find(p => !p.mesh.visible);
+                if (inactiveParticle) {
+                    inactiveParticle.mesh.position.copy(this.vehicle.position);
+                    inactiveParticle.mesh.position.y -= 0.2; // Start below the car
+                    inactiveParticle.life = 1;
+                    inactiveParticle.mesh.visible = true;
+                    inactiveParticle.mesh.material.opacity = 1;
+                    inactiveParticle.velocity.set(
+                        (Math.random() - 0.5) * 0.1,
+                        (Math.random() - 0.5) * 0.1,
+                        (Math.random() - 0.5) * 0.1
+                    );
+                }
             }
         }
         
