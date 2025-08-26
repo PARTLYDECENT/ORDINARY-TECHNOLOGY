@@ -219,6 +219,8 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
     <script>
         class MobileRacingGame {
             constructor() {
@@ -226,6 +228,8 @@
                 this.camera = null;
                 this.renderer = null;
                 this.car = null;
+                this.carModel = null;
+                this.wheels = [];
                 this.road = [];
                 this.obstacles = [];
                 this.trees = [];
@@ -236,6 +240,7 @@
                 this.carPosition = 0;
                 this.distance = 0;
                 this.maxSpeed = 8;
+                this.wheelRotation = 0;
                 
                 this.controls = {
                     left: false,
@@ -243,6 +248,9 @@
                     gas: false,
                     brake: false
                 };
+                
+                this.gltfLoader = new THREE.GLTFLoader();
+                this.rgbeLoader = new THREE.RGBELoader();
                 
                 this.init();
                 this.setupControls();
@@ -266,6 +274,11 @@
                 this.renderer.setClearColor(0x87ceeb);
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 0.6;
+                
+                // Load HDR skybox
+                this.loadSkybox();
                 
                 // Add lighting
                 const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
@@ -278,14 +291,94 @@
                 directionalLight.shadow.mapSize.height = 2048;
                 this.scene.add(directionalLight);
                 
-                this.createCar();
+                this.loadCarModel();
                 this.createRoad();
                 this.createEnvironment();
                 
                 window.addEventListener('resize', () => this.onWindowResize(), false);
             }
             
-            createCar() {
+            loadSkybox() {
+                // Try to load HDR skybox, fallback to default if not found
+                this.rgbeLoader.load(
+                    'sky.hdr',
+                    (texture) => {
+                        texture.mapping = THREE.EquirectangularReflectionMapping;
+                        this.scene.background = texture;
+                        this.scene.environment = texture;
+                    },
+                    undefined,
+                    (error) => {
+                        console.log('HDR skybox not found, using default sky');
+                        // Fallback to gradient sky
+                        const skyGeometry = new THREE.SphereGeometry(500, 32, 15);
+                        const skyMaterial = new THREE.MeshBasicMaterial({
+                            color: 0x87ceeb,
+                            side: THREE.BackSide
+                        });
+                        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                        this.scene.add(sky);
+                    }
+                );
+            }
+            
+            loadCarModel() {
+                // Try to load GLB car model, fallback to basic car if not found
+                this.gltfLoader.load(
+                    'car.glb',
+                    (gltf) => {
+                        this.carModel = gltf.scene;
+                        this.carModel.scale.setScalar(1);
+                        this.carModel.position.set(0, 0, 0);
+                        
+                        // Enable shadows for all meshes in the model
+                        this.carModel.traverse((child) => {
+                            if (child.isMesh) {
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                            }
+                        });
+                        
+                        this.createCarWithWheels();
+                    },
+                    undefined,
+                    (error) => {
+                        console.log('GLB car model not found, using default car');
+                        this.createBasicCar();
+                    }
+                );
+            }
+            
+            createCarWithWheels() {
+                const carGroup = new THREE.Group();
+                
+                // Add the loaded car model
+                carGroup.add(this.carModel);
+                
+                // Create wheels separately for animation
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+                const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                
+                const wheelPositions = [
+                    [-1.2, 0, 1.5], [1.2, 0, 1.5],
+                    [-1.2, 0, -1.5], [1.2, 0, -1.5]
+                ];
+                
+                wheelPositions.forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(...pos);
+                    wheel.castShadow = true;
+                    this.wheels.push(wheel);
+                    carGroup.add(wheel);
+                });
+                
+                carGroup.position.set(0, 0.2, 0);
+                this.car = carGroup;
+                this.scene.add(carGroup);
+            }
+            
+            createBasicCar() {
                 const carGroup = new THREE.Group();
                 
                 // Car body
@@ -309,16 +402,17 @@
                 const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
                 const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
                 
-                const positions = [
+                const wheelPositions = [
                     [-1.2, 0, 1.5], [1.2, 0, 1.5],
                     [-1.2, 0, -1.5], [1.2, 0, -1.5]
                 ];
                 
-                positions.forEach(pos => {
+                wheelPositions.forEach(pos => {
                     const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
                     wheel.rotation.z = Math.PI / 2;
                     wheel.position.set(...pos);
                     wheel.castShadow = true;
+                    this.wheels.push(wheel);
                     carGroup.add(wheel);
                 });
                 
@@ -471,13 +565,14 @@
             update() {
                 if (!this.gameRunning) return;
                 
-                // Car movement
+                // Linear acceleration - must hold gas to maintain/gain speed
                 if (this.controls.gas) {
-                    this.carSpeed = Math.min(this.carSpeed + 0.15, this.maxSpeed);
+                    this.carSpeed = Math.min(this.carSpeed + 0.1, this.maxSpeed);
                 } else if (this.controls.brake) {
                     this.carSpeed = Math.max(this.carSpeed - 0.3, 0);
                 } else {
-                    this.carSpeed *= 0.98; // Natural deceleration
+                    // Linear deceleration when not pressing gas
+                    this.carSpeed = Math.max(this.carSpeed - 0.05, 0);
                 }
                 
                 if (this.controls.left) {
@@ -492,6 +587,14 @@
                 
                 this.car.position.x = this.carPosition;
                 this.distance += this.carSpeed * 0.5;
+                
+                // Animate wheels
+                if (this.carSpeed > 0) {
+                    this.wheelRotation += this.carSpeed * 0.1;
+                    this.wheels.forEach(wheel => {
+                        wheel.rotation.x = this.wheelRotation;
+                    });
+                }
                 
                 // Move environment
                 this.road.forEach(segment => {
