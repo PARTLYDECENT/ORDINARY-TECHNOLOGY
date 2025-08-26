@@ -199,7 +199,7 @@
         class MobileRacingGame {
             constructor() {
                 this.scene = null; this.camera = null; this.renderer = null; this.car = null;
-                this.wheels = []; this.road = []; this.obstacles = []; this.trees = [];
+                this.wheels = []; this.road = []; this.obstacles = [];
                 
                 this.gameRunning = false; this.carSpeed = 0; this.carPosition = 0; this.distance = 0;
                 this.maxSpeed = 4; this.wheelRotation = 0;
@@ -247,8 +247,41 @@
             createCarWithWheels(){const t=new THREE.Group;t.add(this.carModel);const e=new THREE.CylinderGeometry(.4,.4,.3,16),o=new THREE.MeshLambertMaterial({color:3355443});[[-1.2,0,1.5],[1.2,0,1.5],[-1.2,0,-1.5],[1.2,0,-1.5]].forEach(s=>{const i=new THREE.Mesh(e,o);i.rotation.z=Math.PI/2,i.position.set(...s),i.castShadow=!0,this.wheels.push(i),t.add(i)}),t.position.set(0,.2,0),this.car=t,this.scene.add(t)}
             createBasicCar(){/* ... code unchanged ... */ const t=new THREE.Group,e=new THREE.Mesh(new THREE.BoxGeometry(2,.8,4),new THREE.MeshLambertMaterial({color:16729156}));e.position.y=.4,e.castShadow=!0,t.add(e);const o=new THREE.Mesh(new THREE.BoxGeometry(1.8,.6,2),new THREE.MeshLambertMaterial({color:13382451}));o.position.y=1,o.position.z=-.5,o.castShadow=!0,t.add(o);const s=new THREE.CylinderGeometry(.4,.4,.3,16),i=new THREE.MeshLambertMaterial({color:3355443});[[-1.2,0,1.5],[1.2,0,1.5],[-1.2,0,-1.5],[1.2,0,-1.5]].forEach(e=>{const o=new THREE.Mesh(s,i);o.rotation.z=Math.PI/2,o.position.set(...e),o.castShadow=!0,this.wheels.push(o),t.add(o)}),t.position.set(0,.2,0),this.car=t,this.scene.add(t)}
             createRoad(){for(let t=0;t<3;t++){const e=new THREE.Mesh(new THREE.PlaneGeometry(12,400),new THREE.MeshLambertMaterial({color:4473924}));e.rotation.x=-Math.PI/2,e.position.z=400*t-200,e.receiveShadow=!0,this.road.push(e),this.scene.add(e)}for(let t=0;t<20;t++){const e=new THREE.Mesh(new THREE.PlaneGeometry(.2,4),new THREE.MeshBasicMaterial({color:16777215}));e.rotation.x=-Math.PI/2,e.position.set(0,.01,20*t-200),this.scene.add(e)}}
-            createEnvironment(){for(let t=0;t<50;t++){const e=new THREE.Group,o=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,3),new THREE.MeshLambertMaterial({color:9127187}));o.position.y=1.5,e.add(o);const s=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,6),new THREE.MeshLambertMaterial({color:2263842}));s.position.y=3.5,e.add(s);const i=.5>Math.random()?-1:1;e.position.set(i*(8+5*Math.random()),0,400*(Math.random()-.5)),this.trees.push(e),this.scene.add(e)}this.createObstacles()}
-            createObstacles(){for(let t=0;t<15;t++){const e=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,1.5),new THREE.MeshLambertMaterial({color:16737792}));e.position.set(8*(Math.random()-.5),.75,-50-25*t),e.castShadow=!0,this.obstacles.push(e),this.scene.add(e)}}
+            createEnvironment(){
+                this.shaderMist = new ShaderMist(this.scene);
+                this.createObstacles();
+            }
+            createObstacles() {
+                this.gltfLoader.load('obstacle.glb', (gltf) => {
+                    const obstacleModel = gltf.scene;
+                    obstacleModel.scale.setScalar(0.5); // Adjust scale if needed
+                    obstacleModel.traverse(node => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
+                        }
+                    });
+
+                    for (let i = 0; i < 15; i++) {
+                        const obstacle = obstacleModel.clone();
+                        obstacle.position.set((Math.random() - 0.5) * 8, 0.75, -50 - i * 25);
+                        this.obstacles.push(obstacle);
+                        this.scene.add(obstacle);
+                    }
+                }, undefined, (error) => {
+                    console.error('An error happened while loading the obstacle model:', error);
+                    // Fallback to basic cubes if the model fails to load
+                    for (let i = 0; i < 15; i++) {
+                        const obstacle = new THREE.Mesh(
+                            new THREE.BoxGeometry(1.5, 1.5, 1.5),
+                            new THREE.MeshLambertMaterial({ color: 0xff0000 })
+                        );
+                        obstacle.position.set((Math.random() - 0.5) * 8, 0.75, -50 - i * 25);
+                        obstacle.castShadow = true;
+                        this.obstacles.push(obstacle);
+                        this.scene.add(obstacle);
+                    }
+                });
+            }
             
             setupControls() {
                 const addTouchListeners = (element, onStart, onEnd) => {
@@ -345,7 +378,9 @@
                     if (dist < 2) { this.gameOver(); }
                 });
                 
-                this.trees.forEach(t => { t.position.z += this.carSpeed; if (t.position.z > 200) t.position.z -= 400; });
+                if (this.shaderMist) {
+                    this.shaderMist.update(this.carSpeed);
+                }
                 
                 this.camera.position.x = this.car.position.x * 0.3;
                 
@@ -431,6 +466,66 @@
                         (Math.random() - 0.5) * 0.1
                     );
                 }
+            }
+        }
+
+        class ShaderMist {
+            constructor(scene) {
+                this.scene = scene;
+                const particleCount = 2000;
+                const particles = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 50;
+                    positions[i+1] = Math.random() * 20;
+                    positions[i+2] = (Math.random() - 0.5) * 400;
+                }
+
+                particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0.0 },
+                        color: { value: new THREE.Color(0xcccccc) }
+                    },
+                    vertexShader: `
+                        uniform float time;
+                        void main() {
+                            vec3 p = position;
+                            p.z += sin(p.x * 10.0 + time) * 0.5;
+                            p.y += cos(p.z * 5.0 + time) * 0.5;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+                            gl_PointSize = 5.0;
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 color;
+                        uniform float time;
+
+                        // 2D Random function
+                        float random (vec2 st) {
+                            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+                        }
+
+                        void main() {
+                            float d = distance(gl_PointCoord, vec2(0.5));
+                            if (d > 0.5) discard;
+                            float alpha = 1.0 - d;
+                            alpha *= (sin(time * 0.1) + 1.0) / 2.0; // Fade in and out
+                            gl_FragColor = vec4(color, alpha * 0.2);
+                        }
+                    `,
+                    transparent: true,
+                    depthWrite: false
+                });
+
+                this.points = new THREE.Points(particles, material);
+                this.scene.add(this.points);
+            }
+
+            update(carSpeed) {
+                this.points.material.uniforms.time.value += carSpeed * 0.05;
             }
         }
         
