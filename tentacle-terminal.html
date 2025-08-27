@@ -58,9 +58,7 @@
             border: 1px solid rgba(0, 255, 157, 0.3);
             border-radius: 15px;
             padding: 15px 20px;
-            box-shadow: 
-                0 8px 32px rgba(0, 255, 157, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 255, 157, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
             animation: hudGlow 3s ease-in-out infinite alternate;
         }
 
@@ -111,16 +109,26 @@
             box-shadow: 0 0 20px rgba(0, 255, 157, 0.6);
         }
 
-        #minimap {
+        #pauseBtn {
             position: absolute;
             top: 20px;
-            right: 20px;
-            width: 120px;
-            height: 160px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid rgba(0, 255, 157, 0.5);
-            border-radius: 10px;
-            margin-top: 60px;
+            right: 50%;
+            transform: translateX(50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: linear-gradient(145deg, rgba(0, 0, 0, 0.3), rgba(50, 50, 50, 0.3));
+            backdrop-filter: blur(20px);
+            color: white;
+            font-size: 24px;
+            pointer-events: auto;
+            transition: all 0.2s ease;
+        }
+
+        #pauseBtn:active {
+            transform: translateX(50%) scale(0.9);
+            background: linear-gradient(145deg, rgba(0, 255, 157, 0.3), rgba(0, 100, 255, 0.3));
         }
 
         #controls {
@@ -187,13 +195,6 @@
                 0 0 30px rgba(76, 175, 80, 0.4);
         }
 
-        #gasBtn:active {
-            box-shadow: 
-                0 6px 20px rgba(0, 0, 0, 0.4),
-                inset 0 2px 0 rgba(255, 255, 255, 0.1),
-                0 0 40px rgba(76, 175, 80, 0.8);
-        }
-
         #brakeBtn {
             right: 30px;
             bottom: 30px;
@@ -204,35 +205,6 @@
                 0 0 30px rgba(244, 67, 54, 0.4);
         }
 
-        #brakeBtn:active {
-            box-shadow: 
-                0 6px 20px rgba(0, 0, 0, 0.4),
-                inset 0 2px 0 rgba(255, 255, 255, 0.1),
-                0 0 40px rgba(244, 67, 54, 0.8);
-        }
-
-        #pauseBtn {
-            position: absolute;
-            top: 20px;
-            right: 50%;
-            transform: translateX(50%);
-            width: 60px;
-            height: 60px;
-            border-radius: 15px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            background: linear-gradient(145deg, rgba(0, 0, 0, 0.3), rgba(50, 50, 50, 0.3));
-            backdrop-filter: blur(20px);
-            color: white;
-            font-size: 24px;
-            pointer-events: auto;
-            transition: all 0.2s ease;
-        }
-
-        #pauseBtn:active {
-            transform: translateX(50%) scale(0.9);
-            background: linear-gradient(145deg, rgba(0, 255, 157, 0.3), rgba(0, 100, 255, 0.3));
-        }
-        
         .menu-overlay {
             position: absolute;
             top: 0;
@@ -301,21 +273,6 @@
             overflow: hidden;
         }
 
-        .menu-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            transition: left 0.5s;
-        }
-
-        .menu-btn:hover::before {
-            left: 100%;
-        }
-
         .menu-btn:active {
             transform: scale(0.95) translateY(2px);
             box-shadow: 
@@ -372,51 +329,13 @@
             opacity: 0;
             pointer-events: none;
             z-index: 150;
-        }
-
-        .particles {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 50;
-        }
-
-        @keyframes sparkle {
-            0% { transform: scale(0) rotate(0deg); opacity: 1; }
-            50% { transform: scale(1) rotate(180deg); opacity: 0.8; }
-            100% { transform: scale(0) rotate(360deg); opacity: 0; }
-        }
-
-        .sparkle {
-            position: absolute;
-            width: 4px;
-            height: 4px;
-            background: #00ff9d;
-            border-radius: 50%;
-            animation: sparkle 1s ease-out forwards;
-            box-shadow: 0 0 10px #00ff9d;
-        }
-
-        .road-particles {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 100px;
-            pointer-events: none;
-            z-index: 10;
+            transition: all 0.3s ease;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        
-        <div class="particles"></div>
-        <div class="road-particles"></div>
         
         <div id="ui">
             <div id="speedometer" class="hud-element">Speed: 0 mph</div>
@@ -475,17 +394,15 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 
     <script>
-        class BriskGetawayGame {
+        class MobileRacingGame {
             constructor() {
                 this.scene = null; this.camera = null; this.renderer = null; this.car = null;
-                this.wheels = []; this.roadSegments = []; this.obstacles = [];
+                this.wheels = []; this.road = []; this.obstacles = [];
                 
                 this.gameRunning = false; this.gamePaused = false;
                 this.carSpeed = 0; this.carPosition = 0; this.distance = 0;
-                this.maxSpeed = 5; this.wheelRotation = 0;
-                this.boostMeter = 0; this.maxBoostMeter = 100;
-                this.nearMisses = 0; this.maxSpeedReached = 0;
-                this.comboMultiplier = 1;
+                this.maxSpeed = 4; this.wheelRotation = 0;
+                this.boostMeter = 0; this.nearMisses = 0; this.maxSpeedReached = 0;
                 
                 this.engineSound = document.getElementById('engineSound');
                 this.controls = { left: false, right: false, gas: false, brake: false };
@@ -493,38 +410,34 @@
                 this.gltfLoader = new THREE.GLTFLoader();
                 this.rgbeLoader = new THREE.RGBELoader();
                 
-                this.sparkleParticles = [];
-                this.roadParticles = [];
-                
                 this.init();
                 this.setupControls();
                 this.setupUI();
-                this.createParticleSystems();
             }
             
             init() {
                 this.scene = new THREE.Scene();
-                this.scene.fog = new THREE.Fog(0x000510, 30, 200);
-                
+                this.scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 this.camera.position.set(0, 8, 12);
                 this.camera.lookAt(0, 0, 0);
-                
                 const canvas = document.getElementById('gameCanvas');
                 this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.setClearColor(0x000510);
+                this.renderer.setClearColor(0x87ceeb);
                 this.renderer.shadowMap.enabled = true;
-                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                this.renderer.toneMappingExposure = 1.2;
-                
+                this.renderer.toneMappingExposure = 0.6;
                 this.loadSkybox();
-                this.setupLighting();
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                this.scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 20, 5);
+                directionalLight.castShadow = true;
+                this.scene.add(directionalLight);
                 this.loadCarModel();
-                this.createEnhancedRoad();
+                this.createRoad();
                 this.createEnvironment();
-                
                 window.addEventListener('resize', () => this.onWindowResize(), false);
             }
             
@@ -534,62 +447,15 @@
                     this.scene.background = texture;
                     this.scene.environment = texture;
                 }, undefined, (error) => {
-                    // Fallback enhanced skybox
+                    console.log("HDR skybox not found, using fallback");
                     const skyGeometry = new THREE.SphereGeometry(500, 32, 15);
-                    const skyMaterial = new THREE.ShaderMaterial({
-                        uniforms: {
-                            topColor: { value: new THREE.Color(0x0077ff) },
-                            bottomColor: { value: new THREE.Color(0x000510) },
-                            offset: { value: 33 },
-                            exponent: { value: 0.6 }
-                        },
-                        vertexShader: `
-                            varying vec3 vWorldPosition;
-                            void main() {
-                                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-                                vWorldPosition = worldPosition.xyz;
-                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                            }
-                        `,
-                        fragmentShader: `
-                            uniform vec3 topColor;
-                            uniform vec3 bottomColor;
-                            uniform float offset;
-                            uniform float exponent;
-                            varying vec3 vWorldPosition;
-                            void main() {
-                                float h = normalize(vWorldPosition + offset).y;
-                                gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
-                            }
-                        `,
+                    const skyMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xa2a2d0,
                         side: THREE.BackSide
                     });
                     const sky = new THREE.Mesh(skyGeometry, skyMaterial);
                     this.scene.add(sky);
                 });
-            }
-            
-            setupLighting() {
-                const ambientLight = new THREE.AmbientLight(0x404080, 0.4);
-                this.scene.add(ambientLight);
-                
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-                directionalLight.position.set(10, 30, 5);
-                directionalLight.castShadow = true;
-                directionalLight.shadow.mapSize.width = 2048;
-                directionalLight.shadow.mapSize.height = 2048;
-                directionalLight.shadow.camera.near = 0.5;
-                directionalLight.shadow.camera.far = 100;
-                this.scene.add(directionalLight);
-                
-                // Neon glow lights
-                const neonLight1 = new THREE.PointLight(0x00ff9d, 1, 50);
-                neonLight1.position.set(-10, 5, -20);
-                this.scene.add(neonLight1);
-                
-                const neonLight2 = new THREE.PointLight(0xff6b35, 1, 50);
-                neonLight2.position.set(10, 5, -40);
-                this.scene.add(neonLight2);
             }
             
             loadCarModel() {
@@ -601,11 +467,6 @@
                         if (node.isMesh) {
                             node.castShadow = true;
                             node.receiveShadow = true;
-                            // Enhanced materials with neon glow
-                            if (node.material) {
-                                node.material.emissive = new THREE.Color(0x001122);
-                                node.material.emissiveIntensity = 0.2;
-                            }
                         }
                     });
                     this.createCarWithWheels();
@@ -616,186 +477,100 @@
             }
             
             createCarWithWheels() {
-                const carGroup = new THREE.Group();
-                carGroup.add(this.carModel);
-                
-                // Enhanced wheels with glow
-                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-                const wheelMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x333333,
-                    emissive: 0x002200,
-                    emissiveIntensity: 0.1
+                const t = new THREE.Group();
+                t.add(this.carModel);
+                const e = new THREE.CylinderGeometry(.4, .4, .3, 16);
+                const o = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                [[-1.2, 0, 1.5], [1.2, 0, 1.5], [-1.2, 0, -1.5], [1.2, 0, -1.5]].forEach(s => {
+                    const i = new THREE.Mesh(e, o);
+                    i.rotation.z = Math.PI / 2;
+                    i.position.set(...s);
+                    i.castShadow = true;
+                    this.wheels.push(i);
+                    t.add(i);
                 });
-                
-                const wheelPositions = [[-1.2, 0, 1.5], [1.2, 0, 1.5], [-1.2, 0, -1.5], [1.2, 0, -1.5]];
-                wheelPositions.forEach(pos => {
-                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                    wheel.rotation.z = Math.PI / 2;
-                    wheel.position.set(...pos);
-                    wheel.castShadow = true;
-                    this.wheels.push(wheel);
-                    carGroup.add(wheel);
-                });
-                
-                carGroup.position.set(0, 0.2, 0);
-                this.car = carGroup;
-                this.scene.add(carGroup);
-                
-                // Add car exhaust particles
-                this.exhaustParticles = new ExhaustParticles(this.scene, this.car);
+                t.position.set(0, .2, 0);
+                this.car = t;
+                this.scene.add(t);
             }
             
-            createEnhancedRoad() {
-                // Create multiple road segments with neon lighting
-                for (let i = 0; i < 4; i++) {
-                    const roadGroup = new THREE.Group();
-                    
-                    // Main road surface with improved texture
-                    const roadGeometry = new THREE.PlaneGeometry(15, 300);
-                    const roadMaterial = new THREE.MeshPhongMaterial({
-                        color: 0x1a1a1a,
-                        emissive: 0x000510,
-                        emissiveIntensity: 0.1
-                    });
-                    const road = new THREE.Mesh(roadGeometry, roadMaterial);
-                    road.rotation.x = -Math.PI / 2;
-                    road.position.z = 300 * i - 150;
-                    road.receiveShadow = true;
-                    roadGroup.add(road);
-                    
-                    // Neon road edges
-                    const edgeGeometry = new THREE.PlaneGeometry(0.5, 300);
-                    const edgeMaterial = new THREE.MeshBasicMaterial({
-                        color: 0x00ff9d,
-                        transparent: true,
-                        opacity: 0.6
-                    });
-                    
-                    const leftEdge = new THREE.Mesh(edgeGeometry, edgeMaterial);
-                    leftEdge.rotation.x = -Math.PI / 2;
-                    leftEdge.position.set(-7.5, 0.02, 300 * i - 150);
-                    roadGroup.add(leftEdge);
-                    
-                    const rightEdge = new THREE.Mesh(edgeGeometry, edgeMaterial);
-                    rightEdge.rotation.x = -Math.PI / 2;
-                    rightEdge.position.set(7.5, 0.02, 300 * i - 150);
-                    roadGroup.add(rightEdge);
-                    
-                    // Enhanced lane markers with glow
-                    for (let j = 0; j < 15; j++) {
-                        const markerGeometry = new THREE.PlaneGeometry(0.3, 6);
-                        const markerMaterial = new THREE.MeshBasicMaterial({
-                            color: 0xffffff,
-                            transparent: true,
-                            opacity: 0.9
-                        });
-                        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-                        marker.rotation.x = -Math.PI / 2;
-                        marker.position.set(0, 0.01, (300 * i - 150) + (j * 20) - 140);
-                        roadGroup.add(marker);
-                    }
-                    
-                    this.roadSegments.push(roadGroup);
-                    this.scene.add(roadGroup);
+            createBasicCar() {
+                const t = new THREE.Group();
+                const e = new THREE.Mesh(new THREE.BoxGeometry(2, .8, 4), new THREE.MeshLambertMaterial({ color: 0xff4444 }));
+                e.position.y = .4;
+                e.castShadow = true;
+                t.add(e);
+                const o = new THREE.Mesh(new THREE.BoxGeometry(1.8, .6, 2), new THREE.MeshLambertMaterial({ color: 0xcccccc }));
+                o.position.y = 1;
+                o.position.z = -.5;
+                o.castShadow = true;
+                t.add(o);
+                const s = new THREE.CylinderGeometry(.4, .4, .3, 16);
+                const i = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                [[-1.2, 0, 1.5], [1.2, 0, 1.5], [-1.2, 0, -1.5], [1.2, 0, -1.5]].forEach(e => {
+                    const o = new THREE.Mesh(s, i);
+                    o.rotation.z = Math.PI / 2;
+                    o.position.set(...e);
+                    o.castShadow = true;
+                    this.wheels.push(o);
+                    t.add(o);
+                });
+                t.position.set(0, .2, 0);
+                this.car = t;
+                this.scene.add(t);
+            }
+            
+            createRoad() {
+                for (let t = 0; t < 3; t++) {
+                    const e = new THREE.Mesh(new THREE.PlaneGeometry(12, 400), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+                    e.rotation.x = -Math.PI / 2;
+                    e.position.z = 400 * t - 200;
+                    e.receiveShadow = true;
+                    this.road.push(e);
+                    this.scene.add(e);
+                }
+                for (let t = 0; t < 20; t++) {
+                    const e = new THREE.Mesh(new THREE.PlaneGeometry(.2, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                    e.rotation.x = -Math.PI / 2;
+                    e.position.set(0, .01, 20 * t - 200);
+                    this.scene.add(e);
                 }
             }
             
             createEnvironment() {
-                this.shaderMist = new EnhancedShaderMist(this.scene);
-                this.createEnhancedObstacles();
-                this.createRoadSideElements();
+                this.shaderMist = new ShaderMist(this.scene);
+                this.createObstacles();
             }
             
-            createEnhancedObstacles() {
+            createObstacles() {
                 this.gltfLoader.load('obstacle.glb', (gltf) => {
                     const obstacleModel = gltf.scene;
-                    obstacleModel.scale.setScalar(0.6);
+                    obstacleModel.scale.setScalar(0.5);
                     obstacleModel.traverse(node => {
                         if (node.isMesh) {
                             node.castShadow = true;
-                            // Add neon glow to obstacles
-                            if (node.material) {
-                                node.material.emissive = new THREE.Color(0x330000);
-                                node.material.emissiveIntensity = 0.3;
-                            }
                         }
                     });
 
-                    for (let i = 0; i < 20; i++) {
+                    for (let i = 0; i < 15; i++) {
                         const obstacle = obstacleModel.clone();
-                        obstacle.position.set((Math.random() - 0.5) * 10, 0.75, -80 - i * 30);
-                        
-                        // Add warning light to obstacles
-                        const warningLight = new THREE.PointLight(0xff0000, 1, 15);
-                        warningLight.position.set(0, 2, 0);
-                        obstacle.add(warningLight);
-                        
+                        obstacle.position.set((Math.random() - 0.5) * 8, 0.75, -50 - i * 25);
                         this.obstacles.push(obstacle);
                         this.scene.add(obstacle);
                     }
                 }, undefined, (error) => {
-                    console.error('Obstacle model not found, creating enhanced fallback');
-                    // Enhanced fallback obstacles with neon effects
-                    for (let i = 0; i < 20; i++) {
-                        const obstacleGroup = new THREE.Group();
-                        
-                        const obstacleGeometry = new THREE.BoxGeometry(1.8, 1.8, 1.8);
-                        const obstacleMaterial = new THREE.MeshPhongMaterial({
-                            color: 0xff2020,
-                            emissive: 0x330000,
-                            emissiveIntensity: 0.4
-                        });
-                        const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+                    console.log('Obstacle model not found, creating basic obstacles');
+                    for (let i = 0; i < 15; i++) {
+                        const obstacle = new THREE.Mesh(
+                            new THREE.BoxGeometry(1.5, 1.5, 1.5),
+                            new THREE.MeshLambertMaterial({ color: 0xff0000 })
+                        );
+                        obstacle.position.set((Math.random() - 0.5) * 8, 0.75, -50 - i * 25);
                         obstacle.castShadow = true;
-                        obstacleGroup.add(obstacle);
-                        
-                        // Neon accent ring
-                        const ringGeometry = new THREE.RingGeometry(1.2, 1.4, 16);
-                        const ringMaterial = new THREE.MeshBasicMaterial({
-                            color: 0x00ff9d,
-                            transparent: true,
-                            opacity: 0.7,
-                            side: THREE.DoubleSide
-                        });
-                        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-                        ring.position.y = 0.9;
-                        ring.rotation.x = -Math.PI / 2;
-                        obstacleGroup.add(ring);
-                        
-                        // Warning light
-                        const warningLight = new THREE.PointLight(0xff0000, 1, 15);
-                        warningLight.position.set(0, 2, 0);
-                        obstacleGroup.add(warningLight);
-                        
-                        obstacleGroup.position.set((Math.random() - 0.5) * 10, 0.75, -80 - i * 30);
-                        this.obstacles.push(obstacleGroup);
-                        this.scene.add(obstacleGroup);
+                        this.obstacles.push(obstacle);
+                        this.scene.add(obstacle);
                     }
                 });
-            }
-            
-            createRoadSideElements() {
-                // Neon billboards and city elements
-                for (let i = 0; i < 10; i++) {
-                    const billboardGeometry = new THREE.PlaneGeometry(8, 4);
-                    const billboardMaterial = new THREE.MeshBasicMaterial({
-                        color: Math.random() > 0.5 ? 0x00ff9d : 0xff6b35,
-                        transparent: true,
-                        opacity: 0.8
-                    });
-                    const billboard = new THREE.Mesh(billboardGeometry, billboardMaterial);
-                    billboard.position.set(
-                        Math.random() > 0.5 ? -20 : 20,
-                        5,
-                        -i * 60 - 50
-                    );
-                    this.scene.add(billboard);
-                }
-            }
-            
-            createParticleSystems() {
-                this.particleTrail = new EnhancedParticleTrail(this.scene, this.car);
-                this.roadEffects = new RoadEffects();
             }
             
             setupControls() {
@@ -830,9 +605,7 @@
                     (e) => { 
                         e.preventDefault(); 
                         this.controls.gas = false; 
-                        if (this.carSpeed < 0.5) {
-                            this.engineSound.pause();
-                        }
+                        this.engineSound.pause();
                     }
                 );
                 
@@ -877,7 +650,7 @@
             startGame() {
                 this.gameRunning = true;
                 this.gamePaused = false;
-                this.resetStats();
+                this.particleTrail = new ParticleTrail(this.scene, this.car);
                 this.animate();
             }
             
@@ -900,9 +673,14 @@
             restartGame() {
                 this.gameRunning = true;
                 this.gamePaused = false;
-                this.resetStats();
-                this.resetCarPosition();
-                this.resetObstacles();
+                this.carSpeed = 0;
+                this.carPosition = 0;
+                this.distance = 0;
+                this.boostMeter = 0;
+                this.nearMisses = 0;
+                this.maxSpeedReached = 0;
+                this.car.position.set(0, 0.2, 0);
+                this.obstacles.forEach((o, i) => { o.position.z = -50 - i * 25; });
                 document.getElementById('gameOver').style.display = 'none';
                 document.getElementById('pauseMenu').style.display = 'none';
                 this.animate();
@@ -917,146 +695,86 @@
                 document.getElementById('instructions').style.display = 'flex';
             }
             
-            resetStats() {
-                this.carSpeed = 0;
-                this.carPosition = 0;
-                this.distance = 0;
-                this.boostMeter = 0;
-                this.nearMisses = 0;
-                this.maxSpeedReached = 0;
-                this.comboMultiplier = 1;
-            }
-            
-            resetCarPosition() {
-                this.car.position.set(0, 0.2, 0);
-                this.car.rotation.set(0, 0, 0);
-            }
-            
-            resetObstacles() {
-                this.obstacles.forEach((obstacle, i) => {
-                    obstacle.position.z = -80 - i * 30;
-                    obstacle.position.x = (Math.random() - 0.5) * 10;
-                });
-            }
-            
             update() {
                 if (!this.gameRunning || this.gamePaused) return;
                 
-                // Enhanced car physics
-                const acceleration = 0.08;
-                const deceleration = 0.04;
-                const brakeForce = 0.20;
-                const maxSpeedBonus = this.boostMeter > 80 ? 1.5 : 1.0;
-                
-                if (this.controls.gas) {
-                    this.carSpeed = Math.min(this.carSpeed + acceleration, this.maxSpeed * maxSpeedBonus);
-                    this.boostMeter = Math.min(this.boostMeter + 0.5, this.maxBoostMeter);
-                } else if (this.controls.brake) {
-                    this.carSpeed = Math.max(this.carSpeed - brakeForce, 0);
-                    this.boostMeter = Math.max(this.boostMeter - 1, 0);
-                } else {
-                    this.carSpeed = Math.max(this.carSpeed - deceleration, 0);
-                    this.boostMeter = Math.max(this.boostMeter - 0.2, 0);
+                if (this.controls.gas) { 
+                    this.carSpeed = Math.min(this.carSpeed + 0.05, this.maxSpeed);
+                    this.boostMeter = Math.min(this.boostMeter + 0.3, 100);
+                } else if (this.controls.brake) { 
+                    this.carSpeed = Math.max(this.carSpeed - 0.15, 0); 
+                } else { 
+                    this.carSpeed = Math.max(this.carSpeed - 0.025, 0); 
                 }
                 
-                // Enhanced steering with momentum
-                const steerForce = 0.12;
-                const maxSteerPosition = 6;
-                
-                if (this.controls.left) {
-                    this.carPosition = Math.max(this.carPosition - steerForce, -maxSteerPosition);
-                    this.car.rotation.z = Math.min(this.car.rotation.z + 0.02, 0.15);
-                    this.car.rotation.y = Math.min(this.car.rotation.y + 0.01, 0.1);
-                } else if (this.controls.right) {
-                    this.carPosition = Math.min(this.carPosition + steerForce, maxSteerPosition);
-                    this.car.rotation.z = Math.max(this.car.rotation.z - 0.02, -0.15);
-                    this.car.rotation.y = Math.max(this.car.rotation.y - 0.01, -0.1);
-                } else {
-                    this.car.rotation.z *= 0.92;
-                    this.car.rotation.y *= 0.92;
+                if (this.controls.left) { 
+                    this.carPosition = Math.max(this.carPosition - 0.075, -4); 
+                    this.car.rotation.z = 0.1; 
+                } else if (this.controls.right) { 
+                    this.carPosition = Math.min(this.carPosition + 0.075, 4); 
+                    this.car.rotation.z = -0.1; 
+                } else { 
+                    this.car.rotation.z *= 0.9; 
                 }
                 
                 this.car.position.x = this.carPosition;
-                this.distance += this.carSpeed * 0.6;
+                this.distance += this.carSpeed * 0.5;
                 this.maxSpeedReached = Math.max(this.maxSpeedReached, this.carSpeed * 10);
                 
-                // Enhanced wheel animation
                 if (this.carSpeed > 0) {
-                    this.wheelRotation += this.carSpeed * 0.15;
-                    this.wheels.forEach(wheel => {
-                        wheel.rotation.x = this.wheelRotation;
-                    });
+                    this.wheelRotation += this.carSpeed * 0.1;
+                    this.wheels.forEach(w => { w.rotation.x = this.wheelRotation; });
                 }
                 
-                // Enhanced road movement with curve effects
-                this.roadSegments.forEach(segment => {
-                    segment.position.z += this.carSpeed;
-                    if (segment.position.z > 300) {
-                        segment.position.z -= 1200;
-                    }
+                this.road.forEach(s => { 
+                    s.position.z += this.carSpeed; 
+                    if (s.position.z > 200) s.position.z -= 1200; 
                 });
                 
-                // Enhanced obstacle management with near-miss detection
-                this.obstacles.forEach(obstacle => {
-                    obstacle.position.z += this.carSpeed;
-                    obstacle.rotation.y += 0.08;
-                    
-                    if (obstacle.position.z > 80) {
-                        obstacle.position.z -= 600;
-                        obstacle.position.x = (Math.random() - 0.5) * 10;
+                this.obstacles.forEach(o => {
+                    o.position.z += this.carSpeed; 
+                    o.rotation.y += 0.05;
+                    if (o.position.z > 50) { 
+                        o.position.z -= 400; 
+                        o.position.x = (Math.random() - 0.5) * 8; 
                     }
                     
-                    const distance = this.car.position.distanceTo(obstacle.position);
+                    const dist = this.car.position.distanceTo(o.position);
                     
-                    // Near miss detection (exciting close calls)
-                    if (distance < 4 && distance > 2.5 && obstacle.position.z > -5 && obstacle.position.z < 5) {
-                        if (!obstacle.nearMissTriggered) {
+                    // Near miss detection
+                    if (dist < 3.5 && dist > 2.5 && o.position.z > -5 && o.position.z < 5) {
+                        if (!o.nearMissTriggered) {
                             this.triggerNearMiss();
-                            obstacle.nearMissTriggered = true;
+                            o.nearMissTriggered = true;
                         }
-                    } else if (distance > 8) {
-                        obstacle.nearMissTriggered = false;
+                    } else if (dist > 8) {
+                        o.nearMissTriggered = false;
                     }
                     
-                    // Collision detection
-                    if (distance < 2.2) {
-                        this.gameOver();
-                        return;
+                    if (dist < 2) { 
+                        this.gameOver(); 
                     }
                 });
                 
-                // Enhanced camera movement with dynamic effects
-                this.camera.position.x = this.car.position.x * 0.4;
-                const speedIntensity = this.carSpeed / this.maxSpeed;
-                this.camera.position.y = 8 + speedIntensity * 2;
-                this.camera.position.z = 12 - speedIntensity * 3;
-                
-                // Update particle systems
                 if (this.shaderMist) {
                     this.shaderMist.update(this.carSpeed);
                 }
                 
-                if (this.particleTrail) {
-                    this.particleTrail.update(this.carSpeed);
-                }
+                this.camera.position.x = this.car.position.x * 0.3;
                 
-                if (this.exhaustParticles) {
-                    this.exhaustParticles.update(this.carSpeed, this.controls.gas);
-                }
-                
-                this.roadEffects.update(this.carSpeed);
-                this.updateSparkles();
                 this.updateUI();
+
+                if (this.particleTrail) {
+                    this.particleTrail.update();
+                }
             }
             
             triggerNearMiss() {
                 this.nearMisses++;
-                this.comboMultiplier = Math.min(this.comboMultiplier + 0.1, 3.0);
-                this.boostMeter = Math.min(this.boostMeter + 10, this.maxBoostMeter);
+                this.boostMeter = Math.min(this.boostMeter + 20, 100);
                 
-                // Show combo indicator
                 const comboEl = document.getElementById('comboIndicator');
-                comboEl.textContent = `NEAR MISS! x${this.comboMultiplier.toFixed(1)}`;
+                comboEl.textContent = `NEAR MISS! +${this.nearMisses}`;
                 comboEl.style.opacity = '1';
                 comboEl.style.transform = 'translate(-50%, -50%) scale(1.2)';
                 
@@ -1064,29 +782,6 @@
                     comboEl.style.opacity = '0';
                     comboEl.style.transform = 'translate(-50%, -50%) scale(1)';
                 }, 1000);
-                
-                // Create sparkle effect
-                this.createSparkles(this.car.position);
-            }
-            
-            createSparkles(position) {
-                const particlesContainer = document.querySelector('.particles');
-                for (let i = 0; i < 8; i++) {
-                    const sparkle = document.createElement('div');
-                    sparkle.className = 'sparkle';
-                    sparkle.style.left = Math.random() * window.innerWidth + 'px';
-                    sparkle.style.top = Math.random() * window.innerHeight + 'px';
-                    particlesContainer.appendChild(sparkle);
-                    
-                    setTimeout(() => sparkle.remove(), 1000);
-                }
-            }
-            
-            updateSparkles() {
-                // Implementation for continuous sparkle effects during high speed
-                if (this.carSpeed > this.maxSpeed * 0.8 && Math.random() > 0.95) {
-                    this.createSparkles(this.car.position);
-                }
             }
             
             updateUI() {
@@ -1095,26 +790,15 @@
                 
                 // Update boost meter
                 const boostFill = document.getElementById('boostFill');
-                const boostPercentage = (this.boostMeter / this.maxBoostMeter);
+                const boostPercentage = this.boostMeter / 100;
                 boostFill.style.transform = `scaleX(${boostPercentage})`;
-                
-                // Change boost color based on level
-                if (boostPercentage > 0.8) {
-                    boostFill.style.background = 'linear-gradient(90deg, #ff6b35, #00ff9d)';
-                } else if (boostPercentage > 0.5) {
-                    boostFill.style.background = 'linear-gradient(90deg, #f7931e, #ff6b35)';
-                } else {
-                    boostFill.style.background = 'linear-gradient(90deg, #ff6b35, #f7931e)';
-                }
             }
             
             gameOver() {
                 this.gameRunning = false;
-                this.gamePaused = false;
                 this.engineSound.pause();
-                
-                document.getElementById('finalScore').textContent = Math.floor(this.distance) + 'm';
-                document.getElementById('maxSpeedStat').textContent = Math.floor(this.maxSpeedReached) + ' mph';
+                document.getElementById('finalScore').textContent = Math.floor(this.distance);
+                document.getElementById('maxSpeedStat').textContent = Math.floor(this.maxSpeedReached);
                 document.getElementById('nearMissesStat').textContent = this.nearMisses;
                 document.getElementById('gameOver').style.display = 'flex';
             }
@@ -1133,129 +817,19 @@
             }
         }
 
-        // Enhanced Particle Systems
-        class EnhancedParticleTrail {
+        class ParticleTrail {
             constructor(scene, vehicle) {
                 this.scene = scene;
                 this.vehicle = vehicle;
                 this.particles = [];
-                this.particleCount = 150;
-                
-                const geometry = new THREE.BufferGeometry();
-                const positions = new Float32Array(this.particleCount * 3);
-                const colors = new Float32Array(this.particleCount * 3);
-                const sizes = new Float32Array(this.particleCount);
-                
-                for (let i = 0; i < this.particleCount; i++) {
-                    positions[i * 3] = 0;
-                    positions[i * 3 + 1] = 0;
-                    positions[i * 3 + 2] = 0;
-                    
-                    colors[i * 3] = Math.random();
-                    colors[i * 3 + 1] = Math.random() * 0.5 + 0.5;
-                    colors[i * 3 + 2] = 1;
-                    
-                    sizes[i] = Math.random() * 5 + 2;
-                }
-                
-                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-                
-                const material = new THREE.ShaderMaterial({
-                    uniforms: {
-                        time: { value: 0 }
-                    },
-                    vertexShader: `
-                        attribute float size;
-                        attribute vec3 color;
-                        varying vec3 vColor;
-                        uniform float time;
-                        
-                        void main() {
-                            vColor = color;
-                            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                            gl_PointSize = size * (300.0 / -mvPosition.z);
-                            gl_Position = projectionMatrix * mvPosition;
-                        }
-                    `,
-                    fragmentShader: `
-                        varying vec3 vColor;
-                        
-                        void main() {
-                            float d = distance(gl_PointCoord, vec2(0.5));
-                            if (d > 0.5) discard;
-                            float alpha = 1.0 - d * 2.0;
-                            gl_FragColor = vec4(vColor, alpha);
-                        }
-                    `,
-                    transparent: true,
-                    depthWrite: false,
-                    vertexColors: true
-                });
-                
-                this.points = new THREE.Points(geometry, material);
-                this.scene.add(this.points);
-                
-                for (let i = 0; i < this.particleCount; i++) {
-                    this.particles.push({
-                        life: 0,
-                        velocity: new THREE.Vector3()
-                    });
-                }
-            }
-            
-            update(carSpeed) {
-                const positions = this.points.geometry.attributes.position.array;
-                const time = performance.now() * 0.001;
-                this.points.material.uniforms.time.value = time;
-                
-                for (let i = 0; i < this.particleCount; i++) {
-                    const particle = this.particles[i];
-                    
-                    if (particle.life > 0) {
-                        positions[i * 3] += particle.velocity.x;
-                        positions[i * 3 + 1] += particle.velocity.y;
-                        positions[i * 3 + 2] += particle.velocity.z;
-                        particle.life -= 0.02;
-                    }
-                    
-                    if (particle.life <= 0 && carSpeed > 1) {
-                        positions[i * 3] = this.vehicle.position.x + (Math.random() - 0.5) * 2;
-                        positions[i * 3 + 1] = this.vehicle.position.y - 0.5;
-                        positions[i * 3 + 2] = this.vehicle.position.z - 2;
-                        
-                        particle.velocity.set(
-                            (Math.random() - 0.5) * 0.2,
-                            -Math.random() * 0.1,
-                            carSpeed * 0.3 + Math.random() * 0.2
-                        );
-                        particle.life = 1.0;
-                    }
-                }
-                
-                this.points.geometry.attributes.position.needsUpdate = true;
-            }
-        }
+                this.particleCount = 100;
+                this.particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+                this.particleMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true });
 
-        class ExhaustParticles {
-            constructor(scene, vehicle) {
-                this.scene = scene;
-                this.vehicle = vehicle;
-                this.particles = [];
-                this.particleCount = 50;
-                
                 for (let i = 0; i < this.particleCount; i++) {
-                    const geometry = new THREE.SphereGeometry(0.1, 8, 8);
-                    const material = new THREE.MeshBasicMaterial({
-                        color: 0x555555,
-                        transparent: true,
-                        opacity: 0.3
-                    });
-                    const particle = new THREE.Mesh(geometry, material);
+                    const particle = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
                     particle.visible = false;
                     this.scene.add(particle);
-                    
                     this.particles.push({
                         mesh: particle,
                         life: 0,
@@ -1263,148 +837,101 @@
                     });
                 }
             }
-            
-            update(carSpeed, isAccelerating) {
-                this.particles.forEach(particle => {
-                    if (particle.life > 0) {
-                        particle.mesh.position.add(particle.velocity);
-                        particle.life -= 0.03;
-                        particle.mesh.material.opacity = particle.life * 0.3;
-                        particle.mesh.scale.multiplyScalar(1.02);
-                        
-                        if (particle.life <= 0) {
-                            particle.mesh.visible = false;
+
+            update() {
+                this.particles.forEach(p => {
+                    if (p.life > 0) {
+                        p.mesh.position.add(p.velocity);
+                        p.life -= 0.01;
+                        p.mesh.material.opacity = p.life;
+                        if (p.life <= 0) {
+                            p.mesh.visible = false;
                         }
                     }
                 });
-                
-                if (isAccelerating && carSpeed > 0.5 && Math.random() > 0.7) {
-                    const inactiveParticle = this.particles.find(p => !p.mesh.visible);
-                    if (inactiveParticle) {
-                        inactiveParticle.mesh.position.copy(this.vehicle.position);
-                        inactiveParticle.mesh.position.y -= 0.3;
-                        inactiveParticle.mesh.position.z += 2;
-                        inactiveParticle.mesh.scale.set(1, 1, 1);
-                        inactiveParticle.life = 1;
-                        inactiveParticle.mesh.visible = true;
-                        inactiveParticle.velocity.set(
-                            (Math.random() - 0.5) * 0.3,
-                            Math.random() * 0.2,
-                            Math.random() * 0.5 + carSpeed * 0.5
-                        );
-                    }
+
+                if (Math.random() > 0.5) {
+                    this.emitParticle();
+                }
+            }
+
+            emitParticle() {
+                const inactiveParticle = this.particles.find(p => !p.mesh.visible);
+                if (inactiveParticle) {
+                    inactiveParticle.mesh.position.copy(this.vehicle.position);
+                    inactiveParticle.mesh.position.y -= 0.2;
+                    inactiveParticle.life = 1;
+                    inactiveParticle.mesh.visible = true;
+                    inactiveParticle.mesh.material.opacity = 1;
+                    inactiveParticle.velocity.set(
+                        (Math.random() - 0.5) * 0.1,
+                        (Math.random() - 0.5) * 0.1,
+                        (Math.random() - 0.5) * 0.1
+                    );
                 }
             }
         }
 
-        class EnhancedShaderMist {
+        class ShaderMist {
             constructor(scene) {
                 this.scene = scene;
-                const particleCount = 3000;
+                const particleCount = 2000;
                 const particles = new THREE.BufferGeometry();
                 const positions = new Float32Array(particleCount * 3);
-                const colors = new Float32Array(particleCount * 3);
 
                 for (let i = 0; i < particleCount * 3; i += 3) {
-                    positions[i] = (Math.random() - 0.5) * 80;
-                    positions[i + 1] = Math.random() * 30;
-                    positions[i + 2] = (Math.random() - 0.5) * 500;
-                    
-                    colors[i] = 0.2 + Math.random() * 0.3;     // R
-                    colors[i + 1] = 0.4 + Math.random() * 0.4; // G  
-                    colors[i + 2] = 0.8 + Math.random() * 0.2; // B
+                    positions[i] = (Math.random() - 0.5) * 50;
+                    positions[i+1] = Math.random() * 20;
+                    positions[i+2] = (Math.random() - 0.5) * 400;
                 }
 
                 particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
                 const material = new THREE.ShaderMaterial({
                     uniforms: {
                         time: { value: 0.0 },
-                        speed: { value: 0.0 }
+                        color: { value: new THREE.Color(0xcccccc) }
                     },
                     vertexShader: `
                         uniform float time;
-                        uniform float speed;
-                        attribute vec3 color;
-                        varying vec3 vColor;
-                        
                         void main() {
-                            vColor = color;
                             vec3 p = position;
-                            p.z += sin(p.x * 5.0 + time) * 2.0;
-                            p.y += cos(p.z * 3.0 + time) * 1.0;
-                            p.x += sin(time * 0.5) * 1.0;
-                            
+                            p.z += sin(p.x * 10.0 + time) * 0.5;
+                            p.y += cos(p.z * 5.0 + time) * 0.5;
                             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-                            gl_PointSize = 3.0 + speed * 2.0;
+                            gl_PointSize = 5.0;
                         }
                     `,
-                
-                // Add car exhaust particles
-                this.exhaustParticles = new ExhaustParticles(this.scene, this.car);
+                    fragmentShader: `
+                        uniform vec3 color;
+                        uniform float time;
+
+                        float random (vec2 st) {
+                            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+                        }
+
+                        void main() {
+                            float d = distance(gl_PointCoord, vec2(0.5));
+                            if (d > 0.5) discard;
+                            float alpha = 1.0 - d;
+                            alpha *= (sin(time * 0.1) + 1.0) / 2.0;
+                            gl_FragColor = vec4(color, alpha * 0.2);
+                        }
+                    `,
+                    transparent: true,
+                    depthWrite: false
+                });
+
+                this.points = new THREE.Points(particles, material);
+                this.scene.add(this.points);
             }
-            
-            createBasicCar() {
-                const carGroup = new THREE.Group();
-                
-                // Enhanced car body with neon accents
-                const bodyGeometry = new THREE.BoxGeometry(2, 0.8, 4);
-                const bodyMaterial = new THREE.MeshPhongMaterial({
-                    color: 0xff4444,
-                    emissive: 0x220000,
-                    emissiveIntensity: 0.3,
-                    shininess: 100
-                });
-                const carBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
-                carBody.position.y = 0.4;
-                carBody.castShadow = true;
-                carGroup.add(carBody);
-                
-                // Neon accent strips
-                const accentGeometry = new THREE.BoxGeometry(2.1, 0.1, 4.1);
-                const accentMaterial = new THREE.MeshBasicMaterial({
-                    color: 0x00ff9d,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                const accent = new THREE.Mesh(accentGeometry, accentMaterial);
-                accent.position.y = 0.45;
-                carGroup.add(accent);
-                
-                // Car cabin
-                const cabinGeometry = new THREE.BoxGeometry(1.8, 0.6, 2);
-                const cabinMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x004444,
-                    emissive: 0x001122,
-                    emissiveIntensity: 0.2,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
-                cabin.position.y = 1;
-                cabin.position.z = -0.5;
-                cabin.castShadow = true;
-                carGroup.add(cabin);
-                
-                // Enhanced wheels
-                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-                const wheelMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x333333,
-                    emissive: 0x002200,
-                    emissiveIntensity: 0.1
-                });
-                
-                const wheelPositions = [[-1.2, 0, 1.5], [1.2, 0, 1.5], [-1.2, 0, -1.5], [1.2, 0, -1.5]];
-                wheelPositions.forEach(pos => {
-                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                    wheel.rotation.z = Math.PI / 2;
-                    wheel.position.set(...pos);
-                    wheel.castShadow = true;
-                    this.wheels.push(wheel);
-                    carGroup.add(wheel);
-                });
-                
-                carGroup.position.set(0, 0.2, 0);
-                this.car = carGroup;
-                this.scene.add(carGroup);
+
+            update(carSpeed) {
+                this.points.material.uniforms.time.value += carSpeed * 0.05;
+            }
+        }
+        
+        window.addEventListener('load', () => { new MobileRacingGame(); });
+    </script>
+</body>
+</html>
