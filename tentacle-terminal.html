@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>3D Mobile Racing</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
         * {
             margin: 0;
@@ -190,6 +191,8 @@
     </div>
     
     <audio id="engineSound" src="engine.mp3" loop></audio>
+    <audio src="track3.mp3" autoplay loop></audio>
+    <audio id="warpSound1" src="warp_sound.mp3"></audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -202,9 +205,13 @@
                 this.wheels = []; this.road = []; this.obstacles = [];
                 
                 this.gameRunning = false; this.carSpeed = 0; this.carPosition = 0; this.distance = 0;
-                this.maxSpeed = 4; this.wheelRotation = 0;
+                this.maxSpeed = 1; this.wheelRotation = 0;
                 
                 this.engineSound = document.getElementById('engineSound');
+                this.warpSounds = [
+                    document.getElementById('warpSound1')
+                ];
+                this.warpInterval = null;
 
                 this.controls = { left: false, right: false, gas: false, brake: false };
                 
@@ -243,7 +250,33 @@
             }
             
             loadSkybox(){ /* ... code unchanged ... */ this.rgbeLoader.load('sky.hdr',t=>{t.mapping=THREE.EquirectangularReflectionMapping,this.scene.background=t,this.scene.environment=t},void 0,e=>{console.log("HDR skybox not found"),this.scene.add(new THREE.Mesh(new THREE.SphereGeometry(500,32,15),new THREE.MeshBasicMaterial({color:10672365,side:THREE.BackSide})))})}
-            loadCarModel(){ /* ... code unchanged ... */ this.gltfLoader.load('car.glb',t=>{this.carModel=t.scene,this.carModel.scale.setScalar(1),this.carModel.position.set(0,0,0),this.carModel.traverse(t=>{t.isMesh&&(t.castShadow=!0,t.receiveShadow=!0)}),this.createCarWithWheels()},void 0,e=>{console.log("GLB car model not found"),this.createBasicCar()})}
+            loadCarModel() {
+                this.gltfLoader.load('car.glb',
+                    (gltf) => {
+                        this.carModel = gltf.scene;
+                        this.carModel.scale.setScalar(1);
+                        this.carModel.position.set(0, 0, 0);
+                        this.carModel.traverse(node => {
+                            if (node.isMesh) {
+                                node.castShadow = true;
+                                node.receiveShadow = true;
+                            }
+                        });
+                        this.createCarWithWheels();
+                        const startBtn = document.getElementById('startBtn');
+                        startBtn.disabled = false;
+                        startBtn.textContent = 'Start Game';
+                    },
+                    undefined,
+                    (error) => {
+                        console.log("GLB car model not found");
+                        this.createBasicCar();
+                        const startBtn = document.getElementById('startBtn');
+                        startBtn.disabled = false;
+                        startBtn.textContent = 'Start Game';
+                    }
+                );
+            }
             createCarWithWheels(){const t=new THREE.Group;t.add(this.carModel);const e=new THREE.CylinderGeometry(.4,.4,.3,16),o=new THREE.MeshLambertMaterial({color:3355443});[[-1.2,0,1.5],[1.2,0,1.5],[-1.2,0,-1.5],[1.2,0,-1.5]].forEach(s=>{const i=new THREE.Mesh(e,o);i.rotation.z=Math.PI/2,i.position.set(...s),i.castShadow=!0,this.wheels.push(i),t.add(i)}),t.position.set(0,.2,0),this.car=t,this.scene.add(t)}
             createBasicCar(){/* ... code unchanged ... */ const t=new THREE.Group,e=new THREE.Mesh(new THREE.BoxGeometry(2,.8,4),new THREE.MeshLambertMaterial({color:16729156}));e.position.y=.4,e.castShadow=!0,t.add(e);const o=new THREE.Mesh(new THREE.BoxGeometry(1.8,.6,2),new THREE.MeshLambertMaterial({color:13382451}));o.position.y=1,o.position.z=-.5,o.castShadow=!0,t.add(o);const s=new THREE.CylinderGeometry(.4,.4,.3,16),i=new THREE.MeshLambertMaterial({color:3355443});[[-1.2,0,1.5],[1.2,0,1.5],[-1.2,0,-1.5],[1.2,0,-1.5]].forEach(e=>{const o=new THREE.Mesh(s,i);o.rotation.z=Math.PI/2,o.position.set(...e),o.castShadow=!0,this.wheels.push(o),t.add(o)}),t.position.set(0,.2,0),this.car=t,this.scene.add(t)}
             createRoad(){for(let t=0;t<3;t++){const e=new THREE.Mesh(new THREE.PlaneGeometry(12,400),new THREE.MeshLambertMaterial({color:4473924}));e.rotation.x=-Math.PI/2,e.position.z=400*t-200,e.receiveShadow=!0,this.road.push(e),this.scene.add(e)}for(let t=0;t<20;t++){const e=new THREE.Mesh(new THREE.PlaneGeometry(.2,4),new THREE.MeshBasicMaterial({color:16777215}));e.rotation.x=-Math.PI/2,e.position.set(0,.01,20*t-200),this.scene.add(e)}}
@@ -339,6 +372,7 @@
             startGame() {
                 this.gameRunning = true;
                 this.particleTrail = new ParticleTrail(this.scene, this.car);
+                this.warpInterval = setInterval(() => this.playRandomWarpSound(), 30000);
                 this.animate();
             }
             
@@ -347,6 +381,7 @@
                 this.car.position.set(0, 0.2, 0);
                 this.obstacles.forEach((o, i) => { o.position.z = -50 - i * 25; });
                 document.getElementById('gameOver').style.display = 'none';
+                this.warpInterval = setInterval(() => this.playRandomWarpSound(), 30000);
                 this.animate();
             }
             
@@ -394,7 +429,8 @@
             
             gameOver() {
                 this.gameRunning = false;
-                this.engineSound.pause(); 
+                this.engineSound.pause();
+                clearInterval(this.warpInterval);
                 document.getElementById('finalScore').textContent = Math.floor(this.distance);
                 document.getElementById('gameOver').style.display = 'block';
             }
@@ -410,6 +446,11 @@
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            playRandomWarpSound() {
+                const randomIndex = Math.floor(Math.random() * this.warpSounds.length);
+                this.warpSounds[randomIndex].play().catch(e => console.error("Audio play failed:", e));
             }
         }
 
@@ -531,5 +572,7 @@
         
         window.addEventListener('load', () => { new MobileRacingGame(); });
     </script>
+</body>
+</html>
 </body>
 </html>
