@@ -1,577 +1,605 @@
 // =================================================================================================
-// [SYSTEM BOOTSTRAP] :: IMMEDIATE-INVOKED FUNCTION EXPRESSION (IIFE)
-// Optimized Grid World WebGL rendering system with traveling camera and random forms
-// Only the `window.updateShader` function is intentionally exposed for external control.
+// [3D WORLD EXPLORER] :: ENHANCED WEBGL SHADER SYSTEM
+// Legitimate 3D world with travel mechanics, multiple variations, and shader voodoo
 // =================================================================================================
 (function() {
     "use strict";
 
-    // --- Core Variable Declarations ---
     const webglCanvas = document.getElementById('webglCanvas');
     let gl = null;
     let program = null;
     let animationFrameId = null;
-    let currentShaderIndex = 0;
-    let shaderTransitionTime = 0;
-    let lastShaderChange = 0;
+    let currentWorldIndex = 0;
+    let cameraPos = [0, 2, 0];
+    let cameraRot = [0, 0];
+    let autoTravel = true;
+    let travelSpeed = 1.0;
 
-    // --- Error Handling and Initialization Check ---
     if (!webglCanvas) {
         console.error("[FATAL] WebGL Canvas element with id 'webglCanvas' not found in DOM. Aborting.");
         return;
     }
 
     // =================================================================================================
-    // [GRID WORLD CONFIGURATIONS] :: DIFFERENT GRID ENVIRONMENTS
+    // [3D WORLD CONFIGURATIONS] :: DIFFERENT 3D ENVIRONMENTS
     // =================================================================================================
-    const gridWorlds = [
+    const worlds3D = [
         {
-            name: "Neon Cyberpunk Grid",
-            description: "A futuristic neon-lit grid world with pulsing energy lines and holographic forms",
-            gridColor: [0.0, 1.0, 1.0],
-            backgroundColor: [0.05, 0.05, 0.2],
-            formColors: [[1.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]],
-            speed: 1.5,
-            gridScale: 2.0
+            name: "Neon Cyberpunk Metropolis",
+            bgColor: [0.05, 0.05, 0.2], primaryColor: [0.0, 1.0, 1.0], secondaryColor: [1.0, 0.0, 1.0],
+            speed: 1.5, density: 0.8, height: 15.0, style: 0
         },
         {
-            name: "Organic Bio Grid",
-            description: "A living grid world with organic forms and pulsing bio-luminescent patterns",
-            gridColor: [0.2, 0.8, 0.3],
-            backgroundColor: [0.02, 0.1, 0.02],
-            formColors: [[0.8, 0.4, 0.1], [0.6, 0.8, 0.2], [0.9, 0.6, 0.3]],
-            speed: 0.8,
-            gridScale: 1.5
+            name: "Bio-Organic Forest",
+            bgColor: [0.02, 0.1, 0.02], primaryColor: [0.2, 0.8, 0.3], secondaryColor: [0.8, 0.4, 0.1],
+            speed: 0.8, density: 1.2, height: 12.0, style: 1
         },
         {
-            name: "Crystal Dimension",
-            description: "A crystalline world with geometric forms and prismatic light effects",
-            gridColor: [0.8, 0.9, 1.0],
-            backgroundColor: [0.1, 0.05, 0.15],
-            formColors: [[1.0, 0.8, 0.9], [0.8, 0.9, 1.0], [0.9, 1.0, 0.8]],
-            speed: 1.2,
-            gridScale: 3.0
+            name: "Crystal Dimension Cave",
+            bgColor: [0.1, 0.05, 0.15], primaryColor: [0.8, 0.9, 1.0], secondaryColor: [1.0, 0.8, 0.9],
+            speed: 1.2, density: 0.6, height: 20.0, style: 2
         },
         {
-            name: "Void Matrix",
-            description: "A dark matrix-like world with glowing code patterns and digital anomalies",
-            gridColor: [0.0, 1.0, 0.0],
-            backgroundColor: [0.0, 0.0, 0.0],
-            formColors: [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
-            speed: 2.0,
-            gridScale: 1.0
+            name: "Void Matrix Construct",
+            bgColor: [0.0, 0.0, 0.0], primaryColor: [0.0, 1.0, 0.0], secondaryColor: [1.0, 0.0, 0.0],
+            speed: 2.0, density: 0.4, height: 8.0, style: 3
         },
         {
-            name: "Plasma Storm",
-            description: "An energetic world with plasma effects and electromagnetic disturbances",
-            gridColor: [1.0, 0.3, 0.8],
-            backgroundColor: [0.2, 0.0, 0.1],
-            formColors: [[1.0, 0.0, 0.5], [0.5, 0.0, 1.0], [1.0, 0.5, 0.0]],
-            speed: 1.8,
-            gridScale: 2.5
+            name: "Plasma Storm Dimension",
+            bgColor: [0.2, 0.0, 0.1], primaryColor: [1.0, 0.3, 0.8], secondaryColor: [0.5, 0.0, 1.0],
+            speed: 1.8, density: 1.0, height: 18.0, style: 4
         }
     ];
 
     // =================================================================================================
-    // [CONTEXT INITIALIZATION] :: ATTEMPT TO SECURE WEBGL2/WEBGL1 CONTEXT
+    // [WEBGL INITIALIZATION]
     // =================================================================================================
     try {
         webglCanvas.width = window.innerWidth;
         webglCanvas.height = window.innerHeight;
 
-        gl = webglCanvas.getContext('webgl2') ||
-             webglCanvas.getContext('webgl') ||
-             webglCanvas.getContext('experimental-web-gl');
+        gl = webglCanvas.getContext('webgl2') || webglCanvas.getContext('webgl');
+        if (!gl) throw new Error("WebGL not supported");
 
-        if (!gl) {
-            throw new Error("WebGL is not supported or the context could not be created.");
-        }
-
-        console.log("[INFO] Advanced Grid World initialized successfully.");
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        
+        console.log("[INFO] 3D World Explorer initialized successfully.");
     } catch (e) {
-        console.error("[FATAL] Grid World initialization error:", e);
-        if (document.body) document.body.style.backgroundColor = '#050511';
+        console.error("[FATAL] 3D World initialization error:", e);
         return;
     }
 
     // =================================================================================================
-    // [SHADER SOURCE CODE] :: GLSL - OPTIMIZED GRID WORLD EFFECTS
+    // [3D VERTEX SHADER] :: PROPER 3D TRANSFORMATION
     // =================================================================================================
-
     const vertexShaderSource = `
-        attribute vec4 a_position;
+        attribute vec3 a_position;
+        attribute vec2 a_texCoord;
+        uniform mat4 u_mvpMatrix;
+        uniform float u_time;
+        uniform vec3 u_cameraPos;
+        varying vec3 v_worldPos;
+        varying vec3 v_viewPos;
+        varying vec2 v_texCoord;
+        varying float v_time;
+        
         void main() {
-            gl_Position = a_position;
+            v_worldPos = a_position;
+            v_viewPos = a_position - u_cameraPos;
+            v_texCoord = a_texCoord;
+            v_time = u_time;
+            gl_Position = u_mvpMatrix * vec4(a_position, 1.0);
         }
     `;
 
+    // =================================================================================================
+    // [3D FRAGMENT SHADER] :: ENHANCED 3D WORLD RENDERING WITH SHADER VOODOO
+    // =================================================================================================
     const fragmentShaderSource = `
         precision highp float;
-
+        
         uniform float u_time;
-        uniform vec2 u_resolution;
+        uniform vec3 u_cameraPos;
+        uniform vec3 u_bgColor;
+        uniform vec3 u_primaryColor;
+        uniform vec3 u_secondaryColor;
         uniform float u_speed;
-        uniform int u_shader_index;
-        uniform float u_transition;
-        uniform vec3 u_grid_color;
-        uniform vec3 u_background_color;
-        uniform vec3 u_form_colors[3];
-        uniform float u_grid_scale;
-
+        uniform float u_density;
+        uniform float u_height;
+        uniform int u_style;
+        uniform vec2 u_resolution;
+        
+        varying vec3 v_worldPos;
+        varying vec3 v_viewPos;
+        varying vec2 v_texCoord;
+        varying float v_time;
+        
         const float PI = 3.14159265359;
         const float TWO_PI = 6.28318530718;
 
         // =========================================================================================
-        // [UTILITY FUNCTIONS]
+        // [3D UTILITY FUNCTIONS] :: ENHANCED NOISE AND MATH
         // =========================================================================================
         
-        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         
-        float noise(vec2 p) {
-            vec2 i = floor(p), f = fract(p);
+        float noise3D(vec3 p) {
+            vec3 i = floor(p), f = fract(p);
             f = f * f * (3.0 - 2.0 * f);
-            return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
-                       mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+            return mix(
+                mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
+                    mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+                    mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
         }
         
-        mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, s, -s, c); }
-
-        // =========================================================================================
-        // [OPTIMIZED GRID WORLD RENDERING]
-        // =========================================================================================
-        vec3 renderGridWorld(vec2 uv, float t) {
-            // Create perspective effect
-            vec2 perspective = uv / (1.0 + uv.y * 0.3);
-            
-            // Moving grid coordinates
-            vec2 gridPos = perspective * u_grid_scale + vec2(0.0, t * u_speed);
-            
-            // Grid lines
-            vec2 grid = abs(fract(gridPos) - 0.5);
-            float lineWidth = 0.02 * (1.0 + uv.y * 0.5); // Thicker lines in distance
-            float lines = smoothstep(lineWidth, lineWidth * 0.5, min(grid.x, grid.y));
-            
-            // Distance fade
-            float fade = 1.0 / (1.0 + abs(uv.y) * 2.0);
-            
-            // Pulsing effect
-            float pulse = sin(t * 2.0 + gridPos.x * 0.5 + gridPos.y * 0.3) * 0.3 + 0.7;
-            
-            vec3 gridColor = u_grid_color * lines * fade * pulse;
-            
-            return mix(u_background_color, gridColor, min(lines * fade, 1.0));
-        }
-
-        // =========================================================================================
-        // [SIMPLIFIED RANDOM FORMS]
-        // =========================================================================================
-        vec3 addRandomForms(vec2 uv, float t, vec3 baseColor) {
-            vec3 formColor = vec3(0.0);
-            
-            // Generate fewer forms for better performance
-            for(int i = 0; i < 4; i++) {
-                float formSeed = float(i) * 123.456;
-                vec2 formPos = vec2(
-                    sin(t * 0.3 + formSeed) * 0.8,
-                    cos(t * 0.2 + formSeed * 1.5) * 0.6 + 0.2
-                );
-                
-                // Form lifecycle
-                float formLife = mod(t * 0.5 + formSeed, 6.0);
-                float formScale = smoothstep(0.0, 1.0, formLife) * smoothstep(6.0, 5.0, formLife);
-                
-                if(formScale > 0.01) {
-                    float dist = length(uv - formPos);
-                    
-                    // Different form shapes
-                    float form = 0.0;
-                    if(i == 0) {
-                        // Pulsing circle
-                        float radius = 0.1 + sin(t * 4.0 + formSeed) * 0.05;
-                        form = exp(-dist / radius) * formScale;
-                    } else if(i == 1) {
-                        // Rotating square
-                        vec2 rotUV = (uv - formPos) * rot(t + formSeed);
-                        float square = max(abs(rotUV.x), abs(rotUV.y));
-                        form = exp(-square * 10.0) * formScale;
-                    } else if(i == 2) {
-                        // Noise blob
-                        float noiseVal = noise((uv - formPos) * 8.0 + t);
-                        form = exp(-dist * 5.0) * noiseVal * formScale;
-                    } else {
-                        // Star shape
-                        float angle = atan(uv.y - formPos.y, uv.x - formPos.x);
-                        float star = sin(angle * 5.0) * 0.5 + 0.5;
-                        form = exp(-dist * 8.0) * star * formScale;
-                    }
-                    
-                    vec3 formColorPalette = u_form_colors[i - (i / 3) * 3];
-                    formColor += formColorPalette * form * 0.8;
-                }
-            }
-            
-            return baseColor + formColor;
-        }
-
-        // =========================================================================================
-        // [SIMPLIFIED BURST EFFECTS]
-        // =========================================================================================
-        vec3 addBurstEffects(vec2 uv, float t, vec3 baseColor) {
-            vec3 burstColor = vec3(0.0);
-            
-            // Fewer burst effects for performance
-            for(int i = 0; i < 2; i++) {
-                float burstSeed = float(i) * 456.789;
-                float burstTime = mod(t * 1.5 + burstSeed, 4.0);
-                
-                if(burstTime < 1.0) {
-                    vec2 burstPos = vec2(
-                        sin(burstSeed) * 0.6,
-                        cos(burstSeed * 1.3) * 0.4
-                    );
-                    
-                    float burstRadius = burstTime * 1.5;
-                    float burstIntensity = (1.0 - burstTime) * (1.0 - burstTime);
-                    
-                    float distToBurst = length(uv - burstPos);
-                    
-                    // Expanding ring
-                    float ring = exp(-abs(distToBurst - burstRadius) * 15.0) * burstIntensity;
-                    
-                    // Flash effect
-                    float flash = exp(-distToBurst * 3.0) * burstIntensity * 0.2;
-                    
-                    vec3 burstColorPalette = u_form_colors[i - (i / 3) * 3];
-                    burstColor += burstColorPalette * (ring + flash);
-                }
-            }
-            
-            return baseColor + burstColor;
-        }
-
-        // =========================================================================================
-        // [SHADER VARIANTS FOR DIFFERENT GRID WORLDS]
-        // =========================================================================================
-        
-        vec3 neonCyberpunkGrid(vec2 uv, float t) {
-            vec3 base = renderGridWorld(uv, t);
-            base = addRandomForms(uv, t, base);
-            base = addBurstEffects(uv, t, base);
-            
-            // Add scanlines
-            float scanlines = sin(uv.y * 400.0) * 0.05;
-            base += vec3(0.0, 0.05, 0.05) * scanlines;
-            
-            return base;
-        }
-        
-        vec3 organicBioGrid(vec2 uv, float t) {
-            vec3 base = renderGridWorld(uv, t);
-            base = addRandomForms(uv, t, base);
-            base = addBurstEffects(uv, t, base);
-            
-            // Add organic pulsing
-            float pulse = sin(t * 1.5 + length(uv) * 3.0) * 0.1 + 0.9;
-            base *= pulse;
-            
-            return base;
-        }
-        
-        vec3 crystalDimension(vec2 uv, float t) {
-            vec3 base = renderGridWorld(uv, t);
-            base = addRandomForms(uv, t, base);
-            base = addBurstEffects(uv, t, base);
-            
-            // Prismatic effects
-            float prism = sin(uv.x * 10.0 + t) * sin(uv.y * 8.0 + t * 1.3);
-            vec3 rainbow = vec3(
-                sin(prism + 0.0) * 0.5 + 0.5,
-                sin(prism + 2.0) * 0.5 + 0.5,
-                sin(prism + 4.0) * 0.5 + 0.5
-            );
-            base += rainbow * 0.05 * smoothstep(0.3, 0.7, abs(prism));
-            
-            return base;
-        }
-        
-        vec3 voidMatrix(vec2 uv, float t) {
-            vec3 base = renderGridWorld(uv, t);
-            base = addRandomForms(uv, t, base);
-            base = addBurstEffects(uv, t, base);
-            
-            // Digital rain effect
-            float rain = 0.0;
+        float fbm3D(vec3 p) {
+            float value = 0.0, amplitude = 0.5;
             for(int i = 0; i < 5; i++) {
-                float x = float(i) * 0.2 - 0.4;
-                float y = mod(t * 1.5 + float(i) * 0.3, 2.0) - 1.0;
-                rain += exp(-length(uv - vec2(x, y)) * 30.0);
+                value += amplitude * noise3D(p);
+                p *= 2.0; amplitude *= 0.5;
             }
-            base += vec3(0.0, 1.0, 0.0) * rain * 0.3;
-            
-            return base;
+            return value;
         }
         
-        vec3 plasmaStorm(vec2 uv, float t) {
-            vec3 base = renderGridWorld(uv, t);
-            base = addRandomForms(uv, t, base);
-            base = addBurstEffects(uv, t, base);
-            
-            // Plasma effects
-            float plasma = sin(uv.x * 3.0 + t * 2.0) * cos(uv.y * 4.0 + t * 1.5);
-            vec3 plasmaColor = vec3(
-                sin(plasma + t) * 0.5 + 0.5,
-                sin(plasma + t + 2.0) * 0.5 + 0.5,
-                sin(plasma + t + 4.0) * 0.5 + 0.5
-            );
-            base += plasmaColor * 0.2;
-            
-            return base;
+        mat3 rotY(float a) {
+            float c = cos(a), s = sin(a);
+            return mat3(c, 0, s, 0, 1, 0, -s, 0, c);
+        }
+        
+        mat3 rotX(float a) {
+            float c = cos(a), s = sin(a);
+            return mat3(1, 0, 0, 0, c, -s, 0, s, c);
         }
 
         // =========================================================================================
-        // [MAIN SHADER LOGIC]
+        // [3D DISTANCE FUNCTIONS] :: SDF FOR PROCEDURAL GEOMETRY
+        // =========================================================================================
+        
+        float sdBox(vec3 p, vec3 b) {
+            vec3 q = abs(p) - b;
+            return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+        }
+        
+        float sdSphere(vec3 p, float r) {
+            return length(p) - r;
+        }
+        
+        float sdCylinder(vec3 p, float h, float r) {
+            vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+            return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+        }
+
+        // =========================================================================================
+        // [3D WORLD GENERATION] :: PROCEDURAL 3D ENVIRONMENTS
+        // =========================================================================================
+        
+        float map3D(vec3 p, float t, int style) {
+            float dist = 1000.0;
+            
+            // Ground plane
+            dist = min(dist, p.y + 0.5);
+            
+            if(style == 0) { // Neon Cyberpunk
+                // Skyscrapers
+                vec3 cell = floor(p / 8.0);
+                vec3 local = mod(p, 8.0) - 4.0;
+                float height = 10.0 + hash(cell) * 15.0;
+                dist = min(dist, sdBox(local - vec3(0, height * 0.5, 0), vec3(1.5, height * 0.5, 1.5)));
+                
+                // Floating platforms
+                float platformY = sin(t + cell.x + cell.z) * 3.0 + 8.0;
+                dist = min(dist, sdBox(local - vec3(0, platformY, 0), vec3(2.0, 0.2, 2.0)));
+                
+            } else if(style == 1) { // Bio Forest
+                // Organic trees
+                vec3 treePos = vec3(mod(p.x, 6.0) - 3.0, 0, mod(p.z, 6.0) - 3.0);
+                float treeHeight = 8.0 + fbm3D(floor(p.xz / 6.0).xyx) * 6.0;
+                dist = min(dist, sdCylinder(treePos - vec3(0, treeHeight * 0.5, 0), treeHeight * 0.5, 0.5));
+                
+                // Organic blobs
+                float blobDist = sdSphere(treePos - vec3(0, treeHeight + 2.0, 0), 2.0 + sin(t) * 0.5);
+                dist = min(dist, blobDist);
+                
+            } else if(style == 2) { // Crystal Cave
+                // Crystal formations
+                vec3 crystalPos = vec3(mod(p.x, 5.0) - 2.5, 0, mod(p.z, 5.0) - 2.5);
+                float crystalHeight = 5.0 + hash(floor(p.xz / 5.0).xyx) * 10.0;
+                vec3 rotatedPos = rotY(t * 0.1 + hash(floor(p.xz / 5.0).xyx) * TWO_PI) * crystalPos;
+                dist = min(dist, sdBox(rotatedPos - vec3(0, crystalHeight * 0.5, 0), vec3(0.8, crystalHeight * 0.5, 0.8)));
+                
+            } else if(style == 3) { // Void Matrix
+                // Digital structures
+                vec3 gridPos = floor(p / 4.0) * 4.0;
+                vec3 localPos = p - gridPos;
+                if(hash(gridPos) > 0.7) {
+                    float pillarHeight = 6.0 + sin(t + gridPos.x + gridPos.z) * 2.0;
+                    dist = min(dist, sdBox(localPos - vec3(0, pillarHeight * 0.5, 0), vec3(0.3, pillarHeight * 0.5, 0.3)));
+                }
+                
+            } else if(style == 4) { // Plasma Storm
+                // Energy pillars
+                vec3 pillarPos = vec3(mod(p.x, 7.0) - 3.5, 0, mod(p.z, 7.0) - 3.5);
+                float energy = sin(t * 2.0 + length(pillarPos.xz) * 0.5) * 0.5 + 0.5;
+                float pillarHeight = 12.0 + energy * 8.0;
+                dist = min(dist, sdCylinder(pillarPos - vec3(0, pillarHeight * 0.5, 0), pillarHeight * 0.5, 0.8 + energy * 0.4));
+            }
+            
+            return dist;
+        }
+
+        // =========================================================================================
+        // [3D RAYMARCHING] :: VOLUMETRIC RENDERING
+        // =========================================================================================
+        
+        vec3 getNormal(vec3 p, float t, int style) {
+            float eps = 0.01;
+            return normalize(vec3(
+                map3D(p + vec3(eps, 0, 0), t, style) - map3D(p - vec3(eps, 0, 0), t, style),
+                map3D(p + vec3(0, eps, 0), t, style) - map3D(p - vec3(0, eps, 0), t, style),
+                map3D(p + vec3(0, 0, eps), t, style) - map3D(p - vec3(0, 0, eps), t, style)
+            ));
+        }
+        
+        float raymarch(vec3 ro, vec3 rd, float t, int style) {
+            float dist = 0.0;
+            for(int i = 0; i < 64; i++) {
+                vec3 p = ro + rd * dist;
+                float d = map3D(p, t, style);
+                if(d < 0.01 || dist > 100.0) break;
+                dist += d * 0.8;
+            }
+            return dist;
+        }
+
+        // =========================================================================================
+        // [3D WORLD SHADERS] :: STYLE-SPECIFIC RENDERING
+        // =========================================================================================
+        
+        vec3 neonCyberpunk3D(vec3 ro, vec3 rd, float t) {
+            float dist = raymarch(ro, rd, t, 0);
+            vec3 color = u_bgColor;
+            
+            if(dist < 100.0) {
+                vec3 p = ro + rd * dist;
+                vec3 n = getNormal(p, t, 0);
+                
+                // Neon lighting
+                float neonGlow = max(0.0, dot(n, normalize(vec3(1, 1, 1))));
+                color += u_primaryColor * neonGlow * 0.8;
+                
+                // Holographic scanlines
+                float scanlines = sin(p.y * 20.0 + t * 5.0) * 0.5 + 0.5;
+                color += u_secondaryColor * scanlines * 0.3;
+                
+                // Edge glow
+                float fresnel = 1.0 - abs(dot(n, -rd));
+                color += u_primaryColor * fresnel * 0.5;
+            }
+            
+            // Atmospheric fog
+            float fog = exp(-dist * 0.02);
+            color = mix(u_bgColor, color, fog);
+            
+            // Digital rain
+            float rain = fbm3D(vec3(ro.x * 0.1, ro.y + t * 3.0, ro.z * 0.1)) * 0.3;
+            color += u_primaryColor * rain * 0.2;
+            
+            return color;
+        }
+        
+        vec3 bioForest3D(vec3 ro, vec3 rd, float t) {
+            float dist = raymarch(ro, rd, t, 1);
+            vec3 color = u_bgColor;
+            
+            if(dist < 100.0) {
+                vec3 p = ro + rd * dist;
+                vec3 n = getNormal(p, t, 1);
+                
+                // Organic lighting
+                float organicLight = max(0.0, dot(n, normalize(vec3(0, 1, 0.5))));
+                color += u_primaryColor * organicLight * 0.6;
+                
+                // Bio-luminescence
+                float bioGlow = fbm3D(p * 2.0 + t * 0.5) * 0.5 + 0.5;
+                color += u_secondaryColor * bioGlow * 0.4;
+                
+                // Pulsing life energy
+                float pulse = sin(t * 2.0 + length(p) * 0.1) * 0.3 + 0.7;
+                color *= pulse;
+            }
+            
+            // Atmospheric particles
+            float particles = fbm3D(ro * 0.5 + t * 0.3) * 0.4;
+            color += u_primaryColor * particles * 0.1;
+            
+            return color;
+        }
+        
+        vec3 crystalCave3D(vec3 ro, vec3 rd, float t) {
+            float dist = raymarch(ro, rd, t, 2);
+            vec3 color = u_bgColor;
+            
+            if(dist < 100.0) {
+                vec3 p = ro + rd * dist;
+                vec3 n = getNormal(p, t, 2);
+                
+                // Crystal reflections
+                vec3 reflected = reflect(rd, n);
+                float reflection = max(0.0, dot(reflected, normalize(vec3(1, 1, 1))));
+                color += u_primaryColor * reflection * 0.7;
+                
+                // Prismatic effects
+                float prism = sin(p.x * 5.0 + t) * sin(p.y * 3.0 + t) * sin(p.z * 4.0 + t);
+                vec3 rainbow = vec3(sin(prism), sin(prism + 2.0), sin(prism + 4.0)) * 0.5 + 0.5;
+                color += rainbow * 0.3;
+                
+                // Crystal internal glow
+                float internalGlow = 1.0 / (1.0 + dist * 0.1);
+                color += u_secondaryColor * internalGlow * 0.2;
+            }
+            
+            // Crystalline atmosphere
+            float atmosphere = fbm3D(ro * 0.3 + t * 0.2) * 0.5;
+            color += u_primaryColor * atmosphere * 0.15;
+            
+            return color;
+        }
+        
+        vec3 voidMatrix3D(vec3 ro, vec3 rd, float t) {
+            float dist = raymarch(ro, rd, t, 3);
+            vec3 color = u_bgColor;
+            
+            if(dist < 100.0) {
+                vec3 p = ro + rd * dist;
+                vec3 n = getNormal(p, t, 3);
+                
+                // Digital grid overlay
+                vec3 gridPos = floor(p * 2.0) / 2.0;
+                float gridHash = hash(gridPos);
+                if(gridHash > 0.95) {
+                    color += u_primaryColor * 0.8;
+                }
+                
+                // Matrix code streams
+                float code = step(0.98, noise3D(vec3(p.x, p.y + t * 5.0, p.z) * 10.0));
+                color += u_primaryColor * code * 0.6;
+                
+                // Glitch effects
+                float glitch = step(0.99, noise3D(p * 20.0 + t * 10.0));
+                color += u_secondaryColor * glitch;
+            }
+            
+            // Digital void
+            float voidEffect = 1.0 - smoothstep(0.0, 50.0, dist);
+            color += u_primaryColor * voidEffect * 0.1;
+            
+            return color;
+        }
+        
+        vec3 plasmaStorm3D(vec3 ro, vec3 rd, float t) {
+            float dist = raymarch(ro, rd, t, 4);
+            vec3 color = u_bgColor;
+            
+            if(dist < 100.0) {
+                vec3 p = ro + rd * dist;
+                vec3 n = getNormal(p, t, 4);
+                
+                // Plasma energy
+                float plasma = sin(p.x * 2.0 + t * 2.0) * cos(p.y * 3.0 + t * 1.5) * sin(p.z * 2.5 + t * 1.8);
+                vec3 plasmaColor = vec3(sin(plasma + t), sin(plasma + t + 2.0), sin(plasma + t + 4.0)) * 0.5 + 0.5;
+                color += plasmaColor * 0.6;
+                
+                // Energy bolts
+                float bolts = fbm3D(p * 3.0 + t * 2.0) * 0.5;
+                color += u_primaryColor * bolts * 0.4;
+                
+                // Electromagnetic distortion
+                float distortion = sin(length(p) * 0.5 + t * 3.0) * 0.3 + 0.7;
+                color *= distortion;
+            }
+            
+            // Storm atmosphere
+            float storm = fbm3D(ro * 0.2 + t * 0.8) * 0.6;
+            color += u_secondaryColor * storm * 0.2;
+            
+            return color;
+        }
+
+        // =========================================================================================
+        // [MAIN 3D RENDERING]
         // =========================================================================================
         void main() {
             vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
             
-            float time_warp = u_time * 0.5;
+            // 3D camera setup
+            vec3 ro = u_cameraPos;
+            vec3 rd = normalize(vec3(uv, 1.0));
             
-            vec3 color = u_background_color;
+            float t = u_time * u_speed;
+            vec3 color = u_bgColor;
             
-            // Shader selection based on index
-            if (u_shader_index == 0) {
-                color = neonCyberpunkGrid(uv, time_warp);
-            } else if (u_shader_index == 1) {
-                color = organicBioGrid(uv, time_warp);
-            } else if (u_shader_index == 2) {
-                color = crystalDimension(uv, time_warp);
-            } else if (u_shader_index == 3) {
-                color = voidMatrix(uv, time_warp);
-            } else if (u_shader_index == 4) {
-                color = plasmaStorm(uv, time_warp);
+            // Render based on world style
+            if(u_style == 0) {
+                color = neonCyberpunk3D(ro, rd, t);
+            } else if(u_style == 1) {
+                color = bioForest3D(ro, rd, t);
+            } else if(u_style == 2) {
+                color = crystalCave3D(ro, rd, t);
+            } else if(u_style == 3) {
+                color = voidMatrix3D(ro, rd, t);
+            } else if(u_style == 4) {
+                color = plasmaStorm3D(ro, rd, t);
             }
             
-            // Smooth transition between shaders
-            color = mix(color, color * 1.2, u_transition);
+            // Post-processing effects
+            color = pow(color, vec3(0.8)); // Gamma correction
+            color *= 1.0 - length(uv) * 0.1; // Vignette
             
-            // Vignette effect
-            float vignette = 1.0 - length(uv) * 0.2;
-            color *= vignette;
-            
-            // Final color output
             gl_FragColor = vec4(color, 1.0);
         }
     `;
 
     // =================================================================================================
-    // [SHADER COMPILATION AND PROGRAM CREATION]
+    // [SHADER COMPILATION AND SETUP]
     // =================================================================================================
     function createShader(type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
-
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const infoLog = gl.getShaderInfoLog(shader);
-            console.error('>>> SHADER COMPILE ERROR:', infoLog);
+            console.error('Shader error:', gl.getShaderInfoLog(shader));
             gl.deleteShader(shader);
-            throw new Error("Shader compilation failed.");
+            return null;
         }
         return shader;
     }
 
-    function createProgram(vertexShader, fragmentShader) {
-        const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
+    function createProgram() {
+        const vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+        const fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+        
+        program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
         gl.linkProgram(program);
-
+        
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            const infoLog = gl.getProgramInfoLog(program);
-            console.error('>>> PROGRAM LINK ERROR:', infoLog);
-            gl.deleteProgram(program);
-            throw new Error("Shader program linking failed.");
-        }
-        return program;
-    }
-
-    // =================================================================================================
-    // [WEBGL STATE & SETUP]
-    // =================================================================================================
-
-    let positionAttributeLocation = -1;
-    let timeUniformLocation = null;
-    let resolutionUniformLocation = null;
-    let speedUniformLocation = null;
-    let shaderIndexUniformLocation = null;
-    let transitionUniformLocation = null;
-    let gridColorUniformLocation = null;
-    let backgroundColorUniformLocation = null;
-    let formColorsUniformLocation = null;
-    let gridScaleUniformLocation = null;
-    let positionBuffer = null;
-    let startTime = performance.now();
-
-    function setupWebGL() {
-        let vs = null;
-        let fs = null;
-        try {
-            vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-            fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
-            program = createProgram(vs, fs);
-
-            positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-            timeUniformLocation = gl.getUniformLocation(program, "u_time");
-            resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
-            speedUniformLocation = gl.getUniformLocation(program, "u_speed");
-            shaderIndexUniformLocation = gl.getUniformLocation(program, "u_shader_index");
-            transitionUniformLocation = gl.getUniformLocation(program, "u_transition");
-            gridColorUniformLocation = gl.getUniformLocation(program, "u_grid_color");
-            backgroundColorUniformLocation = gl.getUniformLocation(program, "u_background_color");
-            formColorsUniformLocation = gl.getUniformLocation(program, "u_form_colors");
-            gridScaleUniformLocation = gl.getUniformLocation(program, "u_grid_scale");
-
-            positionBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-            const positions = new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1]);
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-            return true;
-        } catch (error) {
-            console.error(">>> Failed during WebGL setup:", error);
-            if (program) gl.deleteProgram(program);
-            program = null;
+            console.error('Program error:', gl.getProgramInfoLog(program));
             return false;
-        } finally {
-            if (vs) gl.deleteShader(vs);
-            if (fs) gl.deleteShader(fs);
         }
-    }
-
-    // =================================================================================================
-    // [RENDER LOOP WITH SHADER CYCLING]
-    // =================================================================================================
-    function render(now) {
-        if (!program) {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-            return;
-        }
-
-        let time = (now - startTime) * 0.001;
-
-        // Auto-cycle through grid worlds every 15 seconds
-        if (time - lastShaderChange > 15.0) {
-            currentShaderIndex = (currentShaderIndex + 1) % 5;
-            lastShaderChange = time;
-            shaderTransitionTime = time;
-            
-            // Display grid world info
-            const world = gridWorlds[currentShaderIndex];
-            console.log(`[GRID WORLD] ${world.name}`);
-            console.log(`[DESCRIPTION] ${world.description}`);
-        }
-
-        // Calculate transition effect
-        let transition = Math.min(1.0, (time - shaderTransitionTime) / 2.0);
-
-        const currentWidth = window.innerWidth;
-        const currentHeight = window.innerHeight;
-
-        if (webglCanvas.width !== currentWidth || webglCanvas.height !== currentHeight) {
-            webglCanvas.width = currentWidth;
-            webglCanvas.height = currentHeight;
-            gl.viewport(0, 0, currentWidth, currentHeight);
-        }
-
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
+        
         gl.useProgram(program);
-
-        // Set up vertex attributes
-        gl.enableVertexAttribArray(positionAttributeLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-        // Set uniforms
-        const currentWorld = gridWorlds[currentShaderIndex];
-        
-        gl.uniform1f(timeUniformLocation, time);
-        gl.uniform2f(resolutionUniformLocation, currentWidth, currentHeight);
-        gl.uniform1f(speedUniformLocation, currentWorld.speed);
-        gl.uniform1i(shaderIndexUniformLocation, currentShaderIndex);
-        gl.uniform1f(transitionUniformLocation, transition);
-        gl.uniform3f(gridColorUniformLocation, currentWorld.gridColor[0], currentWorld.gridColor[1], currentWorld.gridColor[2]);
-        gl.uniform3f(backgroundColorUniformLocation, currentWorld.backgroundColor[0], currentWorld.backgroundColor[1], currentWorld.backgroundColor[2]);
-        gl.uniform1f(gridScaleUniformLocation, currentWorld.gridScale);
-        
-        // Set form colors array
-        const formColors = new Float32Array(9); // 3 colors * 3 components
-        for(let i = 0; i < 3; i++) {
-            formColors[i * 3] = currentWorld.formColors[i][0];
-            formColors[i * 3 + 1] = currentWorld.formColors[i][1];
-            formColors[i * 3 + 2] = currentWorld.formColors[i][2];
-        }
-        gl.uniform3fv(formColorsUniformLocation, formColors);
-
-        // Draw
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        animationFrameId = requestAnimationFrame(render);
-    }
-
-    // =================================================================================================
-    // [INITIALIZATION AND STARTUP]
-    // =================================================================================================
-    function initialize() {
-        if (!setupWebGL()) {
-            console.error("[FATAL] Grid World WebGL setup failed. Cannot continue.");
-            return false;
-        }
-
-        console.log("[SUCCESS] Optimized Grid World shader system initialized.");
-        console.log("[INFO] Cycling through 5 different grid worlds every 15 seconds.");
-        
-        // Start the render loop
-        animationFrameId = requestAnimationFrame(render);
         return true;
     }
 
     // =================================================================================================
-    // [WINDOW RESIZE HANDLER]
+    // [3D GEOMETRY AND RENDERING]
+    // =================================================================================================
+    function createGeometry() {
+        const vertices = new Float32Array([
+            -1, -1, 0, 0, 0,
+             1, -1, 0, 1, 0,
+             1,  1, 0, 1, 1,
+            -1,  1, 0, 0, 1
+        ]);
+        
+        const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+        
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+        
+        const positionLoc = gl.getAttribLocation(program, 'a_position');
+        const texCoordLoc = gl.getAttribLocation(program, 'a_texCoord');
+        
+        gl.enableVertexAttribArray(positionLoc);
+        gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 20, 0);
+        
+        gl.enableVertexAttribArray(texCoordLoc);
+        gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 20, 12);
+        
+        return 6;
+    }
+
+    // =================================================================================================
+    // [CAMERA AND TRAVEL MECHANICS]
+    // =================================================================================================
+    function updateCamera(dt) {
+        if(autoTravel) {
+            const time = performance.now() * 0.001;
+            cameraPos[0] += Math.sin(time * 0.3) * travelSpeed * dt;
+            cameraPos[2] += travelSpeed * dt * 2.0;
+            cameraRot[1] = Math.sin(time * 0.2) * 0.1;
+        }
+    }
+
+    // =================================================================================================
+    // [MAIN RENDER LOOP]
+    // =================================================================================================
+    let lastTime = 0, indexCount = 0;
+    
+    function render(time) {
+        const dt = (time - lastTime) * 0.001;
+        lastTime = time;
+        
+        updateCamera(dt);
+        
+        const world = worlds3D[currentWorldIndex];
+        gl.clearColor(...world.bgColor, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        
+        // Set uniforms
+        gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time * 0.001);
+        gl.uniform3f(gl.getUniformLocation(program, 'u_cameraPos'), ...cameraPos);
+        gl.uniform3f(gl.getUniformLocation(program, 'u_bgColor'), ...world.bgColor);
+        gl.uniform3f(gl.getUniformLocation(program, 'u_primaryColor'), ...world.primaryColor);
+        gl.uniform3f(gl.getUniformLocation(program, 'u_secondaryColor'), ...world.secondaryColor);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_speed'), world.speed);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_density'), world.density);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_height'), world.height);
+        gl.uniform1i(gl.getUniformLocation(program, 'u_style'), world.style);
+        gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), webglCanvas.width, webglCanvas.height);
+        
+        // Identity matrix for fullscreen quad
+        const mvpMatrix = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'u_mvpMatrix'), false, mvpMatrix);
+        
+        gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0);
+        
+        animationFrameId = requestAnimationFrame(render);
+    }
+
+    // =================================================================================================
+    // [EXTERNAL API AND INITIALIZATION]
+    // =================================================================================================
+    window.updateShader = function(options = {}) {
+        if (options.worldIndex !== undefined && options.worldIndex >= 0 && options.worldIndex < 5) {
+            currentWorldIndex = options.worldIndex;
+            console.log(`[3D WORLD SWITCH] ${worlds3D[currentWorldIndex].name}`);
+        }
+        if (options.autoTravel !== undefined) autoTravel = options.autoTravel;
+        if (options.speed !== undefined) travelSpeed = Math.max(0.1, Math.min(5.0, options.speed));
+    };
+
+    function initialize() {
+        try {
+            if (!createProgram()) return false;
+            indexCount = createGeometry();
+            
+            // Auto-switch worlds every 20 seconds
+            setInterval(() => {
+                if(autoTravel) {
+                    currentWorldIndex = (currentWorldIndex + 1) % worlds3D.length;
+                    console.log(`[AUTO SWITCH] ${worlds3D[currentWorldIndex].name}`);
+                }
+            }, 20000);
+            
+            render(0);
+            return true;
+        } catch (e) {
+            console.error('3D World initialization failed:', e);
+            return false;
+        }
+    }
+
+    // =================================================================================================
+    // [WINDOW RESIZE AND STARTUP]
     // =================================================================================================
     window.addEventListener('resize', function() {
         if (webglCanvas) {
             webglCanvas.width = window.innerWidth;
             webglCanvas.height = window.innerHeight;
-            if (gl) {
-                gl.viewport(0, 0, window.innerWidth, window.innerHeight);
-            }
+            if (gl) gl.viewport(0, 0, window.innerWidth, window.innerHeight);
         }
     });
 
-    // =================================================================================================
-    // [EXTERNAL API - EXPOSED FUNCTIONS]
-    // =================================================================================================
-    window.updateShader = function(options = {}) {
-        if (options.worldIndex !== undefined && options.worldIndex >= 0 && options.worldIndex < 5) {
-            currentShaderIndex = options.worldIndex;
-            shaderTransitionTime = performance.now() * 0.001;
-            lastShaderChange = shaderTransitionTime;
-            
-            const world = gridWorlds[currentShaderIndex];
-            console.log(`[MANUAL SWITCH] ${world.name}`);
-        }
-        
-        if (options.speed !== undefined) {
-            gridWorlds[currentShaderIndex].speed = Math.max(0.1, Math.min(5.0, options.speed));
-        }
-    };
-
-    // =================================================================================================
-    // [AUTO-INITIALIZATION]
-    // =================================================================================================
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initialize);
     } else {
