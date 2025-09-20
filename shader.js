@@ -1,7 +1,6 @@
 // =================================================================================================
-// [ADVENTUROUS 3D WORLD EXPLORER] :: ENHANCED WEBGL SHADER SYSTEM V2
-// Seamless transitions, interactive camera, and a new world to explore
-// Standalone script for use as shader.js
+// [PHOTOREALISTIC LANDSCAPE SHADER] :: SHADERTOY-INSPIRED PROCEDURAL WORLD
+// Renders a single, high-quality alpine landscape with advanced lighting and reflections.
 // =================================================================================================
 (function() {
     "use strict";
@@ -14,54 +13,11 @@
 
     let gl = null;
     let program = null;
-    let animationFrameId = null;
 
     // Camera & Interaction State
-    let currentWorldIndex = 0;
-    let nextWorldIndex = 1;
-    let transitionProgress = 0.0;
-    let isTransitioning = false;
-
-    let cameraPos = [0, 2, 0];
-    let cameraRot = [-0.3, 0]; // [PITCH, YAW] - Start looking down slightly
-    let travelSpeed = 1.0;
+    let cameraPos = [0, 8, -25];
+    let cameraRot = [-0.15, 0.2]; // [PITCH, YAW]
     let mouse = { x: 0, y: 0, isDown: false };
-
-    // =================================================================================================
-    // [3D WORLD CONFIGURATIONS]
-    // =================================================================================================
-    const worlds3D = [
-        {
-            name: "Neon Cyberpunk Metropolis",
-            bgColor: [0.05, 0.05, 0.2], primaryColor: [0.0, 1.0, 1.0], secondaryColor: [1.0, 0.0, 1.0],
-            speed: 1.5, style: 0
-        },
-        {
-            name: "Bio-Organic Forest",
-            bgColor: [0.02, 0.1, 0.02], primaryColor: [0.2, 0.8, 0.3], secondaryColor: [0.8, 0.4, 0.1],
-            speed: 0.8, style: 1
-        },
-        {
-            name: "Crystal Dimension Cave",
-            bgColor: [0.1, 0.05, 0.15], primaryColor: [0.8, 0.9, 1.0], secondaryColor: [1.0, 0.8, 0.9],
-            speed: 1.2, style: 2
-        },
-        {
-            name: "Void Matrix Construct",
-            bgColor: [0.0, 0.0, 0.0], primaryColor: [0.0, 1.0, 0.0], secondaryColor: [1.0, 0.0, 0.0],
-            speed: 2.0, style: 3
-        },
-        {
-            name: "Plasma Storm Dimension",
-            bgColor: [0.2, 0.0, 0.1], primaryColor: [1.0, 0.3, 0.8], secondaryColor: [0.5, 0.0, 1.0],
-            speed: 1.8, style: 4
-        },
-        { // New World
-            name: "The Celestial Isles",
-            bgColor: [0.01, 0.02, 0.05], primaryColor: [0.9, 0.8, 1.0], secondaryColor: [0.5, 0.7, 1.0],
-            speed: 1.0, style: 5
-        }
-    ];
 
     // =================================================================================================
     // [WEBGL INITIALIZATION]
@@ -71,12 +27,9 @@
         webglCanvas.height = window.innerHeight;
         gl = webglCanvas.getContext('webgl2') || webglCanvas.getContext('webgl');
         if (!gl) throw new Error("WebGL not supported");
-        gl.enable(gl.DEPTH_TEST);
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        console.log("[INFO] 3D World Explorer initialized successfully.");
+        console.log("[INFO] Photorealistic Shader initialized.");
     } catch (e) {
-        console.error("[FATAL] 3D World initialization error:", e);
+        console.error("[FATAL] Initialization error:", e);
         return;
     }
 
@@ -91,7 +44,7 @@
     `;
 
     // =================================================================================================
-    // [FRAGMENT SHADER]
+    // [FRAGMENT SHADER - The Core Engine]
     // =================================================================================================
     const fragmentShaderSource = `
         precision highp float;
@@ -101,193 +54,188 @@
         uniform vec3 u_cameraPos;
         uniform vec2 u_cameraRot;
 
-        // Uniforms for world blending
-        uniform vec3 u_bgColor1;
-        uniform vec3 u_primaryColor1;
-        uniform vec3 u_secondaryColor1;
-        uniform float u_speed1;
-        uniform int u_style1;
+        // --- Constants ---
+        const vec3 SUN_DIR = normalize(vec3(0.8, 0.4, -0.2));
+        const vec3 SUN_COLOR = vec3(1.0, 0.9, 0.7);
+        const float MAX_DIST = 200.0;
+        const float WATER_LEVEL = 0.0;
+        const int MARCH_STEPS = 128;
 
-        uniform vec3 u_bgColor2;
-        uniform vec3 u_primaryColor2;
-        uniform vec3 u_secondaryColor2;
-        uniform float u_speed2;
-        uniform int u_style2;
+        // --- Noise Functions ---
+        vec3 hash3(vec2 p) {
+            vec3 q = vec3(dot(p, vec2(127.1, 311.7)),
+                          dot(p, vec2(269.5, 183.3)),
+                          dot(p, vec2(419.2, 371.9)));
+            return fract(sin(q) * 43758.5453);
+        }
 
-        uniform float u_transition;
-
-        const float PI = 3.14159265359;
-
-        // --- UTILITY FUNCTIONS (Noise, Math) ---
-        float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-        
-        float noise3D(vec3 p) {
-            vec3 i = floor(p), f = fract(p);
+        float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
             f = f * f * (3.0 - 2.0 * f);
-            return mix(
-                mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
-                    mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
-                    mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
-        }
-        
-        float fbm3D(vec3 p) {
-            float value = 0.0, amplitude = 0.5;
-            for(int i = 0; i < 5; i++) {
-                value += amplitude * noise3D(p);
-                p *= 2.0; amplitude *= 0.5;
-            }
-            return value;
-        }
-
-        mat3 rotY(float a) {
-            float c = cos(a), s = sin(a);
-            return mat3(c, 0, s, 0, 1, 0, -s, 0, c);
-        }
-        
-        mat3 rotX(float a) {
-            float c = cos(a), s = sin(a);
-            return mat3(1, 0, 0, 0, c, -s, 0, s, c);
-        }
-
-        // --- SDF GEOMETRY FUNCTIONS ---
-        float sdBox(vec3 p, vec3 b) {
-            vec3 q = abs(p) - b;
-            return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-        }
-        float sdSphere(vec3 p, float r) { return length(p) - r; }
-        float sdCylinder(vec3 p, float h, float r) {
-            vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
-            return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
-        }
-
-        // --- WORLD GENERATION (MAP) ---
-        float mapStyle(vec3 p, float t, int style) {
-            float dist = 1000.0;
-            dist = min(dist, p.y + 0.5);
             
-            if(style == 0) { // Neon Cyberpunk
-                vec3 cell = floor(p / 8.0);
-                vec3 local = mod(p, 8.0) - 4.0;
-                float height = 10.0 + hash(cell) * 15.0;
-                dist = min(dist, sdBox(local - vec3(0, height * 0.5, 0), vec3(1.5, height * 0.5, 1.5)));
-            } else if(style == 1) { // Bio Forest
-                vec3 treePos = vec3(mod(p.x, 6.0) - 3.0, p.y, mod(p.z, 6.0) - 3.0);
-                float treeHeight = 8.0 + fbm3D(floor(p.xz / 6.0).xyx) * 6.0;
-                dist = min(dist, sdCylinder(treePos - vec3(0, treeHeight * 0.5, 0), treeHeight * 0.5, 0.5));
-            } else if(style == 2) { // Crystal Cave
-                vec3 crystalPos = vec3(mod(p.x, 5.0) - 2.5, p.y, mod(p.z, 5.0) - 2.5);
-                float crystalHeight = 5.0 + hash(floor(p.xz / 5.0).xyx) * 10.0;
-                vec3 rotatedPos = rotY(t * 0.1 + hash(floor(p.xz / 5.0).xyx) * PI * 2.0) * crystalPos;
-                dist = min(dist, sdBox(rotatedPos - vec3(0, crystalHeight * 0.5, 0), vec3(0.8, crystalHeight * 0.5, 0.8)));
-            } else if(style == 3) { // Void Matrix
-                vec3 gridPos = floor(p / 4.0) * 4.0;
-                if(hash(gridPos) > 0.7) {
-                    float pillarHeight = 6.0 + sin(t + gridPos.x + gridPos.z) * 2.0;
-                    dist = min(dist, sdBox(p - gridPos - vec3(0, pillarHeight * 0.5, 0), vec3(0.3, pillarHeight * 0.5, 0.3)));
-                }
-            } else if(style == 4) { // Plasma Storm
-                vec3 pillarPos = vec3(mod(p.x, 7.0) - 3.5, p.y, mod(p.z, 7.0) - 3.5);
-                float energy = sin(t * 2.0 + length(pillarPos.xz) * 0.5) * 0.5 + 0.5;
-                float pillarHeight = 12.0 + energy * 8.0;
-                dist = min(dist, sdCylinder(pillarPos - vec3(0, pillarHeight * 0.5, 0), pillarHeight * 0.5, 0.8 + energy * 0.4));
-            } else if(style == 5) { // Celestial Isles
-                vec3 cell = floor(p / 15.0);
-                if (hash(cell) > 0.6) {
-                    vec3 localPos = mod(p, 15.0) - 7.5;
-                    float islandRadius = 2.0 + hash(cell + 0.1) * 3.0;
-                    float islandY = sin(cell.x * 0.5 + cell.z * 0.3 + t * 0.1) * 5.0;
-                    vec3 islandCenter = vec3(0, islandY, 0);
-                    float displacement = fbm3D(localPos * 0.8) * 1.5;
-                    dist = min(dist, sdSphere(localPos - islandCenter, islandRadius) - displacement);
-                }
-            }
-            return dist;
+            vec3 h = hash3(i) - 0.5;
+            float n = dot(h.xy, f);
+            
+            return n * 0.6;
         }
 
-        float map(vec3 p, float t) {
-            float d1 = mapStyle(p, t * u_speed1, u_style1);
-            float d2 = mapStyle(p, t * u_speed2, u_style2);
-            return mix(d1, d2, smoothstep(0.0, 1.0, u_transition));
+        float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.5;
+            mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+            for (int i = 0; i < 6; ++i) {
+                v += a * noise(p);
+                p = rot * p * 2.0;
+                a *= 0.5;
+            }
+            return v;
         }
-        
-        // --- RAYMARCHING CORE ---
-        vec3 getNormal(vec3 p, float t) {
-            float eps = 0.01;
+
+        // --- World Generation (SDF) ---
+        float terrainSDF(vec2 p) {
+            // Layered noise for realistic terrain
+            float large_features = fbm(p * 0.01) * 30.0;
+            float medium_details = fbm(p * 0.05) * 6.0;
+            float fine_rocks = fbm(p * 0.2) * 1.5;
+            return large_features + medium_details + fine_rocks;
+        }
+
+        float map(vec3 p) {
+            float terrain_height = terrainSDF(p.xz);
+            return p.y - terrain_height;
+        }
+
+        // --- Raymarching & Lighting ---
+        vec3 getNormal(vec3 p) {
+            vec2 e = vec2(0.01, 0.0);
+            float d = map(p);
             return normalize(vec3(
-                map(p + vec3(eps, 0, 0), t) - map(p - vec3(eps, 0, 0), t),
-                map(p + vec3(0, eps, 0), t) - map(p - vec3(0, eps, 0), t),
-                map(p + vec3(0, 0, eps), t) - map(p - vec3(0, 0, eps), t)
+                d - map(p - e.xyy),
+                d - map(p - e.yxy),
+                d - map(p - e.yyx)
             ));
         }
-        
-        float raymarch(vec3 ro, vec3 rd, float t) {
-            float dist = 0.0;
-            for(int i = 0; i < 80; i++) {
-                vec3 p = ro + rd * dist;
-                float d = map(p, t);
-                if(d < 0.005 || dist > 150.0) break;
-                dist += d * 0.7;
+
+        float calcSoftShadow(vec3 ro, vec3 rd, float k) {
+            float res = 1.0;
+            float t = 0.05;
+            for(int i=0; i<48; i++) {
+                float h = map(ro + rd * t);
+                if(h < 0.001) return 0.0;
+                res = min(res, k * h / t);
+                t += h;
+                if(t > 60.0) break;
             }
-            return dist;
+            return res;
         }
 
-        // --- SHADING & EFFECTS ---
-        vec3 renderStyle(vec3 ro, vec3 rd, float t, int style, vec3 bgColor, vec3 primaryColor, vec3 secondaryColor) {
-            float dist = raymarch(ro, rd, t);
-            vec3 color = bgColor;
+        vec3 raymarch(vec3 ro, vec3 rd) {
+            float t = 0.0;
+            for(int i = 0; i < MARCH_STEPS; i++) {
+                vec3 p = ro + rd * t;
+                float d = map(p);
+                if (d < 0.001 * t || t > MAX_DIST) break;
+                t += d * 0.6;
+            }
+            return ro + rd * t;
+        }
 
-            if (dist < 150.0) {
-                vec3 p = ro + rd * dist;
-                vec3 n = getNormal(p, t);
-                vec3 sunDir = normalize(vec3(0.8, 0.4, 0.2));
-                float diffuse = max(0.0, dot(n, sunDir));
-                
-                color = mix(color, primaryColor, diffuse * 0.8);
-                float fresnel = pow(1.0 - abs(dot(n, -rd)), 3.0);
-                color += secondaryColor * fresnel * 0.5;
+        // --- Sky & Atmosphere ---
+        vec3 getSkyColor(vec3 rd) {
+            float sun_dot = max(0.0, dot(rd, SUN_DIR));
+            vec3 sky = mix(vec3(0.2, 0.3, 0.4), vec3(0.5, 0.7, 0.9), 1.0 - rd.y);
+            sky += SUN_COLOR * pow(sun_dot, 256.0) * 2.0; // Sun disk
+            sky += SUN_COLOR * pow(sun_dot, 4.0) * 0.2; // Sun glow
+            return sky;
+        }
 
-                if (style == 0) { color += primaryColor * (sin(p.y * 20.0 + t * 5.0) * 0.5 + 0.5) * 0.1; }
-                else if (style == 1) { color += secondaryColor * fbm3D(p * 2.0 + t) * 0.2; }
-                else if (style == 2) { vec3 reflected = reflect(rd, n); color += primaryColor * max(0.0, dot(reflected, sunDir)) * 0.3; }
-                else if (style == 4) { color *= sin(length(p) * 0.5 + t * 3.0) * 0.3 + 0.7; }
-                else if (style == 5) { color += primaryColor * pow(fresnel, 2.0) * 0.3; }
+        // --- Main Shading Function ---
+        vec3 render(vec3 ro, vec3 rd) {
+            vec3 final_color = getSkyColor(rd);
+            vec3 hit_pos = raymarch(ro, rd);
+            float dist = distance(ro, hit_pos);
+
+            if (dist < MAX_DIST) {
+                // Check if we hit water plane or terrain
+                if (hit_pos.y < WATER_LEVEL) { // --- Water Shading ---
+                    vec3 normal = vec3(0.0, 1.0, 0.0);
+                    vec3 reflected_rd = reflect(rd, normal);
+                    
+                    // Raymarch again for reflections
+                    vec3 reflected_color = getSkyColor(reflected_rd);
+                    vec3 reflected_hit = raymarch(hit_pos + normal * 0.01, reflected_rd);
+                    if(distance(hit_pos, reflected_hit) < MAX_DIST) {
+                         vec3 n_refl = getNormal(reflected_hit);
+                         float diffuse_refl = max(0.0, dot(n_refl, SUN_DIR));
+                         reflected_color = mix(vec3(0.2, 0.3, 0.2), vec3(1.0), smoothstep(0.4, 0.7, n_refl.y));
+                         reflected_color = reflected_color * diffuse_refl * SUN_COLOR;
+                    }
+
+                    // Fresnel for mixing reflection and water color
+                    float fresnel = pow(1.0 - max(0.0, dot(-rd, normal)), 3.0);
+                    vec3 water_color = vec3(0.05, 0.1, 0.12);
+                    final_color = mix(water_color, reflected_color, fresnel);
+
+                } else { // --- Terrain Shading ---
+                    vec3 normal = getNormal(hit_pos);
+                    
+                    // Texture based on height and slope
+                    float slope = 1.0 - normal.y;
+                    vec3 rock_color = vec3(0.3) + noise(hit_pos.xz * 2.0) * 0.1;
+                    vec3 grass_color = vec3(0.2, 0.3, 0.1) + noise(hit_pos.xz * 5.0) * 0.05;
+                    vec3 terrain_color = mix(grass_color, rock_color, smoothstep(0.2, 0.6, slope));
+                    
+                    // Add snow at high altitudes
+                    float snow_amount = smoothstep(20.0, 30.0, hit_pos.y);
+                    terrain_color = mix(terrain_color, vec3(1.0), snow_amount);
+                    
+                    // Lighting
+                    float diffuse = max(0.0, dot(normal, SUN_DIR));
+                    float shadow = calcSoftShadow(hit_pos + normal * 0.02, SUN_DIR, 32.0);
+                    float skylight = max(0.2, normal.y * 0.5 + 0.5); // Ambient from sky
+                    
+                    vec3 lighting = diffuse * shadow * SUN_COLOR;
+                    lighting += skylight * vec3(0.1, 0.2, 0.3); // Add sky color to ambient
+                    
+                    final_color = terrain_color * lighting;
+                }
             }
             
-            float fogDensity = style == 5 ? 0.02 : 0.04;
-            float fog = exp(-dist * dist * fogDensity);
-            color = mix(bgColor, color, fog);
+            // Atmospheric perspective (fog)
+            float fog_amount = exp(-dist * 0.01);
+            final_color = mix(getSkyColor(rd), final_color, fog_amount);
 
-            if (style == 5) {
-                float clouds = fbm3D(ro * 0.1 + vec3(0, t*0.1, 0)) * 0.5 + 0.3;
-                color = mix(color, secondaryColor, clouds * (1.0 - fog) * 0.5);
-            }
-
-            return color;
+            return final_color;
         }
 
-        // --- MAIN RENDER FUNCTION ---
+        // --- Main Render Function ---
+        mat3 setCamera(vec3 ro, vec2 rot) {
+            vec3 f = vec3(0,0,1); // Forward
+            f = mat3(1,0,0, 0,cos(rot.x),-sin(rot.x), 0,sin(rot.x),cos(rot.x)) * f;
+            f = mat3(cos(rot.y),0,sin(rot.y), 0,1,0, -sin(rot.y),0,cos(rot.y)) * f;
+            vec3 r = normalize(cross(vec3(0,1,0), f)); // Right
+            vec3 u = normalize(cross(f,r)); // Up
+            return mat3(r, u, f);
+        }
+
         void main() {
-            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / u_resolution.y;
+            vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
             vec3 ro = u_cameraPos;
-            vec3 rd = normalize(vec3(uv, 1.5));
-            rd = rotY(u_cameraRot.y) * rotX(u_cameraRot.x) * rd;
+            vec3 rd = setCamera(ro, u_cameraRot) * normalize(vec3(uv, 1.5));
             
-            float t = u_time;
-            
-            vec3 color1 = renderStyle(ro, rd, t * u_speed1, u_style1, u_bgColor1, u_primaryColor1, u_secondaryColor1);
-            vec3 color2 = renderStyle(ro, rd, t * u_speed2, u_style2, u_bgColor2, u_primaryColor2, u_secondaryColor2);
-            vec3 finalColor = mix(color1, color2, smoothstep(0.0, 1.0, u_transition));
+            vec3 col = render(ro, rd);
 
-            finalColor = pow(finalColor, vec3(0.85));
-            finalColor *= 1.0 - length(uv) * 0.15;
+            // Post-processing
+            col = pow(col, vec3(0.4545)); // Gamma correction
+            col = mix(col, vec3(0.5), -0.4 * length(uv)); // Vignette
             
-            gl_FragColor = vec4(finalColor, 1.0);
+            gl_FragColor = vec4(col, 1.0);
         }
     `;
 
     // =================================================================================================
-    // [SHADER COMPILATION]
+    // [SHADER COMPILATION & SETUP]
     // =================================================================================================
     function createShader(type, source) {
         const shader = gl.createShader(type);
@@ -314,86 +262,40 @@
         return true;
     }
 
-    // =================================================================================================
-    // [GEOMETRY & RENDER LOOP]
-    // =================================================================================================
     function createGeometry() {
         const vertices = new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]);
-        const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
-        const vertexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-        const indexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
         const positionLoc = gl.getAttribLocation(program, 'a_position');
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
         gl.enableVertexAttribArray(positionLoc);
         gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
-        return 6;
     }
     
+    // =================================================================================================
+    // [RENDER LOOP & EVENT LISTENERS]
+    // =================================================================================================
     let lastTime = 0;
     function render(time) {
         const dt = (time - lastTime) * 0.001;
         lastTime = time;
-        
-        const timeForPath = performance.now() * 0.0001;
-        cameraPos[0] += Math.sin(timeForPath * 2.0) * travelSpeed * dt * 5.0;
-        cameraPos[2] += travelSpeed * dt * 10.0;
-        cameraPos[1] += Math.cos(timeForPath * 3.0) * travelSpeed * dt * 3.0;
 
-        if (isTransitioning) {
-            transitionProgress += dt / 5.0;
-            if (transitionProgress >= 1.0) {
-                transitionProgress = 0.0;
-                isTransitioning = false;
-                currentWorldIndex = nextWorldIndex;
-            }
-        }
-        
-        const world1 = worlds3D[currentWorldIndex];
-        const world2 = worlds3D[nextWorldIndex];
+        // Slow, cinematic camera flight
+        cameraPos[2] += dt * 2.0;
         
         gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time * 0.001);
         gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), webglCanvas.width, webglCanvas.height);
         gl.uniform3fv(gl.getUniformLocation(program, 'u_cameraPos'), cameraPos);
         gl.uniform2fv(gl.getUniformLocation(program, 'u_cameraRot'), cameraRot);
-        gl.uniform3fv(gl.getUniformLocation(program, 'u_bgColor1'), world1.bgColor);
-        gl.uniform3fv(gl.getUniformLocation(program, 'u_primaryColor1'), world1.primaryColor);
-        gl.uniform3fv(gl.getUniformLocation(program, 'u_secondaryColor1'), world1.secondaryColor);
-        gl.uniform1f(gl.getUniformLocation(program, 'u_speed1'), world1.speed);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_style1'), world1.style);
-        gl.uniform3fv(gl.getUniformLocation(program, 'u_bgColor2'), world2.bgColor);
-        gl.uniform3fv(gl.getUniformLocation(program, 'u_primaryColor2'), world2.primaryColor);
-        gl.uniform3fv(gl.getUniformLocation(program, 'u_secondaryColor2'), world2.secondaryColor);
-        gl.uniform1f(gl.getUniformLocation(program, 'u_speed2'), world2.speed);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_style2'), world2.style);
-        gl.uniform1f(gl.getUniformLocation(program, 'u_transition'), transitionProgress);
 
-        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-        animationFrameId = requestAnimationFrame(render);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+        requestAnimationFrame(render);
     }
 
-    // =================================================================================================
-    // [INITIALIZATION & EVENT LISTENERS]
-    // =================================================================================================
     function initialize() {
-        try {
-            if (!createProgram()) return;
-            const indexCount = createGeometry();
-            
-            setInterval(() => {
-                if (!isTransitioning) {
-                    isTransitioning = true;
-                    nextWorldIndex = (currentWorldIndex + 1) % worlds3D.length;
-                    console.log(`[TRANSITION START] To: ${worlds3D[nextWorldIndex].name}`);
-                }
-            }, 20000);
-            
-            render(0);
-        } catch (e) {
-            console.error('3D World initialization failed:', e);
-        }
+        if (!createProgram()) return;
+        createGeometry();
+        render(0);
     }
 
     webglCanvas.addEventListener('mousedown', () => { mouse.isDown = true; });
