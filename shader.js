@@ -1,6 +1,6 @@
 // =================================================================================================
-// [3D WORLD EXPLORER] :: ENHANCED WEBGL SHADER SYSTEM
-// Legitimate 3D world with travel mechanics, multiple variations, and shader voodoo
+// [3D WORLD EXPLORER] :: MEGA-ENHANCED WEBGL SHADER SYSTEM V2
+// 10 Unique procedural worlds with advanced travel mechanics, multiple variations, and shader voodoo
 // =================================================================================================
 (function() {
     "use strict";
@@ -21,9 +21,10 @@
     }
 
     // =================================================================================================
-    // [3D WORLD CONFIGURATIONS] :: DIFFERENT 3D ENVIRONMENTS
+    // [3D WORLD CONFIGURATIONS] :: 10 DIFFERENT 3D ENVIRONMENTS
     // =================================================================================================
     const worlds3D = [
+        // --- Original 5 ---
         {
             name: "Neon Cyberpunk Metropolis",
             bgColor: [0.05, 0.05, 0.2], primaryColor: [0.0, 1.0, 1.0], secondaryColor: [1.0, 0.0, 1.0],
@@ -48,6 +49,32 @@
             name: "Plasma Storm Dimension",
             bgColor: [0.2, 0.0, 0.1], primaryColor: [1.0, 0.3, 0.8], secondaryColor: [0.5, 0.0, 1.0],
             speed: 1.8, density: 1.0, height: 18.0, style: 4
+        },
+        // --- New 5 ---
+        {
+            name: "Infernal Forge",
+            bgColor: [0.1, 0.0, 0.0], primaryColor: [1.0, 0.2, 0.0], secondaryColor: [1.0, 0.8, 0.0],
+            speed: 1.0, density: 1.5, height: 25.0, style: 5
+        },
+        {
+            name: "Abyssal Trench",
+            bgColor: [0.0, 0.02, 0.05], primaryColor: [0.1, 0.5, 1.0], secondaryColor: [0.8, 1.0, 0.2],
+            speed: 0.7, density: 0.9, height: 30.0, style: 6
+        },
+        {
+            name: "Celestial Archipelago",
+            bgColor: [0.4, 0.6, 0.9], primaryColor: [1.0, 0.9, 0.7], secondaryColor: [0.2, 0.8, 0.5],
+            speed: 1.3, density: 1.0, height: 0.0, style: 7
+        },
+        {
+            name: "Polygonal Dreamscape",
+            bgColor: [0.1, 0.1, 0.1], primaryColor: [1.0, 1.0, 1.0], secondaryColor: [0.0, 0.5, 1.0],
+            speed: 2.2, density: 0.5, height: 10.0, style: 8
+        },
+        {
+            name: "Sun-Bleached Expanse",
+            bgColor: [0.8, 0.75, 0.6], primaryColor: [0.9, 0.85, 0.8], secondaryColor: [0.3, 0.2, 0.1],
+            speed: 1.6, density: 0.7, height: 40.0, style: 9
         }
     ];
 
@@ -65,7 +92,7 @@
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         
-        console.log("[INFO] 3D World Explorer initialized successfully.");
+        console.log("[INFO] 3D World Explorer V2 initialized successfully.");
     } catch (e) {
         console.error("[FATAL] 3D World initialization error:", e);
         return;
@@ -76,20 +103,11 @@
     // =================================================================================================
     const vertexShaderSource = `
         attribute vec3 a_position;
-        attribute vec2 a_texCoord;
         uniform mat4 u_mvpMatrix;
-        uniform float u_time;
-        uniform vec3 u_cameraPos;
         varying vec3 v_worldPos;
-        varying vec3 v_viewPos;
-        varying vec2 v_texCoord;
-        varying float v_time;
         
         void main() {
             v_worldPos = a_position;
-            v_viewPos = a_position - u_cameraPos;
-            v_texCoord = a_texCoord;
-            v_time = u_time;
             gl_Position = u_mvpMatrix * vec4(a_position, 1.0);
         }
     `;
@@ -102,341 +120,241 @@
         
         uniform float u_time;
         uniform vec3 u_cameraPos;
+        uniform vec2 u_resolution;
         uniform vec3 u_bgColor;
         uniform vec3 u_primaryColor;
         uniform vec3 u_secondaryColor;
         uniform float u_speed;
-        uniform float u_density;
-        uniform float u_height;
         uniform int u_style;
-        uniform vec2 u_resolution;
-        
+
         varying vec3 v_worldPos;
-        varying vec3 v_viewPos;
-        varying vec2 v_texCoord;
-        varying float v_time;
         
         const float PI = 3.14159265359;
         const float TWO_PI = 6.28318530718;
+        const int MAX_STEPS = 96;
+        const float MAX_DIST = 150.0;
+        const float SURF_DIST = 0.005;
 
         // =========================================================================================
         // [3D UTILITY FUNCTIONS] :: ENHANCED NOISE AND MATH
         // =========================================================================================
-        
-        float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-        
-        float noise3D(vec3 p) {
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float hash3D(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+
+        float noise(vec3 p) {
             vec3 i = floor(p), f = fract(p);
             f = f * f * (3.0 - 2.0 * f);
             return mix(
-                mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
-                    mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
-                    mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+                mix(mix(hash3D(i), hash3D(i + vec3(1,0,0)), f.x),
+                    mix(hash3D(i + vec3(0,1,0)), hash3D(i + vec3(1,1,0)), f.x), f.y),
+                mix(mix(hash3D(i + vec3(0,0,1)), hash3D(i + vec3(1,0,1)), f.x),
+                    mix(hash3D(i + vec3(0,1,1)), hash3D(i + vec3(1,1,1)), f.x), f.y), f.z);
         }
         
-        float fbm3D(vec3 p) {
-            float value = 0.0, amplitude = 0.5;
-            for(int i = 0; i < 5; i++) {
-                value += amplitude * noise3D(p);
-                p *= 2.0; amplitude *= 0.5;
+        float fbm(vec3 p) {
+            float v = 0.0, a = 0.5;
+            for(int i = 0; i < 6; i++) {
+                v += a * noise(p);
+                p *= 2.0; a *= 0.5;
             }
-            return value;
+            return v;
         }
-        
-        mat3 rotY(float a) {
-            float c = cos(a), s = sin(a);
-            return mat3(c, 0, s, 0, 1, 0, -s, 0, c);
-        }
-        
-        mat3 rotX(float a) {
-            float c = cos(a), s = sin(a);
-            return mat3(1, 0, 0, 0, c, -s, 0, s, c);
-        }
+
+        mat3 rotY(float a) { float c=cos(a), s=sin(a); return mat3(c,0,s,0,1,0,-s,0,c); }
+        mat3 rotX(float a) { float c=cos(a), s=sin(a); return mat3(1,0,0,0,c,-s,0,s,c); }
+        mat3 rotZ(float a) { float c=cos(a), s=sin(a); return mat3(c,-s,0,s,c,0,0,0,1); }
 
         // =========================================================================================
         // [3D DISTANCE FUNCTIONS] :: SDF FOR PROCEDURAL GEOMETRY
         // =========================================================================================
-        
-        float sdBox(vec3 p, vec3 b) {
-            vec3 q = abs(p) - b;
-            return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-        }
-        
-        float sdSphere(vec3 p, float r) {
-            return length(p) - r;
-        }
-        
-        float sdCylinder(vec3 p, float h, float r) {
-            vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
-            return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
-        }
+        float sdBox(vec3 p, vec3 b) { vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }
+        float sdSphere(vec3 p, float r) { return length(p) - r; }
+        float sdCylinder(vec3 p, float h, float r) { vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h); return min(max(d.x,d.y),0.0)+length(max(d,0.0)); }
+        float sdTorus(vec3 p, vec2 t) { vec2 q=vec2(length(p.xz)-t.x,p.y); return length(q)-t.y; }
+        float opU(float d1, float d2) { return min(d1, d2); }
 
         // =========================================================================================
         // [3D WORLD GENERATION] :: PROCEDURAL 3D ENVIRONMENTS
         // =========================================================================================
-        
-        float map3D(vec3 p, float t, int style) {
-            float dist = 1000.0;
-            
-            // Ground plane
-            dist = min(dist, p.y + 0.5);
-            
-            if(style == 0) { // Neon Cyberpunk
-                // Skyscrapers
-                vec3 cell = floor(p / 8.0);
-                vec3 local = mod(p, 8.0) - 4.0;
-                float height = 10.0 + hash(cell) * 15.0;
-                dist = min(dist, sdBox(local - vec3(0, height * 0.5, 0), vec3(1.5, height * 0.5, 1.5)));
-                
-                // Floating platforms
-                float platformY = sin(t + cell.x + cell.z) * 3.0 + 8.0;
-                dist = min(dist, sdBox(local - vec3(0, platformY, 0), vec3(2.0, 0.2, 2.0)));
-                
-            } else if(style == 1) { // Bio Forest
-                // Organic trees
-                vec3 treePos = vec3(mod(p.x, 6.0) - 3.0, 0, mod(p.z, 6.0) - 3.0);
-                float treeHeight = 8.0 + fbm3D(floor(p.xz / 6.0).xyx) * 6.0;
-                dist = min(dist, sdCylinder(treePos - vec3(0, treeHeight * 0.5, 0), treeHeight * 0.5, 0.5));
-                
-                // Organic blobs
-                float blobDist = sdSphere(treePos - vec3(0, treeHeight + 2.0, 0), 2.0 + sin(t) * 0.5);
-                dist = min(dist, blobDist);
-                
-            } else if(style == 2) { // Crystal Cave
-                // Crystal formations
-                vec3 crystalPos = vec3(mod(p.x, 5.0) - 2.5, 0, mod(p.z, 5.0) - 2.5);
-                float crystalHeight = 5.0 + hash(floor(p.xz / 5.0).xyx) * 10.0;
-                vec3 rotatedPos = rotY(t * 0.1 + hash(floor(p.xz / 5.0).xyx) * TWO_PI) * crystalPos;
-                dist = min(dist, sdBox(rotatedPos - vec3(0, crystalHeight * 0.5, 0), vec3(0.8, crystalHeight * 0.5, 0.8)));
-                
-            } else if(style == 3) { // Void Matrix
-                // Digital structures
-                vec3 gridPos = floor(p / 4.0) * 4.0;
-                vec3 localPos = p - gridPos;
-                if(hash(gridPos) > 0.7) {
-                    float pillarHeight = 6.0 + sin(t + gridPos.x + gridPos.z) * 2.0;
-                    dist = min(dist, sdBox(localPos - vec3(0, pillarHeight * 0.5, 0), vec3(0.3, pillarHeight * 0.5, 0.3)));
+        float map(vec3 p, float t) {
+            float res = MAX_DIST;
+            if(u_style == 0) { // Neon Cyberpunk
+                vec3 cell = floor(p / 12.0);
+                vec3 local = mod(p, 12.0) - 6.0;
+                float h = 15.0 + hash3D(cell) * 25.0;
+                res = opU(res, sdBox(local - vec3(0, h * 0.5 - 5.0, 0), vec3(2.5, h * 0.5, 2.5)));
+            } else if(u_style == 1) { // Bio Forest
+                vec3 treePos = p;
+                treePos.xz = mod(p.xz, 8.0) - 4.0;
+                float h = 10.0 + fbm(p*0.1) * 8.0;
+                res = opU(res, sdCylinder(treePos - vec3(0, h * 0.4, 0), h * 0.6, 0.4 + fbm(p*0.5)*0.2));
+            } else if(u_style == 2) { // Crystal Cave
+                p.y += 10.0;
+                res = opU(res, -sdSphere(p, 15.0) + fbm(p * 0.8 + t * 0.1) * 3.0);
+            } else if(u_style == 3) { // Void Matrix
+                vec3 gridPos = floor(p / 5.0) * 5.0;
+                if(hash3D(gridPos) > 0.6) {
+                    float h = 8.0 + sin(t + gridPos.x) * 4.0;
+                    res = opU(res, sdBox(p - gridPos - vec3(2.5, h*0.5-5.0, 2.5), vec3(0.2, h*0.5, 0.2)));
                 }
-                
-            } else if(style == 4) { // Plasma Storm
-                // Energy pillars
-                vec3 pillarPos = vec3(mod(p.x, 7.0) - 3.5, 0, mod(p.z, 7.0) - 3.5);
-                float energy = sin(t * 2.0 + length(pillarPos.xz) * 0.5) * 0.5 + 0.5;
-                float pillarHeight = 12.0 + energy * 8.0;
-                dist = min(dist, sdCylinder(pillarPos - vec3(0, pillarHeight * 0.5, 0), pillarHeight * 0.5, 0.8 + energy * 0.4));
+            } else if(u_style == 4) { // Plasma Storm
+                res = fbm(p * 0.3 + t * 0.5) * 8.0;
+                res += sdTorus(p, vec2(10.0, 1.0));
+            } else if(u_style == 5) { // Infernal Forge
+                float ground = p.y + fbm(p * 0.5 + vec3(0,0,t*0.2)) * 3.0;
+                vec3 q = mod(p, 15.0) - 7.5;
+                float spire_h = 20.0 * hash3D(floor(p/15.0));
+                float spire = sdCylinder(q - vec3(0,spire_h*0.5,0), spire_h*0.5, 1.0);
+                res = opU(ground, spire);
+            } else if(u_style == 6) { // Abyssal Trench
+                float trench = abs(p.x) - 15.0 + noise(p*0.2)*5.0;
+                p.y += 20.0;
+                vec3 vent_pos = mod(p, 20.0) - 10.0;
+                float vent_h = 30.0 * hash3D(floor(p/20.0));
+                float vent = sdCylinder(vent_pos - vec3(0,vent_h*0.5,0), vent_h*0.5, 0.5 + noise(p)*0.5);
+                res = opU(trench, vent);
+            } else if(u_style == 7) { // Celestial Archipelago
+                vec3 island_pos = mod(p, 50.0)-25.0;
+                float id = hash3D(floor(p/50.0));
+                if (id > 0.5) {
+                    float island_size = 5.0 + id * 10.0;
+                    res = opU(res, sdSphere(island_pos, island_size) - fbm(p*0.5)*3.0);
+                }
+            } else if(u_style == 8) { // Polygonal Dreamscape
+                p = rotY(t*0.2) * p;
+                p = rotX(t*0.1) * p;
+                res = sdBox(abs(mod(p, 8.0) - 4.0)-1.0, vec3(0.5));
+            } else if(u_style == 9) { // Sun-Bleached Expanse
+                float ground = p.y + sin(p.x * 0.1 + t) * sin(p.z * 0.1 + t) * 2.0; // Dunes
+                vec3 rib_pos = p;
+                rib_pos.xz = mod(p.xz, 40.0) - 20.0;
+                rib_pos.y -= 5.0;
+                rib_pos = rotZ(1.2) * rib_pos;
+                res = opU(ground, sdTorus(rib_pos, vec2(10.0, 1.5)));
             }
-            
-            return dist;
+            return res;
         }
 
         // =========================================================================================
-        // [3D RAYMARCHING] :: VOLUMETRIC RENDERING
+        // [3D RAYMARCHING & NORMALS]
         // =========================================================================================
-        
-        vec3 getNormal(vec3 p, float t, int style) {
-            float eps = 0.01;
-            return normalize(vec3(
-                map3D(p + vec3(eps, 0, 0), t, style) - map3D(p - vec3(eps, 0, 0), t, style),
-                map3D(p + vec3(0, eps, 0), t, style) - map3D(p - vec3(0, eps, 0), t, style),
-                map3D(p + vec3(0, 0, eps), t, style) - map3D(p - vec3(0, 0, eps), t, style)
-            ));
-        }
-        
-        float raymarch(vec3 ro, vec3 rd, float t, int style) {
-            float dist = 0.0;
-            for(int i = 0; i < 64; i++) {
-                vec3 p = ro + rd * dist;
-                float d = map3D(p, t, style);
-                if(d < 0.01 || dist > 100.0) break;
-                dist += d * 0.8;
-            }
-            return dist;
+        vec3 getNormal(vec3 p, float t) {
+            float e = 0.001;
+            vec2 h = vec2(1, -1);
+            return normalize(
+                h.xyy * map(p + h.xyy*e, t) +
+                h.yyx * map(p + h.yyx*e, t) +
+                h.yxy * map(p + h.yxy*e, t) +
+                h.xxx * map(p + h.xxx*e, t)
+            );
         }
 
+        float raymarch(vec3 ro, vec3 rd, float t) {
+            float d = 0.0;
+            for(int i=0; i<MAX_STEPS; i++) {
+                vec3 p = ro + rd * d;
+                float h = map(p, t);
+                if(h < SURF_DIST || d > MAX_DIST) break;
+                d += h * 0.7;
+            }
+            return d;
+        }
+        
         // =========================================================================================
-        // [3D WORLD SHADERS] :: STYLE-SPECIFIC RENDERING
+        // [3D WORLD SHADING & RENDERING]
         // =========================================================================================
-        
-        vec3 neonCyberpunk3D(vec3 ro, vec3 rd, float t) {
-            float dist = raymarch(ro, rd, t, 0);
-            vec3 color = u_bgColor;
-            
-            if(dist < 100.0) {
-                vec3 p = ro + rd * dist;
-                vec3 n = getNormal(p, t, 0);
+        vec3 render(vec3 ro, vec3 rd, float t) {
+            vec3 col = u_bgColor;
+            float d = raymarch(ro, rd, t);
+
+            if(d < MAX_DIST) {
+                vec3 p = ro + rd * d;
+                vec3 n = getNormal(p, t);
+                vec3 lightDir = normalize(vec3(0.5, 0.8, -0.3));
+                float diffuse = max(0.0, dot(n, lightDir));
                 
-                // Neon lighting
-                float neonGlow = max(0.0, dot(n, normalize(vec3(1, 1, 1))));
-                color += u_primaryColor * neonGlow * 0.8;
-                
-                // Holographic scanlines
-                float scanlines = sin(p.y * 20.0 + t * 5.0) * 0.5 + 0.5;
-                color += u_secondaryColor * scanlines * 0.3;
-                
-                // Edge glow
-                float fresnel = 1.0 - abs(dot(n, -rd));
-                color += u_primaryColor * fresnel * 0.5;
-            }
-            
-            // Atmospheric fog
-            float fog = exp(-dist * 0.02);
-            color = mix(u_bgColor, color, fog);
-            
-            // Digital rain
-            float rain = fbm3D(vec3(ro.x * 0.1, ro.y + t * 3.0, ro.z * 0.1)) * 0.3;
-            color += u_primaryColor * rain * 0.2;
-            
-            return color;
-        }
-        
-        vec3 bioForest3D(vec3 ro, vec3 rd, float t) {
-            float dist = raymarch(ro, rd, t, 1);
-            vec3 color = u_bgColor;
-            
-            if(dist < 100.0) {
-                vec3 p = ro + rd * dist;
-                vec3 n = getNormal(p, t, 1);
-                
-                // Organic lighting
-                float organicLight = max(0.0, dot(n, normalize(vec3(0, 1, 0.5))));
-                color += u_primaryColor * organicLight * 0.6;
-                
-                // Bio-luminescence
-                float bioGlow = fbm3D(p * 2.0 + t * 0.5) * 0.5 + 0.5;
-                color += u_secondaryColor * bioGlow * 0.4;
-                
-                // Pulsing life energy
-                float pulse = sin(t * 2.0 + length(p) * 0.1) * 0.3 + 0.7;
-                color *= pulse;
-            }
-            
-            // Atmospheric particles
-            float particles = fbm3D(ro * 0.5 + t * 0.3) * 0.4;
-            color += u_primaryColor * particles * 0.1;
-            
-            return color;
-        }
-        
-        vec3 crystalCave3D(vec3 ro, vec3 rd, float t) {
-            float dist = raymarch(ro, rd, t, 2);
-            vec3 color = u_bgColor;
-            
-            if(dist < 100.0) {
-                vec3 p = ro + rd * dist;
-                vec3 n = getNormal(p, t, 2);
-                
-                // Crystal reflections
-                vec3 reflected = reflect(rd, n);
-                float reflection = max(0.0, dot(reflected, normalize(vec3(1, 1, 1))));
-                color += u_primaryColor * reflection * 0.7;
-                
-                // Prismatic effects
-                float prism = sin(p.x * 5.0 + t) * sin(p.y * 3.0 + t) * sin(p.z * 4.0 + t);
-                vec3 rainbow = vec3(sin(prism), sin(prism + 2.0), sin(prism + 4.0)) * 0.5 + 0.5;
-                color += rainbow * 0.3;
-                
-                // Crystal internal glow
-                float internalGlow = 1.0 / (1.0 + dist * 0.1);
-                color += u_secondaryColor * internalGlow * 0.2;
-            }
-            
-            // Crystalline atmosphere
-            float atmosphere = fbm3D(ro * 0.3 + t * 0.2) * 0.5;
-            color += u_primaryColor * atmosphere * 0.15;
-            
-            return color;
-        }
-        
-        vec3 voidMatrix3D(vec3 ro, vec3 rd, float t) {
-            float dist = raymarch(ro, rd, t, 3);
-            vec3 color = u_bgColor;
-            
-            if(dist < 100.0) {
-                vec3 p = ro + rd * dist;
-                vec3 n = getNormal(p, t, 3);
-                
-                // Digital grid overlay
-                vec3 gridPos = floor(p * 2.0) / 2.0;
-                float gridHash = hash(gridPos);
-                if(gridHash > 0.95) {
-                    color += u_primaryColor * 0.8;
+                // --- World-Specific Materials & Lighting ---
+                vec3 material_col = u_primaryColor;
+                if(u_style == 0) { // Neon Cyberpunk
+                    material_col = mix(u_primaryColor, u_secondaryColor, step(0.95, hash3D(floor(p*2.0))));
+                    float fresnel = pow(1.0 - abs(dot(n, -rd)), 4.0);
+                    col = material_col * (diffuse * 0.5 + 0.5) + u_secondaryColor * fresnel;
+                    col += sin(p.y*10.0 + t*5.0) * 0.1 * u_primaryColor;
+                } else if(u_style == 1) { // Bio Forest
+                    float bio = fbm(p*2.0 + t) * 0.5 + 0.5;
+                    material_col = mix(u_primaryColor, u_secondaryColor, bio);
+                    col = material_col * (diffuse * 0.7 + 0.3);
+                } else if(u_style == 2) { // Crystal Cave
+                    vec3 r = reflect(rd, n);
+                    float reflection = fbm(r*2.0);
+                    material_col = mix(u_primaryColor, vec3(1.0), reflection);
+                    col = material_col * (diffuse * 0.4 + 0.6);
+                } else if(u_style == 3) { // Void Matrix
+                    float grid = step(0.98, noise(p*vec3(10,1,10)));
+                    material_col = mix(u_primaryColor, u_secondaryColor, grid);
+                    col = material_col * (diffuse * 0.8 + 0.2);
+                } else if(u_style == 4) { // Plasma Storm
+                    float plasma = fbm(p * 2.0 + t) * 0.5 + 0.5;
+                    col = mix(u_primaryColor, u_secondaryColor, plasma);
+                } else if(u_style == 5) { // Infernal Forge
+                    float lava = smoothstep(0.4, 0.6, fbm(p * 1.5 + vec3(0,0,t)));
+                    material_col = mix(vec3(0.05), u_secondaryColor, lava);
+                    col = material_col * (diffuse * 0.3 + 0.7) + u_secondaryColor * lava * 1.5;
+                } else if(u_style == 6) { // Abyssal Trench
+                    float lum = pow(fbm(p * 3.0 - t * 0.5), 3.0);
+                    col = u_primaryColor * diffuse * 0.2 + u_secondaryColor * lum * 2.0;
+                } else if(u_style == 7) { // Celestial Archipelago
+                    float grass = smoothstep(0.5, 0.6, noise(p*3.0));
+                    material_col = mix(u_primaryColor, u_secondaryColor, grass);
+                    col = material_col * (diffuse * 0.8 + 0.2);
+                } else if(u_style == 8) { // Polygonal Dreamscape
+                    vec3 cell = floor(p);
+                    material_col = mix(u_primaryColor, u_secondaryColor, hash3D(cell));
+                    col = material_col * (diffuse * 0.5 + 0.5);
+                } else if(u_style == 9) { // Sun-Bleached Expanse
+                    col = u_primaryColor * (diffuse * 0.9 + 0.1);
                 }
                 
-                // Matrix code streams
-                float code = step(0.98, noise3D(vec3(p.x, p.y + t * 5.0, p.z) * 10.0));
-                color += u_primaryColor * code * 0.6;
-                
-                // Glitch effects
-                float glitch = step(0.99, noise3D(p * 20.0 + t * 10.0));
-                color += u_secondaryColor * glitch;
+                // --- Fog ---
+                float fog = 1.0 - exp(-d * d * 0.001);
+                col = mix(col, u_bgColor, fog);
+
+            } else {
+                // --- Background effects for worlds without hits ---
+                if (u_style == 7) { // Volumetric clouds for Celestial Archipelago
+                    float clouds = fbm(rd * 3.0 + vec3(0, -t*0.1, 0));
+                    col = mix(u_bgColor, vec3(1.0), smoothstep(0.4, 0.7, clouds));
+                }
             }
-            
-            // Digital void
-            float voidEffect = 1.0 - smoothstep(0.0, 50.0, dist);
-            color += u_primaryColor * voidEffect * 0.1;
-            
-            return color;
+            return col;
         }
-        
-        vec3 plasmaStorm3D(vec3 ro, vec3 rd, float t) {
-            float dist = raymarch(ro, rd, t, 4);
-            vec3 color = u_bgColor;
-            
-            if(dist < 100.0) {
-                vec3 p = ro + rd * dist;
-                vec3 n = getNormal(p, t, 4);
-                
-                // Plasma energy
-                float plasma = sin(p.x * 2.0 + t * 2.0) * cos(p.y * 3.0 + t * 1.5) * sin(p.z * 2.5 + t * 1.8);
-                vec3 plasmaColor = vec3(sin(plasma + t), sin(plasma + t + 2.0), sin(plasma + t + 4.0)) * 0.5 + 0.5;
-                color += plasmaColor * 0.6;
-                
-                // Energy bolts
-                float bolts = fbm3D(p * 3.0 + t * 2.0) * 0.5;
-                color += u_primaryColor * bolts * 0.4;
-                
-                // Electromagnetic distortion
-                float distortion = sin(length(p) * 0.5 + t * 3.0) * 0.3 + 0.7;
-                color *= distortion;
-            }
-            
-            // Storm atmosphere
-            float storm = fbm3D(ro * 0.2 + t * 0.8) * 0.6;
-            color += u_secondaryColor * storm * 0.2;
-            
-            return color;
-        }
+
 
         // =========================================================================================
         // [MAIN 3D RENDERING]
         // =========================================================================================
         void main() {
-            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
+            vec2 uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / u_resolution.y;
             
             // 3D camera setup
             vec3 ro = u_cameraPos;
-            vec3 rd = normalize(vec3(uv, 1.0));
+            vec3 target = ro + vec3(0, 0, 1);
+            vec3 fwd = normalize(target - ro);
+            vec3 right = normalize(cross(fwd, vec3(0,1,0)));
+            vec3 up = normalize(cross(right, fwd));
+            vec3 rd = normalize(fwd + right * uv.x + up * uv.y);
             
-            float t = u_time * u_speed;
-            vec3 color = u_bgColor;
-            
-            // Render based on world style
-            if(u_style == 0) {
-                color = neonCyberpunk3D(ro, rd, t);
-            } else if(u_style == 1) {
-                color = bioForest3D(ro, rd, t);
-            } else if(u_style == 2) {
-                color = crystalCave3D(ro, rd, t);
-            } else if(u_style == 3) {
-                color = voidMatrix3D(ro, rd, t);
-            } else if(u_style == 4) {
-                color = plasmaStorm3D(ro, rd, t);
+            // Heat distortion for Infernal Forge
+            if(u_style == 5){
+                rd.xy += (fbm(ro*0.1+t)-0.5)*0.02;
             }
+
+            float t = u_time * u_speed;
+            vec3 color = render(ro, rd, t);
             
             // Post-processing effects
-            color = pow(color, vec3(0.8)); // Gamma correction
-            color *= 1.0 - length(uv) * 0.1; // Vignette
+            color = pow(color, vec3(0.4545)); // Gamma correction
+            color *= 1.0 - dot(uv, uv) * 0.15; // Vignette
             
             gl_FragColor = vec4(color, 1.0);
         }
@@ -476,16 +394,10 @@
     }
 
     // =================================================================================================
-    // [3D GEOMETRY AND RENDERING]
+    // [GEOMETRY AND RENDERING]
     // =================================================================================================
     function createGeometry() {
-        const vertices = new Float32Array([
-            -1, -1, 0, 0, 0,
-             1, -1, 0, 1, 0,
-             1,  1, 0, 1, 1,
-            -1,  1, 0, 0, 1
-        ]);
-        
+        const vertices = new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]);
         const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
         
         const vertexBuffer = gl.createBuffer();
@@ -497,15 +409,10 @@
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
         
         const positionLoc = gl.getAttribLocation(program, 'a_position');
-        const texCoordLoc = gl.getAttribLocation(program, 'a_texCoord');
-        
         gl.enableVertexAttribArray(positionLoc);
-        gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 20, 0);
+        gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
         
-        gl.enableVertexAttribArray(texCoordLoc);
-        gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 20, 12);
-        
-        return 6;
+        return indices.length;
     }
 
     // =================================================================================================
@@ -514,9 +421,10 @@
     function updateCamera(dt) {
         if(autoTravel) {
             const time = performance.now() * 0.001;
-            cameraPos[0] += Math.sin(time * 0.3) * travelSpeed * dt;
-            cameraPos[2] += travelSpeed * dt * 2.0;
-            cameraRot[1] = Math.sin(time * 0.2) * 0.1;
+            const currentSpeed = travelSpeed * worlds3D[currentWorldIndex].speed;
+            cameraPos[2] += currentSpeed * dt * 2.0;
+            cameraPos[0] += Math.sin(time * 0.2) * currentSpeed * dt;
+            cameraPos[1] = 2.0 + Math.sin(time * 0.3) * 0.5;
         }
     }
 
@@ -526,26 +434,24 @@
     let lastTime = 0, indexCount = 0;
     
     function render(time) {
-        const dt = (time - lastTime) * 0.001;
+        time *= 0.001; // convert to seconds
+        const dt = time - lastTime;
         lastTime = time;
         
         updateCamera(dt);
         
         const world = worlds3D[currentWorldIndex];
-        gl.clearColor(...world.bgColor, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         
         // Set uniforms
-        gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time * 0.001);
-        gl.uniform3f(gl.getUniformLocation(program, 'u_cameraPos'), ...cameraPos);
-        gl.uniform3f(gl.getUniformLocation(program, 'u_bgColor'), ...world.bgColor);
-        gl.uniform3f(gl.getUniformLocation(program, 'u_primaryColor'), ...world.primaryColor);
-        gl.uniform3f(gl.getUniformLocation(program, 'u_secondaryColor'), ...world.secondaryColor);
-        gl.uniform1f(gl.getUniformLocation(program, 'u_speed'), world.speed);
-        gl.uniform1f(gl.getUniformLocation(program, 'u_density'), world.density);
-        gl.uniform1f(gl.getUniformLocation(program, 'u_height'), world.height);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_style'), world.style);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time);
+        gl.uniform3fv(gl.getUniformLocation(program, 'u_cameraPos'), cameraPos);
         gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), webglCanvas.width, webglCanvas.height);
+        
+        gl.uniform3fv(gl.getUniformLocation(program, 'u_bgColor'), world.bgColor);
+        gl.uniform3fv(gl.getUniformLocation(program, 'u_primaryColor'), world.primaryColor);
+        gl.uniform3fv(gl.getUniformLocation(program, 'u_secondaryColor'), world.secondaryColor);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_speed'), world.speed);
+        gl.uniform1i(gl.getUniformLocation(program, 'u_style'), world.style);
         
         // Identity matrix for fullscreen quad
         const mvpMatrix = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -560,7 +466,8 @@
     // [EXTERNAL API AND INITIALIZATION]
     // =================================================================================================
     window.updateShader = function(options = {}) {
-        if (options.worldIndex !== undefined && options.worldIndex >= 0 && options.worldIndex < 5) {
+        // *** UPDATED to handle 10 worlds ***
+        if (options.worldIndex !== undefined && options.worldIndex >= 0 && options.worldIndex < 10) {
             currentWorldIndex = options.worldIndex;
             console.log(`[3D WORLD SWITCH] ${worlds3D[currentWorldIndex].name}`);
         }
@@ -570,22 +477,20 @@
 
     function initialize() {
         try {
-            if (!createProgram()) return false;
+            if (!createProgram()) return;
             indexCount = createGeometry();
             
-            // Auto-switch worlds every 20 seconds
+            // Auto-switch worlds every 25 seconds
             setInterval(() => {
                 if(autoTravel) {
                     currentWorldIndex = (currentWorldIndex + 1) % worlds3D.length;
                     console.log(`[AUTO SWITCH] ${worlds3D[currentWorldIndex].name}`);
                 }
-            }, 20000);
+            }, 25000);
             
-            render(0);
-            return true;
+            requestAnimationFrame(render);
         } catch (e) {
             console.error('3D World initialization failed:', e);
-            return false;
         }
     }
 
@@ -593,10 +498,10 @@
     // [WINDOW RESIZE AND STARTUP]
     // =================================================================================================
     window.addEventListener('resize', function() {
-        if (webglCanvas) {
+        if (webglCanvas && gl) {
             webglCanvas.width = window.innerWidth;
             webglCanvas.height = window.innerHeight;
-            if (gl) gl.viewport(0, 0, window.innerWidth, window.innerHeight);
+            gl.viewport(0, 0, window.innerWidth, window.innerHeight);
         }
     });
 
