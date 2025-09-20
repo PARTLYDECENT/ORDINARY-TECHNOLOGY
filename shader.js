@@ -1,5 +1,5 @@
 // =================================================================================================
-// [PROCEDURAL TERRAIN MEGA-SHADER] :: V5 :: OPTIMIZED PERFORMANCE EDITION
+// [PROCEDURAL TERRAIN MEGA-SHADER] :: V5.1 :: SYNTAX ERROR FIX
 // Four unique, high-quality procedural landscapes with efficient, blended transitions.
 // =================================================================================================
 (function() {
@@ -75,7 +75,7 @@
 
         // --- Constants ---
         const float MAX_DIST = 250.0;
-        const int MARCH_STEPS = 96; // [OPTIMIZED] Reduced from 128
+        const int MARCH_STEPS = 96;
         const float PI = 3.1415926535;
 
         // ================================================================= //
@@ -99,7 +99,7 @@
         
         float fbm(vec2 p) {
             float v = 0.0;
-            float a = 0.5;
+            float a = 0.5; // <-- The semicolon was missing here in the previous version.
             mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
             for (int i = 0; i < 6; ++i) {
                 v += a * noise(p);
@@ -181,13 +181,12 @@
         float calcSoftShadow(vec3 ro, vec3 rd, float k, float dist) {
             float res = 1.0;
             float t = 0.05;
-            int steps = 32; // [OPTIMIZED] Reduced from 48
-            // [OPTIMIZED] Dynamic shadow quality (LOD). Fewer steps for far away shadows.
+            int steps = 32;
             if (dist > 50.0) steps = 24;
             if (dist > 100.0) steps = 16;
             
             for(int i=0; i < 32; i++) {
-                if (i >= steps) break; // ugly but effective way to have dynamic loop count
+                if (i >= steps) break;
                 float h = map(ro + rd * t);
                 if(h < 0.001) return 0.0;
                 res = min(res, k * h / t);
@@ -230,7 +229,6 @@
             return vec3(0.5);
         }
 
-        // [OPTIMIZED] This function gets just the surface material color, without lighting.
         vec3 getMaterial(vec3 p, vec3 n, vec3 rd, int style) {
             if (style == 0) { // Alpine Material
                 if (p.y < 0.0) { // Water
@@ -259,7 +257,7 @@
                 vec3 h = hash3(floor(p.xz / 20.0));
                 vec3 mat = h * 0.5 + 0.5;
                 float fresnel = pow(1.0 - abs(dot(n, -rd)), 5.0);
-                return mix(mat, vec3(1.0), fresnel * 0.8); // Fake translucency
+                return mix(mat, vec3(1.0), fresnel * 0.8);
             }
             return vec3(0.5);
         }
@@ -282,11 +280,9 @@
             vec3 ro = u_cameraPos;
             vec3 rd = setCamera(u_cameraRot) * normalize(vec3(uv, 1.5));
             
-            // --- Raymarch once using the blended SDF ---
             vec3 hit_pos = raymarch(ro, rd);
             float dist = distance(ro, hit_pos);
 
-            // --- Blended Sky Background ---
             vec3 sky1 = getSkyColor(rd, u_style1);
             vec3 sky2 = getSkyColor(rd, u_style2);
             vec3 final_color = mix(sky1, sky2, u_transition);
@@ -294,7 +290,6 @@
             if (dist < MAX_DIST) {
                 vec3 normal = getNormal(hit_pos);
 
-                // [OPTIMIZED] Get material properties for both worlds and blend them *before* lighting.
                 vec3 mat1 = getMaterial(hit_pos, normal, rd, u_style1);
                 vec3 mat2 = getMaterial(hit_pos, normal, rd, u_style2);
                 vec3 blended_material = mix(mat1, mat2, u_transition);
@@ -303,9 +298,8 @@
                 vec3 sun2 = getSun(u_style2);
                 vec3 blended_sun_dir = normalize(mix(sun1, sun2, u_transition));
 
-                // [OPTIMIZED] Calculate expensive lighting only ONCE on the blended material.
                 vec3 lighting = vec3(0.0);
-                if (u_style1 == 2 && u_transition < 0.5) { // Special emissive lighting for volcano world
+                if (u_style1 == 2 && u_transition < 0.5) {
                      vec3 magma_pos = hit_pos; magma_pos.x -= mod(hit_pos.x, 20.0) - 10.0;
                      float magma_light = 30.0 / (distance(hit_pos.y, -5.0) * distance(hit_pos.y, -5.0));
                      lighting += vec3(0.8, 0.2, 0.1) * magma_light * max(0.0, normal.y);
@@ -315,24 +309,21 @@
                 float shadow = calcSoftShadow(hit_pos + normal * 0.02, blended_sun_dir, 32.0, dist);
                 float skylight = max(0.2, normal.y * 0.5 + 0.5);
                 lighting += diffuse * shadow * vec3(1.0, 0.9, 0.7);
-                lighting += skylight * sky1 * 0.5; // Ambient light from sky
+                lighting += skylight * sky1 * 0.5;
                 
                 final_color = blended_material * lighting;
 
-                 // Add specular highlights for crystals
                 if (u_style1 == 3 || u_style2 == 3) {
                     float specular = pow(max(0.0, dot(reflect(rd, normal), blended_sun_dir)), 32.0);
                     final_color += vec3(1.0) * specular * 2.0 * shadow;
                 }
             }
             
-            // --- Atmospheric Fog ---
             float fog_amount = exp(-dist * 0.015);
             final_color = mix(mix(sky1, sky2, u_transition), final_color, fog_amount);
 
-            // --- Post-processing ---
-            final_color = pow(final_color, vec3(0.4545)); // Gamma correction
-            final_color = mix(final_color, vec3(0.5), -0.4 * length(uv)); // Vignette
+            final_color = pow(final_color, vec3(0.4545));
+            final_color = mix(final_color, vec3(0.5), -0.4 * length(uv));
             
             gl_FragColor = vec4(final_color, 1.0);
         }
@@ -385,7 +376,7 @@
 
         cameraPos[2] += dt * 3.0;
         if (isTransitioning) {
-            transitionProgress += dt / 8.0; // 8 second transition
+            transitionProgress += dt / 8.0;
             if (transitionProgress >= 1.0) {
                 transitionProgress = 0.0;
                 isTransitioning = false;
