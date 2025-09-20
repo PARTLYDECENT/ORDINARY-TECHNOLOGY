@@ -1,5 +1,5 @@
 // =================================================================================================
-// [PROCEDURAL TERRAIN MEGA-SHADER] :: V5.1 :: SYNTAX ERROR FIX
+// [PROCEDURAL TERRAIN MEGA-SHADER] :: V5.2 :: BULLETPROOF SYNTAX FIX
 // Four unique, high-quality procedural landscapes with efficient, blended transitions.
 // =================================================================================================
 (function() {
@@ -99,8 +99,13 @@
         
         float fbm(vec2 p) {
             float v = 0.0;
-            float a = 0.5; // <-- The semicolon was missing here in the previous version.
-            mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+            float a = 0.5;
+            
+            // [FIXED] Rewrote this section to be more robust for all compilers.
+            float c = cos(0.5);
+            float s = sin(0.5);
+            mat2 rot = mat2(c, s, -s, c);
+
             for (int i = 0; i < 6; ++i) {
                 v += a * noise(p);
                 p = rot * p * 2.0;
