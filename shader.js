@@ -1,8 +1,6 @@
 // =================================================================================================
-// [PROCEDURAL TERRAIN MEGA-SHADER] :: V4 :: MULTI-PHASE REALISTIC WORLDS
-// Four unique, high-quality procedural landscapes with seamless transitions.
-// Total Lines: 1100+
-// Author: Gemini Advanced
+// [PROCEDURAL TERRAIN MEGA-SHADER] :: V5 :: OPTIMIZED PERFORMANCE EDITION
+// Four unique, high-quality procedural landscapes with efficient, blended transitions.
 // =================================================================================================
 (function() {
     "use strict";
@@ -44,7 +42,7 @@
         webglCanvas.height = window.innerHeight;
         gl = webglCanvas.getContext('webgl2') || webglCanvas.getContext('webgl');
         if (!gl) throw new Error("WebGL not supported");
-        console.log(`[INFO] Mega-Shader Initialized. ${worlds.length} worlds loaded.`);
+        console.log(`[INFO] Mega-Shader (Optimized) Initialized. ${worlds.length} worlds loaded.`);
     } catch (e) {
         console.error("[FATAL] Initialization error:", e);
         return;
@@ -77,21 +75,18 @@
 
         // --- Constants ---
         const float MAX_DIST = 250.0;
-        const int MARCH_STEPS = 128;
+        const int MARCH_STEPS = 96; // [OPTIMIZED] Reduced from 128
         const float PI = 3.1415926535;
 
         // ================================================================= //
         // [SECTION A: UTILITIES & NOISE FUNCTIONS]
         // ================================================================= //
 
-        // --- Hashing ---
-        vec2 hash2(vec2 p) { return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
         vec3 hash3(vec2 p) {
             vec3 q = vec3(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)), dot(p, vec2(419.2, 371.9)));
             return fract(sin(q) * 43758.5453);
         }
 
-        // --- Classic Perlin-style Noise ---
         float noise(vec2 p) {
             vec2 i = floor(p);
             vec2 f = fract(p);
@@ -102,7 +97,6 @@
                            dot(hash3(i + vec2(1,1)).xy - 0.5, f - vec2(1,1)), f.x), f.y);
         }
         
-        // --- Fractional Brownian Motion (for general terrain) ---
         float fbm(vec2 p) {
             float v = 0.0;
             float a = 0.5;
@@ -115,12 +109,8 @@
             return v;
         }
         
-        // --- Ridged Noise (for canyons and sharp features) ---
-        float ridged_noise(vec2 p) {
-            return 1.0 - abs(fbm(p));
-        }
+        float ridged_noise(vec2 p) { return 1.0 - abs(fbm(p)); }
 
-        // --- SDF Primitives ---
         float sdHexPrism(vec3 p, vec2 h) {
             vec3 q = abs(p);
             return max(q.z - h.y, max((q.x * 0.866025 + q.y * 0.5), q.y) - h.x);
@@ -130,46 +120,38 @@
         // [SECTION B: WORLD GEOMETRY (SDF)]
         // ================================================================= //
         
-        // --- Per-World Geometry Functions ---
         float mapStyle(vec3 p, int style) {
-            if (style == 0) { // --- Alpine Lake ---
-                float terrain_height = fbm(p.xz * 0.01) * 30.0 + fbm(p.xz * 0.05) * 6.0 + fbm(p.xz * 0.2) * 1.5;
-                return p.y - terrain_height;
+            if (style == 0) { // Alpine Lake
+                float h = fbm(p.xz * 0.01) * 30.0 + fbm(p.xz * 0.05) * 6.0 + fbm(p.xz * 0.2) * 1.5;
+                return p.y - h;
             }
-            if (style == 1) { // --- Scorched Canyons ---
+            if (style == 1) { // Scorched Canyons
                 vec2 p2 = p.xz * 0.008;
-                float canyon_walls = ridged_noise(p2) * 60.0;
-                float canyon_floor = fbm(p2 * 2.0) * 4.0 - 20.0;
-                float t = smoothstep(-25.0, -15.0, canyon_walls);
-                return p.y - mix(canyon_floor, canyon_walls, t);
+                float walls = ridged_noise(p2) * 60.0;
+                float floor = fbm(p2 * 2.0) * 4.0 - 20.0;
+                return p.y - mix(floor, walls, smoothstep(-25.0, -15.0, walls));
             }
-            if (style == 2) { // --- Volcanic Ash Fields ---
+            if (style == 2) { // Volcanic Ash Fields
                 float ground = fbm(p.xz * 0.02) * 8.0;
-                // Carve a river using a sine wave
                 float river = p.y - (ground - 5.0);
-                float river_width = 10.0;
-                float river_sdf = abs(p.x + sin(p.z * 0.1) * 20.0) - river_width;
+                float river_sdf = abs(p.x + sin(p.z * 0.1) * 20.0) - 10.0;
                 river = max(river, river_sdf);
                 return min(p.y - ground, river);
             }
-            if (style == 3) { // --- Prismatic Salt Flats ---
+            if (style == 3) { // Prismatic Salt Flats
                 float ground = p.y;
-                // Place crystals on a grid
                 vec2 grid = floor(p.xz / 20.0);
                 vec3 h = hash3(grid);
                 if (h.z > 0.4) {
                     vec3 local_p = p;
                     local_p.xz = mod(p.xz, 20.0) - 10.0;
-                    float height = 5.0 + h.x * 20.0;
-                    float radius = 2.0 + h.y * 3.0;
-                    ground = min(ground, sdHexPrism(local_p - vec3(0, height*0.5, 0), vec2(radius, height*0.5)));
+                    ground = min(ground, sdHexPrism(local_p - vec3(0, (5.0 + h.x * 20.0)*0.5, 0), vec2(2.0 + h.y * 3.0, (5.0 + h.x * 20.0)*0.5)));
                 }
                 return ground;
             }
             return p.y;
         }
 
-        // --- Master Blended SDF for Transitions ---
         float map(vec3 p) {
             float d1 = mapStyle(p, u_style1);
             float d2 = mapStyle(p, u_style2);
@@ -196,10 +178,16 @@
             return ro + rd * t;
         }
 
-        float calcSoftShadow(vec3 ro, vec3 rd, float k) {
+        float calcSoftShadow(vec3 ro, vec3 rd, float k, float dist) {
             float res = 1.0;
             float t = 0.05;
-            for(int i=0; i<48; i++) {
+            int steps = 32; // [OPTIMIZED] Reduced from 48
+            // [OPTIMIZED] Dynamic shadow quality (LOD). Fewer steps for far away shadows.
+            if (dist > 50.0) steps = 24;
+            if (dist > 100.0) steps = 16;
+            
+            for(int i=0; i < 32; i++) {
+                if (i >= steps) break; // ugly but effective way to have dynamic loop count
                 float h = map(ro + rd * t);
                 if(h < 0.001) return 0.0;
                 res = min(res, k * h / t);
@@ -214,9 +202,9 @@
         // ================================================================= //
 
         vec3 getSun(int style) {
-            if (style == 1) return normalize(vec3(0.3, 0.9, -0.4)); // High noon for desert
-            if (style == 2) return normalize(vec3(0.9, 0.1, 0.1));  // Low, red sun for volcano
-            return normalize(vec3(0.8, 0.4, -0.2)); // Default
+            if (style == 1) return normalize(vec3(0.3, 0.9, -0.4));
+            if (style == 2) return normalize(vec3(0.9, 0.1, 0.1));
+            return normalize(vec3(0.8, 0.4, -0.2));
         }
         
         vec3 getSkyColor(vec3 rd, int style) {
@@ -225,114 +213,59 @@
             
             if (style == 0) { // Alpine Sky
                 vec3 sky = mix(vec3(0.2, 0.3, 0.4), vec3(0.5, 0.7, 0.9), 1.0 - rd.y);
-                sky += vec3(1.0, 0.9, 0.7) * (pow(sun_dot, 256.0) * 2.0 + pow(sun_dot, 4.0) * 0.2);
-                return sky;
+                return sky + vec3(1.0, 0.9, 0.7) * (pow(sun_dot, 256.0) * 2.0 + pow(sun_dot, 4.0) * 0.2);
             }
             if (style == 1) { // Desert Haze
                 vec3 sky = mix(vec3(0.8, 0.5, 0.3), vec3(0.4, 0.5, 0.7), pow(1.0 - rd.y, 2.0));
-                sky += vec3(1.0, 0.9, 0.8) * (pow(sun_dot, 128.0) * 1.5 + pow(sun_dot, 8.0) * 0.3);
-                return sky;
+                return sky + vec3(1.0, 0.9, 0.8) * (pow(sun_dot, 128.0) * 1.5 + pow(sun_dot, 8.0) * 0.3);
             }
             if (style == 2) { // Volcanic Gloom
                 vec3 sky = mix(vec3(0.1, 0.0, 0.0), vec3(0.4, 0.1, 0.2), 1.0 - rd.y);
-                sky += vec3(1.0, 0.7, 0.5) * (pow(sun_dot, 256.0) * 1.0 + pow(sun_dot, 8.0) * 0.1);
-                return sky;
+                return sky + vec3(1.0, 0.7, 0.5) * (pow(sun_dot, 256.0) * 1.0 + pow(sun_dot, 8.0) * 0.1);
             }
             if (style == 3) { // Crystal Sky
                 vec3 sky = mix(vec3(0.7, 0.8, 0.9), vec3(1.0), 1.0 - rd.y);
-                sky += vec3(1.0, 0.95, 0.9) * (pow(sun_dot, 512.0) * 2.0 + pow(sun_dot, 2.0) * 0.2);
-                return sky;
+                return sky + vec3(1.0, 0.95, 0.9) * (pow(sun_dot, 512.0) * 2.0 + pow(sun_dot, 2.0) * 0.2);
             }
             return vec3(0.5);
         }
 
-        // --- Main Shading Orchestrator ---
-        vec3 render(vec3 ro, vec3 rd, int style) {
-            vec3 hit_pos = raymarch(ro, rd);
-            float dist = distance(ro, hit_pos);
-            vec3 final_color = getSkyColor(rd, style);
-
-            if (dist < MAX_DIST) {
-                vec3 normal = getNormal(hit_pos);
-                vec3 sunDir = getSun(style);
-                vec3 sunColor = vec3(1.0, 0.9, 0.7);
-                vec3 terrain_color = vec3(0.5);
-                
-                // --- Style-Specific Surface Shading ---
-                if (style == 0) { // Alpine Lake
-                    if (hit_pos.y < 0.0) { // Water
-                        vec3 reflected_rd = reflect(rd, vec3(0,1,0));
-                        terrain_color = getSkyColor(reflected_rd, style); // Simple reflection
-                        float fresnel = pow(1.0 - max(0.0, dot(-rd, vec3(0,1,0))), 3.0);
-                        terrain_color = mix(vec3(0.05, 0.1, 0.12), terrain_color, fresnel);
-                    } else { // Terrain
-                        float slope = 1.0 - normal.y;
-                        terrain_color = mix(vec3(0.2, 0.3, 0.1), vec3(0.3), smoothstep(0.2, 0.6, slope));
-                        terrain_color = mix(terrain_color, vec3(1.0), smoothstep(20.0, 30.0, hit_pos.y));
-                        float diffuse = max(0.0, dot(normal, sunDir));
-                        float shadow = calcSoftShadow(hit_pos + normal * 0.02, sunDir, 32.0);
-                        float skylight = max(0.2, normal.y * 0.5 + 0.5);
-                        terrain_color *= (diffuse * shadow * sunColor + skylight * vec3(0.1, 0.2, 0.3));
-                    }
+        // [OPTIMIZED] This function gets just the surface material color, without lighting.
+        vec3 getMaterial(vec3 p, vec3 n, vec3 rd, int style) {
+            if (style == 0) { // Alpine Material
+                if (p.y < 0.0) { // Water
+                    vec3 reflected_rd = reflect(rd, vec3(0,1,0));
+                    vec3 reflected_color = getSkyColor(reflected_rd, style);
+                    float fresnel = pow(1.0 - max(0.0, dot(-rd, vec3(0,1,0))), 3.0);
+                    return mix(vec3(0.05, 0.1, 0.12), reflected_color, fresnel);
                 }
-                else if (style == 1) { // Scorched Canyons
-                    float strata = sin(hit_pos.y * 0.5 + fbm(hit_pos.xz * 0.1) * 2.0);
-                    terrain_color = mix(vec3(0.6, 0.3, 0.1), vec3(0.4, 0.2, 0.05), strata);
-                    terrain_color *= 0.5 + hash3(floor(hit_pos.xz)).x * 0.5; // Color variation
-                    float diffuse = max(0.0, dot(normal, sunDir));
-                    float shadow = calcSoftShadow(hit_pos + normal * 0.02, sunDir, 48.0);
-                    float skylight = max(0.3, normal.y * 0.5 + 0.5);
-                    terrain_color *= (diffuse * shadow * sunColor + skylight * vec3(0.4, 0.2, 0.1));
-                }
-                else if (style == 2) { // Volcanic Ash Fields
-                    float d = mapStyle(hit_pos, style);
-                    if (d > -0.1) { // Magma
-                        float noise_pattern = fbm(hit_pos.xz * 0.1 + u_time * 0.2);
-                        terrain_color = mix(vec3(1.0, 0.5, 0.0), vec3(0.8, 0.1, 0.0), noise_pattern);
-                        terrain_color *= 1.5; // Emissive
-                    } else { // Ash
-                        terrain_color = vec3(0.1) + noise(hit_pos.xz * 2.0) * 0.05;
-                        // Lighting from magma (simplified)
-                        vec3 magma_pos = hit_pos;
-                        magma_pos.x -= mod(hit_pos.x, 20.0) - 10.0; // find approx river center
-                        float dist_to_magma = distance(hit_pos.y, -5.0); // approx magma height
-                        float magma_light = 30.0 / (dist_to_magma * dist_to_magma);
-                        terrain_color += vec3(0.8, 0.2, 0.1) * magma_light * max(0.0, normal.y);
-                        
-                        float diffuse = max(0.0, dot(normal, sunDir));
-                        terrain_color *= diffuse * vec3(0.5,0.2,0.2);
-                    }
-                }
-                 else if (style == 3) { // Prismatic Salt Flats
-                    float d = mapStyle(hit_pos, style);
-                    if (abs(d) < 0.01) { // Ground
-                        terrain_color = vec3(0.9) + noise(hit_pos.xz * 0.5) * 0.1;
-                    } else { // Crystal
-                        vec3 h = hash3(floor(hit_pos.xz / 20.0));
-                        terrain_color = h * 0.5 + 0.5; // Unique color per crystal
-                        // Fake Translucency / Specular
-                        float fresnel = pow(1.0 - abs(dot(normal, -rd)), 5.0);
-                        float specular = pow(max(0.0, dot(reflect(rd, normal), sunDir)), 32.0);
-                        terrain_color = mix(terrain_color, vec3(1.0), fresnel * 0.8);
-                        terrain_color += vec3(1.0) * specular * 2.0;
-                    }
-                    float diffuse = max(0.0, dot(normal, sunDir));
-                    float shadow = calcSoftShadow(hit_pos + normal * 0.02, sunDir, 64.0);
-                    terrain_color *= diffuse * shadow * sunColor * 0.5 + 0.5;
-                 }
-                final_color = terrain_color;
+                float slope = 1.0 - n.y;
+                vec3 mat = mix(vec3(0.2, 0.3, 0.1), vec3(0.3), smoothstep(0.2, 0.6, slope));
+                return mix(mat, vec3(1.0), smoothstep(20.0, 30.0, p.y));
             }
-            
-            // Atmospheric perspective (fog)
-            float fog_density = style == 1 ? 0.02 : 0.01;
-            float fog_amount = exp(-dist * fog_density);
-            final_color = mix(getSkyColor(rd, style), final_color, fog_amount);
-
-            return final_color;
+            if (style == 1) { // Canyon Material
+                float strata = sin(p.y * 0.5 + fbm(p.xz * 0.1) * 2.0);
+                vec3 mat = mix(vec3(0.6, 0.3, 0.1), vec3(0.4, 0.2, 0.05), strata);
+                return mat * (0.5 + hash3(floor(p.xz)).x * 0.5);
+            }
+            if (style == 2) { // Volcanic Material
+                if (mapStyle(p, style) > -0.1) { // Magma is emissive
+                    return mix(vec3(1.0, 0.5, 0.0), vec3(0.8, 0.1, 0.0), fbm(p.xz*0.1+u_time*0.2)) * 1.5;
+                }
+                return vec3(0.1) + noise(p.xz * 2.0) * 0.05; // Ash
+            }
+            if (style == 3) { // Crystal Material
+                if (abs(mapStyle(p, style)) < 0.01) { return vec3(0.9) + noise(p.xz * 0.5) * 0.1; }
+                vec3 h = hash3(floor(p.xz / 20.0));
+                vec3 mat = h * 0.5 + 0.5;
+                float fresnel = pow(1.0 - abs(dot(n, -rd)), 5.0);
+                return mix(mat, vec3(1.0), fresnel * 0.8); // Fake translucency
+            }
+            return vec3(0.5);
         }
 
         // ================================================================= //
-        // [SECTION E: MAIN & CAMERA]
+        // [SECTION E: MAIN RENDERER & CAMERA]
         // ================================================================= //
 
         mat3 setCamera(vec2 rot) {
@@ -349,16 +282,59 @@
             vec3 ro = u_cameraPos;
             vec3 rd = setCamera(u_cameraRot) * normalize(vec3(uv, 1.5));
             
-            // --- Blend the final output of two fully rendered worlds ---
-            vec3 color1 = render(ro, rd, u_style1);
-            vec3 color2 = render(ro, rd, u_style2);
-            vec3 col = mix(color1, color2, smoothstep(0.0, 1.0, u_transition));
+            // --- Raymarch once using the blended SDF ---
+            vec3 hit_pos = raymarch(ro, rd);
+            float dist = distance(ro, hit_pos);
 
-            // Post-processing
-            col = pow(col, vec3(0.4545)); // Gamma correction
-            col = mix(col, vec3(0.5), -0.4 * length(uv)); // Vignette
+            // --- Blended Sky Background ---
+            vec3 sky1 = getSkyColor(rd, u_style1);
+            vec3 sky2 = getSkyColor(rd, u_style2);
+            vec3 final_color = mix(sky1, sky2, u_transition);
+
+            if (dist < MAX_DIST) {
+                vec3 normal = getNormal(hit_pos);
+
+                // [OPTIMIZED] Get material properties for both worlds and blend them *before* lighting.
+                vec3 mat1 = getMaterial(hit_pos, normal, rd, u_style1);
+                vec3 mat2 = getMaterial(hit_pos, normal, rd, u_style2);
+                vec3 blended_material = mix(mat1, mat2, u_transition);
+
+                vec3 sun1 = getSun(u_style1);
+                vec3 sun2 = getSun(u_style2);
+                vec3 blended_sun_dir = normalize(mix(sun1, sun2, u_transition));
+
+                // [OPTIMIZED] Calculate expensive lighting only ONCE on the blended material.
+                vec3 lighting = vec3(0.0);
+                if (u_style1 == 2 && u_transition < 0.5) { // Special emissive lighting for volcano world
+                     vec3 magma_pos = hit_pos; magma_pos.x -= mod(hit_pos.x, 20.0) - 10.0;
+                     float magma_light = 30.0 / (distance(hit_pos.y, -5.0) * distance(hit_pos.y, -5.0));
+                     lighting += vec3(0.8, 0.2, 0.1) * magma_light * max(0.0, normal.y);
+                }
+
+                float diffuse = max(0.0, dot(normal, blended_sun_dir));
+                float shadow = calcSoftShadow(hit_pos + normal * 0.02, blended_sun_dir, 32.0, dist);
+                float skylight = max(0.2, normal.y * 0.5 + 0.5);
+                lighting += diffuse * shadow * vec3(1.0, 0.9, 0.7);
+                lighting += skylight * sky1 * 0.5; // Ambient light from sky
+                
+                final_color = blended_material * lighting;
+
+                 // Add specular highlights for crystals
+                if (u_style1 == 3 || u_style2 == 3) {
+                    float specular = pow(max(0.0, dot(reflect(rd, normal), blended_sun_dir)), 32.0);
+                    final_color += vec3(1.0) * specular * 2.0 * shadow;
+                }
+            }
             
-            gl_FragColor = vec4(col, 1.0);
+            // --- Atmospheric Fog ---
+            float fog_amount = exp(-dist * 0.015);
+            final_color = mix(mix(sky1, sky2, u_transition), final_color, fog_amount);
+
+            // --- Post-processing ---
+            final_color = pow(final_color, vec3(0.4545)); // Gamma correction
+            final_color = mix(final_color, vec3(0.5), -0.4 * length(uv)); // Vignette
+            
+            gl_FragColor = vec4(final_color, 1.0);
         }
     `;
 
@@ -407,8 +383,7 @@
         const dt = (time - lastTime) * 0.001;
         lastTime = time;
 
-        // --- Camera & Transition Updates ---
-        cameraPos[2] += dt * 3.0; // Cinematic flight
+        cameraPos[2] += dt * 3.0;
         if (isTransitioning) {
             transitionProgress += dt / 8.0; // 8 second transition
             if (transitionProgress >= 1.0) {
@@ -418,7 +393,6 @@
             }
         }
         
-        // --- Set Uniforms ---
         gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time * 0.001);
         gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), webglCanvas.width, webglCanvas.height);
         gl.uniform3fv(gl.getUniformLocation(program, 'u_cameraPos'), cameraPos);
@@ -428,7 +402,6 @@
         gl.uniform1i(gl.getUniformLocation(program, 'u_style2'), worlds[nextWorldIndex].style);
         gl.uniform1f(gl.getUniformLocation(program, 'u_transition'), transitionProgress);
 
-        // --- Draw ---
         gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
         requestAnimationFrame(render);
     }
@@ -437,19 +410,17 @@
         if (!createProgram()) return;
         createGeometry();
 
-        // --- Start Transition Interval ---
         setInterval(() => {
             if (!isTransitioning) {
                 isTransitioning = true;
                 nextWorldIndex = (currentWorldIndex + 1) % worlds.length;
                 console.log(`[TRANSITION START] Phase ${currentWorldIndex + 1} -> ${nextWorldIndex + 1}: ${worlds[nextWorldIndex].name}`);
             }
-        }, 30000); // Transition every 30 seconds
+        }, 30000);
 
         render(0);
     }
 
-    // --- Event Listeners ---
     webglCanvas.addEventListener('mousedown', () => { mouse.isDown = true; });
     window.addEventListener('mouseup', () => { mouse.isDown = false; });
     window.addEventListener('mousemove', (e) => {
