@@ -150,10 +150,10 @@
             float energy = hash21(floor(pos * 10.0) + time * 0.1) * 0.2;
             base += vec3(energy) * intensity;
             
-            // Morphing between dimensions
+            // Morphing between dimensions creates color bleeding
             if(morph > 0.0) {
-                vec3 nextCol1 = dimensions[int(mod(float(dim + 1), 6.0))].colors[0];
-                base = mix(base, nextCol1, morph * 0.3);
+                vec3 morphColor = vec3(sin(time), cos(time * 1.3), sin(time * 0.7)) * 0.5 + 0.5;
+                base = mix(base, morphColor, morph * 0.3);
             }
             
             return base;
@@ -248,6 +248,8 @@
         const pos = gl.getAttribLocation(program, 'pos');
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+        
+        console.log("[QUANTUM] Shader program compiled successfully");
     }
 
     // =================================================================================================
@@ -327,6 +329,11 @@
             
             // Performance monitoring
             let frameCount = 0, lastTime = performance.now();
+            const renderLoop = (timestamp) => {
+                frameCount++;
+                render(timestamp);
+            };
+            
             function logPerformance() {
                 const now = performance.now();
                 const fps = frameCount / ((now - lastTime) / 1000);
@@ -337,7 +344,7 @@
             
             setInterval(logPerformance, 5000);
             
-            render(0);
+            animationId = requestAnimationFrame(renderLoop);
             
             console.log("[QUANTUM] Reality matrix fully loaded");
             console.log("Use quantumControl.switchDimension(0-5) to explore dimensions");
