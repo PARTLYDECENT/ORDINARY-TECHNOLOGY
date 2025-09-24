@@ -48,7 +48,7 @@
     const vertexSource = `attribute vec2 p;varying vec2 v;void main(){v=p;gl_Position=vec4(p,0,1);}`;
 
     // =================================================================================================
-    // [EXPANDED FRAGMENT SHADER] :: PROCEDURAL WORLD GENERATOR
+    // [EXPANDED FRAGMENT SHADER] :: PROCEDURAL WORLD GENERATOR (FIXED)
     // =================================================================================================
     const fragmentSource = `
         precision highp float;
@@ -97,10 +97,10 @@
             if(mode==8) { float disc=length(p.xy)-gridSize; float hole=sphere(p,params.x); return max(disc,-hole); }
             if(mode==9) return min(abs(p.y)-params.y,length(p.xz)-abs(sin(p.y*0.1*params.x))*gridSize-0.2);
             if(mode==10){vec2 id=floor(p.xz);vec3 z=vec3(p.x,p.y,p.z); z.xy=abs(z.xy)-params.y; z.x+=sin(time+id.x)*0.2; return box(z,vec3(0.2,1.0,0.2));}
-            if(mode==11){p.xy*=rotY(p.z*0.1*params.z).xz;return max(-(length(p.xy)-gridSize),noise(p*params.x)*params.y-1.0);}
-            if(mode==12){q=p;q.xy*=rotY(q.y*params.z).xz; return cylinder(mod(q,gridSize)-gridSize/2.,0.05,abs(sin(q.y*params.x))*0.5+0.05);}
+            if(mode==11){ p = rotY(p.z*0.1*params.z) * p; return max(-(length(p.xy)-gridSize),noise(p*params.x)*params.y-1.0); }
+            if(mode==12){ q = rotY(q.y*params.z) * p; return cylinder(mod(q,gridSize)-gridSize/2.,params.y,abs(sin(q.y*params.x))*0.5+0.05); }
             if(mode==13){return length(p.xy)-params.x-sin(atan(p.y,p.x)*10.0+p.z*0.5)*0.1;}
-            if(mode==14){return max(abs(p.y)-gridSize,-cylinder(p.xz,params.x,0.1));}
+            if(mode==14){return max(abs(p.y)-gridSize,-cylinder(p,params.x,0.1));} // Corrected cylinder usage
             if(mode==15){float wall=box(p,vec3(gridSize,10.0,gridSize))-0.1;float path=box(p,vec3(0.5,10.1,gridSize*1.1));return max(wall,-path);}
             if(mode==16){return length(p.xy)-params.x-noise(p*vec3(1,1,5))*params.y;}
             if(mode==17){float d=length(p.xy)-1.0;d=abs(d)-0.2;d=abs(d)-0.05; return d-noise(p*params.x+time*2.)*params.y;}
@@ -187,7 +187,9 @@
         gl.shaderSource(fs, fragmentSource);
         gl.compileShader(fs);
         if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-            throw new Error(`Shader compilation error: ${gl.getShaderInfoLog(fs)}`);
+            // Log the detailed error to the console
+            console.error("Shader compilation error log:", gl.getShaderInfoLog(fs));
+            throw new Error(`Shader compilation error. See console for details.`);
         }
         program = gl.createProgram();
         gl.attachShader(program, vs);
@@ -311,3 +313,4 @@
         bootstrap();
     }
 })();
+
