@@ -100,13 +100,13 @@
             if(mode==11){ p = rotY(p.z*0.1*params.z) * p; return max(-(length(p.xy)-gridSize),noise(p*params.x)*params.y-1.0); }
             if(mode==12){ q = rotY(q.y*params.z) * p; return cylinder(mod(q,gridSize)-gridSize/2.,params.y,abs(sin(q.y*params.x))*0.5+0.05); }
             if(mode==13){return length(p.xy)-params.x-sin(atan(p.y,p.x)*10.0+p.z*0.5)*0.1;}
-            if(mode==14){return max(abs(p.y)-gridSize,-cylinder(p,params.x,0.1));} // Corrected cylinder usage
+            if(mode==14){return max(abs(p.y)-gridSize,-cylinder(p,params.x,0.1));}
             if(mode==15){float wall=box(p,vec3(gridSize,10.0,gridSize))-0.1;float path=box(p,vec3(0.5,10.1,gridSize*1.1));return max(wall,-path);}
             if(mode==16){return length(p.xy)-params.x-noise(p*vec3(1,1,5))*params.y;}
             if(mode==17){float d=length(p.xy)-1.0;d=abs(d)-0.2;d=abs(d)-0.05; return d-noise(p*params.x+time*2.)*params.y;}
             if(mode==18){float sph=sphere(mod(p,gridSize)-gridSize*0.5,gridSize*0.4); float outer=sphere(p,params.y); return max(-outer,sph); }
             if(mode==19){vec2 id=floor(p.xz);float h=hash(id.x*13.37+id.y*7.77);return box(p-vec3(0,h*params.y,0),vec3(params.x,h*params.y+0.1,params.z));}
-            if(mode==20){return box(p,vec3(params.x,params.x,100.0))-noise(p*gridSize)*params.y;}
+            if(mode==20){ float box_dist = box(p, vec3(params.x,params.x,100.0)); float noise_val = noise(p * gridSize) * params.y; return box_dist - noise_val; }
             if(mode==21){return min(length(mod(p.xy,gridSize)-gridSize*0.5)-0.1,length(mod(p.yz,gridSize)-gridSize*0.5)-0.1);}
             if(mode==22){float plane=p.y;float columns=cylinder(mod(p,gridSize)-gridSize*0.5,10.0,0.2);float glitch=box(p,vec3(5.0))-step(0.5,noise(p*10.0+time));return opSmoothUnion(plane,min(columns,glitch),2.0);}
             if(mode==23){float plane=p.y;float spikes=p.y+noise(p.xz*params.x)*params.y;return max(plane,-spikes);}
@@ -313,4 +313,3 @@
         bootstrap();
     }
 })();
-
