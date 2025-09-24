@@ -43,12 +43,12 @@
     ];
 
     // =================================================================================================
-    // [OPTIMIZED VERTEX SHADER]
+    // [OPTIMIZED VERTEX SHADER] (FIXED)
     // =================================================================================================
-    const vertexSource = `attribute vec2 p;varying vec2 v;void main(){v=p;gl_Position=vec4(p,0,1);}`;
+    const vertexSource = `attribute vec2 p;varying vec2 vUv;void main(){vUv=p;gl_Position=vec4(p,0,1);}`;
 
     // =================================================================================================
-    // [EXPANDED FRAGMENT SHADER] :: PROCEDURAL WORLD GENERATOR (FIXED)
+    // [EXPANDED FRAGMENT SHADER] :: PROCEDURAL WORLD GENERATOR
     // =================================================================================================
     const fragmentSource = `
         precision highp float;
@@ -183,26 +183,35 @@
         const vs = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vs, vertexSource);
         gl.compileShader(vs);
+
         const fs = gl.createShader(gl.FRAGMENT_SHADER);
         gl.shaderSource(fs, fragmentSource);
         gl.compileShader(fs);
+
         if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-            // Log the detailed error to the console
-            console.error("Shader compilation error log:", gl.getShaderInfoLog(fs));
-            throw new Error(`Shader compilation error. See console for details.`);
+            console.error("SHADER COMPILATION ERROR LOG:", gl.getShaderInfoLog(fs));
+            throw new Error(`Fragment shader compilation failed.`);
         }
+
         program = gl.createProgram();
         gl.attachShader(program, vs);
         gl.attachShader(program, fs);
         gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error("SHADER LINKING ERROR LOG:", gl.getProgramInfoLog(program));
+            throw new Error(`Shader program linking failed.`);
+        }
+
         gl.useProgram(program);
+        
         const buffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
         const pos = gl.getAttribLocation(program, 'p');
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-        console.log("[QRE] :: Shader Matrix Compiled. Ready for world generation.");
+        console.log("[QRE] :: Shader Matrix Compiled and Linked. Ready for world generation.");
     }
 
     // =================================================================================================
@@ -313,4 +322,5 @@
         bootstrap();
     }
 })();
+
 
