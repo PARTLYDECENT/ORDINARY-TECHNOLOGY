@@ -1,223 +1,298 @@
 // =================================================================================================
-// [QUANTUM FRACTAL DIMENSION EXPLORER] :: HYPER-OPTIMIZED SHADER MADNESS
-// Performance-focused fractal universe with mind-bending visuals
+// [GRID JOURNEY] :: 3D TUNNEL WORLD SHADER
+// Uncanny digital landscape with structured journey through grid space
 // =================================================================================================
 (function() {
     "use strict";
 
     let canvas, gl, program, animationId;
-    let time = 0, dimIndex = 0, morphFactor = 0;
-    let autoMorph = true, intensity = 1.0, warpSpeed = 1.0;
+    let time = 0, journeyMode = 0, speed = 1.0;
+    let cameraPos = [0, 0, 0], cameraRot = [0, 0];
+    let keys = {}, mousePos = [0, 0];
     
     // =================================================================================================
-    // [FRACTAL DIMENSIONS] :: MATHEMATICAL UNIVERSES
+    // [JOURNEY MODES] :: Different tunnel/grid experiences
     // =================================================================================================
-    const dimensions = [
-        { name: "Mandelbrot Nexus", colors: [[0.1,0.5,1.0], [1.0,0.2,0.8], [0.0,0.8,0.4]], params: [2.0, 4.0, 0.3] },
-        { name: "Julia Vortex", colors: [[1.0,0.3,0.0], [0.8,0.0,1.0], [0.0,1.0,0.5]], params: [3.0, 6.0, 0.5] },
-        { name: "Phoenix Flames", colors: [[1.0,0.6,0.0], [1.0,0.0,0.3], [0.5,0.0,1.0]], params: [2.5, 8.0, 0.4] },
-        { name: "Quantum Foam", colors: [[0.0,1.0,1.0], [1.0,0.5,0.0], [1.0,0.0,1.0]], params: [1.8, 10.0, 0.6] },
-        { name: "Void Spiral", colors: [[0.8,0.8,1.0], [0.2,0.2,0.4], [1.0,0.1,0.1]], params: [3.5, 5.0, 0.2] },
-        { name: "Neural Web", colors: [[0.3,1.0,0.3], [0.0,0.5,1.0], [1.0,0.8,0.0]], params: [2.2, 7.0, 0.7] }
+    const journeyModes = [
+        { 
+            name: "Cyber Tunnels", 
+            colors: [[0.0,1.0,1.0], [0.0,0.5,1.0], [1.0,0.0,1.0]], 
+            params: [1.0, 0.8, 0.3],
+            gridSize: 2.0,
+            fogDensity: 0.02
+        },
+        { 
+            name: "Neon Underground", 
+            colors: [[1.0,0.2,0.8], [0.2,1.0,0.3], [1.0,0.8,0.0]], 
+            params: [1.5, 0.6, 0.5],
+            gridSize: 1.5,
+            fogDensity: 0.025
+        },
+        { 
+            name: "Data Highways", 
+            colors: [[0.1,0.8,0.1], [0.0,1.0,0.5], [0.5,0.5,1.0]], 
+            params: [0.8, 1.0, 0.2],
+            gridSize: 3.0,
+            fogDensity: 0.015
+        },
+        { 
+            name: "Ghost Protocol", 
+            colors: [[0.8,0.8,1.0], [0.3,0.3,0.6], [1.0,0.9,0.7]], 
+            params: [2.0, 0.4, 0.7],
+            gridSize: 1.2,
+            fogDensity: 0.03
+        },
+        { 
+            name: "Neural Pathways", 
+            colors: [[1.0,0.3,0.0], [0.8,0.0,0.8], [0.0,0.6,1.0]], 
+            params: [1.2, 0.9, 0.4],
+            gridSize: 2.5,
+            fogDensity: 0.02
+        }
     ];
 
     // =================================================================================================
-    // [ULTRA-OPTIMIZED VERTEX SHADER]
+    // [OPTIMIZED VERTEX SHADER]
     // =================================================================================================
     const vertexSource = `
-        attribute vec2 pos;
-        varying vec2 uv;
+        attribute vec2 position;
+        varying vec2 vUv;
         void main() {
-            uv = pos;
-            gl_Position = vec4(pos, 0, 1);
+            vUv = position;
+            gl_Position = vec4(position, 0.0, 1.0);
         }
     `;
 
     // =================================================================================================
-    // [QUANTUM FRACTAL FRAGMENT SHADER] :: PURE MATHEMATICAL POETRY
+    // [3D GRID JOURNEY FRAGMENT SHADER]
     // =================================================================================================
     const fragmentSource = `
         precision highp float;
-        uniform float time, intensity, warp, morph;
-        uniform int dim;
-        uniform vec2 res;
-        uniform vec3 col1, col2, col3;
+        uniform float time, speed;
+        uniform int mode;
+        uniform vec2 resolution;
+        uniform vec3 cameraPos, cameraRot;
+        uniform vec3 color1, color2, color3;
         uniform vec3 params;
-        varying vec2 uv;
+        uniform float gridSize, fogDensity;
+        varying vec2 vUv;
         
-        const int MAX_ITER = 128;
         const float PI = 3.14159265;
-        const float TAU = 6.28318531;
+        const int MAX_STEPS = 80;
+        const float MIN_DIST = 0.001;
+        const float MAX_DIST = 100.0;
         
-        // Ultra-fast complex math
-        vec2 cmul(vec2 a, vec2 b) { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
-        vec2 csqr(vec2 z) { return vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y); }
-        vec2 cdiv(vec2 a, vec2 b) { float d = dot(b,b); return vec2(dot(a,b), a.y*b.x - a.x*b.y) / d; }
-        float cabs2(vec2 z) { return dot(z,z); }
-        
-        // Hyper-optimized noise
-        float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5); }
-        
-        // Quantum field distortion
-        vec2 warpField(vec2 z, float t) {
-            float r = length(z);
-            float a = atan(z.y, z.x);
-            r += sin(a * 5.0 + t) * warp * 0.1;
-            a += sin(r * 3.0 + t * 2.0) * warp * 0.2;
-            return r * vec2(cos(a), sin(a));
+        // Rotation matrices
+        mat3 rotateX(float a) {
+            float c = cos(a), s = sin(a);
+            return mat3(1,0,0, 0,c,-s, 0,s,c);
         }
         
-        // Multi-dimensional fractal engine
-        float fractal(vec2 coord) {
-            vec2 z = coord;
-            vec2 c = coord;
-            float escape = 0.0;
-            
-            // Dimension-specific transformations
-            if(dim == 0) { // Mandelbrot Nexus
-                c = coord * (2.0 + sin(time * 0.5) * 0.5);
-                for(int i = 0; i < MAX_ITER; i++) {
-                    if(cabs2(z) > params.y) break;
-                    z = csqr(z) + c + vec2(sin(time * 0.3), cos(time * 0.4)) * 0.1;
-                    escape += 1.0;
-                }
-            }
-            else if(dim == 1) { // Julia Vortex
-                c = vec2(sin(time * 0.2) * 0.7, cos(time * 0.3) * 0.8);
-                for(int i = 0; i < MAX_ITER; i++) {
-                    if(cabs2(z) > params.y) break;
-                    z = csqr(z) + c;
-                    z = warpField(z, time);
-                    escape += 1.0;
-                }
-            }
-            else if(dim == 2) { // Phoenix Flames
-                vec2 prev = vec2(0);
-                for(int i = 0; i < MAX_ITER; i++) {
-                    if(cabs2(z) > params.y) break;
-                    vec2 temp = csqr(z) + c + params.z * prev;
-                    prev = z; z = temp;
-                    escape += 1.0;
-                }
-            }
-            else if(dim == 3) { // Quantum Foam
-                float phase = time * 0.1;
-                for(int i = 0; i < MAX_ITER; i++) {
-                    if(cabs2(z) > params.y) break;
-                    z = vec2(z.x*z.x - z.y*z.y + c.x + sin(phase), 
-                             params.x * z.x * z.y + c.y + cos(phase));
-                    phase += 0.1;
-                    escape += 1.0;
-                }
-            }
-            else if(dim == 4) { // Void Spiral
-                float spiral = atan(coord.y, coord.x) + time * 0.2;
-                c = coord + vec2(cos(spiral), sin(spiral)) * 0.3;
-                for(int i = 0; i < MAX_ITER; i++) {
-                    if(cabs2(z) > params.y) break;
-                    z = cmul(z, z) + c;
-                    z *= mat2(cos(time*0.1), -sin(time*0.1), sin(time*0.1), cos(time*0.1));
-                    escape += 1.0;
-                }
-            }
-            else { // Neural Web
-                for(int i = 0; i < MAX_ITER; i++) {
-                    if(cabs2(z) > params.y) break;
-                    float r = length(z), a = atan(z.y, z.x);
-                    r = pow(r, params.x) + params.z;
-                    a = a * params.x + time * 0.1;
-                    z = r * vec2(cos(a), sin(a)) + c;
-                    escape += 1.0;
-                }
-            }
-            
-            return escape / float(MAX_ITER);
+        mat3 rotateY(float a) {
+            float c = cos(a), s = sin(a);
+            return mat3(c,0,s, 0,1,0, -s,0,c);
         }
         
-        // Quantum color mixing
-        vec3 quantumColor(float t, vec2 pos) {
-            t = pow(t, 0.7); // Gamma for better distribution
+        // Smooth noise for organic movement
+        float noise(vec3 p) {
+            vec3 f = fract(p);
+            p = floor(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float n = p.x + p.y * 57.0 + p.z * 113.0;
+            return mix(
+                mix(mix(fract(sin(n) * 43758.5), fract(sin(n + 1.0) * 43758.5), f.x),
+                    mix(fract(sin(n + 57.0) * 43758.5), fract(sin(n + 58.0) * 43758.5), f.x), f.y),
+                mix(mix(fract(sin(n + 113.0) * 43758.5), fract(sin(n + 114.0) * 43758.5), f.x),
+                    mix(fract(sin(n + 170.0) * 43758.5), fract(sin(n + 171.0) * 43758.5), f.x), f.y), f.z);
+        }
+        
+        // Distance field for 3D grid structures
+        float gridSDF(vec3 p) {
+            if(mode == 0) {
+                // Cyber tunnel with grid walls
+                vec3 q = p;
+                q.z = mod(q.z + time * speed * 2.0, gridSize) - gridSize * 0.5;
+                
+                float tunnel = length(p.xy) - 3.0 - sin(p.z * 0.1 + time) * 0.5;
+                float grid = min(
+                    abs(mod(q.x, gridSize) - gridSize * 0.5) - 0.05,
+                    abs(mod(q.y, gridSize) - gridSize * 0.5) - 0.05
+                );
+                return max(-tunnel, grid);
+            }
+            else if(mode == 1) {
+                // Underground neon passages  
+                vec3 q = p;
+                q.z = mod(q.z + time * speed, gridSize * 2.0) - gridSize;
+                
+                float corridor = max(abs(p.x) - 2.0, abs(p.y) - 1.5);
+                float bars = min(
+                    abs(mod(q.x, gridSize * 0.5) - gridSize * 0.25) - 0.02,
+                    abs(mod(q.z, gridSize * 0.3) - gridSize * 0.15) - 0.02
+                );
+                return max(-corridor, bars);
+            }
+            else if(mode == 2) {
+                // Data highway lanes
+                vec3 q = p;
+                q.z = mod(q.z + time * speed * 3.0, gridSize) - gridSize * 0.5;
+                
+                float highway = abs(p.y) - 0.1;
+                float lanes = abs(mod(p.x + gridSize * 0.5, gridSize) - gridSize * 0.5) - 0.05;
+                float dividers = abs(mod(q.z, gridSize * 0.2) - gridSize * 0.1) - 0.02;
+                
+                return max(highway, min(lanes, dividers));
+            }
+            else if(mode == 3) {
+                // Ghost protocol - floating platforms
+                vec3 q = p;
+                q.z = mod(q.z + time * speed * 1.5, gridSize * 3.0) - gridSize * 1.5;
+                
+                float platforms = abs(p.y + 1.0) - 0.1;
+                float holes = length(mod(p.xz, gridSize) - gridSize * 0.5) - gridSize * 0.3;
+                
+                return max(platforms, -holes);
+            }
+            else {
+                // Neural pathways - organic tubes
+                vec3 q = p;
+                float twist = sin(p.z * 0.1) * 0.5;
+                q.x += sin(p.z * 0.2 + time) * 0.8;
+                q.y += cos(p.z * 0.15 + time * 0.7) * 0.6;
+                
+                float tube = length(q.xy) - 2.5;
+                float segments = abs(mod(p.z + time * speed, gridSize) - gridSize * 0.5) - 0.1;
+                
+                return max(tube, segments);
+            }
+        }
+        
+        // Raymarching through the 3D grid world
+        vec4 raymarch(vec3 origin, vec3 direction) {
+            float dist = 0.0;
+            vec3 pos = origin;
             
-            // Multi-dimensional color interpolation
-            vec3 base = mix(col1, col2, smoothstep(0.0, 0.6, t));
-            base = mix(base, col3, smoothstep(0.4, 1.0, t));
-            
-            // Quantum interference patterns
-            float interference = sin(pos.x * 20.0 + time) * sin(pos.y * 15.0 + time * 1.3) * 0.1;
-            base += interference * intensity;
-            
-            // Dimensional energy fields
-            float energy = hash21(floor(pos * 10.0) + time * 0.1) * 0.2;
-            base += vec3(energy) * intensity;
-            
-            // Morphing between dimensions creates color bleeding
-            if(morph > 0.0) {
-                vec3 morphColor = vec3(sin(time), cos(time * 1.3), sin(time * 0.7)) * 0.5 + 0.5;
-                base = mix(base, morphColor, morph * 0.3);
+            for(int i = 0; i < MAX_STEPS; i++) {
+                float d = gridSDF(pos);
+                
+                if(d < MIN_DIST) {
+                    // Hit surface - calculate lighting
+                    vec3 normal = normalize(vec3(
+                        gridSDF(pos + vec3(0.001, 0, 0)) - gridSDF(pos - vec3(0.001, 0, 0)),
+                        gridSDF(pos + vec3(0, 0.001, 0)) - gridSDF(pos - vec3(0, 0.001, 0)),
+                        gridSDF(pos + vec3(0, 0, 0.001)) - gridSDF(pos - vec3(0, 0, 0.001))
+                    ));
+                    
+                    float light = max(0.0, dot(normal, normalize(vec3(1, 1, -1))));
+                    float fresnel = 1.0 - max(0.0, dot(normal, -direction));
+                    
+                    // Mode-specific surface effects
+                    vec3 surfaceColor = color1;
+                    if(mode == 0) {
+                        surfaceColor = mix(color1, color2, sin(pos.z * 0.5 + time * 2.0) * 0.5 + 0.5);
+                    } else if(mode == 1) {
+                        surfaceColor = mix(color2, color3, fresnel);
+                    } else if(mode == 2) {
+                        surfaceColor = color2 * (sin(pos.x * 2.0 + time * 4.0) * 0.5 + 0.5);
+                    } else if(mode == 3) {
+                        surfaceColor = mix(color1, color3, noise(pos * 0.5));
+                    } else {
+                        surfaceColor = mix(color1, color2, light);
+                    }
+                    
+                    return vec4(surfaceColor * (light * 0.7 + 0.3), dist);
+                }
+                
+                if(dist > MAX_DIST) break;
+                
+                pos += direction * d;
+                dist += d;
             }
             
-            return base;
+            // Didn't hit anything - return background
+            return vec4(0.0, 0.0, 0.0, MAX_DIST);
         }
         
         void main() {
-            vec2 coord = (uv * 2.0 - 1.0) * vec2(res.x / res.y, 1.0);
-            coord *= 1.5; // Zoom level
+            vec2 uv = (vUv * 2.0 - 1.0) * vec2(resolution.x / resolution.y, 1.0);
             
-            // Multi-sample anti-aliasing for smooth edges
-            vec3 color = vec3(0);
-            const int samples = 2;
-            for(int sx = 0; sx < samples; sx++) {
-                for(int sy = 0; sy < samples; sy++) {
-                    vec2 offset = (vec2(sx, sy) - 0.5) / res * 2.0;
-                    float t = fractal(coord + offset);
-                    color += quantumColor(t, coord + offset);
-                }
+            // Camera setup with rotation
+            vec3 camPos = cameraPos;
+            mat3 camRot = rotateY(cameraRot.y) * rotateX(cameraRot.x);
+            vec3 rayDir = normalize(camRot * vec3(uv, 1.0));
+            
+            // March through the grid world
+            vec4 result = raymarch(camPos, rayDir);
+            vec3 color = result.rgb;
+            float depth = result.a;
+            
+            // Atmospheric fog
+            float fog = exp(-depth * fogDensity);
+            vec3 fogColor = mix(color1 * 0.1, color2 * 0.05, sin(time * 0.5) * 0.5 + 0.5);
+            color = mix(fogColor, color, fog);
+            
+            // Journey-specific post effects
+            if(mode == 0) {
+                // Cyber scan lines
+                color += sin(vUv.y * resolution.y * 0.5) * 0.02;
+            } else if(mode == 1) {
+                // Underground glow
+                color += exp(-depth * 0.1) * color2 * 0.1;
+            } else if(mode == 2) {
+                // Data stream particles
+                float stream = noise(vec3(vUv * 10.0, time * 5.0)) * exp(-depth * 0.05);
+                color += stream * color3 * 0.15;
+            } else if(mode == 3) {
+                // Ghostly interference
+                float interference = sin(uv.x * 20.0 + time * 3.0) * sin(uv.y * 15.0 + time * 2.0);
+                color += interference * 0.03 * color1;
+            } else {
+                // Neural pulse
+                float pulse = sin(depth * 0.1 - time * 2.0) * exp(-depth * 0.02);
+                color += pulse * color2 * 0.1;
             }
-            color /= float(samples * samples);
             
-            // Post-quantum effects
-            color = pow(color, vec3(0.8)); // Gamma correction
-            color *= 1.0 - length(uv) * 0.3; // Vignette
-            color += hash21(gl_FragCoord.xy + time) * 0.02; // Film grain
+            // Final tweaks
+            color = pow(color, vec3(0.8)); // Slight gamma
+            color *= 1.0 - length(vUv) * 0.1; // Subtle vignette
             
             gl_FragColor = vec4(color, 1.0);
         }
     `;
 
     // =================================================================================================
-    // [HYPER-OPTIMIZED WEBGL SETUP]
+    // [WEBGL INITIALIZATION]
     // =================================================================================================
     function initWebGL() {
         canvas = document.createElement('canvas');
-        canvas.id = 'quantumCanvas';
         canvas.style.cssText = `
-            position: fixed; top: 0; left: 0; z-index: -1;
-            width: 100vw; height: 100vh; background: #000;
+            position: fixed; top: 0; left: 0; z-index: 1;
+            width: 100vw; height: 100vh;
         `;
         document.body.appendChild(canvas);
         
-        gl = canvas.getContext('webgl', { 
-            antialias: false, 
-            depth: false, 
-            stencil: false,
-            alpha: false,
-            preserveDrawingBuffer: false,
+        gl = canvas.getContext('webgl', {
+            antialias: false,
+            depth: false,
             powerPreference: "high-performance"
         });
         
         if (!gl) throw new Error("WebGL not supported");
         
+        resizeCanvas();
+    }
+
+    function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
-        
-        console.log("[QUANTUM] WebGL initialized - Reality matrix loaded");
     }
 
-    function compileShader(type, source) {
+    function createShader(type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
+        
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
             throw new Error(`Shader error: ${gl.getShaderInfoLog(shader)}`);
         }
@@ -225,8 +300,8 @@
     }
 
     function createProgram() {
-        const vs = compileShader(gl.VERTEX_SHADER, vertexSource);
-        const fs = compileShader(gl.FRAGMENT_SHADER, fragmentSource);
+        const vs = createShader(gl.VERTEX_SHADER, vertexSource);
+        const fs = createShader(gl.FRAGMENT_SHADER, fragmentSource);
         
         program = gl.createProgram();
         gl.attachShader(program, vs);
@@ -239,154 +314,120 @@
         
         gl.useProgram(program);
         
-        // Ultra-simple fullscreen quad
+        // Fullscreen quad
         const vertices = new Float32Array([-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1]);
         const buffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
         
-        const pos = gl.getAttribLocation(program, 'pos');
+        const pos = gl.getAttribLocation(program, 'position');
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-        
-        console.log("[QUANTUM] Shader program compiled successfully");
     }
 
     // =================================================================================================
-    // [QUANTUM RENDER LOOP] :: MAXIMUM PERFORMANCE
+    // [CAMERA CONTROLS & MOVEMENT]
     // =================================================================================================
+    function updateCamera(deltaTime) {
+        const moveSpeed = 3.0 * speed;
+        const rotSpeed = 1.0;
+        
+        // Forward movement (automatic journey)
+        cameraPos[2] += moveSpeed * deltaTime;
+        
+        // Manual controls
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) cameraPos[1] += moveSpeed * deltaTime;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) cameraPos[1] -= moveSpeed * deltaTime;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) cameraPos[0] -= moveSpeed * deltaTime;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) cameraPos[0] += moveSpeed * deltaTime;
+        
+        // Speed boost
+        speed = keys[' '] ? 2.0 : 1.0;
+        
+        // Gentle automatic camera sway for uncanny feeling
+        cameraRot[0] = Math.sin(time * 0.3) * 0.05;
+        cameraRot[1] = Math.sin(time * 0.2) * 0.1;
+    }
+
+    // =================================================================================================
+    // [RENDER LOOP]
+    // =================================================================================================
+    let lastTime = 0;
     function render(timestamp) {
+        const deltaTime = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
         time = timestamp * 0.001;
         
-        // Auto-morph between dimensions
-        if (autoMorph) {
-            morphFactor = Math.sin(time * 0.1) * 0.5 + 0.5;
-            if (time % 8.0 < 0.016) { // ~60fps check
-                dimIndex = Math.floor(time / 8.0) % dimensions.length;
-            }
-        }
+        updateCamera(deltaTime);
         
-        const dim = dimensions[dimIndex];
+        const mode = journeyModes[journeyMode];
         
-        // Ultra-fast uniform updates
+        // Update uniforms
         gl.uniform1f(gl.getUniformLocation(program, 'time'), time);
-        gl.uniform1f(gl.getUniformLocation(program, 'intensity'), intensity);
-        gl.uniform1f(gl.getUniformLocation(program, 'warp'), warpSpeed);
-        gl.uniform1f(gl.getUniformLocation(program, 'morph'), morphFactor);
-        gl.uniform1i(gl.getUniformLocation(program, 'dim'), dimIndex);
-        gl.uniform2f(gl.getUniformLocation(program, 'res'), canvas.width, canvas.height);
-        gl.uniform3f(gl.getUniformLocation(program, 'col1'), ...dim.colors[0]);
-        gl.uniform3f(gl.getUniformLocation(program, 'col2'), ...dim.colors[1]);
-        gl.uniform3f(gl.getUniformLocation(program, 'col3'), ...dim.colors[2]);
-        gl.uniform3f(gl.getUniformLocation(program, 'params'), ...dim.params);
+        gl.uniform1f(gl.getUniformLocation(program, 'speed'), speed);
+        gl.uniform1i(gl.getUniformLocation(program, 'mode'), journeyMode);
+        gl.uniform2f(gl.getUniformLocation(program, 'resolution'), canvas.width, canvas.height);
+        gl.uniform3f(gl.getUniformLocation(program, 'cameraPos'), ...cameraPos);
+        gl.uniform3f(gl.getUniformLocation(program, 'cameraRot'), ...cameraRot);
+        gl.uniform3f(gl.getUniformLocation(program, 'color1'), ...mode.colors[0]);
+        gl.uniform3f(gl.getUniformLocation(program, 'color2'), ...mode.colors[1]);
+        gl.uniform3f(gl.getUniformLocation(program, 'color3'), ...mode.colors[2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'params'), ...mode.params);
+        gl.uniform1f(gl.getUniformLocation(program, 'gridSize'), mode.gridSize);
+        gl.uniform1f(gl.getUniformLocation(program, 'fogDensity'), mode.fogDensity);
         
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         animationId = requestAnimationFrame(render);
     }
 
     // =================================================================================================
-    // [QUANTUM CONTROL API] :: REALITY MANIPULATION
+    // [INPUT HANDLING]
     // =================================================================================================
-    window.quantumControl = {
-        switchDimension: (index) => {
-            if (index >= 0 && index < dimensions.length) {
-                dimIndex = index;
-                console.log(`[QUANTUM SHIFT] Entering ${dimensions[index].name}`);
-            }
-        },
+    window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
         
-        setIntensity: (val) => {
-            intensity = Math.max(0, Math.min(3, val));
-        },
-        
-        setWarpSpeed: (val) => {
-            warpSpeed = Math.max(0, Math.min(5, val));
-        },
-        
-        toggleAutoMorph: () => {
-            autoMorph = !autoMorph;
-            console.log(`[QUANTUM] Auto-morph ${autoMorph ? 'enabled' : 'disabled'}`);
-        },
-        
-        getDimensions: () => dimensions.map((d, i) => ({index: i, name: d.name})),
-        
-        getCurrentDimension: () => ({index: dimIndex, name: dimensions[dimIndex].name}),
-        
-        destroy: () => {
-            if (animationId) cancelAnimationFrame(animationId);
-            if (canvas) canvas.remove();
-            console.log("[QUANTUM] Reality matrix unloaded");
+        // Journey mode switching
+        const num = parseInt(e.key);
+        if (num >= 1 && num <= 5) {
+            journeyMode = num - 1;
+            console.log(`[GRID JOURNEY] Entering ${journeyModes[journeyMode].name}`);
         }
-    };
-
-    // =================================================================================================
-    // [REALITY INITIALIZATION]
-    // =================================================================================================
-    function initialize() {
-        try {
-            initWebGL();
-            createProgram();
-            
-            // Performance monitoring
-            let frameCount = 0, lastTime = performance.now();
-            const renderLoop = (timestamp) => {
-                frameCount++;
-                render(timestamp);
-            };
-            
-            function logPerformance() {
-                const now = performance.now();
-                const fps = frameCount / ((now - lastTime) / 1000);
-                console.log(`[QUANTUM PERF] ${fps.toFixed(1)} FPS - Dimension: ${dimensions[dimIndex].name}`);
-                frameCount = 0;
-                lastTime = now;
-            }
-            
-            setInterval(logPerformance, 5000);
-            
-            animationId = requestAnimationFrame(renderLoop);
-            
-            console.log("[QUANTUM] Reality matrix fully loaded");
-            console.log("Use quantumControl.switchDimension(0-5) to explore dimensions");
-            console.log("Use quantumControl.setIntensity(1-3) for visual intensity");
-            
-            return true;
-        } catch (e) {
-            console.error("[QUANTUM ERROR] Reality matrix failed:", e);
-            return false;
-        }
-    }
-
-    // =================================================================================================
-    // [REALITY HOOKS]
-    // =================================================================================================
-    window.addEventListener('resize', () => {
-        if (canvas && gl) {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
+        
+        // Reset position
+        if (e.key.toLowerCase() === 'r') {
+            cameraPos = [0, 0, 0];
+            console.log("[GRID JOURNEY] Position reset");
         }
     });
     
-    // Keyboard controls for dimension switching
-    window.addEventListener('keydown', (e) => {
-        const key = parseInt(e.key);
-        if (key >= 1 && key <= 6) {
-            window.quantumControl.switchDimension(key - 1);
-        } else if (e.key === 'a') {
-            window.quantumControl.toggleAutoMorph();
-        } else if (e.key === '=') {
-            window.quantumControl.setIntensity(intensity + 0.2);
-        } else if (e.key === '-') {
-            window.quantumControl.setIntensity(intensity - 0.2);
-        }
+    window.addEventListener('keyup', (e) => {
+        keys[e.key] = false;
     });
+    
+    window.addEventListener('resize', resizeCanvas);
 
-    // Initialize when ready
+    // =================================================================================================
+    // [INITIALIZATION]
+    // =================================================================================================
+    function init() {
+        try {
+            initWebGL();
+            createProgram();
+            animationId = requestAnimationFrame(render);
+            
+            console.log("[GRID JOURNEY] Reality matrix loaded");
+            console.log("Navigate with WASD/Arrow keys, Switch modes with 1-5");
+            
+        } catch (e) {
+            console.error("[GRID JOURNEY ERROR]", e);
+        }
+    }
+
+    // Start the journey
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        initialize();
+        init();
     }
 
 })();
