@@ -1,4 +1,57 @@
-  // =================================================================================================
+// =================================================================================================
+// [GRID JOURNEY] :: 3D TUNNEL WORLD SHADER - IIFE SCRIPT
+// Uncanny digital landscape with structured journey through grid space
+// =================================================================================================
+(function() {
+    "use strict";
+
+    let canvas, gl, program, animationId;
+    let time = 0, journeyMode = 0, speed = 1.0;
+    let cameraPos = [0, 0, 0], cameraRot = [0, 0, 0];
+    let keys = {}, autoJourney = true;
+    
+    // =================================================================================================
+    // [JOURNEY MODES] :: Different tunnel/grid experiences
+    // =================================================================================================
+    const journeyModes = [
+        { 
+            name: "Cyber Tunnels", 
+            colors: [[0.0,1.0,1.0], [0.0,0.5,1.0], [1.0,0.0,1.0]], 
+            params: [1.0, 0.8, 0.3],
+            gridSize: 2.0,
+            fogDensity: 0.02
+        },
+        { 
+            name: "Neon Underground", 
+            colors: [[1.0,0.2,0.8], [0.2,1.0,0.3], [1.0,0.8,0.0]], 
+            params: [1.5, 0.6, 0.5],
+            gridSize: 1.5,
+            fogDensity: 0.025
+        },
+        { 
+            name: "Data Highways", 
+            colors: [[0.1,0.8,0.1], [0.0,1.0,0.5], [0.5,0.5,1.0]], 
+            params: [0.8, 1.0, 0.2],
+            gridSize: 3.0,
+            fogDensity: 0.015
+        },
+        { 
+            name: "Ghost Protocol", 
+            colors: [[0.8,0.8,1.0], [0.3,0.3,0.6], [1.0,0.9,0.7]], 
+            params: [2.0, 0.4, 0.7],
+            gridSize: 1.2,
+            fogDensity: 0.03
+        },
+        { 
+            name: "Neural Pathways", 
+            colors: [[1.0,0.3,0.0], [0.8,0.0,0.8], [0.0,0.6,1.0]], 
+            params: [1.2, 0.9, 0.4],
+            gridSize: 2.5,
+            fogDensity: 0.02
+        }
+    ];
+
+    // =================================================================================================
     // [OPTIMIZED VERTEX SHADER]
     // =================================================================================================
     const vertexSource = `
@@ -208,38 +261,39 @@
     `;
 
     // =================================================================================================
-    // [WEBGL INITIALIZATION]
+    // [HYPER-OPTIMIZED WEBGL SETUP]
     // =================================================================================================
     function initWebGL() {
         canvas = document.createElement('canvas');
+        canvas.id = 'gridJourneyCanvas';
         canvas.style.cssText = `
-            position: fixed; top: 0; left: 0; z-index: 1;
-            width: 100vw; height: 100vh;
+            position: fixed; top: 0; left: 0; z-index: -1;
+            width: 100vw; height: 100vh; background: #000;
         `;
         document.body.appendChild(canvas);
         
-        gl = canvas.getContext('webgl', {
-            antialias: false,
-            depth: false,
+        gl = canvas.getContext('webgl', { 
+            antialias: false, 
+            depth: false, 
+            stencil: false,
+            alpha: false,
+            preserveDrawingBuffer: false,
             powerPreference: "high-performance"
         });
         
         if (!gl) throw new Error("WebGL not supported");
         
-        resizeCanvas();
-    }
-
-    function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
+        
+        console.log("[GRID JOURNEY] WebGL initialized - Grid matrix loaded");
     }
 
-    function createShader(type, source) {
+    function compileShader(type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
-        
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
             throw new Error(`Shader error: ${gl.getShaderInfoLog(shader)}`);
         }
@@ -247,8 +301,8 @@
     }
 
     function createProgram() {
-        const vs = createShader(gl.VERTEX_SHADER, vertexSource);
-        const fs = createShader(gl.FRAGMENT_SHADER, fragmentSource);
+        const vs = compileShader(gl.VERTEX_SHADER, vertexSource);
+        const fs = compileShader(gl.FRAGMENT_SHADER, fragmentSource);
         
         program = gl.createProgram();
         gl.attachShader(program, vs);
@@ -261,7 +315,7 @@
         
         gl.useProgram(program);
         
-        // Fullscreen quad
+        // Ultra-simple fullscreen quad
         const vertices = new Float32Array([-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1]);
         const buffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -270,6 +324,8 @@
         const pos = gl.getAttribLocation(program, 'position');
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+        
+        console.log("[GRID JOURNEY] Shader program compiled successfully");
     }
 
     // =================================================================================================
@@ -277,10 +333,11 @@
     // =================================================================================================
     function updateCamera(deltaTime) {
         const moveSpeed = 3.0 * speed;
-        const rotSpeed = 1.0;
         
-        // Forward movement (automatic journey)
-        cameraPos[2] += moveSpeed * deltaTime;
+        // Auto journey forward movement
+        if (autoJourney) {
+            cameraPos[2] += moveSpeed * deltaTime;
+        }
         
         // Manual controls
         if (keys['ArrowUp'] || keys['w'] || keys['W']) cameraPos[1] += moveSpeed * deltaTime;
@@ -294,10 +351,16 @@
         // Gentle automatic camera sway for uncanny feeling
         cameraRot[0] = Math.sin(time * 0.3) * 0.05;
         cameraRot[1] = Math.sin(time * 0.2) * 0.1;
+        
+        // Auto mode switching for journey progression
+        if (autoJourney && Math.floor(time / 12) !== Math.floor((time - deltaTime) / 12)) {
+            journeyMode = Math.floor(time / 12) % journeyModes.length;
+            console.log(`[GRID JOURNEY] Auto-switching to ${journeyModes[journeyMode].name}`);
+        }
     }
 
     // =================================================================================================
-    // [RENDER LOOP]
+    // [GRID RENDER LOOP] :: MAXIMUM PERFORMANCE
     // =================================================================================================
     let lastTime = 0;
     function render(timestamp) {
@@ -309,17 +372,17 @@
         
         const mode = journeyModes[journeyMode];
         
-        // Update uniforms
+        // Ultra-fast uniform updates
         gl.uniform1f(gl.getUniformLocation(program, 'time'), time);
         gl.uniform1f(gl.getUniformLocation(program, 'speed'), speed);
         gl.uniform1i(gl.getUniformLocation(program, 'mode'), journeyMode);
         gl.uniform2f(gl.getUniformLocation(program, 'resolution'), canvas.width, canvas.height);
-        gl.uniform3f(gl.getUniformLocation(program, 'cameraPos'), ...cameraPos);
-        gl.uniform3f(gl.getUniformLocation(program, 'cameraRot'), ...cameraRot);
-        gl.uniform3f(gl.getUniformLocation(program, 'color1'), ...mode.colors[0]);
-        gl.uniform3f(gl.getUniformLocation(program, 'color2'), ...mode.colors[1]);
-        gl.uniform3f(gl.getUniformLocation(program, 'color3'), ...mode.colors[2]);
-        gl.uniform3f(gl.getUniformLocation(program, 'params'), ...mode.params);
+        gl.uniform3f(gl.getUniformLocation(program, 'cameraPos'), cameraPos[0], cameraPos[1], cameraPos[2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'cameraRot'), cameraRot[0], cameraRot[1], cameraRot[2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'color1'), mode.colors[0][0], mode.colors[0][1], mode.colors[0][2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'color2'), mode.colors[1][0], mode.colors[1][1], mode.colors[1][2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'color3'), mode.colors[2][0], mode.colors[2][1], mode.colors[2][2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'params'), mode.params[0], mode.params[1], mode.params[2]);
         gl.uniform1f(gl.getUniformLocation(program, 'gridSize'), mode.gridSize);
         gl.uniform1f(gl.getUniformLocation(program, 'fogDensity'), mode.fogDensity);
         
@@ -328,53 +391,114 @@
     }
 
     // =================================================================================================
-    // [INPUT HANDLING]
+    // [GRID CONTROL API] :: JOURNEY MANIPULATION
     // =================================================================================================
+    window.gridJourney = {
+        switchMode: (index) => {
+            if (index >= 0 && index < journeyModes.length) {
+                journeyMode = index;
+                console.log(`[GRID JOURNEY] Entering ${journeyModes[index].name}`);
+            }
+        },
+        
+        setSpeed: (val) => {
+            speed = Math.max(0, Math.min(5, val));
+        },
+        
+        toggleAutoJourney: () => {
+            autoJourney = !autoJourney;
+            console.log(`[GRID JOURNEY] Auto-journey ${autoJourney ? 'enabled' : 'disabled'}`);
+        },
+        
+        resetCamera: () => {
+            cameraPos = [0, 0, 0];
+            cameraRot = [0, 0, 0];
+            console.log("[GRID JOURNEY] Camera reset");
+        },
+        
+        getModes: () => journeyModes.map((m, i) => ({index: i, name: m.name})),
+        
+        getCurrentMode: () => ({index: journeyMode, name: journeyModes[journeyMode].name}),
+        
+        destroy: () => {
+            if (animationId) cancelAnimationFrame(animationId);
+            if (canvas) canvas.remove();
+            console.log("[GRID JOURNEY] Journey terminated");
+        }
+    };
+
+    // =================================================================================================
+    // [JOURNEY INITIALIZATION]
+    // =================================================================================================
+    function initialize() {
+        try {
+            initWebGL();
+            createProgram();
+            
+            // Performance monitoring
+            let frameCount = 0, lastTime = performance.now();
+            const renderLoop = (timestamp) => {
+                frameCount++;
+                render(timestamp);
+            };
+            
+            function logPerformance() {
+                const now = performance.now();
+                const fps = frameCount / ((now - lastTime) / 1000);
+                console.log(`[GRID JOURNEY PERF] ${fps.toFixed(1)} FPS - Mode: ${journeyModes[journeyMode].name}`);
+                frameCount = 0;
+                lastTime = now;
+            }
+            
+            setInterval(logPerformance, 5000);
+            
+            animationId = requestAnimationFrame(renderLoop);
+            
+            console.log("[GRID JOURNEY] Journey matrix fully loaded");
+            console.log("Use gridJourney.switchMode(0-4) to change journey types");
+            console.log("Use gridJourney.setSpeed(1-5) for travel speed");
+            
+            return true;
+        } catch (e) {
+            console.error("[GRID JOURNEY ERROR] Journey matrix failed:", e);
+            return false;
+        }
+    }
+
+    // =================================================================================================
+    // [JOURNEY HOOKS]
+    // =================================================================================================
+    window.addEventListener('resize', () => {
+        if (canvas && gl) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+    });
+    
+    // Keyboard controls for journey navigation
     window.addEventListener('keydown', (e) => {
         keys[e.key] = true;
         
-        // Journey mode switching
-        const num = parseInt(e.key);
-        if (num >= 1 && num <= 5) {
-            journeyMode = num - 1;
-            console.log(`[GRID JOURNEY] Entering ${journeyModes[journeyMode].name}`);
-        }
-        
-        // Reset position
-        if (e.key.toLowerCase() === 'r') {
-            cameraPos = [0, 0, 0];
-            console.log("[GRID JOURNEY] Position reset");
+        const key = parseInt(e.key);
+        if (key >= 1 && key <= 5) {
+            window.gridJourney.switchMode(key - 1);
+        } else if (e.key.toLowerCase() === 'r') {
+            window.gridJourney.resetCamera();
+        } else if (e.key.toLowerCase() === 'j') {
+            window.gridJourney.toggleAutoJourney();
         }
     });
     
     window.addEventListener('keyup', (e) => {
         keys[e.key] = false;
     });
-    
-    window.addEventListener('resize', resizeCanvas);
 
-    // =================================================================================================
-    // [INITIALIZATION]
-    // =================================================================================================
-    function init() {
-        try {
-            initWebGL();
-            createProgram();
-            animationId = requestAnimationFrame(render);
-            
-            console.log("[GRID JOURNEY] Reality matrix loaded");
-            console.log("Navigate with WASD/Arrow keys, Switch modes with 1-5");
-            
-        } catch (e) {
-            console.error("[GRID JOURNEY ERROR]", e);
-        }
-    }
-
-    // Start the journey
+    // Initialize when ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', initialize);
     } else {
-        init();
+        initialize();
     }
 
 })();
