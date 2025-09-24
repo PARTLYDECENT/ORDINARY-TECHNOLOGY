@@ -106,10 +106,10 @@
             if(mode==17){float d=length(p.xy)-1.0;d=abs(d)-0.2;d=abs(d)-0.05; return d-noise(p*params.x+time*2.)*params.y;}
             if(mode==18){float sph=sphere(mod(p,gridSize)-gridSize*0.5,gridSize*0.4); float outer=sphere(p,params.y); return max(-outer,sph); }
             if(mode==19){vec2 id=floor(p.xz);float h=hash(id.x*13.37+id.y*7.77);return box(p-vec3(0,h*params.y,0),vec3(params.x,h*params.y+0.1,params.z));}
-            if(mode==20){ float box_dist = box(p, vec3(params.x,params.x,100.0)); float noise_val = noise(p * gridSize) * params.y; return box_dist - noise_val; }
+            if(mode==20){return box(p, vec3(params.x,params.x,100.0)) - noise(p * gridSize) * params.y;}
             if(mode==21){return min(length(mod(p.xy,gridSize)-gridSize*0.5)-0.1,length(mod(p.yz,gridSize)-gridSize*0.5)-0.1);}
             if(mode==22){float plane=p.y;float columns=cylinder(mod(p,gridSize)-gridSize*0.5,10.0,0.2);float glitch=box(p,vec3(5.0))-step(0.5,noise(p*10.0+time));return opSmoothUnion(plane,min(columns,glitch),2.0);}
-            if(mode==23){float plane=p.y;float spikes=p.y+noise(p.xz*params.x)*params.y;return max(plane,-spikes);}
+            if(mode==23){float plane=p.y;float spikes=p.y+noise(vec3(p.x, 0.0, p.z)*params.x)*params.y;return max(plane,-spikes);}
             if(mode==24){float x=abs(mod(p.x,gridSize)-gridSize/2.)-params.x;float y=abs(mod(p.y,gridSize)-gridSize/2.)-params.x;float z=abs(mod(p.z,gridSize)-gridSize/2.)-params.x;return min(min(x,y),z);}
             if(mode==25){float plane=p.y-sin(p.x*params.x)*cos(p.z*params.x)*params.y;return plane;}
             return 1.0;
@@ -313,3 +313,4 @@
         bootstrap();
     }
 })();
+
