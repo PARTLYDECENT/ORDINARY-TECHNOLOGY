@@ -89,7 +89,10 @@
         float sdMengerSponge(vec3 p, float scale) {
             float d = sdBox(p, vec3(scale));
             float s = 1.0;
-            for(int m=0; m<int(params.z); m++){
+            // WebGL1 requires loop counters to be compared against compile-time constants.
+            // The original 'int(params.z)' is a uniform, which is not constant at compile time.
+            // Using a fixed value of 4, which matches the 'Menger Sponge' phase params.
+            for(int m=0; m < 4; m++){
                 vec3 a = mod(p*s, 2.0)-1.0;
                 s *= 3.0;
                 vec3 r = 1.0 - 3.0*abs(a);
@@ -130,7 +133,7 @@
             if (mode == 9) return p.y + noise(vec3(p.xz * params.x, 0.0)) * params.y * 2.0 - 1.0;
             if (mode == 10) return opSmoothUnion(sdSphere(p, 1.0), sdTorus(p, vec2(1.2, 0.3) + sin(time * 2.0) * 0.1), params.x);
             if (mode == 11) return sdSphere(p, 5.0) - noise(p * params.x + time) * params.y * 3.0;
-            if (mode == 12) { p = rotY(time*0.2) * p; vec3 q = p; float d = 100.0; float s = params.x; for(int i=0; i<int(params.y); i++){ d = opSmoothUnion(d, sdSphere(q-vec3(s,0,0), s), 0.5); q.xzy = abs(q.xzy); q -= s; s*=0.7;} return d;}
+            if (mode == 12) { p = rotY(time*0.2) * p; vec3 q = p; float d = 100.0; float s = params.x; for(int i=0; i<4; i++){ d = opSmoothUnion(d, sdSphere(q-vec3(s,0,0), s), 0.5); q.xzy = abs(q.xzy); q -= s; s*=0.7;} return d;}
             if (mode == 13) return min(abs(p.x)-params.x, min(abs(p.y)-params.x, abs(p.z)-params.x)) - noise(p*params.y)*0.05;
             if (mode == 14) { vec3 q = opRep(p, vec3(gridSize)); q.y -= 1.0; return opSmoothUnion(sdBox(q, vec3(2, 0.1, 2)), sdCylinder(q-vec3(0,1,0), 2.0, 0.2), 1.0);}
             if (mode == 15) return p.y + noise(vec3(p.xz * params.x + sin(time*0.5), 0.0)) * params.y * 1.5 - (sin(p.x*0.1)*cos(p.z*0.1))*3.0;
@@ -394,5 +397,3 @@
         console.warn("[QRE] :: No DOM found. Bootstrap will not run automatically.");
     }
 })();
-
-
