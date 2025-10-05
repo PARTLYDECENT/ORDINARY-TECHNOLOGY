@@ -127,13 +127,13 @@
             if (mode == 6) return sdBox(opRep(p, vec3(gridSize)) - vec3(0, 2.5, 0), vec3(params.x, params.y, params.x)) - noise(p) * params.z;
             if (mode == 7) return sdHexPrism(opRep(p, vec3(gridSize, 100.0, gridSize*0.866)), vec2(params.x, 50.0));
             if (mode == 8) { vec3 q = opRep(p, vec3(gridSize)); return sdTorus(q, vec2(params.x, params.y)) - sin(p.y * params.z) * 0.1; }
-            if (mode == 9) return p.y + noise(p.xz * params.x) * params.y * 2.0 - 1.0;
+            if (mode == 9) return p.y + noise(vec3(p.xz * params.x, 0.0)) * params.y * 2.0 - 1.0;
             if (mode == 10) return opSmoothUnion(sdSphere(p, 1.0), sdTorus(p, vec2(1.2, 0.3) + sin(time * 2.0) * 0.1), params.x);
             if (mode == 11) return sdSphere(p, 5.0) - noise(p * params.x + time) * params.y * 3.0;
             if (mode == 12) { p = rotY(time*0.2) * p; vec3 q = p; float d = 100.0; float s = params.x; for(int i=0; i<int(params.y); i++){ d = opSmoothUnion(d, sdSphere(q-vec3(s,0,0), s), 0.5); q.xzy = abs(q.xzy); q -= s; s*=0.7;} return d;}
             if (mode == 13) return min(abs(p.x)-params.x, min(abs(p.y)-params.x, abs(p.z)-params.x)) - noise(p*params.y)*0.05;
             if (mode == 14) { vec3 q = opRep(p, vec3(gridSize)); q.y -= 1.0; return opSmoothUnion(sdBox(q, vec3(2, 0.1, 2)), sdCylinder(q-vec3(0,1,0), 2.0, 0.2), 1.0);}
-            if (mode == 15) return p.y + noise(p.xz * params.x + sin(time*0.5)) * params.y * 1.5 - (sin(p.x*0.1)*cos(p.z*0.1))*3.0;
+            if (mode == 15) return p.y + noise(vec3(p.xz * params.x + sin(time*0.5), 0.0)) * params.y * 1.5 - (sin(p.x*0.1)*cos(p.z*0.1))*3.0;
             if (mode == 16) { vec3 q = opRep(p, vec3(gridSize)); float box = sdBox(q, vec3(1.0, 0.05, 1.0)); float lines = min(sdBox(q, vec3(1.1, 0.1, 0.02)), sdBox(q, vec3(0.02, 0.1, 1.1))); return min(box, lines); }
             if (mode == 17) return opSmoothSubtraction(sdSphere(p, 1.0), sdSphere(p - vec3(sin(time), cos(time), 0.0), 1.1), params.y);
             if (mode == 18) { vec3 q = p; q.z += time * 5.0; return sdCylinder(opRep(q, vec3(gridSize)), 0.1, 0.05) - noise(p * params.x) * params.y; }
@@ -394,4 +394,5 @@
         console.warn("[QRE] :: No DOM found. Bootstrap will not run automatically.");
     }
 })();
+
 
