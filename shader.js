@@ -10,7 +10,8 @@
     let cameraPos = [0, 1.6, 0], cameraRot = [0, 0];
     let velocity = [0, 0], headBob = 0;
     let keys = {}, mouseMovement = { x: 0, y: 0 };
-    let lastMouseX = 0, lastMouseY = 0, isPointerLocked = false;
+    let isPointerLocked = false;
+    let initialized = false;
 
     // =================================================================================================
     // [VERTEX SHADER]
@@ -63,9 +64,7 @@
             vec3 cellId = floor(p / roomSize);
             vec3 cellPos = mod(p, roomSize) - roomSize * 0.5;
             
-            // Walls (with occasional doorways)
             float wallThickness = 0.15;
-            float walls = 1e10;
             
             // Room boundaries
             float roomBox = -box(cellPos, roomSize * 0.5 - wallThickness);
@@ -90,8 +89,6 @@
                 roomBox = max(roomBox, -door);
             }
             
-            walls = roomBox;
-            
             // Floor
             float floor = cellPos.y + roomSize.y * 0.5;
             
@@ -112,7 +109,7 @@
                 pillars = box(pillarPos, vec3(0.2, roomSize.y * 0.5, 0.2));
             }
             
-            return min(min(min(walls, floor), ceiling), min(light, pillars));
+            return min(min(min(roomBox, floor), ceiling), min(light, pillars));
         }
         
         // --- MATERIAL ID ---
@@ -181,12 +178,11 @@
                     }
                     
                     // Lighting
-                    float lightDist = 1e10;
                     vec3 roomSize = vec3(4.0, 3.0, 4.0);
                     vec3 cellId = floor(p / roomSize);
                     vec3 lightCenter = (cellId + 0.5) * roomSize;
                     lightCenter.y = roomSize.y - 0.1;
-                    lightDist = length(p - lightCenter);
+                    float lightDist = length(p - lightCenter);
                     
                     float light = max(0.0, dot(normal, normalize(lightCenter - p)));
                     float ambient = 0.3;
@@ -245,17 +241,26 @@
     function initWebGL() {
         canvas = document.createElement('canvas');
         canvas.id = 'backroomsCanvas';
-        canvas.style.cssText = `position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;cursor:none;`;
+        canvas.style.cssText = `position:fixed;top:0;left:0;width:100vw;height:100vh;background:#1a1a1a;cursor:none;z-index:9999;`;
         document.body.appendChild(canvas);
         
         gl = canvas.getContext('webgl', { antialias: false, powerPreference: "high-performance" });
-        if (!gl) throw new Error("WebGL not supported");
+        if (!gl) {
+            console.error("[BACKROOMS] :: WebGL not supported");
+            return false;
+        }
         
+        resizeCanvas();
+        
+        console.log("[BACKROOMS] :: You've entered the Backrooms. Click to lock pointer, WASD to move, mouse to look.");
+        return true;
+    }
+
+    function resizeCanvas() {
+        if (!canvas || !gl) return;
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
-        
-        console.log("[BACKROOMS] :: You've entered the Backrooms. Use WASD to move, mouse to look.");
     }
 
     function createShaders() {
@@ -263,19 +268,30 @@
         gl.shaderSource(vs, vertexSource);
         gl.compileShader(vs);
 
+        if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+            console.error("[BACKROOMS] Vertex shader error:", gl.getShaderInfoLog(vs));
+            return false;
+        }
+
         const fs = gl.createShader(gl.FRAGMENT_SHADER);
         gl.shaderSource(fs, fragmentSource);
         gl.compileShader(fs);
 
         if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-            console.error("Shader error:", gl.getShaderInfoLog(fs));
-            throw new Error("Fragment shader compilation failed");
+            console.error("[BACKROOMS] Fragment shader error:", gl.getShaderInfoLog(fs));
+            return false;
         }
 
         program = gl.createProgram();
         gl.attachShader(program, vs);
         gl.attachShader(program, fs);
         gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error("[BACKROOMS] Program link error:", gl.getProgramInfoLog(program));
+            return false;
+        }
+
         gl.useProgram(program);
         
         const buffer = gl.createBuffer();
@@ -284,6 +300,8 @@
         const pos = gl.getAttribLocation(program, 'p');
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+        
+        return true;
     }
 
     // =================================================================================================
@@ -331,6 +349,8 @@
     // =================================================================================================
     let lastTime = 0;
     function render(timestamp) {
+        if (!initialized || !gl || !program) return;
+        
         const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
         lastTime = timestamp;
         time = timestamp * 0.001;
@@ -359,46 +379,52 @@
     // =================================================================================================
     // [EVENT HANDLERS]
     // =================================================================================================
-    window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gl.viewport(0, 0, canvas.width, canvas.height);
-    });
+    function setupEvents() {
+        window.addEventListener('resize', resizeCanvas);
 
-    window.addEventListener('keydown', (e) => {
-        keys[e.key] = true;
-    });
-    
-    window.addEventListener('keyup', (e) => {
-        keys[e.key] = false;
-    });
-    
-    canvas.addEventListener('click', () => {
-        canvas.requestPointerLock();
-    });
-    
-    document.addEventListener('pointerlockchange', () => {
-        isPointerLocked = document.pointerLockElement === canvas;
-    });
-    
-    window.addEventListener('mousemove', (e) => {
-        if (isPointerLocked) {
-            mouseMovement.x += e.movementX;
-            mouseMovement.y += e.movementY;
-        }
-    });
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        canvas.addEventListener('click', () => {
+            if (canvas.requestPointerLock) {
+                canvas.requestPointerLock();
+            }
+        });
+        
+        document.addEventListener('pointerlockchange', () => {
+            isPointerLocked = document.pointerLockElement === canvas;
+        });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (isPointerLocked) {
+                mouseMovement.x += e.movementX || 0;
+                mouseMovement.y += e.movementY || 0;
+            }
+        });
+    }
 
     // =================================================================================================
     // [BOOTSTRAP]
     // =================================================================================================
     function bootstrap() {
         try {
-            initWebGL();
-            createShaders();
+            if (!initWebGL()) {
+                throw new Error("WebGL initialization failed");
+            }
+            if (!createShaders()) {
+                throw new Error("Shader creation failed");
+            }
+            setupEvents();
+            initialized = true;
             animationId = requestAnimationFrame(render);
-            console.log("[BACKROOMS] :: Click to lock pointer and start exploring.");
+            console.log("[BACKROOMS] :: ✅ Initialized successfully. Click canvas to begin.");
         } catch (e) {
-            console.error("[BACKROOMS] :: Initialization failed:", e);
+            console.error("[BACKROOMS] :: ❌ Initialization failed:", e);
         }
     }
     
@@ -414,14 +440,26 @@
     window.backrooms = {
         teleport: (x, y, z) => {
             cameraPos = [x, y, z];
-            console.log(`[BACKROOMS] :: Teleported to ${x}, ${y}, ${z}`);
+            console.log(`[BACKROOMS] :: Teleported to (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
         },
         destroy: () => {
-            if (animationId) cancelAnimationFrame(animationId);
-            if (canvas) canvas.remove();
-            document.exitPointerLock();
+            initialized = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            if (document.pointerLockElement === canvas) {
+                document.exitPointerLock();
+            }
+            if (canvas && canvas.parentNode) {
+                canvas.remove();
+            }
+            canvas = null;
+            gl = null;
+            program = null;
             console.log("[BACKROOMS] :: You've escaped... for now.");
-        }
+        },
+        isActive: () => initialized
     };
 })();
 
