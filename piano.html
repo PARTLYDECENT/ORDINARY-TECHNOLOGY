@@ -12,7 +12,7 @@
         <h1>🎹 Ultimate Piano Studio</h1>
         <div class="status-bar">
             <span id="note-display">♪ Play a note ♪</span>
-            <span id="chord-display"></span>
+            <span id="chord-display">Chord: ---</span>
         </div>
     </div>
     
@@ -26,6 +26,9 @@
                 <option value="synth">Analog Synth</option>
                 <option value="bells">Crystal Bells</option>
                 <option value="pad">Ambient Pad</option>
+                <option value="strings">Strings</option>
+                <option value="brass">Brass</option>
+                <option value="guitar">Guitar</option>
             </select>
         </div>
         
@@ -48,6 +51,52 @@
             <button id="sustain-btn" class="sustain-btn">Sustain OFF</button>
             <button id="record-btn" class="record-btn">● REC</button>
         </div>
+
+        <div class="control-group">
+            <label>Arpeggiator</label>
+            <button id="arp-btn" class="control-btn">OFF</button>
+            <input type="range" id="arp-speed-slider" min="50" max="500" value="150">
+        </div>
+
+        <div class="control-group">
+            <label>Metronome</label>
+            <button id="metro-btn" class="control-btn">OFF</button>
+            <input type="range" id="metro-tempo-slider" min="60" max="180" value="120">
+        </div>
+
+        <div class="control-group">
+            <label>Theme</label>
+            <button id="theme-btn" class="control-btn">Light</button>
+        </div>
+
+        <div class="control-group">
+            <label>Panic</label>
+            <button id="panic-btn" class="control-btn">STOP ALL</button>
+        </div>
+
+        <div class="control-group">
+            <label>AI</label>
+            <button id="inspire-btn" class="control-btn">Inspire Me</button>
+        </div>
+
+        <div class="control-group">
+            <label>Automated Song</label>
+            <button id="automated-song-btn" class="control-btn">Play</button>
+        </div>
+
+        <div class="control-group">
+            <label>Song</label>
+            <select id="song-select">
+                <option value="0">Song 1</option>
+                <option value="1">Song 2</option>
+                <option value="2">Song 3</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Loop</label>
+            <button id="loop-btn" class="control-btn">OFF</button>
+        </div>
     </div>
     
     <div class="piano-wrapper">
@@ -61,6 +110,7 @@
     <div class="info-panel">
         <p><strong>Controls:</strong> Q-P keys for white notes, 2-0 for black notes | Space: Sustain | R: Record</p>
         <p id="performance-stats">Polyphony: 0 voices active</p>
+        <div id="key-mapping"></div>
     </div>
 </div>
 
@@ -163,6 +213,21 @@ select, input[type="range"] {
 
 .record-btn.recording {
     animation: pulse 1s infinite;
+}
+
+.control-btn {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #3498db;
+    color: white;
+}
+
+.control-btn.active {
+    background: #e74c3c;
 }
 
 @keyframes pulse {
@@ -289,6 +354,73 @@ select, input[type="range"] {
     .piano-header h1 { font-size: 1.8rem; }
     .status-bar { flex-direction: column; gap: 5px; }
 }
+
+#key-mapping {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.key-mapping-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 10px;
+    font-size: 0.9rem;
+}
+
+.key-mapping-item .key-char {
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.light-theme {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 50%, #e0e0e0 100%);
+    color: #333;
+}
+
+.light-theme .piano-header h1 {
+    background: linear-gradient(45deg, #333, #555, #777);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.light-theme .status-bar {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .control-panel {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.light-theme .control-group label {
+    color: #333;
+}
+
+.light-theme select, .light-theme input[type="range"] {
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+}
+
+.light-theme .white-key {
+    background: linear-gradient(to bottom, #f8f8f8 0%, #e8e8e8 100%);
+    color: #333;
+}
+
+.light-theme .black-key {
+    background: linear-gradient(to bottom, #555 0%, #333 100%);
+    color: #ccc;
+}
+
+.light-theme .visual-feedback {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.light-theme .info-panel {
+    color: #555;
+}
+
 </style>
 
 <script>
@@ -308,6 +440,65 @@ class UltimatePiano {
         this.visualizerContext = null;
         this.analyser = null;
         this.dataArray = null;
+
+        this.arpeggiator = { on: false, speed: 150, interval: null, notes: [], index: 0 };
+        this.metronome = { on: false, tempo: 120, interval: null };
+
+        this.ai = {
+            songs: [
+                {
+                    melody: [
+                        { note: 'C', octave: 5, duration: 0.5 },
+                        { note: 'D', octave: 5, duration: 0.5 },
+                        { note: 'E', octave: 5, duration: 0.5 },
+                        { note: 'C', octave: 5, duration: 0.5 },
+                        { note: 'E', octave: 5, duration: 0.5 },
+                        { note: 'F', octave: 5, duration: 1 },
+                        { note: 'G', octave: 5, duration: 1 },
+                    ],
+                    chordProgression: ['C', 'G', 'Am', 'F'],
+                },
+                {
+                    melody: [
+                        { note: 'G', octave: 4, duration: 0.5 },
+                        { note: 'A', octave: 4, duration: 0.5 },
+                        { note: 'B', octave: 4, duration: 0.5 },
+                        { note: 'G', octave: 4, duration: 0.5 },
+                        { note: 'B', octave: 4, duration: 0.5 },
+                        { note: 'C', octave: 5, duration: 1 },
+                        { note: 'D', octave: 5, duration: 1 },
+                    ],
+                    chordProgression: ['G', 'D', 'Em', 'C'],
+                },
+                {
+                    melody: [
+                        { note: 'E', octave: 5, duration: 0.5 },
+                        { note: 'F#', octave: 5, duration: 0.5 },
+                        { note: 'G#', octave: 5, duration: 0.5 },
+                        { note: 'E', octave: 5, duration: 0.5 },
+                        { note: 'G#', octave: 5, duration: 0.5 },
+                        { note: 'A', octave: 5, duration: 1 },
+                        { note: 'B', octave: 5, duration: 1 },
+                    ],
+                    chordProgression: ['E', 'B', 'C#m', 'A'],
+                },
+            ],
+            markovChain: {},
+        };
+
+        this.currentSong = 0;
+        this.loop = false;
+
+        this.noteOrder = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        this.chordLibrary = {
+            'Major': [0, 4, 7],
+            'Minor': [0, 3, 7],
+            'Diminished': [0, 3, 6],
+            'Augmented': [0, 4, 8],
+            'Major 7th': [0, 4, 7, 11],
+            'Minor 7th': [0, 3, 7, 10],
+            'Dominant 7th': [0, 4, 7, 10],
+        };
         
         this.noteFrequencies = {
             'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13,
@@ -331,6 +522,8 @@ class UltimatePiano {
         this.setupKeyboardEvents();
         this.setupVisualizer();
         this.startVisualization();
+        this.createKeyMapping();
+        this.trainMarkovChain();
     }
     
     setupAudioContext() {
@@ -443,6 +636,17 @@ class UltimatePiano {
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume();
         }
+
+        if (this.arpeggiator.on) {
+            const noteKey = `${note}-${octave}`;
+            if (!this.arpeggiator.notes.includes(noteKey)) {
+                this.arpeggiator.notes.push(noteKey);
+            }
+            if (!this.arpeggiator.interval) {
+                this.startArpeggiator();
+            }
+            return;
+        }
         
         const frequency = this.noteFrequencies[note] * Math.pow(2, octave - 4);
         const noteKey = `${note}-${octave}`;
@@ -464,6 +668,7 @@ class UltimatePiano {
         }
         
         this.updatePolyphonyStats();
+        this.detectChord();
     }
     
     createVoices(frequency) {
@@ -557,6 +762,30 @@ class UltimatePiano {
                     filter.Q.value = 0.5;
                 }
                 break;
+            case 'strings':
+                oscillator.type = 'sawtooth';
+                if (filter) {
+                    filter.type = 'lowpass';
+                    filter.frequency.value = frequency * 2;
+                    filter.Q.value = 0.5;
+                }
+                break;
+            case 'brass':
+                oscillator.type = 'square';
+                if (filter) {
+                    filter.type = 'lowpass';
+                    filter.frequency.value = frequency * 2;
+                    filter.Q.value = 2;
+                }
+                break;
+            case 'guitar':
+                oscillator.type = 'square';
+                if (filter) {
+                    filter.type = 'lowpass';
+                    filter.frequency.value = frequency * 5;
+                    filter.Q.value = 1;
+                }
+                break;
         }
         
         oscillator.frequency.value = frequency;
@@ -564,6 +793,15 @@ class UltimatePiano {
     
     stopNote(note, octave) {
         const noteKey = `${note}-${octave}`;
+
+        if (this.arpeggiator.on) {
+            this.arpeggiator.notes = this.arpeggiator.notes.filter(n => n !== noteKey);
+            if (this.arpeggiator.notes.length === 0) {
+                this.stopArpeggiator();
+            }
+            return;
+        }
+
         const voices = this.activeNotes.get(noteKey);
         
         if (!voices) return;
@@ -576,6 +814,7 @@ class UltimatePiano {
         this.releaseVoices(voices);
         this.activeNotes.delete(noteKey);
         this.updatePolyphonyStats();
+        this.detectChord();
     }
     
     releaseVoices(voices) {
@@ -645,6 +884,79 @@ class UltimatePiano {
                     this.playbackRecording();
                 }
             }
+        });
+
+        // Arpeggiator button
+        document.getElementById('arp-btn').addEventListener('click', (e) => {
+            this.arpeggiator.on = !this.arpeggiator.on;
+            e.target.textContent = this.arpeggiator.on ? 'ON' : 'OFF';
+            e.target.classList.toggle('active', this.arpeggiator.on);
+            if (!this.arpeggiator.on) {
+                this.stopArpeggiator();
+            }
+        });
+
+        // Arpeggiator speed
+        document.getElementById('arp-speed-slider').addEventListener('input', (e) => {
+            this.arpeggiator.speed = parseInt(e.target.value);
+            if (this.arpeggiator.interval) {
+                this.stopArpeggiator();
+                this.startArpeggiator();
+            }
+        });
+
+        // Metronome button
+        document.getElementById('metro-btn').addEventListener('click', (e) => {
+            this.metronome.on = !this.metronome.on;
+            e.target.textContent = this.metronome.on ? 'ON' : 'OFF';
+            e.target.classList.toggle('active', this.metronome.on);
+            if (this.metronome.on) {
+                this.startMetronome();
+            } else {
+                this.stopMetronome();
+            }
+        });
+
+        // Metronome tempo
+        document.getElementById('metro-tempo-slider').addEventListener('input', (e) => {
+            this.metronome.tempo = parseInt(e.target.value);
+            if (this.metronome.interval) {
+                this.stopMetronome();
+                this.startMetronome();
+            }
+        });
+
+        // Theme button
+        document.getElementById('theme-btn').addEventListener('click', (e) => {
+            document.body.classList.toggle('light-theme');
+            e.target.textContent = document.body.classList.contains('light-theme') ? 'Dark' : 'Light';
+        });
+
+        // Panic button
+        document.getElementById('panic-btn').addEventListener('click', () => {
+            this.panic();
+        });
+
+        // Inspire Me button
+        document.getElementById('inspire-btn').addEventListener('click', () => {
+            this.inspireMe();
+        });
+
+        // Automated Song button
+        document.getElementById('automated-song-btn').addEventListener('click', () => {
+            this.playAutomatedSong();
+        });
+
+        // Song select
+        document.getElementById('song-select').addEventListener('change', (e) => {
+            this.currentSong = parseInt(e.target.value);
+        });
+
+        // Loop button
+        document.getElementById('loop-btn').addEventListener('click', (e) => {
+            this.loop = !this.loop;
+            e.target.textContent = this.loop ? 'ON' : 'OFF';
+            e.target.classList.toggle('active', this.loop);
         });
     }
     
@@ -729,6 +1041,88 @@ class UltimatePiano {
         document.getElementById('performance-stats').textContent = 
             `Polyphony: ${this.activeNotes.size} voices active`;
     }
+
+    detectChord() {
+        const notes = Array.from(this.activeNotes.keys()).map(key => key.split('-')[0]);
+        const uniqueNotes = [...new Set(notes)];
+
+        if (uniqueNotes.length < 2) {
+            document.getElementById('chord-display').textContent = 'Chord: ---';
+            return;
+        }
+
+        const noteIndexes = uniqueNotes.map(note => this.noteOrder.indexOf(note)).sort((a, b) => a - b);
+
+        for (let i = 0; i < noteIndexes.length; i++) {
+            const rootNote = this.noteOrder[noteIndexes[i]];
+            const intervals = noteIndexes.map(index => (index - noteIndexes[i] + 12) % 12).sort((a, b) => a - b);
+
+            for (const chordName in this.chordLibrary) {
+                const chordIntervals = this.chordLibrary[chordName];
+                if (chordIntervals.length === intervals.length && chordIntervals.every((val, index) => val === intervals[index])) {
+                    document.getElementById('chord-display').textContent = `Chord: ${rootNote} ${chordName}`;
+                    return;
+                }
+            }
+        }
+
+        document.getElementById('chord-display').textContent = 'Chord: ---';
+    }
+
+    startArpeggiator() {
+        this.arpeggiator.interval = setInterval(() => {
+            if (this.arpeggiator.notes.length === 0) return;
+
+            const noteKey = this.arpeggiator.notes[this.arpeggiator.index % this.arpeggiator.notes.length];
+            const [note, octave] = noteKey.split('-');
+
+            this.playSingleNote(note, parseInt(octave));
+
+            this.arpeggiator.index++;
+        }, this.arpeggiator.speed);
+    }
+
+    stopArpeggiator() {
+        clearInterval(this.arpeggiator.interval);
+        this.arpeggiator.interval = null;
+        this.arpeggiator.notes = [];
+        this.arpeggiator.index = 0;
+    }
+
+    playSingleNote(note, octave) {
+        const frequency = this.noteFrequencies[note] * Math.pow(2, octave - 4);
+        const voices = this.createVoices(frequency);
+        voices.forEach(voice => {
+            voice.oscillator.start();
+            const releaseTime = this.currentInstrument === 'bells' ? 2.0 : 0.5;
+            voice.gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + releaseTime);
+            voice.oscillator.stop(this.audioContext.currentTime + releaseTime + 0.1);
+        });
+        this.updateDisplay(note, octave);
+        this.createNoteParticle(note);
+    }
+
+    startMetronome() {
+        const tempo = 60000 / this.metronome.tempo;
+        this.metronome.interval = setInterval(() => this.playMetronomeTick(), tempo);
+    }
+
+    stopMetronome() {
+        clearInterval(this.metronome.interval);
+        this.metronome.interval = null;
+    }
+
+    playMetronomeTick() {
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        osc.frequency.value = 1000;
+        gain.gain.setValueAtTime(1, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 0.05);
+    }
     
     createNoteParticle(note) {
         const particle = document.createElement('div');
@@ -746,15 +1140,122 @@ class UltimatePiano {
     
     playbackRecording() {
         if (this.recordedNotes.length === 0) return;
-        
-        const startTime = this.recordedNotes[0].time;
-        
+
+        let lastTime = this.recordedNotes[0].time;
+
         this.recordedNotes.forEach(({ note, octave, time }) => {
+            const delay = time - lastTime;
             setTimeout(() => {
                 this.playNote(note, octave);
                 setTimeout(() => this.stopNote(note, octave), 300);
-            }, time - startTime);
+            }, delay);
+            lastTime = time;
         });
+    }
+
+    createKeyMapping() {
+        const keyMappingContainer = document.getElementById('key-mapping');
+        for (const key in this.keyboardMap) {
+            const note = this.keyboardMap[key];
+            const keyMappingItem = document.createElement('div');
+            keyMappingItem.className = 'key-mapping-item';
+            keyMappingItem.innerHTML = `<span class="key-char">${key.toUpperCase()}</span><span>${note}</span>`;
+            keyMappingContainer.appendChild(keyMappingItem);
+        }
+    }
+
+    panic() {
+        this.activeNotes.forEach((voices, noteKey) => {
+            this.releaseVoices(voices);
+        });
+        this.activeNotes.clear();
+
+        this.sustainedNotes.forEach(noteKey => {
+            const voices = this.activeNotes.get(noteKey);
+            if (voices) {
+                this.releaseVoices(voices);
+            }
+        });
+        this.sustainedNotes.clear();
+
+        this.stopArpeggiator();
+        this.stopMetronome();
+        this.updatePolyphonyStats();
+    }
+
+    trainMarkovChain() {
+        for (const song of this.ai.songs) {
+            const progression = song.chordProgression;
+            for (let i = 0; i < progression.length - 1; i++) {
+                const currentChord = progression[i];
+                const nextChord = progression[i + 1];
+                if (!this.ai.markovChain[currentChord]) {
+                    this.ai.markovChain[currentChord] = [];
+                }
+                this.ai.markovChain[currentChord].push(nextChord);
+            }
+        }
+    }
+
+    generateChordProgression() {
+        const chords = Object.keys(this.ai.markovChain);
+        let currentChord = chords[Math.floor(Math.random() * chords.length)];
+        const progression = [currentChord];
+        for (let i = 0; i < 3; i++) {
+            const nextChords = this.ai.markovChain[currentChord];
+            currentChord = nextChords[Math.floor(Math.random() * nextChords.length)];
+            progression.push(currentChord);
+        }
+        return progression;
+    }
+
+    playChordProgression(progression) {
+        progression.forEach((chord, index) => {
+            setTimeout(() => {
+                const notes = this.getNotesInChord(chord, 4);
+                notes.forEach(note => {
+                    this.playNote(note.note, note.octave);
+                    setTimeout(() => this.stopNote(note.note, note.octave), 500);
+                });
+            }, index * 600);
+        });
+    }
+
+    getNotesInChord(chord, octave) {
+        const rootNote = chord.replace('m', '').replace('#', '');
+        const isMinor = chord.includes('m');
+        const rootNoteIndex = this.noteOrder.indexOf(rootNote);
+        const intervals = isMinor ? this.chordLibrary['Minor'] : this.chordLibrary['Major'];
+        const notes = [];
+        for (const interval of intervals) {
+            const noteIndex = (rootNoteIndex + interval) % 12;
+            notes.push({ note: this.noteOrder[noteIndex], octave });
+        }
+        return notes;
+    }
+
+    inspireMe() {
+        const progression = this.generateChordProgression();
+        this.playChordProgression(progression);
+    }
+
+    playAutomatedSong() {
+        const song = this.ai.songs[this.currentSong];
+        this.playChordProgression(song.chordProgression);
+
+        let time = 0;
+        const playNextNote = () => {
+            if (!this.loop && time >= song.melody.length) {
+                return;
+            }
+            const note = song.melody[time % song.melody.length];
+            this.playNote(note.note, note.octave);
+            setTimeout(() => this.stopNote(note.note, note.octave), note.duration * 1000 - 50);
+            time++;
+            setTimeout(playNextNote, note.duration * 1000);
+        };
+
+        playNextNote();
     }
 }
 
