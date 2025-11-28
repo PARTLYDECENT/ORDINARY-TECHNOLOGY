@@ -127,11 +127,15 @@ varying vec2 vUv;
 
 const float PI = 3.14159265;
 
-const int MAX_STEPS = 90;
+const int MAX_STEPS = 120;
 
-const float MIN_DIST = 0.001;
+const float MIN_DIST = 0.0008;
 
-const float MAX_DIST = 80.0;
+const float MAX_DIST = 100.0;
+
+const float SHADOW_SOFTNESS = 8.0;
+
+const int SHADOW_STEPS = 16;
 
 
 // --- UTILITY & NOISE ---
@@ -140,7 +144,11 @@ mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1,0,0,0,c,-s,0,s,c);}
 
 mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0,s,0,1,0,-s,0,c);}
 
+mat3 rotZ(float a){float c=cos(a),s=sin(a);return mat3(c,-s,0,s,c,0,0,0,1);}
+
 float hash(float n){return fract(sin(n)*43758.5453);}
+
+float hash2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 
 float noise(vec3 x){vec3 p=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);float n=p.x+p.y*57.0+113.0*p.z;return mix(mix(mix(hash(n+0.0),hash(n+1.0),f.x),mix(hash(n+57.0),hash(n+58.0),f.x),f.y),mix(mix(hash(n+113.0),hash(n+114.0),f.x),mix(hash(n+170.0),hash(n+171.0),f.x),f.y),f.z);}
 
@@ -176,12 +184,6 @@ float sdMengerSponge(vec3 p, float scale) {
 float d = sdBox(p, vec3(scale));
 
 float s = 1.0;
-
-// WebGL1 requires loop counters to be compared against compile-time constants.
-
-// The original 'int(params.z)' is a uniform, which is not constant at compile time.
-
-// Using a fixed value of 4, which matches the 'Menger Sponge' phase params.
 
 for(int m=0; m < 4; m++){
 
@@ -303,7 +305,7 @@ return 1.0;
 
 vec3 calcNormal(vec3 p) {
 
-vec2 e = vec2(0.001, 0);
+vec2 e = vec2(0.0005, 0);
 
 return normalize(vec3(
 
@@ -318,27 +320,92 @@ sceneSDF(p + e.yyx) - sceneSDF(p - e.yyx)
 }
 
 
+// Enhanced Ambient Occlusion with better sampling
+
 float calcAO(vec3 p, vec3 n) {
 
 float total_ao = 0.0;
 
-float step_dist = 0.05;
+float step_dist = 0.04;
 
-for(int i=1; i<=5; i++){
+for(int i=1; i<=6; i++){
 
 float dist = float(i) * step_dist;
 
-total_ao += (dist - sceneSDF(p + n * dist)) / pow(1.0 + dist, 2.0);
+total_ao += (dist - sceneSDF(p + n * dist)) / pow(1.2 + dist, 2.0);
 
 }
 
-return 1.0 - clamp(total_ao * 0.5, 0.0, 1.0);
+return 1.0 - clamp(total_ao * 0.6, 0.0, 1.0);
 
 }
 
 
+// Soft shadows with penumbra
 
-// --- RAYMARCHER & MAIN ---
+float calcSoftShadow(vec3 ro, vec3 rd, float mint, float maxt) {
+
+float res = 1.0;
+
+float t = mint;
+
+for(int i=0; i<SHADOW_STEPS; i++) {
+
+float h = sceneSDF(ro + rd * t);
+
+if(h < 0.001) return 0.0;
+
+res = min(res, SHADOW_SOFTNESS * h / t);
+
+t += clamp(h, 0.01, 0.3);
+
+if(t > maxt) break;
+
+}
+
+return clamp(res, 0.0, 1.0);
+
+}
+
+
+// Calculate reflections
+
+vec3 calcReflection(vec3 p, vec3 n, vec3 rd, vec3 lightDir) {
+
+vec3 reflDir = reflect(rd, n);
+
+float reflDist = 0.0;
+
+
+
+for(int i=0; i<32; i++) {
+
+vec3 rp = p + reflDir * reflDist;
+
+float d = sceneSDF(rp);
+
+if(d < 0.01) {
+
+vec3 rn = calcNormal(rp);
+
+float rdiff = max(0.1, dot(rn, lightDir));
+
+return vec3(rdiff * 0.3);
+
+}
+
+if(reflDist > 10.0) break;
+
+reflDist += d * 0.8;
+
+}
+
+return vec3(0.0);
+
+}
+
+
+// --- ENHANCED RAYMARCHER ---
 
 vec4 raymarch(vec3 ro, vec3 rd) {
 
@@ -356,31 +423,109 @@ vec3 n = calcNormal(p);
 
 float ao = calcAO(p, n);
 
-vec3 lightDir = normalize(vec3(0.5, 0.8, -0.3));
-
-float diffuse = max(0.2, dot(n, lightDir));
 
 
-float fresnel = pow(1.0 - max(0.0, dot(n, -rd)), 3.0);
+// Primary light
 
-vec3 surfCol = mix(color1, color2, fresnel);
+vec3 lightDir1 = normalize(vec3(0.6, 0.8, -0.4));
+
+float diffuse1 = max(0.0, dot(n, lightDir1));
+
+float shadow1 = calcSoftShadow(p + n * 0.01, lightDir1, 0.02, 10.0);
 
 
-if (mode == 15) { // Volcanic Plains emissive
 
-surfCol = mix(surfCol, color1, clamp(-d*200.0, 0.0, 1.0));
+// Secondary fill light
+
+vec3 lightDir2 = normalize(vec3(-0.5, 0.3, 0.6));
+
+float diffuse2 = max(0.0, dot(n, lightDir2)) * 0.4;
+
+
+
+// Rim light (backlight)
+
+vec3 rimDir = normalize(vec3(0.0, -0.5, 1.0));
+
+float rim = pow(max(0.0, dot(n, rimDir)), 3.0) * 0.6;
+
+
+
+// Fresnel for edge glow
+
+float fresnel = pow(1.0 - max(0.0, dot(n, -rd)), 2.5);
+
+
+
+// Specular highlight
+
+vec3 halfDir = normalize(lightDir1 - rd);
+
+float specular = pow(max(0.0, dot(n, halfDir)), 32.0) * 0.8;
+
+
+
+// Subsurface scattering hint
+
+float sss = pow(clamp(dot(rd, -lightDir1) + 1.0, 0.0, 1.0), 3.0) * 0.3;
+
+
+
+// Color mixing with fresnel
+
+vec3 surfCol = mix(color1, color2, fresnel * 0.7 + 0.3);
+
+
+
+// Mode-specific emissive effects
+
+if (mode == 15) { // Volcanic Plains
+
+surfCol = mix(surfCol, color1 * 1.5, clamp(-d*200.0, 0.0, 1.0));
 
 }
 
-if (mode == 21) { // Oracle emissive
+if (mode == 21) { // Oracle
 
-surfCol = mix(surfCol, color1, pow(abs(sin(p.y*3.0 - time*2.0)), 5.0));
+surfCol = mix(surfCol, color1 * 1.3, pow(abs(sin(p.y*3.0 - time*2.0)), 5.0));
+
+}
+
+if (mode == 11) { // Frozen Nebula glow
+
+surfCol = mix(surfCol, color2, pow(noise(p * 2.0 + time), 3.0) * 0.4);
 
 }
 
 
 
-vec3 finalColor = surfCol * diffuse * ao;
+// Calculate reflections for shiny materials
+
+vec3 refl = calcReflection(p, n, rd, lightDir1) * fresnel * 0.5;
+
+
+
+// Combine all lighting
+
+vec3 lighting = vec3(0.0);
+
+lighting += diffuse1 * shadow1 * 1.2; // Primary diffuse
+
+lighting += diffuse2 * 0.6; // Fill light
+
+lighting += rim; // Rim light
+
+lighting += sss; // Subsurface
+
+lighting += specular * shadow1; // Specular highlights
+
+lighting += 0.15; // Ambient
+
+
+
+vec3 finalColor = surfCol * lighting * ao + refl;
+
+
 
 return vec4(finalColor, dist);
 
@@ -388,7 +533,7 @@ return vec4(finalColor, dist);
 
 if(dist > MAX_DIST) break;
 
-dist += d * 0.7;
+dist += d * 0.65;
 
 }
 
@@ -396,6 +541,57 @@ return vec4(0.0, 0.0, 0.0, MAX_DIST);
 
 }
 
+
+// Post-processing: Bloom
+
+vec3 bloom(vec3 col, vec2 uv) {
+
+float brightness = dot(col, vec3(0.2126, 0.7152, 0.0722));
+
+if(brightness > 0.7) {
+
+return col * (brightness - 0.7) * 1.5;
+
+}
+
+return vec3(0.0);
+
+}
+
+
+// Chromatic aberration
+
+vec3 chromaticAberration(vec2 uv, vec3 ro, mat3 camRot) {
+
+float aberration = 0.002 * length(uv);
+
+
+
+vec2 uvR = uv * (1.0 + aberration);
+
+vec2 uvB = uv * (1.0 - aberration);
+
+
+
+vec3 rdR = normalize(camRot * vec3(uvR, 1.5));
+
+vec3 rdG = normalize(camRot * vec3(uv, 1.5));
+
+vec3 rdB = normalize(camRot * vec3(uvB, 1.5));
+
+
+
+return vec3(
+
+raymarch(ro, rdR).r,
+
+raymarch(ro, rdG).g,
+
+raymarch(ro, rdB).b
+
+);
+
+}
 
 
 void main() {
@@ -406,24 +602,93 @@ vec3 ro = cameraPos;
 
 mat3 camRot = rotY(cameraRot.y) * rotX(cameraRot.x);
 
+
+
+// Multi-sample anti-aliasing (2x2)
+
+vec3 col = vec3(0.0);
+
+float aaOffset = 0.0008;
+
+
+
+for(int aaY = 0; aaY < 2; aaY++) {
+
+for(int aaX = 0; aaX < 2; aaX++) {
+
+vec2 offset = vec2(float(aaX), float(aaY)) * aaOffset - aaOffset * 0.5;
+
+vec2 uvAA = uv + offset;
+
+vec3 rd = normalize(camRot * vec3(uvAA, 1.5));
+
+vec4 res = raymarch(ro, rd);
+
+col += res.rgb;
+
+}
+
+}
+
+col /= 4.0;
+
+
+
+// Get distance for fog
+
 vec3 rd = normalize(camRot * vec3(uv, 1.5));
 
+float d = raymarch(ro, rd).a;
 
-vec4 res = raymarch(ro,rd);
 
-vec3 col = res.rgb;
 
-float d = res.a;
-
+// Volumetric fog with depth
 
 float fog = exp(-d * fogDensity);
 
-col = mix(color3, col, fog);
+float fogGlow = exp(-d * fogDensity * 0.3) * 0.2;
+
+col = mix(color3 * (1.0 + fogGlow), col, fog);
 
 
-col = pow(col, vec3(0.4545)); // Gamma correction
 
-col *= 1.0 - length(uv) * 0.15; // Vignette
+// Bloom effect
+
+vec3 bloomCol = bloom(col, uv);
+
+col += bloomCol;
+
+
+
+// Film grain
+
+float grain = hash2(uv * time) * 0.03;
+
+col += grain;
+
+
+
+// Gamma correction
+
+col = pow(col, vec3(0.4545));
+
+
+
+// Enhanced vignette with subtle color shift
+
+float vignette = 1.0 - length(uv) * 0.3;
+
+vignette = pow(vignette, 0.8);
+
+col *= vignette;
+
+
+
+// Subtle color grading
+
+col = mix(col, col * vec3(1.02, 1.0, 0.98), 0.2);
+
+
 
 gl_FragColor = vec4(col, 1.0);
 
