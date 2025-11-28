@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Parasite Entity</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #020000;
+            font-family: 'Courier New', Courier, monospace;
+            transition: background-color 0.1s;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ff3333;
+            z-index: 10;
+            text-shadow: 0 0 5px #ff0000;
+            background: rgba(20, 0, 0, 0.85);
+            padding: 15px;
+            border: 1px solid #ff3333;
+            backdrop-filter: blur(2px);
+            user-select: none;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.2);
+            max-width: 250px;
+        }
+
+        h1 {
+            font-size: 16px;
+            margin: 0 0 5px 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
+
+        p {
+            font-size: 12px;
+            margin: 0 0 5px 0;
+            opacity: 0.9;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid #ff3333;
+            color: #ff3333;
+            padding: 5px 10px;
+            font-family: inherit;
+            font-size: 10px;
+            cursor: pointer;
+            margin-top: 5px;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.1s;
+        }
+
+        button:hover {
+            background: #ff3333;
+            color: #000;
+            box-shadow: 0 0 10px #ff0000;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #ff0000;
+            margin-right: 5px;
+            box-shadow: 0 0 5px #ff0000;
+            animation: blink 0.5s infinite alternate;
+        }
+
+        @keyframes blink {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0.3;
+            }
+        }
+
+        .back-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(20, 0, 0, 0.85);
+            border: 1px solid #ff3333;
+            color: #ff3333;
+            padding: 10px 20px;
+            text-decoration: none;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10;
+            transition: all 0.1s;
+            cursor: pointer;
+        }
+
+        .back-button:hover {
+            background: #ff3333;
+            color: #000;
+            box-shadow: 0 0 10px #ff0000;
+        }
+    </style>
+</head>
+
+<body>
+
+    <a href="index.html" class="back-button">← RETURN TO MAIN</a>
+
+    <div id="ui">
+        <h1>Specimen OMEGA</h1>
+        <p><span class="status-indicator" id="status-dot"></span>State: <span id="state-text">CONTAINMENT BREACH</span>
+        </p>
+
+        <div style="margin-top: 15px; border-top: 1px solid rgba(255, 50, 50, 0.3); padding-top: 10px;">
+            <p><strong>CONTROLS</strong></p>
+            <button onclick="entity.mutate()">[FORCE MUTATION]</button>
+            <button onclick="toggleBackground()">[VISIBILITY TOGGLE]</button>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let frame = 0;
+
+        let mouse = { x: -1000, y: -1000, active: false };
+
+        let config = {
+            tentacleCount: 16,
+            segmentCount: 20,
+            baseLength: 15,
+            colorBase: '255, 20, 20',
+            glowColor: '#ff0000',
+            coreSize: 18,
+            turbulence: 1.0, // Reduced turbulence for more controlled "alien" movement
+            transparent: false
+        };
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            mouse.active = true;
+            clearTimeout(mouse.timer);
+            mouse.timer = setTimeout(() => { mouse.active = false; }, 2000);
+        });
+
+        function toggleBackground() {
+            config.transparent = !config.transparent;
+            document.body.style.backgroundColor = config.transparent ? 'transparent' : '#020000';
+        }
+
+        function random(min, max) { return Math.random() * (max - min) + min; }
+
+        // Improved Perlin-like noise for smoother organic movement
+        function noise(x, y) {
+            return Math.sin(x) * Math.cos(y) + Math.sin(y * 0.5) * Math.cos(x * 0.5);
+        }
+
+        class Segment {
+            constructor(x, y, length) {
+                this.x = x;
+                this.y = y;
+                this.length = length;
+                this.angle = 0;
+            }
+        }
+
+        class Tentacle {
+            constructor(x, y, length, count, offsetAngle, index) {
+                this.segments = [];
+                this.baseAngle = offsetAngle; // The "home" angle on the circle
+                this.index = index;
+                this.seed = Math.random() * 1000; // Unique offset for independence
+
+                for (let i = 0; i < count; i++) {
+                    let len = length * (1 - (i / count) * 0.4);
+                    this.segments.push(new Segment(x, y, len));
+                }
+            }
+
+            update(coreX, coreY, coreAngle, state, target) {
+                // 1. ANCHOR: Calculate the fixed attachment point on the entity's skin
+                // We add coreAngle so the tentacles rotate WITH the body
+                let attachAngle = this.baseAngle + coreAngle;
+                let anchorX = coreX + Math.cos(attachAngle) * (config.coreSize * 0.8);
+                let anchorY = coreY + Math.sin(attachAngle) * (config.coreSize * 0.8);
+
+                this.segments[0].x = anchorX;
+                this.segments[0].y = anchorY;
+
+                // 2. KINEMATICS: Propagate movement outwards (Forward Kinematics)
+                let currentAngle = attachAngle;
+
+                // If hunting, bias towards the target
+                let targetAngle = 0;
+                let huntStrength = 0;
+
+                if (state === 'HUNT' || state === 'SPASM') {
+                    huntStrength = (state === 'HUNT') ? 0.3 : 0.1;
+                    // Calculate angle towards mouse/target
+                    let dx = target.x - coreX;
+                    let dy = target.y - coreY;
+                    targetAngle = Math.atan2(dy, dx);
+                }
+
+                for (let i = 0; i < this.segments.length - 1; i++) {
+                    let seg = this.segments[i];
+                    let next = this.segments[i + 1];
+
+                    // Procedural Alien Movement
+                    // Use noise based on time, segment index, and unique seed
+                    let n = noise(frame * 0.05 + this.seed, i * 0.2) * config.turbulence;
+
+                    // Add a "curling" factor
+                    let curl = Math.sin(frame * 0.02 + this.seed) * 0.5;
+
+                    // Base direction comes from the segment before it (or the core for the first one)
+                    // We mix:
+                    // a) The natural radial angle (attachAngle)
+                    // b) The noise/writhe (n)
+                    // c) The hunt direction (targetAngle) if active
+
+                    // Default organic writhe
+                    let segmentAngle = attachAngle + (n * (i * 0.1)) + (curl * (i * 0.05));
+
+                    // Blend in Hunt behavior
+                    // The further out the segment, the more it points to target
+                    if (huntStrength > 0) {
+                        // Shortest angle interpolation
+                        let diff = targetAngle - segmentAngle;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        segmentAngle += diff * huntStrength * (i / this.segments.length);
+                    }
+
+                    next.x = seg.x + Math.cos(segmentAngle) * seg.length;
+                    next.y = seg.y + Math.sin(segmentAngle) * seg.length;
+                }
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.moveTo(this.segments[0].x, this.segments[0].y);
+
+                // Draw skeletal segments
+                for (let i = 1; i < this.segments.length; i++) {
+                    ctx.lineTo(this.segments[i].x, this.segments[i].y);
+                }
+
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // Dark outer shell
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = `rgba(10, 0, 0, 0.9)`;
+                ctx.stroke();
+
+                // Glowing inner nerve
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = `rgba(${config.colorBase}, 0.6)`;
+                ctx.stroke();
+
+                // Draw "claws" or tips
+                let tip = this.segments[this.segments.length - 1];
+                ctx.fillStyle = config.glowColor;
+                ctx.beginPath();
+                ctx.arc(tip.x, tip.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Entity {
+            constructor() {
+                this.pos = { x: width / 2, y: height / 2 };
+                this.vel = { x: 0, y: 0 };
+                this.acc = { x: 0, y: 0 };
+                this.rotation = 0; // Body rotation
+                this.maxSpeed = 2;
+                this.maxForce = 0.05;
+
+                this.tentacles = [];
+                this.state = 'IDLE';
+                this.stateTimer = 0;
+                this.target = { x: width / 2, y: height / 2 };
+
+                this.uiState = document.getElementById('state-text');
+                this.uiDot = document.getElementById('status-dot');
+
+                this.initTentacles();
+            }
+
+            initTentacles() {
+                this.tentacles = [];
+                for (let i = 0; i < config.tentacleCount; i++) {
+                    let angle = (Math.PI * 2 / config.tentacleCount) * i;
+                    this.tentacles.push(new Tentacle(this.pos.x, this.pos.y, config.baseLength, config.segmentCount, angle, i));
+                }
+            }
+
+            mutate() {
+                const r = Math.floor(random(150, 255));
+                const g = Math.floor(random(0, 100));
+                const b = Math.floor(random(0, 100));
+
+                config.colorBase = `${r}, ${g}, ${b}`;
+                config.glowColor = `rgb(${r},${g},${b})`;
+                config.tentacleCount = Math.floor(random(12, 30)); // More tentacles = more scary halo
+                config.segmentCount = Math.floor(random(15, 30));
+                config.turbulence = random(0.8, 1.5);
+
+                this.initTentacles();
+
+                // UI Styling
+                const ui = document.querySelector('#ui');
+                ui.style.borderColor = config.glowColor;
+                ui.style.color = config.glowColor;
+                ui.style.textShadow = `0 0 5px ${config.glowColor}`;
+                document.querySelector('h1').style.color = config.glowColor;
+                document.querySelectorAll('button').forEach(btn => {
+                    btn.style.borderColor = config.glowColor;
+                    btn.style.color = config.glowColor;
+                });
+                this.uiDot.style.background = config.glowColor;
+                this.uiDot.style.boxShadow = `0 0 5px ${config.glowColor}`;
+            }
+
+            think() {
+                this.stateTimer--;
+
+                let distToMouse = Math.hypot(this.pos.x - mouse.x, this.pos.y - mouse.y);
+
+                // AI Logic
+                if (mouse.active && distToMouse < 300) {
+                    if (this.state !== 'HUNT') this.changeState('HUNT');
+                } else if (this.state === 'HUNT' && distToMouse > 500) {
+                    this.changeState('WANDER');
+                }
+
+                if (this.stateTimer <= 0) {
+                    const roll = Math.random();
+                    if (roll < 0.4) this.changeState('WANDER');
+                    else if (roll < 0.7) this.changeState('LURK');
+                    else this.changeState('SPASM');
+                }
+
+                // State Execution
+                if (this.state === 'WANDER') {
+                    if (frame % 60 === 0) {
+                        this.target = {
+                            x: random(100, width - 100),
+                            y: random(100, height - 100)
+                        };
+                    }
+                    this.seek(this.target);
+                    // Slowly rotate while wandering
+                    this.rotation += 0.01;
+                }
+                else if (this.state === 'LURK') {
+                    this.vel.x *= 0.9;
+                    this.vel.y *= 0.9;
+                    // Breathing rotation
+                    this.rotation += Math.sin(frame * 0.05) * 0.005;
+                }
+                else if (this.state === 'SPASM') {
+                    if (frame % 4 === 0) {
+                        this.target = { x: random(0, width), y: random(0, height) };
+                    }
+                    this.seek(this.target);
+                    this.rotation += 0.2; // Spin crazy
+                }
+                else if (this.state === 'HUNT') {
+                    this.target = { x: mouse.x, y: mouse.y };
+                    this.seek(this.target);
+
+                    // Rotate towards prey
+                    let dx = mouse.x - this.pos.x;
+                    let dy = mouse.y - this.pos.y;
+                    let desiredAngle = Math.atan2(dy, dx);
+                    // Smooth rotation to face target (optional, since tentacles do the pointing)
+                    this.rotation = desiredAngle;
+                }
+            }
+
+            changeState(newState) {
+                this.state = newState;
+                this.uiState.innerText = newState;
+
+                if (newState === 'WANDER') {
+                    this.stateTimer = random(100, 300);
+                    this.maxSpeed = 1.5;
+                } else if (newState === 'LURK') {
+                    this.stateTimer = random(100, 200);
+                } else if (newState === 'SPASM') {
+                    this.stateTimer = random(20, 60);
+                    this.maxSpeed = 8;
+                } else if (newState === 'HUNT') {
+                    this.stateTimer = 200;
+                    this.maxSpeed = 3.5;
+                }
+            }
+
+            seek(target) {
+                let desiredX = target.x - this.pos.x;
+                let desiredY = target.y - this.pos.y;
+                let d = Math.hypot(desiredX, desiredY);
+                if (d > 0) {
+                    desiredX = (desiredX / d) * this.maxSpeed;
+                    desiredY = (desiredY / d) * this.maxSpeed;
+                }
+                let steerX = desiredX - this.vel.x;
+                let steerY = desiredY - this.vel.y;
+                let steerLen = Math.hypot(steerX, steerY);
+                if (steerLen > this.maxForce) {
+                    steerX = (steerX / steerLen) * this.maxForce;
+                    steerY = (steerY / steerLen) * this.maxForce;
+                }
+                this.acc.x += steerX;
+                this.acc.y += steerY;
+            }
+
+            update() {
+                this.think();
+                this.vel.x += this.acc.x;
+                this.vel.y += this.acc.y;
+
+                // Apply velocity
+                this.pos.x += this.vel.x;
+                this.pos.y += this.vel.y;
+                this.acc.x = 0; this.acc.y = 0;
+
+                // Boundaries
+                if (this.pos.x < -100) this.pos.x = width + 100;
+                if (this.pos.x > width + 100) this.pos.x = -100;
+                if (this.pos.y < -100) this.pos.y = height + 100;
+                if (this.pos.y > height + 100) this.pos.y = -100;
+
+                // Update tentacles
+                // We pass the "target" (mouse or random point) so they can reach for it
+                this.tentacles.forEach(t => t.update(this.pos.x, this.pos.y, this.rotation, this.state, this.target));
+            }
+
+            draw(ctx) {
+                this.tentacles.forEach(t => t.draw(ctx));
+
+                // Core
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = config.glowColor;
+
+                let pulse = 1 + Math.sin(frame * 0.15) * 0.1;
+
+                // Main body gradient
+                let gradient = ctx.createRadialGradient(this.pos.x, this.pos.y, 0, this.pos.x, this.pos.y, config.coreSize * 2);
+                gradient.addColorStop(0, `rgba(${config.colorBase}, 1)`);
+                gradient.addColorStop(0.6, `rgba(0,0,0,1)`);
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+
+                // Irregular organic shape for body
+                const bodyRes = 10;
+                for (let i = 0; i <= bodyRes; i++) {
+                    let ang = (Math.PI * 2 / bodyRes) * i + this.rotation;
+                    let r = config.coreSize * pulse + (Math.sin(ang * 3 + frame * 0.2) * 2);
+                    let x = this.pos.x + Math.cos(ang) * r;
+                    let y = this.pos.y + Math.sin(ang) * r;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.fill();
+
+                // Eye / Sensory Organ
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                // Eye looks at target
+                let lookX = (this.target.x - this.pos.x) * 0.05;
+                let lookY = (this.target.y - this.pos.y) * 0.05;
+                // Limit eye movement
+                let lookDist = Math.hypot(lookX, lookY);
+                if (lookDist > 5) {
+                    lookX = (lookX / lookDist) * 5;
+                    lookY = (lookY / lookDist) * 5;
+                }
+
+                ctx.arc(this.pos.x + lookX, this.pos.y + lookY, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        const entity = new Entity();
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            if (!config.transparent) {
+                ctx.fillStyle = 'rgba(2, 0, 0, 0.4)';
+                ctx.fillRect(0, 0, width, height);
+            }
+
+            ctx.globalCompositeOperation = 'lighter';
+            entity.update();
+            entity.draw(ctx);
+            ctx.globalCompositeOperation = 'source-over';
+
+            frame++;
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+    </script>
+</body>
+
+</html>
