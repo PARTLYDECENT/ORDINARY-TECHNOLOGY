@@ -1,0 +1,534 @@
+The Convergence of Hyper-Spatial Interfaces and Autonomous Agent Architectures in Modern Web Development
+1. Introduction: The Spatial Web Paradigm Shift
+The contemporary web landscape is undergoing a fundamental architectural metamorphosis, transitioning from static, two-dimensional document object models (DOM) into immersive, spatial environments often characterized as the "Spatial Web" or "Immersive Web." The user's request to transform an existing standard website into a 3D world—triggered by a specific interaction (a button press) that "lays the site down"—represents the cutting edge of this transition. This paradigm shift requires not merely a visual redesign but a complete re-engineering of the rendering pipeline, creating a hybrid context where standard HTML elements coexist with procedurally generated autonomous entities, such as virtual pets or viral agents.
+
+To achieve an "advanced and impressive" user interface (UI) that allows an existing 2D site to inhabit a 3D ecosystem, developers must bridge the historically disparate worlds of CSS-based styling and WebGL-based rasterization. This report provides an exhaustive technical analysis and implementation roadmap for constructing such a system. It details the mathematical synchronization of coordinate systems required to "lay down" a flat page, the implementation of autonomous steering behaviors for creating lifelike procedural entities, and the application of General-Purpose Computing on Graphics Processing Units (GPGPU) to simulate complex phenomena like viral infections or swarming behaviors.
+
+The integration of these features into an "already built" website necessitates a non-destructive "retrofitting" architecture. This involves wrapping existing DOM structures in spatial proxies, allowing them to retain their native interactivity (scrolling, clicking, inputting) while subjecting them to the geometric transformations of a 3D physics engine. By leveraging libraries such as Three.js for rendering, React Three Fiber (R3F) for declarative scene graph management, and Yuka for artificial intelligence, a developer can transmute a static webpage into a living, reactive digital ecosystem.   
+
+2. Architectural Foundations of Hybrid Interfaces
+The core technical challenge lies in the simultaneous rendering and synchronization of two distinct coordinate spaces: the Screen Space (measured in pixels, originating from the top-left) and the World Space (measured in abstract units, originating from the scene center). Achieving the effect of "laying the site down" requires a precise mechanism to map the former onto the latter.
+
+2.1 The Dual-Renderer Composition Strategy
+The most robust method for mixing interactive HTML with 3D space is the superposition of a CSS3DRenderer and a WebGLRenderer. The CSS3DRenderer applies CSS3 transforms (specifically matrix3d()) to DOM elements, allowing them to exist on the same visual plane as the 3D geometry rendered by the WebGLRenderer. This dual-stack approach ensures that the DOM elements are not merely texture projections (which would lose interactivity) but remain live, selectable, and accessible nodes within the document flow.   
+
+2.1.1 The Rendering Stack Implementation
+In a hybrid architecture, the browser's viewport acts as a composite window. The WebGLRenderer creates the 3D context (the "world," lighting, shadows, and procedural entities), while the CSS3DRenderer handles the transformation of the DOM elements to match the 3D camera's perspective.
+
+Layer 0 (Background/Scene): The WebGLRenderer canvas. This layer handles the rendering of the procedural environment (skybox, terrain), the autonomous agents (pets, viruses), and particle effects. It must be configured with alpha: true or a specific clearColor to ensure proper blending with the CSS layer if distinct layering is required, although typically, the WebGL layer provides the depth context behind the HTML.   
+
+Layer 1 (Foreground/Interface): The CSS3DRenderer container. This div wraps the website's existing HTML content. The renderer calculates the precise CSS transformations required to align the DOM elements with the WebGL camera's frustum. This allows the user to click buttons, select text, and interact with forms even when the site is "laid down" in perspective.   
+
+Table 1: Comparison of Hybrid Rendering Strategies
+
+Feature	CSS3DRenderer + WebGLRenderer	Canvas Texture Projection	Drei <Html> Component (R3F)
+Interactivity	Native (Select, Click, Input)	None (Requires Raycasting emulation)	Native (Wraps DOM elements)
+Visual Fidelity	Limited by CSS engine (no real lighting)	High (Participates in shader pipeline)	High (Can blend/occlude)
+Performance	High (Browser optimized compositing)	Low (Re-uploading textures every frame)	High (Optimized projection)
+Occlusion	Difficult (Always on top of canvas)	Native (Part of 3D scene)	Supported via occlude="blending"
+Implementation	Complex (Manual matrix sync)	Complex (Event mapping required)	Simplified (Declarative)
+2.1.2 The Role of React Three Fiber and Drei
+For modern implementations, particularly when integrating into an existing React-based site, the drei library's <Html> component offers a superior abstraction over raw CSS3DRenderer usage. The <Html> component automates the projection of 3D anchor points to 2D screen coordinates, effectively attaching a standard div to a point in 3D space.   
+
+The critical feature for the "lay down" effect is the Transform Mode. By adding the transform prop to the <Html> component, the library applies a matrix3d transformation to the div rather than simple 2D positioning. This subjects the HTML element to the scene's perspective, scale, and rotation, allowing it to act as a physical object within the 3D world. Furthermore, recent advancements in drei enable Occlusion Blending (occlude="blending"), where the HTML element's visibility is modulated by invisible proxy geometry in the WebGL scene. This solves the historical limitation where HTML overlays would float atop 3D objects, breaking the illusion of depth; with blending, a 3D pet can walk "in front" of a DOM button, and the button will be correctly obscured.   
+
+2.2 Coordinate Synchronization and Scaling
+A significant engineering hurdle in this architecture is the discrepancy between pixel units and 3D world units. A 1920-pixel wide website does not inherently map to a 1920-unit wide mesh in Three.js, as the latter depends on the camera's field of view (FOV) and distance.
+
+To maintain a 1:1 visual scale where the 3D website looks identical to the 2D version before the "lay down" transition, the camera's distance must be calculated mathematically:
+
+Z 
+position
+​
+ = 
+2×tan( 
+360
+FOV×π
+​
+ )
+Window Height
+​
+ 
+This formula ensures that at Z=0, one world unit corresponds exactly to one screen pixel. However, simply positioning the camera is often insufficient due to browser differences. A more robust approach involves scaling the CSS3DObject down (e.g., scale.set(0.01, 0.01, 0.01)) and bringing the camera closer, which prevents floating-point precision errors associated with extremely large scene graphs.   
+
+3. The "Lay Down" Mechanic: Transitioning Perspectives
+The user's requirement to "press a button and lay the site down" implies a dynamic transition of the viewport, shifting the user's mental model from viewing a document to viewing a world. This section details the mechanics of this transition.
+
+3.1 The 3D Button Trigger
+The "3D button feature" serves as the catalyst for the experience. Unlike a standard flat UI button, this element should signal the dimensional capabilities of the underlying system.
+
+Implementation Strategy:
+
+Volumetric Geometry: Instead of a simple div, the button is constructed using Three.ExtrudeGeometry or a loaded GLTF model to give it physical depth.
+
+Skeuomorphic Physics: Upon interaction (mousedown), the button mesh physically depresses along its local Z-axis using a spring physics simulation (e.g., react-spring or rapier). This provides tactile feedback that exceeds the capabilities of CSS :active states.   
+
+State Trigger: The click event updates a global state manager (e.g., Zustand) to toggle the isImmersive flag. This state change initiates the camera rig animation and the geometric transformation of the page content.   
+
+3.2 The Camera Rig and Gimbal Logic
+To "lay the site down," we do not necessarily rotate the HTML content itself; rather, we often rotate the camera relative to the content, or a parent container holding the content.
+
+Initial State (2D Mode): The camera is positioned at (0,0,Z 
+calc
+​
+ ) with a rotation of (0,0,0). The OrbitControls are disabled or locked to prevent accidental user rotation, maintaining the illusion of a standard 2D site.
+
+Transition Sequence: Upon triggering the button, a tweening library like GSAP (GreenSock Animation Platform) interpolates the camera's transform. The camera moves to an oblique angle, typically (0,Y,Z 
+offset
+​
+ ), and pitches downwards (rotation around X-axis) by approximately 45 to 60 degrees. This reveals the "floor" plane and the depth of the procedural entities.   
+
+Target State (3D Mode): The OrbitControls are unlocked, allowing the user to pan and rotate around the now-spatialized website. The website content, anchored to the Y=0 plane (or slightly above it to avoid z-fighting), appears to be lying on a digital desk or terrain.   
+
+3.3 Deconstructing the DOM into "Cards"
+For the most impressive effect, the website should not remain a single contiguous plane. Instead, individual sections (header, hero, gallery, footer) can be deconstructed into separate rigid bodies.
+
+The "Flip" Technique: Using the FLIP (First, Last, Invert, Play) animation principle, we can seamlessly transition elements from the document flow to independent 3D planes.
+
+Measure: Use getBoundingClientRect() to record the 2D position of each major section.   
+
+Reparent: Instantly hide the original DOM nodes and spawn drei/Html components at those exact world coordinates.
+
+Animate: Apply physics impulses to these new "cards," causing them to drift slightly apart or settle onto the 3D floor with a satisfying "thud" (using collision detection). This transforms the static page into a collection of physical artifacts.   
+
+4. Autonomous Agents: Procedural Artificial Life
+The requirement for "entities AI procedural pets or viruses to randomly populate and live in the webpage" introduces the domain of autonomous agent architecture. These entities must exhibit behavior that feels intentional and organic ("alive") rather than purely scripted or linear.
+
+4.1 Agent Architecture: Steering Behaviors
+To populate the webpage with entities that move naturally, we employ Steering Behaviors. Unlike keyframe animation, where position is defined explicitly over time, steering behaviors define forces (acceleration) applied to an agent's mass based on its environment.   
+
+The library Yuka is the industry standard for implementing these behaviors in a Three.js environment. It provides a clean separation of concern: the Yuka.Vehicle class handles the physics and AI, which is then synchronized frame-by-frame to the visual Three.Mesh.   
+
+4.1.1 Core Behaviors for Procedural Pets
+The "Pet" entities (e.g., virtual dogs, robots, or organic blobs) utilize a combination of weighted behaviors:
+
+Wander: This behavior projects a random point on a circle ahead of the agent, creating a smooth, jitter-free random movement path. This allows pets to explore the empty spaces of the webpage without looking like they are vibrating or moving linearly.   
+
+Seek/Arrive: When the user interacts (e.g., clicks the "3D Button" or hovers over a specific element), the pet's behavior weights shift. The Arrive behavior applies a force towards the target that decelerates as distance approaches zero, allowing the pet to gently stop at the button rather than overshooting it.   
+
+Obstacle Avoidance: To ensure the pets respect the "already built" webpage, the DOM elements are treated as obstacles. The AI casts a ray ahead of its current velocity vector; if this ray intersects with the bounding box of a DOM element, a lateral force is applied to steer the pet around the content. This creates the illusion that the pet is aware of the website's layout.   
+
+4.1.2 Flocking Algorithms for Viral Agents
+For the "virus" entities, the user implies a swarm-like or spreading behavior. This is best modeled using Reynolds' Flocking algorithm (Boids), which creates complex group dynamics from three simple rules applied to each agent:
+
+Separation: Steer to avoid crowding local flockmates.
+
+Alignment: Steer towards the average heading of local flockmates.
+
+Cohesion: Steer to move towards the average position (center of mass) of local flockmates.   
+
+Snippet Insight: Research indicates that for simulations involving thousands of viral particles, CPU-based calculation (O(n²)) is insufficient. The implementation must leverage GPGPU (General-Purpose computing on Graphics Processing Units). By encoding agent positions and velocities into floating-point textures ("ping-pong buffers"), the simulation logic can be executed in a fragment shader, updating the positions of 10,000+ virus particles at 60 FPS.   
+
+4.2 Finite State Machines (FSM): The Cognitive Layer
+While steering handles movement, a Finite State Machine (FSM) handles decision-making. To make the pets feel "alive," they must transition between different behavioral modes based on internal variables (e.g., hunger, boredom) or external triggers.   
+
+Table 2: Example FSM Logic for a Webpage Pet
+
+State	Trigger Condition	Resulting Behavior	Animation Loop
+IDLE	Initial State	Wander (Weight: 0.5), LookAt (Cursor)	Breathing/Idle cycle
+CURIOUS	Mouse movement > Threshold	Pursuit (Target: Mouse)	Run cycle
+HUNGRY	Internal Timer > 60s	Seek (Target: Nearest Image/Element)	Sniffing/Searching
+EATING	Distance to Target < 0.5m	Velocity = 0; Trigger "Glitch" on Element	Chewing/Absorbing
+SLEEP	System Idle > 120s	Velocity = 0; Arrive (Target: Footer)	Sleeping loop
+Implementation: Libraries like XState allow developers to define these states and transitions formally. This prevents logical errors, such as a pet trying to "sleep" and "chase" simultaneously. The FSM outputs the current active state, which drives both the Yuka steering weights and the React Three Fiber animation mixer.   
+
+4.3 Navigational Mesh (NavMesh) Integration
+To truly "live in the webpage," entities must not clip through the "floor" or walk through walls. A Navigation Mesh is a simplified geometric representation of the walkable surface.
+
+Generation: We can dynamically generate a NavMesh by taking the plane of the webpage and subtracting the bounding boxes of the "laid down" DOM elements.
+
+Pathfinding: Using the A* (A-Star) algorithm provided by Yuka, agents calculate the shortest path across the NavMesh to reach a target. This ensures that if a pet wants to go from the Header to the Footer, it will walk around the "Article" content block rather than ghosting through it.   
+
+5. Visual Synthesis: Virality, Glitches, and Shaders
+The user's request for "viruses" implies not just a swarm of entities, but a visual corruption or "infection" of the interface. This requires advanced shader programming to manipulate the rendering of the DOM elements themselves.
+
+5.1 Texture-Based Infection Simulation
+To simulate a virus spreading across the webpage, we cannot rely on discrete agents alone. We need a continuous simulation of surface contamination.
+
+Reaction-Diffusion Mechanics: We utilize a Reaction-Diffusion algorithm running in a custom WebGL shader. This algorithm simulates the interaction of two chemical substances (represented as color channels in a texture) to create organic, growing patterns similar to mold or bacterial colonies.
+
+Simulation Texture: An off-screen framebuffer (Render Target) stores the state of the infection.
+
+Propagation Rule: In the fragment shader, each pixel checks the status of its neighbors. If a neighbor is "infected" (value > 0), the current pixel increases its infection value based on a growth rate variable.
+
+Mapping: This dynamic texture is mapped to the UV coordinates of the meshes representing the "laid down" website. The "infection" appears to crawl across the buttons and images organically.   
+
+5.2 The "Glitch" and Distortion Effects
+As the virus infects specific areas of the page (driven by the simulation texture), the visual fidelity of those areas should degrade. This is achieved through Post-Processing and custom materials.
+
+Displacement Mapping: The simulation texture drives the vertex displacement of the DOM meshes. Infected areas physically bubble, spike, or melt as the vertices are pushed along their normals.   
+
+Chromatic Aberration: A post-processing pass (using react-postprocessing) splits the RGB channels of the rendered image. The offset of this split is modulated by the local infection level, causing "infected" text to jitter and separate into red/blue ghosts.   
+
+Digital Noise: High-frequency noise functions (Simplex or Perlin noise) are blended into the element's texture, simulating data corruption. The Glitch effect component can be configured to trigger sporadically or constantly based on the global "system health" state.   
+
+5.3 Particle Disintegration (The "Hole Punch")
+One of the most impressive requested features is the ability for entities to "add" themselves or interact destructively. A "Hole Punch" effect—where a virus eats a hole in the site—can be achieved using Masking and Particle Systems.
+
+HTML Capture: When a virus attacks an element, we use html2canvas to capture the current visual state of that DOM node as a static image.   
+
+Particle Spawn: This image is passed to a GPU particle system. Each pixel of the image is assigned to a particle.
+
+Explosion: Upon the "death" of the element, the DOM node is hidden (opacity: 0), and the particle system explodes outwards. This creates the illusion that the HTML element itself has shattered into thousands of pieces within the 3D world.   
+
+6. Implementation Guide: Retrofitting an Existing Site
+The user explicitly states: "i already built i wannta be able ot add them in". This requires a non-destructive integration strategy that wraps the existing application logic without requiring a rewrite.
+
+6.1 The "Overlay" vs. "Portal" Pattern
+There are two primary architectural patterns for retrofitting:
+
+The Canvas Underlay (Recommended): The R3F <Canvas> is placed as a fixed-position background element (z-index: -1). The existing React app lives in a foreground div. To "lay the site down," we do not move the existing DOM; instead, we take a snapshot (or use drei/Html proxies) and render the proxy in the 3D world while hiding the original interface. This avoids the complexity of nesting the entire existing app provider tree inside the Canvas.   
+
+The Portal Bridge: If deep interaction is required (e.g., the pet interacts with Redux state), we use drei's <Tunnel> or React Portals to transport DOM nodes from the main React tree into the <Html> components inside the Canvas. This allows the 3D interface to share the same context providers (Theme, Auth, State) as the main app.   
+
+6.2 Step-by-Step Integration Plan
+Phase 1: The Wrapper Wrap the entry point of the application (e.g., App.js) in a layout component that creates the 3D context.
+
+JavaScript
+// Conceptual Pseudo-code
+function SpatialWrapper({ children }) {
+  const [mode, setMode] = useState('2D');
+  return (
+    <>
+      <Canvas className="webgl-layer" style={{ pointerEvents: mode === '3D'? 'all' : 'none' }}>
+        <Suspense fallback={null}>
+           <ProceduralWorld mode={mode}>
+             {/* Proxies of the UI go here */}
+           </ProceduralWorld>
+        </Suspense>
+      </Canvas>
+      <div className="dom-layer" style={{ opacity: mode === '2D'? 1 : 0 }}>
+        {children}
+      </div>
+    </>
+  );
+}
+Phase 2: The Synchronization Hook Create a custom hook useDomSync that registers DOM elements to the 3D scene.
+
+Mechanism: Inside the existing components (e.g., <Header>), call useDomSync(ref).
+
+Function: This hook measures the element's position and size. It then dispatches this data to the R3F store, causing a corresponding transparent physics body to be spawned in the Rapier physics world. This ensures that even though the visual site is 2D, the 3D pets have invisible walls to collide with.   
+
+Phase 3: The Asset Pipeline
+
+Models: Load the pet models (GLTF/GLB) using useGLTF. Optimize textures using WebP to minimize impact on the site's initial load time.
+
+Audio: Integrate spatial audio (using PositionalAudio in Three.js) for the pets. The bark of a dog or the buzz of a virus should pan left/right as the user rotates the "laid down" site.   
+
+7. Performance Engineering at Scale
+Rendering a full website, a physics simulation, a sophisticated AI system, and post-processing effects simultaneously presents a significant performance risk. Optimization is not optional; it is structural.
+
+7.1 Instancing and Draw Calls
+For the "viruses to randomly populate" the page, we must assume a high entity count (100+). Rendering 100 separate meshes with unique geometries is computationally prohibitive.
+
+InstancedMesh: We use THREE.InstancedMesh to render thousands of virus particles in a single draw call. The position, rotation, and scale of each individual virus are stored in a SharedArrayBuffer or Data Texture, allowing the GPU to render the swarm efficiently.   
+
+7.2 On-Demand Rendering
+Typical websites are static and do not require a 60 FPS loop. However, 3D worlds do. To balance battery life and performance:
+
+Adaptive Frameloop: Use R3F's frameloop="demand". The scene only renders when a visual change occurs (camera moves, pet moves).
+
+Active/Passive Modes: When the user is in "2D Mode," the Canvas can be paused entirely or unmounted. When the "3D Button" is pressed, the frameloop switches to always to support the smooth camera transition, then settles back to an optimized state.   
+
+7.3 Physics Offloading
+The physics calculations (Rapier) and AI pathfinding (Yuka) are CPU-intensive. Running them on the main thread will cause the UI to stutter (jank).
+
+Web Workers: These systems should be moved to a Web Worker. The main thread sends the DOM layout data to the worker; the worker runs the simulation loop and sends back the position updates for the pets and viruses. This ensures the UI remains buttery smooth even if the AI is calculating complex flocking vectors.   
+
+8. Conclusion
+The request to build a website that can "lay down" into a 3D world populated by procedural AI represents a bold step towards the immersive web. It requires a synthesis of hybrid rendering (CSS3D + WebGL), behavioral AI (Steering + FSM), and advanced graphics programming (Shaders + GPGPU).
+
+By adopting the architecture detailed in this report—specifically the use of React Three Fiber for scene management, Yuka for autonomous agents, and InstancedMesh for performance—developers can "retrofit" existing web properties with these spatial capabilities. The result is a user interface that is not merely a tool for information consumption but a dynamic, living environment that responds, evolves, and engages the user through the illusion of depth and autonomous life. This is the foundational blueprint for the next generation of web interfaces.
+
+
+codecademy.com
+Build a 3D Environment with Three.js - Codecademy
+Opens in a new window
+
+youtube.com
+Building a 3D World with Three.js, React and WebGL - YouTube
+Opens in a new window
+
+mugen87.github.io
+Yuka | A JavaScript library for developing Game AI
+Opens in a new window
+
+stackoverflow.com
+ThreeJS, How to use CSS3Renderer and WebGLRenderer to render 2 objects on the same scene and have them overlap? - Stack Overflow
+Opens in a new window
+
+threejs.org
+three.js docs
+Opens in a new window
+
+stackoverflow.com
+three.js properly blending css3d and webgl - Stack Overflow
+Opens in a new window
+
+discourse.threejs.org
+Scale CSS3DRenderer respect to WebGLRenderer - Questions - three.js forum
+Opens in a new window
+
+github.com
+Combining WebGLRenderer & CSS3DRenderer · pmndrs react-three-fiber · Discussion #820 - GitHub
+Opens in a new window
+
+discourse.threejs.org
+How can we make Three.js scenes use DOM-style coordinates? - Questions
+Opens in a new window
+
+discourse.threejs.org
+Sync DOM element movement on Z axis to be the same with WebGL 3DObject movement
+Opens in a new window
+
+discourse.threejs.org
+Occlusion with Three.js CSS3DRenderer - Questions
+Opens in a new window
+
+stackoverflow.com
+React-Three/Drei Html's 'occlude="blending"' prop hides Html, leva etc when post processing pass is used - Stack Overflow
+Opens in a new window
+
+github.com
+Real occlusion with HTML elements · Issue #1129 · pmndrs/drei - GitHub
+Opens in a new window
+
+medium.com
+A beginner's guide to using Three.js, React and WebGL to build a 3D Application with interaction | by Summer Deehan | Medium
+Opens in a new window
+
+discourse.threejs.org
+Show DOM content at screen position of Three.js object
+Opens in a new window
+
+discourse.threejs.org
+How to improve three.js performance, with react-three-fiber? - Questions
+Opens in a new window
+
+gsap.com
+Flip | GSAP | Docs & Learning
+Opens in a new window
+
+youtube.com
+Introducing Flip Plugin for GSAP - YouTube
+Opens in a new window
+
+discourse.threejs.org
+How to change camera position on scroll in react-three-fibre? - Questions
+Opens in a new window
+
+stackoverflow.com
+Sync positions of dom elements and threejs objects - Stack Overflow
+Opens in a new window
+
+gsap.com
+FLIP plugin and 3D - GSAP - GreenSock
+Opens in a new window
+
+natureofcode.com
+Chapter 5: Autonomous Agents - Nature of Code
+Opens in a new window
+
+arnauld-alex.com
+Introduction to Steering Behavior for Autonomous Agents in P5.js - Arnauld's blog
+Opens in a new window
+
+mugen87.github.io
+Yuka | Documentation
+Opens in a new window
+
+red3d.com
+Steering Behaviors For Autonomous Characters - red3d.com
+Opens in a new window
+
+graphics.cs.wisc.edu
+three.js webgl - gpgpu - flocking
+Opens in a new window
+
+threejs.org
+three.js webgl - gpgpu - flocking
+Opens in a new window
+
+youtube.com
+Boids Flocking Simulation with Three.js & React - YouTube
+Opens in a new window
+
+github.com
+b-amir/fsm-game: A simple Finite State Machine game inspired by the Witcher - GitHub
+Opens in a new window
+
+kentcdodds.com
+Implementing a simple state machine library in JavaScript - Kent C. Dodds
+Opens in a new window
+
+reddit.com
+What are some good finite-state-machine libraries? : r/reactjs - Reddit
+Opens in a new window
+
+forum.babylonjs.com
+YUKA NavMesh example - Questions - Babylon.js Forum
+Opens in a new window
+
+youtube.com
+Make Obstacles And Restricted Areas In A Map Using Navigation Meshes - Three.js & Yuka Tutorial - YouTube
+Opens in a new window
+
+community.khronos.org
+Creating a shader effect that emulates ink spreading - OpenGL - Khronos Forums
+Opens in a new window
+
+react-postprocessing.docs.pmnd.rs
+Glitch - React Postprocessing
+Opens in a new window
+
+github.com
+postprocessing for react-three-fiber - GitHub
+Opens in a new window
+
+onion2k.github.io
+Glitch - react-three-fiber by example - GitHub Pages
+Opens in a new window
+
+css-tricks.com
+Adding Particle Effects to DOM Elements with Canvas - CSS-Tricks
+Opens in a new window
+
+varun.ca
+Three ways to create 3D particle effects | Varun Vachhar
+Opens in a new window
+
+github.com
+Easily create amazing particle explosions in an HTML5 canvas. - GitHub
+Opens in a new window
+
+youtube.com
+React Three Fiber tutorial - Scroll Animations - YouTube
+Opens in a new window
+
+r3f.docs.pmnd.rs
+Events and Interaction - React Three Fiber
+Opens in a new window
+
+r3f.docs.pmnd.rs
+Examples - React Three Fiber
+Opens in a new window
+
+taintedcoders.com
+Bevy Physics: Rapier - Tainted Coders
+Opens in a new window
+
+r3f.docs.pmnd.rs
+Scaling performance - React Three Fiber
+Opens in a new window
+
+discourse.threejs.org
+When is InstancedMesh worth it in THREE? - Questions
+Opens in a new window
+
+reddit.com
+3D Cellular Automata in C++ & OpenGL : r/proceduralgeneration - Reddit
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window
+Opens in a new window

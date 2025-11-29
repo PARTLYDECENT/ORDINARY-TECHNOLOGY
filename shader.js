@@ -372,7 +372,7 @@ void main() {
     function render(timestamp) {
         const deltaTime = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
         lastTimestamp = timestamp;
-        time = timestamp * 0.001;
+        time = timestamp * 0.001 * 0.5;
 
         updateCamera(deltaTime);
         const phase = phases[phaseIndex];

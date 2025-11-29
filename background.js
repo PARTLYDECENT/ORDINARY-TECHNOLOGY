@@ -1,7 +1,7 @@
 // Global ShaderManager initialization
 let ShaderManager = null;
 
-(function() {
+(function () {
   console.log('Advanced Multi-Shader Background System: Initializing');
 
   // Configuration for shader management
@@ -114,7 +114,7 @@ let ShaderManager = null;
 
       this.isTransitioning = true;
       this.currentShaderIndex = (this.currentShaderIndex + 1) % this.shaders.length;
-      
+
       log(`Transitioning to Shader ${this.currentShaderIndex + 1}`);
     }
 
@@ -128,8 +128,8 @@ let ShaderManager = null;
       const positionBuffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
       const positions = new Float32Array([
-        -1, -1,   1, -1,  -1,  1,
-        -1,  1,   1, -1,   1,  1
+        -1, -1, 1, -1, -1, 1,
+        -1, 1, 1, -1, 1, 1
       ]);
       gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
@@ -146,7 +146,7 @@ let ShaderManager = null;
         currentShader.startTime = now;
       }
 
-      const elapsedTime = (now - currentShader.startTime) * 0.001;
+      const elapsedTime = (now - currentShader.startTime) * 0.001 * 0.5;
 
       if (now - currentShader.startTime > SHADER_CONFIG.displayDuration) {
         this.transitionToNextShader();
@@ -176,12 +176,12 @@ let ShaderManager = null;
     `precision highp float;
     // ... (shader code from previous implementation)
     `,
-    
+
     // Cosmic Particle Shader (previous implementation)
     `precision highp float;
     // ... (shader code from previous implementation)
     `,
-    
+
     // Organic Fluid Shader (previous implementation)
     `precision highp float;
     // ... (shader code from previous implementation)
@@ -191,14 +191,14 @@ let ShaderManager = null;
   // Global initialization function
   function initShaderSystem(canvasId) {
     const canvas = document.getElementById(canvasId);
-    
+
     if (!canvas) {
       console.error(`Canvas with ID '${canvasId}' not found`);
       return null;
     }
 
     ShaderManager = new WebGLShaderManager(canvas);
-    
+
     // Add all shaders
     shaders.forEach(shaderSource => {
       ShaderManager.addShader(shaderSource);

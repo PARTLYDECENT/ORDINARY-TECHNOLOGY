@@ -29,7 +29,7 @@ function initWebGL() {
 
   webglCanvas.width = window.innerWidth;
   webglCanvas.height = window.innerHeight;
-  
+
   const gl = webglCanvas.getContext('webgl');
   if (!gl) {
     console.log("WebGL not supported in this browser. Fallback visuals will be used.");
@@ -65,7 +65,7 @@ function createShader(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
-  
+
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
     console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
     gl.deleteShader(shader);
@@ -81,7 +81,7 @@ function createProgram(gl, vertexShader, fragmentShader) {
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
   gl.linkProgram(program);
-  
+
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     console.error('Program link error:', gl.getProgramInfoLog(program));
     gl.deleteProgram(program);
@@ -99,7 +99,7 @@ function setupWebGLRendering() {
 
   const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-  
+
   if (!vertexShader || !fragmentShader) {
     console.error('Failed to create shaders');
     return;
@@ -139,14 +139,14 @@ function setupWebGLRendering() {
     gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
     gl.uniform1f(timeUniformLocation, time);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    
-    time += 0.01;
+
+    time += 0.005;
     requestAnimationFrame(render);
   }
   render();
 
   // Shader update function
-  window.updateShader = function(newShaderCode) {
+  window.updateShader = function (newShaderCode) {
     try {
       const newFragmentShaderSource = `
         precision highp float;
@@ -156,7 +156,7 @@ function setupWebGLRendering() {
           ${newShaderCode}
         }
       `;
-      
+
       const newFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, newFragmentShaderSource);
       if (!newFragmentShader) return;
 
@@ -178,7 +178,7 @@ function setupWebGLRendering() {
   };
 
   // Handle window resize
-  window.addEventListener('resize', function() {
+  window.addEventListener('resize', function () {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -284,7 +284,7 @@ function handleConsoleInput(event) {
       notification.style.animation = 'fadeIn 0.3s, fadeOut 0.3s 2s forwards';
       notification.textContent = 'UNKNOWN COMMAND: ' + input;
       document.body.appendChild(notification);
-      
+
       setTimeout(() => {
         document.body.removeChild(notification);
       }, 2300);
@@ -297,35 +297,35 @@ function handleConsoleInput(event) {
 function createParticles() {
   const container = document.getElementById('particles');
   const particleCount = 40;
-  
+
   for (let i = 0; i < particleCount; i++) {
     const particle = document.createElement('div');
     particle.classList.add('particle');
-    
+
     // Random positions and sizes
     const size = Math.random() * 4 + 1;
     const left = Math.random() * 100;
     const delay = Math.random() * 10;
     const duration = Math.random() * 15 + 10;
-    
+
     // Set CSS properties
     particle.style.width = `${size}px`;
     particle.style.height = `${size}px`;
     particle.style.left = `${left}%`;
     particle.style.bottom = `-5px`;
     particle.style.opacity = Math.random() * 0.6 + 0.1;
-    
+
     // Random colors - no pink
     const colors = [
-      'var(--primary)', 
-      'var(--secondary)', 
-      '#0088FF', 
-      '#00FFAA', 
-      '#6600FF', 
+      'var(--primary)',
+      'var(--secondary)',
+      '#0088FF',
+      '#00FFAA',
+      '#6600FF',
       '#FFFFFF'
     ];
     particle.style.background = colors[Math.floor(Math.random() * colors.length)];
-    
+
     // Enhanced animation with pulses
     if (Math.random() > 0.7) {
       particle.style.animation = `float ${duration}s infinite ease-in-out, pulse 3s infinite`;
@@ -333,7 +333,7 @@ function createParticles() {
       particle.style.animation = `float ${duration}s infinite linear`;
     }
     particle.style.animationDelay = `${delay}s`;
-    
+
     container.appendChild(particle);
   }
 }
