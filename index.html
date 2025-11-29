@@ -8831,6 +8831,13 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
 
 </div>
 <!-- Entity.js - Procedural Organism System -->
+<!-- Organism Canvas for Advanced Rendering -->
+<canvas id="organism-canvas"
+  style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9998; pointer-events: none;"></canvas>
+
+<!-- Entity System Scripts -->
+<script src="procedural-textures.js"></script>
+<script src="entity-renderer.js"></script>
 <script src="entity.js"></script>
 
 <!-- Placeholder Organism Container -->
@@ -8841,43 +8848,80 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
 <script>
   // Wait for DOM to be ready
   document.addEventListener('DOMContentLoaded', function () {
-    console.log('🦠 Initializing organisms...');
+    console.log('🦠 Initializing organisms with advanced rendering...');
 
-    // Spawn some initial organisms
-    if (window.entityManager) {
-      // Spawn 3-5 random organisms
-      const count = 3 + Math.floor(Math.random() * 3);
-      for (let i = 0; i < count; i++) {
-        entityManager.spawn({
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-          speed: 0.3 + Math.random() * 1.2
+    // Give scripts time to load
+    setTimeout(() => {
+      try {
+        console.log('🔍 Checking dependencies...');
+        const canvas = document.getElementById('organism-canvas');
+        const hasEntityManager = typeof window.entityManager !== 'undefined';
+        const hasEntityRenderer = typeof EntityRenderer !== 'undefined';
+        const hasProceduralTextures = typeof ProceduralTextures !== 'undefined';
+
+        console.log('Dependency Status:', {
+          canvas: !!canvas,
+          entityManager: hasEntityManager,
+          EntityRenderer: hasEntityRenderer,
+          ProceduralTextures: hasProceduralTextures
         });
-      }
 
-      // Start the animation loop
-      entityManager.start();
-
-      console.log(`✨ Spawned ${count} organisms! They're alive!`);
-
-      // Optional: Spawn a new organism every 10 seconds
-      setInterval(() => {
-        if (entityManager.entities.length < 10) {
-          entityManager.spawn({
-            x: Math.random() * window.innerWidth,
-            y: Math.random() * window.innerHeight
-          });
-          console.log('🌟 New organism spawned!');
+        if (!hasEntityManager) {
+          throw new Error('EntityManager not found on window object');
         }
-      }, 10000);
-    }
+
+        if (!hasEntityRenderer) {
+          console.error('⚠️ EntityRenderer class is missing. Check script loading order.');
+        }
+
+        // Manually connect renderer if needed
+        if (canvas && hasEntityRenderer) {
+          if (!window.entityManager.renderer) {
+            console.log('🔌 Connecting renderer manually...');
+            try {
+              window.entityManager.renderer = new EntityRenderer(canvas);
+              console.log('✅ Renderer connected successfully');
+            } catch (err) {
+              console.error('❌ Failed to instantiate EntityRenderer:', err);
+            }
+          }
+        } else {
+          console.error('❌ Cannot connect renderer: Missing canvas or EntityRenderer class');
+        }
+
+        // Spawn organisms
+        console.log('🌱 Attempting to spawn organisms...');
+        const count = 3 + Math.floor(Math.random() * 3);
+
+        for (let i = 0; i < count; i++) {
+          try {
+            window.entityManager.spawn({
+              x: 100 + Math.random() * (window.innerWidth - 200),
+              y: 100 + Math.random() * (window.innerHeight - 200),
+              size: 40 + Math.random() * 60,
+              speed: 0.8 + Math.random() * 1.2
+            });
+          } catch (spawnErr) {
+            console.error(`❌ Failed to spawn entity ${i}:`, spawnErr);
+          }
+        }
+
+        // Start loop
+        console.log('▶️ Starting EntityManager loop...');
+        window.entityManager.start();
+        console.log(`✨ Advanced organism rendering system active! Spawned ${count} entities.`);
+
+      } catch (e) {
+        console.error('🔥 CRITICAL ERROR initializing organisms:', e);
+      }
+    }, 500); // Increased delay to 500ms to be safe
   });
 
   // Handle window resize
   window.addEventListener('resize', () => {
-    if (window.entityManager) {
+    if (window.entityManager && window.entityManager.entities) {
       // Keep organisms within new bounds
-      entityManager.entities.forEach(entity => {
+      window.entityManager.entities.forEach(entity => {
         entity.position.x = Math.min(entity.position.x, window.innerWidth - entity.size);
         entity.position.y = Math.min(entity.position.y, window.innerHeight - entity.size);
       });

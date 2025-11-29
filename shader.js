@@ -1,44 +1,13 @@
-// [QUANTUM REALITY ENGINE] :: REIMAGINED 3D WORLD SHADER - IIFE SCRIPT
-// A journey through 26 uncanny, procedurally generated 3D landscapes.
+// [QUANTUM REALITY ENGINE] :: CALM 3D WORLD SHADER
+// A soothing, atmospheric 3D landscape generator.
 
 (function () {
     "use strict";
 
     let canvas, gl, program, animationId;
-    let time = 0, phaseIndex = 0, speed = 1.0;
-    let cameraPos = [0, 0, 5], cameraRot = [0, 0, 0];
-    let keys = {}, autoJourney = true;
-    let infoElement;
-
-    // --- PHASE DEFINITIONS ---
-    const phases = [
-        { name: "Menger Sponge", colors: [[1.0, 0.8, 0.6], [0.8, 0.2, 0.1], [0.1, 0.1, 0.2]], params: [3.0, 0.5, 4.0], gridSize: 3.0, fogDensity: 0.1 },
-        { name: "Crystalline Caverns", colors: [[0.2, 0.8, 1.0], [0.8, 0.9, 1.0], [0.0, 0.2, 0.4]], params: [0.8, 1.2, 0.1], gridSize: 4.0, fogDensity: 0.15 },
-        { name: "Gigeresque Bones", colors: [[0.8, 0.8, 0.7], [0.2, 0.2, 0.2], [0.0, 0.0, 0.0]], params: [1.5, 0.4, 0.8], gridSize: 3.0, fogDensity: 0.2 },
-        { name: "Gyroid Infinity", colors: [[1.0, 0.6, 0.1], [0.2, 0.8, 1.0], [0.1, 0.0, 0.1]], params: [8.0, 0.05, 0.9], gridSize: 5.0, fogDensity: 0.08 },
-        { name: "Voxel Overgrowth", colors: [[0.2, 0.8, 0.3], [0.9, 0.9, 0.8], [0.1, 0.2, 0.1]], params: [5.0, 0.4, 1.0], gridSize: 2.0, fogDensity: 0.12 },
-        { name: "Mandelbulb Core", colors: [[1.0, 0.5, 0.0], [0.0, 0.5, 1.0], [0.0, 0.0, 0.0]], params: [8.0, 1.5, 8.0], gridSize: 1.0, fogDensity: 0.25 },
-        { name: "Floating Obelisks", colors: [[0.9, 0.9, 1.0], [0.4, 0.4, 0.6], [0.1, 0.2, 0.4]], params: [0.2, 5.0, 0.8], gridSize: 8.0, fogDensity: 0.07 },
-        { name: "Hexagonal Pillars", colors: [[1.0, 0.9, 0.2], [0.8, 0.4, 0.1], [0.2, 0.1, 0.0]], params: [1.0, 0.8, 0.5], gridSize: 2.0, fogDensity: 0.1 },
-        { name: "Torus Knot City", colors: [[1.0, 0.1, 0.3], [0.2, 0.8, 1.0], [0.1, 0.1, 0.2]], params: [0.8, 0.2, 4.0], gridSize: 10.0, fogDensity: 0.05 },
-        { name: "Alien Desert", colors: [[0.8, 0.4, 0.2], [1.0, 0.8, 0.6], [0.3, 0.5, 0.8]], params: [1.2, 0.5, 0.9], gridSize: 1.0, fogDensity: 0.06 },
-        { name: "Mechanized Heart", colors: [[1.0, 0.1, 0.1], [0.5, 0.5, 0.6], [0.1, 0.1, 0.1]], params: [0.5, 0.2, 0.8], gridSize: 2.0, fogDensity: 0.3 },
-        { name: "Frozen Nebula", colors: [[0.5, 0.8, 1.0], [1.0, 0.5, 1.0], [0.0, 0.0, 0.1]], params: [2.5, 0.8, 1.2], gridSize: 1.0, fogDensity: 0.18 },
-        { name: "Recursive Tetrahedra", colors: [[0.1, 1.0, 0.8], [0.8, 1.0, 0.9], [0.1, 0.2, 0.3]], params: [0.5, 4.0, 1.0], gridSize: 1.0, fogDensity: 0.15 },
-        { name: "Data Weave", colors: [[0.0, 1.0, 1.0], [1.0, 1.0, 0.0], [0.0, 0.0, 0.2]], params: [0.1, 5.0, 0.5], gridSize: 2.0, fogDensity: 0.1 },
-        { name: "Submerged Temple", colors: [[0.1, 0.4, 0.3], [0.5, 0.8, 0.7], [0.0, 0.1, 0.2]], params: [1.0, 2.0, 1.0], gridSize: 12.0, fogDensity: 0.2 },
-        { name: "Volcanic Plains", colors: [[1.0, 0.3, 0.0], [0.2, 0.1, 0.1], [0.0, 0.0, 0.0]], params: [1.5, 0.3, 2.0], gridSize: 1.0, fogDensity: 0.09 },
-        { name: "Quantum Chip", colors: [[0.8, 0.8, 1.0], [0.2, 0.2, 0.8], [0.1, 0.1, 0.1]], params: [0.1, 1.0, 0.0], gridSize: 3.0, fogDensity: 0.11 },
-        { name: "The Great Attractor", colors: [[1.0, 0.8, 1.0], [0.8, 0.2, 1.0], [0.0, 0.0, 0.0]], params: [1.0, 0.1, 0.5], gridSize: 1.0, fogDensity: 0.04 },
-        { name: "Living Coral", colors: [[1.0, 0.4, 0.6], [0.2, 1.0, 0.8], [0.1, 0.2, 0.5]], params: [1.8, 0.6, 0.3], gridSize: 3.0, fogDensity: 0.13 },
-        { name: "Dyson Swarm", colors: [[1.0, 0.9, 0.8], [0.8, 0.8, 0.8], [0.1, 0.1, 0.1]], params: [0.5, 0.9, 0.1], gridSize: 15.0, fogDensity: 0.03 },
-        { name: "Warp Core", colors: [[0.2, 0.8, 1.0], [1.0, 1.0, 1.0], [0.0, 0.2, 0.5]], params: [0.3, 0.8, 0.4], gridSize: 2.0, fogDensity: 0.22 },
-        { name: "The Oracle", colors: [[1.0, 0.8, 0.2], [0.8, 1.0, 0.9], [0.2, 0.1, 0.0]], params: [0.6, 0.5, 0.2], gridSize: 1.0, fogDensity: 0.16 },
-        { name: "Glitch City", colors: [[1.0, 0.0, 0.5], [0.0, 1.0, 0.8], [0.1, 0.1, 0.1]], params: [1.0, 0.9, 0.5], gridSize: 6.0, fogDensity: 0.08 },
-        { name: "Abyssal Leviathan", colors: [[0.0, 0.1, 0.3], [0.5, 0.2, 0.8], [0.0, 0.0, 0.0]], params: [0.2, 0.5, 0.8], gridSize: 1.0, fogDensity: 0.35 },
-        { name: "Stochastic Forest", colors: [[0.4, 0.8, 0.2], [0.2, 0.4, 0.1], [0.1, 0.1, 0.1]], params: [0.1, 6.0, 0.5], gridSize: 4.0, fogDensity: 0.1 },
-        { name: "World Serpent", colors: [[0.8, 1.0, 0.9], [0.8, 0.5, 0.2], [0.2, 0.2, 0.3]], params: [1.0, 0.4, 3.0], gridSize: 1.0, fogDensity: 0.07 }
-    ];
+    let time = 0;
+    let cameraPos = [0, 2, 0]; // Start slightly above ground
+    let speed = 0.2; // Very slow, calming speed
 
     // --- VERTEX SHADER ---
     const vertexSource = `attribute vec2 p;varying vec2 vUv;void main(){vUv=p;gl_Position=vec4(p,0,1);}`;
@@ -46,107 +15,63 @@
     // --- FRAGMENT SHADER ---
     const fragmentSource = `
 precision highp float;
-uniform float time, speed;
-uniform int mode;
+uniform float time;
 uniform vec2 resolution;
-uniform vec3 cameraPos, cameraRot;
-uniform vec3 color1, color2, color3;
-uniform vec3 params;
-uniform float gridSize, fogDensity;
-varying vec2 vUv;
+uniform vec3 cameraPos;
 
-const float PI = 3.14159265;
-const int MAX_STEPS = 120;
-const float MIN_DIST = 0.0008;
-const float MAX_DIST = 100.0;
-const float SHADOW_SOFTNESS = 8.0;
-const int SHADOW_STEPS = 16;
+const int MAX_STEPS = 100;
+const float MIN_DIST = 0.001;
+const float MAX_DIST = 50.0;
 
-// --- UTILITY & NOISE ---
-mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1,0,0,0,c,-s,0,s,c);}
-mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0,s,0,1,0,-s,0,c);}
-mat3 rotZ(float a){float c=cos(a),s=sin(a);return mat3(c,-s,0,s,c,0,0,0,1);}
-float hash(float n){return fract(sin(n)*43758.5453);}
-float hash2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-float noise(vec3 x){vec3 p=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);float n=p.x+p.y*57.0+113.0*p.z;return mix(mix(mix(hash(n+0.0),hash(n+1.0),f.x),mix(hash(n+57.0),hash(n+58.0),f.x),f.y),mix(mix(hash(n+113.0),hash(n+114.0),f.x),mix(hash(n+170.0),hash(n+171.0),f.x),f.y),f.z);}
-
-// --- SDFs ---
-float sdSphere(vec3 p, float s){return length(p)-s;}
-float sdBox(vec3 p, vec3 b){vec3 q=abs(p)-b;return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);}
-float sdTorus(vec3 p, vec2 t){vec2 q=vec2(length(p.xz)-t.x,p.y);return length(q)-t.y;}
-float sdCylinder(vec3 p, float h, float r){vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h);return min(max(d.x,d.y),0.0)+length(max(d,0.0));}
-float sdHexPrism(vec3 p, vec2 h){const vec3 k=vec3(-0.8660254,0.5,0.57735026);p=abs(p);p.xy-=2.0*min(dot(k.xy,p.xy),0.0)*k.xy;vec2 d=vec2(length(p.xy-vec2(clamp(p.x,-k.z*h.x,k.z*h.x),h.x))*sign(p.y-h.x),p.z-h.y);return min(max(d.x,d.y),0.0)+length(max(d,0.0));}
-
-// --- OPERATORS ---
-vec3 opRep(vec3 p, vec3 c){return mod(p+0.5*c,c)-0.5*c;}
-float opSmoothUnion(float d1, float d2, float k){float h=clamp(0.5+0.5*(d2-d1)/k,0.0,1.0);return mix(d2,d1,h)-k*h*(1.0-h);}
-float opSmoothSubtraction(float d1, float d2, float k){float h=clamp(0.5-0.5*(d1+d2)/k,0.0,1.0);return mix(d1,-d2,h)+k*h*(1.0-h);}
-
-// --- COMPLEX SDFs ---
-float sdMengerSponge(vec3 p, float scale) {
-    float d = sdBox(p, vec3(scale));
-    float s = 1.0;
-    for(int m=0; m < 4; m++){
-        vec3 a = mod(p*s, 2.0)-1.0;
-        s *= 3.0;
-        vec3 r = 1.0 - 3.0*abs(a);
-        float c = sdBox(r, vec3(1.0))/s;
-        d = max(d, -c);
-    }
-    return d;
+// --- NOISE FUNCTIONS ---
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
-float sdMandelbulb(vec3 pos, float power, float bailout) {
-    vec3 z = pos;
-    float dr = 1.0;
-    float r = 0.0;
+// --- FBM (Fractal Brownian Motion) for Terrain ---
+float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
     for (int i = 0; i < 5; i++) {
-        r = length(z);
-        if (r > bailout) break;
-        float theta = acos(z.z / r) * power;
-        float phi = atan(z.y, z.x) * power;
-        dr = pow(r, power - 1.0) * power * dr + 1.0;
-        float zr = pow(r, power);
-        z = zr * vec3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
-        z += pos;
+        v += a * noise(p);
+        p = rot * p * 2.0 + vec2(1.3);
+        a *= 0.5;
     }
-    return 0.5 * log(r) * r / dr;
+    return v;
 }
 
 // --- SCENE SDF ---
 float sceneSDF(vec3 p) {
-    if (mode == 0) return sdMengerSponge(p, params.x);
-    if (mode == 1) return length(opRep(p, vec3(gridSize))) - params.x - noise(p * params.y) * 1.5;
-    if (mode == 2) return opSmoothUnion(sdTorus(p.xzy, vec2(params.x, params.y)), sdCylinder(opRep(p, vec3(gridSize)), 0.1, 0.1), params.z);
-    if (mode == 3) return dot(sin(p*gridSize), cos(p.zxy*gridSize)) - params.y;
-    if (mode == 4) return sdBox(opRep(p, vec3(gridSize)), vec3(params.y)) - noise(p * params.x) * 0.2;
-    if (mode == 5) return sdMandelbulb(p, params.x, params.y);
-    if (mode == 6) return sdBox(opRep(p, vec3(gridSize)) - vec3(0, 2.5, 0), vec3(params.x, params.y, params.x)) - noise(p) * params.z;
-    if (mode == 7) return sdHexPrism(opRep(p, vec3(gridSize, 100.0, gridSize*0.866)), vec2(params.x, 50.0));
-    if (mode == 8) { vec3 q = opRep(p, vec3(gridSize)); return sdTorus(q, vec2(params.x, params.y)) - sin(p.y * params.z) * 0.1; }
-    if (mode == 9) return p.y + noise(vec3(p.xz * params.x, 0.0)) * params.y * 2.0 - 1.0;
-    if (mode == 10) return opSmoothUnion(sdSphere(p, 1.0), sdTorus(p, vec2(1.2, 0.3) + sin(time * 2.0) * 0.1), params.x);
-    if (mode == 11) return sdSphere(p, 5.0) - noise(p * params.x + time) * params.y * 3.0;
-    if (mode == 12) { p = rotY(time*0.2) * p; vec3 q = p; float d = 100.0; float s = params.x; for(int i=0; i<4; i++){ d = opSmoothUnion(d, sdSphere(q-vec3(s,0,0), s), 0.5); q.xzy = abs(q.xzy); q -= s; s*=0.7;} return d;}
-    if (mode == 13) return min(abs(p.x)-params.x, min(abs(p.y)-params.x, abs(p.z)-params.x)) - noise(p*params.y)*0.05;
-    if (mode == 14) { vec3 q = opRep(p, vec3(gridSize)); q.y -= 1.0; return opSmoothUnion(sdBox(q, vec3(2, 0.1, 2)), sdCylinder(q-vec3(0,1,0), 2.0, 0.2), 1.0);}
-    if (mode == 15) return p.y + noise(vec3(p.xz * params.x + sin(time*0.5), 0.0)) * params.y * 1.5 - (sin(p.x*0.1)*cos(p.z*0.1))*3.0;
-    if (mode == 16) { vec3 q = opRep(p, vec3(gridSize)); float box = sdBox(q, vec3(1.0, 0.05, 1.0)); float lines = min(sdBox(q, vec3(1.1, 0.1, 0.02)), sdBox(q, vec3(0.02, 0.1, 1.1))); return min(box, lines); }
-    if (mode == 17) return opSmoothSubtraction(sdSphere(p, 1.0), sdSphere(p - vec3(sin(time), cos(time), 0.0), 1.1), params.y);
-    if (mode == 18) { vec3 q = p; q.z += time * 5.0; return sdCylinder(opRep(q, vec3(gridSize)), 0.1, 0.05) - noise(p * params.x) * params.y; }
-    if (mode == 19) { vec3 q = opRep(p, vec3(gridSize, 10, gridSize)); return sdSphere(q, params.x) + noise(p * 2.0) * params.y; }
-    if (mode == 20) { p = rotY(time * 0.05) * p; return sdTorus(opRep(p, vec3(gridSize)), vec2(0.5, 0.1)); }
-    if (mode == 21) { vec3 q = p; q.y = abs(q.y); float cyl = sdCylinder(q, 1.5, params.x); float pulse = sin(p.y - time * 2.0) * params.y; return cyl - pulse; }
-    if (mode == 22) { float sph = sdSphere(p, params.x); float disp = sin(p.x*5.+time)*sin(p.y*5.+time)*sin(p.z*5.+time)*params.y; return sph + disp; }
-    if (mode == 23) { vec3 q = opRep(p, vec3(gridSize)); q.y += sin(q.x + time) * 0.5; return sdBox(q, vec3(1.5, 1.5, 1.5)) + noise(p) * params.y * step(0.5, fract(p.x*0.1));}
-    if (mode == 24) { float spine = sdCylinder(p.xzy, 100.0, params.x); float ribs = sdTorus(opRep(p, vec3(0, gridSize, 0)), vec2(1.0, 0.1)); return opSmoothUnion(spine, ribs, params.z); }
-    if (mode == 25) { vec3 q = opRep(p, vec3(gridSize)); vec2 id = floor(p.xz / gridSize); float h = hash(id.x * 13.37 + id.y * 7.77); return sdCylinder(q - vec3(0, h * params.y * 0.5, 0), h * params.y, params.x); }
-    if (mode == 26) { vec3 q = p; float tube = 100.0; for(int i=0; i<4; i++){ q.xy = abs(q.xy); q.xy -= 1.0; q = rotY(PI/params.z) * q; } tube = sdTorus(q, vec2(params.x, params.y)); return tube;}
-    return 1.0;
+    // Terrain height based on FBM
+    float h = fbm(p.xz * 0.1 + vec2(time * 0.05, 0.0)) * 4.0; 
+    // Add some rolling hills
+    h += sin(p.x * 0.2) * 0.5 + cos(p.z * 0.3) * 0.5;
+    
+    return p.y + 1.0 - h; // Plane at y = -1 distorted by height
 }
 
+// --- RAYMARCHING ---
+float raymarch(vec3 ro, vec3 rd) {
+    float d = 0.0;
+    for (int i = 0; i < MAX_STEPS; i++) {
+        vec3 p = ro + rd * d;
+        float h = sceneSDF(p);
+        if (h < MIN_DIST) return d;
+        if (d > MAX_DIST) break;
+        d += h * 0.5; // Slower step for better quality on terrain
+    }
+    return MAX_DIST;
+}
+
+// --- NORMALS ---
 vec3 calcNormal(vec3 p) {
-    vec2 e = vec2(0.0005, 0);
+    vec2 e = vec2(0.01, 0.0);
     return normalize(vec3(
         sceneSDF(p + e.xyy) - sceneSDF(p - e.xyy),
         sceneSDF(p + e.yxy) - sceneSDF(p - e.yxy),
@@ -154,126 +79,50 @@ vec3 calcNormal(vec3 p) {
     ));
 }
 
-float calcAO(vec3 p, vec3 n) {
-    float total_ao = 0.0;
-    float step_dist = 0.04;
-    for(int i=1; i<=6; i++){
-        float dist = float(i) * step_dist;
-        total_ao += (dist - sceneSDF(p + n * dist)) / pow(1.2 + dist, 2.0);
-    }
-    return 1.0 - clamp(total_ao * 0.6, 0.0, 1.0);
-}
-
-float calcSoftShadow(vec3 ro, vec3 rd, float mint, float maxt) {
-    float res = 1.0;
-    float t = mint;
-    for(int i=0; i<SHADOW_STEPS; i++) {
-        float h = sceneSDF(ro + rd * t);
-        if(h < 0.001) return 0.0;
-        res = min(res, SHADOW_SOFTNESS * h / t);
-        t += clamp(h, 0.01, 0.3);
-        if(t > maxt) break;
-    }
-    return clamp(res, 0.0, 1.0);
-}
-
-vec3 calcReflection(vec3 p, vec3 n, vec3 rd, vec3 lightDir) {
-    vec3 reflDir = reflect(rd, n);
-    float reflDist = 0.0;
-    for(int i=0; i<32; i++) {
-        vec3 rp = p + reflDir * reflDist;
-        float d = sceneSDF(rp);
-        if(d < 0.01) {
-            vec3 rn = calcNormal(rp);
-            float rdiff = max(0.1, dot(rn, lightDir));
-            return vec3(rdiff * 0.3);
-        }
-        if(reflDist > 10.0) break;
-        reflDist += d * 0.8;
-    }
-    return vec3(0.0);
-}
-
-vec4 raymarch(vec3 ro, vec3 rd) {
-    float dist = 0.0;
-    for(int i=0; i < MAX_STEPS; i++){
-        vec3 p = ro + rd * dist;
-        float d = sceneSDF(p);
-        if(d < MIN_DIST){
-            vec3 n = calcNormal(p);
-            float ao = calcAO(p, n);
-            vec3 lightDir1 = normalize(vec3(0.6, 0.8, -0.4));
-            float diffuse1 = max(0.0, dot(n, lightDir1));
-            float shadow1 = calcSoftShadow(p + n * 0.01, lightDir1, 0.02, 10.0);
-            vec3 lightDir2 = normalize(vec3(-0.5, 0.3, 0.6));
-            float diffuse2 = max(0.0, dot(n, lightDir2)) * 0.4;
-            vec3 rimDir = normalize(vec3(0.0, -0.5, 1.0));
-            float rim = pow(max(0.0, dot(n, rimDir)), 3.0) * 0.6;
-            float fresnel = pow(1.0 - max(0.0, dot(n, -rd)), 2.5);
-            vec3 halfDir = normalize(lightDir1 - rd);
-            float specular = pow(max(0.0, dot(n, halfDir)), 32.0) * 0.8;
-            float sss = pow(clamp(dot(rd, -lightDir1) + 1.0, 0.0, 1.0), 3.0) * 0.3;
-            vec3 surfCol = mix(color1, color2, fresnel * 0.7 + 0.3);
-            
-            if (mode == 15) surfCol = mix(surfCol, color1 * 1.5, clamp(-d*200.0, 0.0, 1.0));
-            if (mode == 21) surfCol = mix(surfCol, color1 * 1.3, pow(abs(sin(p.y*3.0 - time*2.0)), 5.0));
-            if (mode == 11) surfCol = mix(surfCol, color2, pow(noise(p * 2.0 + time), 3.0) * 0.4);
-
-            vec3 refl = calcReflection(p, n, rd, lightDir1) * fresnel * 0.5;
-            vec3 lighting = vec3(0.0);
-            lighting += diffuse1 * shadow1 * 1.2;
-            lighting += diffuse2 * 0.6;
-            lighting += rim;
-            lighting += sss;
-            lighting += specular * shadow1;
-            lighting += 0.15;
-            
-            vec3 finalColor = surfCol * lighting * ao + refl;
-            return vec4(finalColor, dist);
-        }
-        if(dist > MAX_DIST) break;
-        dist += d * 0.65;
-    }
-    return vec4(0.0, 0.0, 0.0, MAX_DIST);
-}
-
-vec3 bloom(vec3 col, vec2 uv) {
-    float brightness = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    if(brightness > 0.7) return col * (brightness - 0.7) * 1.5;
-    return vec3(0.0);
-}
-
 void main() {
-    vec2 uv = (vUv * 2.0 - 1.0) * vec2(resolution.x / resolution.y, 1.0);
-    vec3 ro = cameraPos;
-    mat3 camRot = rotY(cameraRot.y) * rotX(cameraRot.x);
-    vec3 col = vec3(0.0);
-    float aaOffset = 0.0008;
+    vec2 uv = (gl_FragCoord.xy - 0.5 * resolution.xy) / resolution.y;
+    
+    // Camera Setup
+    vec3 ro = cameraPos + vec3(0.0, 0.0, -time * 0.5); // Move forward slowly
+    vec3 lookAt = ro + vec3(0.0, -0.2, -1.0);
+    vec3 f = normalize(lookAt - ro);
+    vec3 r = normalize(cross(vec3(0.0, 1.0, 0.0), f));
+    vec3 u = cross(f, r);
+    vec3 rd = normalize(f + uv.x * r + uv.y * u);
 
-    for(int aaY = 0; aaY < 2; aaY++) {
-        for(int aaX = 0; aaX < 2; aaX++) {
-            vec2 offset = vec2(float(aaX), float(aaY)) * aaOffset - aaOffset * 0.5;
-            vec2 uvAA = uv + offset;
-            vec3 rd = normalize(camRot * vec3(uvAA, 1.5));
-            vec4 res = raymarch(ro, rd);
-            col += res.rgb;
-        }
+    // Render
+    float d = raymarch(ro, rd);
+    
+    // Sky / Background Color (Soft Gradient)
+    vec3 col = mix(vec3(0.05, 0.1, 0.2), vec3(0.1, 0.05, 0.15), uv.y + 0.5);
+    
+    if (d < MAX_DIST) {
+        vec3 p = ro + rd * d;
+        vec3 n = calcNormal(p);
+        
+        // Lighting
+        vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
+        float diff = max(dot(n, lightDir), 0.0);
+        float amb = 0.2;
+        
+        // Terrain Color (Procedural grid/lines for "digital" feel but calm)
+        vec3 terrainCol = vec3(0.1, 0.15, 0.25);
+        
+        // Grid lines
+        float grid = smoothstep(0.95, 1.0, max(sin(p.x * 2.0), sin(p.z * 2.0)));
+        terrainCol += vec3(0.0, 0.8, 1.0) * grid * 0.3; // Cyan glowing grid
+        
+        col = terrainCol * (diff + amb);
+        
+        // Fog (Atmospheric Depth)
+        float fog = 1.0 - exp(-d * 0.08);
+        vec3 fogCol = vec3(0.05, 0.08, 0.15);
+        col = mix(col, fogCol, fog);
     }
-    col /= 4.0;
 
-    vec3 rd = normalize(camRot * vec3(uv, 1.5));
-    float d = raymarch(ro, rd).a;
-    float fog = exp(-d * fogDensity);
-    float fogGlow = exp(-d * fogDensity * 0.3) * 0.2;
-    col = mix(color3 * (1.0 + fogGlow), col, fog);
-    col += bloom(col, uv);
-    float grain = hash2(uv * time) * 0.03;
-    col += grain;
-    col = pow(col, vec3(0.4545));
-    float vignette = 1.0 - length(uv) * 0.3;
-    vignette = pow(vignette, 0.8);
-    col *= vignette;
-    col = mix(col, col * vec3(1.02, 1.0, 0.98), 0.2);
+    // Vignette
+    col *= 1.0 - length(uv) * 0.3;
+
     gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -290,17 +139,17 @@ void main() {
         }
 
         canvas.style.cssText = `position:fixed;top:0;left:0;z-index:-2;width:100vw;height:100vh;background:#000;`;
-        gl = canvas.getContext('webgl', { antialias: false, powerPreference: "high-performance" });
+        gl = canvas.getContext('webgl');
 
         if (!gl) throw new Error("WebGL is not supported.");
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, canvas.width, canvas.height);
-        console.log("[QRE] :: Quantum Reality Engine Initialized. GL Context Acquired.");
+        console.log("[QRE] :: Calm Reality Engine Initialized.");
     }
 
-    function createProgramAndShaders() {
+    function createProgram() {
         const vs = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vs, vertexSource);
         gl.compileShader(vs);
@@ -332,98 +181,26 @@ void main() {
         const pos = gl.getAttribLocation(program, 'p');
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-        console.log("[QRE] :: Shader Matrix Compiled and Linked. Ready for world generation.");
+        console.log("[QRE] :: Shader Compiled. World generating...");
     }
 
-    function updateInfo() {
-        if (typeof document !== 'undefined') {
-            infoElement = document.getElementById('phaseName');
-            if (!infoElement) {
-                if (!document.getElementById('webglCanvas')) {
-                    const infoContainer = document.createElement('div');
-                    infoContainer.style.cssText = `position: fixed; bottom: 10px; left: 10px; color: white; font-family: 'Courier New', Courier, monospace; font-size: 14px; background-color: rgba(0,0,0,0.5); padding: 8px; border-radius: 5px; text-shadow: 1px 1px 2px black; z-index: 10;`;
-                    infoContainer.innerHTML = `<b>[QRE]</b> <span id="phaseName">Loading...</span><br>Controls: [←][→] | [W/A/S/D] | [J] | [R]`;
-                    document.body.appendChild(infoContainer);
-                    infoElement = document.getElementById('phaseName');
-                }
-            }
-            if (infoElement) {
-                infoElement.textContent = `[${phaseIndex}] ${phases[phaseIndex].name}`;
-            }
-        }
-    }
-
-    function updateCamera(deltaTime) {
-        const moveSpeed = 3.0 * (keys['Shift'] ? 3.0 : 1.0);
-        if (autoJourney) cameraPos[2] -= moveSpeed * deltaTime * speed;
-        if (keys['w'] || keys['W']) cameraPos[2] -= moveSpeed * deltaTime;
-        if (keys['s'] || keys['S']) cameraPos[2] += moveSpeed * deltaTime;
-        if (keys['a'] || keys['A']) cameraPos[0] -= moveSpeed * deltaTime;
-        if (keys['d'] || keys['D']) cameraPos[0] += moveSpeed * deltaTime;
-
-        if (autoJourney && Math.floor(time / 20) !== Math.floor((time - deltaTime) / 20)) {
-            phaseIndex = (phaseIndex + 1) % phases.length;
-            console.log(`[QRE] :: Auto-phasing to [${phaseIndex}] ${phases[phaseIndex].name}`);
-            updateInfo();
-        }
-    }
-
-    let lastTimestamp = 0;
     function render(timestamp) {
-        const deltaTime = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
-        lastTimestamp = timestamp;
-        time = timestamp * 0.001 * 0.5;
+        time = timestamp * 0.001 * speed;
 
-        updateCamera(deltaTime);
-        const phase = phases[phaseIndex];
-
-        gl.useProgram(program);
         gl.uniform1f(gl.getUniformLocation(program, 'time'), time);
-        gl.uniform1f(gl.getUniformLocation(program, 'speed'), speed);
-        gl.uniform1i(gl.getUniformLocation(program, 'mode'), phaseIndex);
         gl.uniform2f(gl.getUniformLocation(program, 'resolution'), canvas.width, canvas.height);
         gl.uniform3fv(gl.getUniformLocation(program, 'cameraPos'), cameraPos);
-        gl.uniform3fv(gl.getUniformLocation(program, 'cameraRot'), cameraRot);
-        gl.uniform3fv(gl.getUniformLocation(program, 'color1'), phase.colors[0]);
-        gl.uniform3fv(gl.getUniformLocation(program, 'color2'), phase.colors[1]);
-        gl.uniform3fv(gl.getUniformLocation(program, 'color3'), phase.colors[2]);
-        gl.uniform3fv(gl.getUniformLocation(program, 'params'), phase.params);
-        gl.uniform1f(gl.getUniformLocation(program, 'gridSize'), phase.gridSize);
-        gl.uniform1f(gl.getUniformLocation(program, 'fogDensity'), phase.fogDensity);
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         animationId = requestAnimationFrame(render);
     }
 
-    window.qre = {
-        switchPhase: (index) => {
-            if (index >= 0 && index < phases.length) {
-                phaseIndex = index;
-                console.log(`[QRE] :: Manual phase shift to [${index}] ${phases[index].name}`);
-                updateInfo();
-            }
-        },
-        nextPhase: () => qre.switchPhase((phaseIndex + 1) % phases.length),
-        prevPhase: () => qre.switchPhase((phaseIndex - 1 + phases.length) % phases.length),
-        setSpeed: (val) => { speed = Math.max(0, Math.min(10, val)); },
-        toggleAuto: () => { autoJourney = !autoJourney; console.log(`[QRE] :: Auto-Journey ${autoJourney ? 'ENABLED' : 'DISABLED'}`); },
-        reset: () => { cameraPos = [0, 0, 5]; cameraRot = [0, 0, 0]; console.log("[QRE] :: Camera Origin Reset."); },
-        getPhases: () => phases.map((p, i) => ({ index: i, name: p.name })),
-        getCurrentPhase: () => ({ index: phaseIndex, name: phases[phaseIndex].name }),
-        destroy: () => {
-            if (animationId) cancelAnimationFrame(animationId);
-            if (canvas) canvas.remove();
-            console.log("[QRE] :: Reality Engine Terminated.");
-        }
-    };
-
     function bootstrap() {
         try {
             initWebGL();
-            createProgramAndShaders();
-            updateInfo();
+            createProgram();
             animationId = requestAnimationFrame(render);
-            console.log("[QRE] :: Bootstrap complete. Journey has begun.");
+            console.log("[QRE] :: Bootstrap complete. Calmness restored.");
         } catch (e) {
             console.error("[QRE CRITICAL FAILURE] :: Engine bootstrap failed:", e);
         }
@@ -437,30 +214,6 @@ void main() {
         }
     });
 
-    window.addEventListener('keydown', (e) => {
-        keys[e.key] = true;
-        if (e.key === 'ArrowRight') qre.nextPhase();
-        if (e.key === 'ArrowLeft') qre.prevPhase();
-        if (e.key.toLowerCase() === 'r') qre.reset();
-        if (e.key.toLowerCase() === 'j') qre.toggleAuto();
-    });
-
-    window.addEventListener('keyup', (e) => { keys[e.key] = false; });
-
-    // Expose updateShader for index.html compatibility
-    window.updateShader = function (args) {
-        console.log("[QRE] :: updateShader called with:", args);
-        if (typeof args === 'number' || !isNaN(parseInt(args))) {
-            qre.switchPhase(parseInt(args));
-        } else if (args === 'next') {
-            qre.nextPhase();
-        } else if (args === 'prev') {
-            qre.prevPhase();
-        } else if (args === 'auto') {
-            qre.toggleAuto();
-        }
-    };
-
     // Auto-start if not already running
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') {
@@ -468,8 +221,6 @@ void main() {
         } else {
             bootstrap();
         }
-    } else {
-        console.warn("[QRE] :: No DOM found. Bootstrap will not run automatically.");
     }
 
 })();

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entity Debug Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: monospace;
+        }
+
+        #debug-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 1px solid #0f0;
+            z-index: 10000;
+            max-width: 400px;
+        }
+
+        .success {
+            color: #0f0;
+        }
+
+        .error {
+            color: #f00;
+        }
+
+        .warning {
+            color: #ff0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="debug-info">
+        <h2>🧪 Entity System Debug</h2>
+        <div id="status">Loading...</div>
+    </div>
+
+    <!-- Canvas for rendering -->
+    <canvas id="organism-canvas"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none;"></canvas>
+
+    <!-- Load scripts in order -->
+    <script src="procedural-textures.js"></script>
+    <script src="entity-renderer.js"></script>
+    <script src="entity.js"></script>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+
+        function log(message, type = 'info') {
+            const p = document.createElement('p');
+            p.className = type;
+            p.textContent = message;
+            statusDiv.appendChild(p);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        // Wait for DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            log('DOM Ready', 'success');
+
+            setTimeout(() => {
+                // Check 1: ProceduralTextures
+                if (typeof ProceduralTextures !== 'undefined') {
+                    log('✓ ProceduralTextures loaded', 'success');
+                } else {
+                    log('✗ ProceduralTextures missing!', 'error');
+                }
+
+                // Check 2: EntityRenderer
+                if (typeof EntityRenderer !== 'undefined') {
+                    log('✓ EntityRenderer loaded', 'success');
+                } else {
+                    log('✗ EntityRenderer missing!', 'error');
+                    return;
+                }
+
+                // Check 3: EntityManager
+                if (typeof window.entityManager !== 'undefined') {
+                    log('✓ EntityManager exists', 'success');
+                } else {
+                    log('✗ EntityManager missing!', 'error');
+                    return;
+                }
+
+                // Check 4: Canvas
+                const canvas = document.getElementById('organism-canvas');
+                if (canvas) {
+                    log(`✓ Canvas found (${canvas.width}x${canvas.height})`, 'success');
+                } else {
+                    log('✗ Canvas missing!', 'error');
+                    return;
+                }
+
+                // Check 5: Connect renderer
+                if (!window.entityManager.renderer) {
+                    try {
+                        window.entityManager.renderer = new EntityRenderer(canvas);
+                        log('✓ Renderer connected manually', 'success');
+                    } catch (e) {
+                        log(`✗ Renderer connection failed: ${e.message}`, 'error');
+                        return;
+                    }
+                } else {
+                    log('✓ Renderer already connected', 'success');
+                }
+
+                // Check 6: Spawn test organism
+                try {
+                    const testEntity = window.entityManager.spawn({
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2,
+                        size: 80,
+                        color: 'hsl(280, 80%, 65%)',
+                        tentacles: 8
+                    });
+                    log(`✓ Test entity spawned (ID: ${testEntity.id})`, 'success');
+                    log(`  - Particles: ${testEntity.particles.length}`, 'info');
+                    log(`  - Eyes: ${testEntity.eyes.length}`, 'info');
+                } catch (e) {
+                    log(`✗ Spawn failed: ${e.message}`, 'error');
+                    return;
+                }
+
+                // Check 7: Start animation
+                try {
+                    window.entityManager.start();
+                    log('✓ Animation loop started', 'success');
+                } catch (e) {
+                    log(`✗ Start failed: ${e.message}`, 'error');
+                    return;
+                }
+
+                // Success!
+                log('', 'info');
+                log('🎉 ALL SYSTEMS GO!', 'success');
+                log('You should see a purple organism in the center', 'success');
+
+                // Spawn more after 2 seconds
+                setTimeout(() => {
+                    for (let i = 0; i < 4; i++) {
+                        window.entityManager.spawn({
+                            x: Math.random() * window.innerWidth,
+                            y: Math.random() * window.innerHeight,
+                            size: 40 + Math.random() * 40
+                        });
+                    }
+                    log(`Spawned 4 more organisms (total: ${window.entityManager.entities.length})`, 'info');
+                }, 2000);
+
+            }, 300); // Wait for scripts to fully load
+        });
+    </script>
+</body>
+
+</html>
