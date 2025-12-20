@@ -1,226 +1,382 @@
-// [QUANTUM REALITY ENGINE] :: CALM 3D WORLD SHADER
-// A soothing, atmospheric 3D landscape generator.
-
 (function () {
     "use strict";
 
-    let canvas, gl, program, animationId;
-    let time = 0;
-    let cameraPos = [0, 2, 0]; // Start slightly above ground
-    let speed = 0.2; // Very slow, calming speed
+    // Basic pseudo-random number generator for shaders
+    const prng = `
+        float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+        }
+    `;
 
-    // --- VERTEX SHADER ---
-    const vertexSource = `attribute vec2 p;varying vec2 vUv;void main(){vUv=p;gl_Position=vec4(p,0,1);}`;
+    // Noise function (Value Noise)
+    const noise = `
+        float noise(vec2 st) {
+            vec2 i = floor(st);
+            vec2 f = fract(st);
 
-    // --- FRAGMENT SHADER ---
-    const fragmentSource = `
-precision highp float;
-uniform float time;
-uniform vec2 resolution;
-uniform vec3 cameraPos;
+            // Four corners in 2D of a tile
+            float a = random(i);
+            float b = random(i + vec2(1.0, 0.0));
+            float c = random(i + vec2(0.0, 1.0));
+            float d = random(i + vec2(1.0, 1.0));
 
-const int MAX_STEPS = 100;
-const float MIN_DIST = 0.001;
-const float MAX_DIST = 50.0;
+            // Smooth interpolation
+            vec2 u = f * f * (3.0 - 2.0 * f);
 
-// --- NOISE FUNCTIONS ---
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
-               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+            return mix(a, b, u.x) +
+                   (c - a) * u.y * (1.0 - u.x) +
+                   (d - b) * u.x * u.y;
+        }
+    `;
 
-// --- FBM (Fractal Brownian Motion) for Terrain ---
-float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
-    for (int i = 0; i < 5; i++) {
-        v += a * noise(p);
-        p = rot * p * 2.0 + vec2(1.3);
-        a *= 0.5;
-    }
-    return v;
-}
+    // Fractional Brownian Motion (adds layers of noise)
+    const fbm = `
+        #define OCTAVES 4
+        float fbm(vec2 st) {
+            float value = 0.0;
+            float amplitude = 0.5;
+            float frequency = 1.0;
 
-// --- SCENE SDF ---
-float sceneSDF(vec3 p) {
-    // Terrain height based on FBM
-    float h = fbm(p.xz * 0.1 + vec2(time * 0.05, 0.0)) * 4.0; 
-    // Add some rolling hills
-    h += sin(p.x * 0.2) * 0.5 + cos(p.z * 0.3) * 0.5;
-    
-    return p.y + 1.0 - h; // Plane at y = -1 distorted by height
-}
+            for (int i = 0; i < OCTAVES; i++) {
+                value += amplitude * noise(st * frequency);
+                st *= 2.0;
+                amplitude *= 0.5;
+                frequency *= 2.0;
+            }
+            return value;
+        }
+    `;
 
-// --- RAYMARCHING ---
-float raymarch(vec3 ro, vec3 rd) {
-    float d = 0.0;
-    for (int i = 0; i < MAX_STEPS; i++) {
-        vec3 p = ro + rd * d;
-        float h = sceneSDF(p);
-        if (h < MIN_DIST) return d;
-        if (d > MAX_DIST) break;
-        d += h * 0.5; // Slower step for better quality on terrain
-    }
-    return MAX_DIST;
-}
+    // Vertex Shader (simple full-screen quad)
+    const vsSource = `
+        attribute vec4 aVertexPosition;
+        attribute vec2 aTextureCoord;
 
-// --- NORMALS ---
-vec3 calcNormal(vec3 p) {
-    vec2 e = vec2(0.01, 0.0);
-    return normalize(vec3(
-        sceneSDF(p + e.xyy) - sceneSDF(p - e.xyy),
-        sceneSDF(p + e.yxy) - sceneSDF(p - e.yxy),
-        sceneSDF(p + e.yyx) - sceneSDF(p - e.yyx)
-    ));
-}
+        varying highp vec2 vTextureCoord;
 
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * resolution.xy) / resolution.y;
-    
-    // Camera Setup
-    vec3 ro = cameraPos + vec3(0.0, 0.0, -time * 0.5); // Move forward slowly
-    vec3 lookAt = ro + vec3(0.0, -0.2, -1.0);
-    vec3 f = normalize(lookAt - ro);
-    vec3 r = normalize(cross(vec3(0.0, 1.0, 0.0), f));
-    vec3 u = cross(f, r);
-    vec3 rd = normalize(f + uv.x * r + uv.y * u);
+        void main(void) {
+            gl_Position = aVertexPosition;
+            vTextureCoord = aTextureCoord;
+        }
+    `;
 
-    // Render
-    float d = raymarch(ro, rd);
-    
-    // Sky / Background Color (Soft Gradient)
-    vec3 col = mix(vec3(0.05, 0.1, 0.2), vec3(0.1, 0.05, 0.15), uv.y + 0.5);
-    
-    if (d < MAX_DIST) {
-        vec3 p = ro + rd * d;
-        vec3 n = calcNormal(p);
-        
-        // Lighting
-        vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
-        float diff = max(dot(n, lightDir), 0.0);
-        float amb = 0.2;
-        
-        // Terrain Color (Procedural grid/lines for "digital" feel but calm)
-        vec3 terrainCol = vec3(0.1, 0.15, 0.25);
-        
-        // Grid lines
-        float grid = smoothstep(0.95, 1.0, max(sin(p.x * 2.0), sin(p.z * 2.0)));
-        terrainCol += vec3(0.0, 0.8, 1.0) * grid * 0.3; // Cyan glowing grid
-        
-        col = terrainCol * (diff + amb);
-        
-        // Fog (Atmospheric Depth)
-        float fog = 1.0 - exp(-d * 0.08);
-        vec3 fogCol = vec3(0.05, 0.08, 0.15);
-        col = mix(col, fogCol, fog);
-    }
+    // Fragment Shader - Backrooms/Tomb Raider uncanny style
+    const fsSource = `
+        precision highp float;
 
-    // Vignette
-    col *= 1.0 - length(uv) * 0.3;
+        varying highp vec2 vTextureCoord;
 
-    gl_FragColor = vec4(col, 1.0);
-}
-`;
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform vec2 uMouse;
 
-    // --- WEBGL SETUP ---
-    function initWebGL() {
-        // Try to find existing canvas first
-        canvas = document.getElementById('webglCanvas') || document.getElementById('qreCanvas');
+        // Include PRNG and Noise functions
+        ${prng}
+        ${noise}
+        ${fbm}
 
-        if (!canvas) {
-            canvas = document.createElement('canvas');
-            canvas.id = 'webglCanvas';
-            document.body.insertBefore(canvas, document.body.firstChild);
+        // Function to create a grid/wall pattern
+        float wallPattern(vec2 uv, float scale) {
+            vec2 grid = fract(uv * scale);
+            float lines = max(
+                smoothstep(0.05, 0.07, grid.x) * smoothstep(0.95, 0.93, grid.x),
+                smoothstep(0.05, 0.07, grid.y) * smoothstep(0.95, 0.93, grid.y)
+            );
+            return lines;
         }
 
-        canvas.style.cssText = `position:fixed;top:0;left:0;z-index:-2;width:100vw;height:100vh;background:#000;`;
-        gl = canvas.getContext('webgl');
+        // Create distorted lighting effect
+        float lighting(vec2 uv, float time) {
+            // Create a slow pulsing light source
+            float dist = length(uv - vec2(0.5 + sin(time * 0.2) * 0.2, 0.5 + cos(time * 0.3) * 0.1));
+            float light = smoothstep(0.8, 0.0, dist);
+            
+            // Add flickering
+            float flicker = 0.95 + 0.05 * sin(time * 10.0);
+            
+            return light * flicker;
+        }
 
-        if (!gl) throw new Error("WebGL is not supported.");
+        void main(void) {
+            // Use texture coordinates and correct aspect ratio
+            vec2 uv = vTextureCoord;
+            float aspect = uResolution.x / uResolution.y;
+            uv.x *= aspect;
+            
+            // Center coordinates (for various effects)
+            vec2 centered_uv = (uv - vec2(aspect * 0.5, 0.5)) * 2.0;
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gl.viewport(0, 0, canvas.width, canvas.height);
-        console.log("[QRE] :: Calm Reality Engine Initialized.");
+            // --- Create a backrooms-like environment ---
+            
+            // Base color (sickly yellow-green of the backrooms)
+            vec3 backroomsYellow = vec3(0.7, 0.65, 0.3);
+            
+            // Wall pattern with slight distortion
+            vec2 distortedUV = uv;
+            distortedUV.x += sin(uv.y * 20.0 + uTime * 0.2) * 0.01;
+            distortedUV.y += cos(uv.x * 15.0 + uTime * 0.1) * 0.01;
+            
+            // Create wall tiles
+            float walls = wallPattern(distortedUV, 3.0);
+            
+            // Add some noise texture for grime/mold
+            float grime = noise(uv * 15.0) * 0.2;
+            float timeMold = fbm(uv * 4.0 + uTime * 0.05) * 0.15;
+            
+            // Lighting with flickering and shadows
+            float light = lighting(uv / vec2(aspect, 1.0), uTime);
+            
+            // Vignette effect for claustrophobic feel
+            float vignette = smoothstep(1.4, 0.2, length(centered_uv));
+            
+            // Add a water puddle effect on the floor
+            float puddle = 0.0;
+            if (uv.y < 0.4) {
+                // Distorted reflection
+                vec2 reflectionUV = vec2(uv.x, 0.8 - uv.y);
+                reflectionUV.x += sin(uv.y * 40.0 + uTime) * 0.02;
+                float reflectionWalls = wallPattern(reflectionUV, 3.0);
+                puddle = reflectionWalls * smoothstep(0.4, 0.2, uv.y) * 0.3;
+                puddle *= (0.5 + 0.5 * sin(uv.x * 30.0 + uTime)); // Ripple effect
+            }
+            
+            // Add some dust particles floating in the air
+            float dust = 0.0;
+            for (int i = 0; i < 5; i++) {
+                float t = mod(uTime * 0.1 + float(i) * 0.2, 1.0);
+                vec2 dustPos = vec2(
+                    mod(random(vec2(float(i), 0.0)) + sin(uTime * 0.1 + float(i)), aspect),
+                    mod(t + random(vec2(0.0, float(i))), 1.0)
+                );
+                dust += smoothstep(0.02, 0.0, length(uv - dustPos)) * 0.5;
+            }
+            
+            // Occasional shadows moving across walls (uncanny)
+            float shadow = 0.0;
+            float shadowTime = mod(uTime * 0.2, 20.0);
+            if (shadowTime > 8.0 && shadowTime < 10.0) {
+                vec2 shadowPos = vec2(mod(shadowTime - 8.0, aspect), 0.5);
+                shadow = smoothstep(0.3, 0.0, length(uv - shadowPos)) * 0.5;
+            }
+            
+            // Combine all elements
+            vec3 finalColor = backroomsYellow;
+            finalColor *= mix(0.2, 1.0, walls); // Apply wall pattern
+            finalColor -= shadow; // Apply moving shadows
+            finalColor = mix(finalColor, vec3(0.1, 0.12, 0.0), grime); // Add grime
+            finalColor = mix(finalColor, vec3(0.06, 0.15, 0.06), timeMold); // Add mold
+            finalColor += dust * vec3(1.0, 0.9, 0.7); // Add dust
+            finalColor += puddle * vec3(0.2, 0.25, 0.3); // Add water puddles
+            finalColor *= light * 1.5; // Apply lighting
+            finalColor *= vignette; // Apply vignette
+            
+            // Add scanlines for a horror/old camera effect
+            float scanline = sin(gl_FragCoord.y * 0.5 - uTime * 10.0) * 0.5 + 0.5;
+            finalColor *= 0.8 + 0.2 * scanline;
+            
+            // Occasional glitch effect
+            float glitchTime = mod(uTime, 15.0);
+            if (glitchTime > 14.0 && glitchTime < 14.2) {
+                if (random(uv + fract(uTime)) > 0.7) {
+                    finalColor.rb = finalColor.br; // Swap channels
+                    finalColor += vec3(0.1, 0.0, 0.1) * random(uv);
+                }
+            }
+            
+            gl_FragColor = vec4(finalColor, 1.0);
+        }
+    `;
+
+    class ShaderBackground {
+        constructor() {
+            this.canvas = document.getElementById('webglCanvas');
+            if (!this.canvas) {
+                this.canvas = document.createElement('canvas');
+                this.canvas.id = 'webglCanvas';
+                this.canvas.style.cssText = `position:fixed;top:0;left:0;z-index:-2;width:100vw;height:100vh;background:#000;`;
+                document.body.insertBefore(this.canvas, document.body.firstChild);
+            }
+
+            this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
+
+            if (!this.gl) {
+                console.error("WebGL not supported or disabled.");
+                this.showFallback();
+                return;
+            }
+
+            this.shaderProgram = null;
+            this.programInfo = null;
+            this.buffers = null;
+            this.startTime = Date.now();
+            this.mousePos = { x: 0.5, y: 0.5 };
+
+            this.init();
+        }
+
+        init() {
+            if (!this.gl) return;
+
+            this.shaderProgram = this.initShaderProgram(this.gl, vsSource, fsSource);
+            if (!this.shaderProgram) return;
+
+            this.programInfo = {
+                program: this.shaderProgram,
+                attribLocations: {
+                    vertexPosition: this.gl.getAttribLocation(this.shaderProgram, 'aVertexPosition'),
+                    textureCoord: this.gl.getAttribLocation(this.shaderProgram, 'aTextureCoord'),
+                },
+                uniformLocations: {
+                    resolution: this.gl.getUniformLocation(this.shaderProgram, 'uResolution'),
+                    time: this.gl.getUniformLocation(this.shaderProgram, 'uTime'),
+                    mouse: this.gl.getUniformLocation(this.shaderProgram, 'uMouse'),
+                },
+            };
+
+            this.buffers = this.initBuffers(this.gl);
+            this.setupEventListeners();
+            this.resizeCanvas();
+            requestAnimationFrame(this.render.bind(this));
+        }
+
+        initShaderProgram(gl, vsSource, fsSource) {
+            const vertexShader = this.loadShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = this.loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            if (!vertexShader || !fragmentShader) return null;
+
+            const shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+                return null;
+            }
+            return shaderProgram;
+        }
+
+        loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(`An error occurred compiling the shader: ${gl.getShaderInfoLog(shader)}`);
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        initBuffers(gl) {
+            // Position buffer (covers entire screen)
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            const positions = [
+                -1.0, 1.0,
+                1.0, 1.0,
+                -1.0, -1.0,
+                1.0, -1.0,
+            ];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+            // Texture coordinate buffer
+            const textureCoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+            const textureCoordinates = [
+                0.0, 1.0,
+                1.0, 1.0,
+                0.0, 0.0,
+                1.0, 0.0,
+            ];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), gl.STATIC_DRAW);
+
+            return {
+                position: positionBuffer,
+                textureCoord: textureCoordBuffer,
+            };
+        }
+
+        setupEventListeners() {
+            window.addEventListener('resize', this.resizeCanvas.bind(this));
+            // Track mouse movement for interactive lighting
+            this.canvas.addEventListener('mousemove', (event) => {
+                const rect = this.canvas.getBoundingClientRect();
+                this.mousePos.x = (event.clientX - rect.left) / this.canvas.width;
+                this.mousePos.y = 1.0 - (event.clientY - rect.top) / this.canvas.height;
+            });
+        }
+
+        resizeCanvas() {
+            if (!this.gl) return;
+            const displayWidth = window.innerWidth;
+            const displayHeight = window.innerHeight;
+
+            if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+                this.canvas.width = displayWidth;
+                this.canvas.height = displayHeight;
+                this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+            }
+        }
+
+        render() {
+            if (!this.gl || !this.programInfo || !this.buffers) {
+                requestAnimationFrame(this.render.bind(this));
+                return;
+            }
+
+            const currentTime = (Date.now() - this.startTime) / 1000.0;
+
+            this.resizeCanvas();
+
+            this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+            this.gl.useProgram(this.programInfo.program);
+
+            // Set uniforms
+            this.gl.uniform2f(this.programInfo.uniformLocations.resolution, this.gl.canvas.width, this.gl.canvas.height);
+            this.gl.uniform1f(this.programInfo.uniformLocations.time, currentTime);
+            this.gl.uniform2f(this.programInfo.uniformLocations.mouse, this.mousePos.x, this.mousePos.y);
+
+            // Position attribute
+            const attribs = this.programInfo.attribLocations;
+
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+            this.gl.vertexAttribPointer(attribs.vertexPosition, 2, this.gl.FLOAT, false, 0, 0);
+            this.gl.enableVertexAttribArray(attribs.vertexPosition);
+
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
+            this.gl.vertexAttribPointer(attribs.textureCoord, 2, this.gl.FLOAT, false, 0, 0);
+            this.gl.enableVertexAttribArray(attribs.textureCoord);
+
+            // Draw the quad
+            this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+
+            requestAnimationFrame(this.render.bind(this));
+        }
+
+        showFallback() {
+            const fallback = document.createElement('div');
+            fallback.style.position = 'fixed';
+            fallback.style.top = '0';
+            fallback.style.left = '0';
+            fallback.style.width = '100%';
+            fallback.style.height = '100%';
+            fallback.style.background = 'linear-gradient(to bottom, #393022, #121212)';
+            fallback.style.color = '#c8b29a';
+            fallback.style.zIndex = '-1';
+            fallback.innerHTML = '<p style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-family: monospace;">WebGL failed. Displaying static backrooms background.</p>';
+            document.body.insertBefore(fallback, document.body.firstChild);
+            if (this.canvas) this.canvas.style.display = 'none';
+        }
     }
 
-    function createProgram() {
-        const vs = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vs, vertexSource);
-        gl.compileShader(vs);
-
-        const fs = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fs, fragmentSource);
-        gl.compileShader(fs);
-
-        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-            console.error("SHADER COMPILATION ERROR LOG:", gl.getShaderInfoLog(fs));
-            throw new Error(`Fragment shader compilation failed.`);
-        }
-
-        program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error("SHADER LINKING ERROR LOG:", gl.getProgramInfoLog(program));
-            throw new Error(`Shader program linking failed.`);
-        }
-
-        gl.useProgram(program);
-
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
-        const pos = gl.getAttribLocation(program, 'p');
-        gl.enableVertexAttribArray(pos);
-        gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-        console.log("[QRE] :: Shader Compiled. World generating...");
-    }
-
-    function render(timestamp) {
-        time = timestamp * 0.001 * speed;
-
-        gl.uniform1f(gl.getUniformLocation(program, 'time'), time);
-        gl.uniform2f(gl.getUniformLocation(program, 'resolution'), canvas.width, canvas.height);
-        gl.uniform3fv(gl.getUniformLocation(program, 'cameraPos'), cameraPos);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-        animationId = requestAnimationFrame(render);
-    }
-
-    function bootstrap() {
-        try {
-            initWebGL();
-            createProgram();
-            animationId = requestAnimationFrame(render);
-            console.log("[QRE] :: Bootstrap complete. Calmness restored.");
-        } catch (e) {
-            console.error("[QRE CRITICAL FAILURE] :: Engine bootstrap failed:", e);
-        }
-    }
-
-    window.addEventListener('resize', () => {
-        if (canvas && gl) {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
-        }
-    });
-
-    // Auto-start if not already running
-    if (typeof document !== 'undefined') {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', bootstrap);
-        } else {
-            bootstrap();
-        }
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => new ShaderBackground());
+    } else {
+        new ShaderBackground();
     }
 
 })();

@@ -243,6 +243,69 @@ function createCSS3DPage() {
     // If the element is 100% width/height of body, it matches.
 }
 
+function createAppPlanes() {
+    console.log("Creating App Planes...");
+    const group = new THREE.Group();
+    group.name = "appPlanesGroup";
+
+    const apps = [
+        { name: "Music", url: "liquidMusic.html", color: "#D16847" },
+        { name: "Video", url: "videoPlayer.html", color: "#E89B6A" },
+        { name: "AI", url: "ai.html", color: "#FF6B3F" },
+        { name: "Game", url: "game.html", color: "#306d3f" },
+        { name: "Forum", url: "forum.html", color: "#4A4A52" },
+        { name: "Settings", url: "settings.html", color: "#B8865C" }
+    ];
+
+    const planeWidth = 800;
+    const planeHeight = 600;
+    const gap = 200;
+    const startX = -((apps.length * (planeWidth + gap)) / 2) + (planeWidth / 2);
+
+    apps.forEach((app, index) => {
+        // Container for the app
+        const div = document.createElement('div');
+        div.style.width = planeWidth + 'px';
+        div.style.height = planeHeight + 'px';
+        div.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        div.style.border = `2px solid ${app.color}`;
+        div.style.borderRadius = '10px';
+        div.style.overflow = 'hidden';
+        div.style.boxShadow = `0 0 20px ${app.color}`;
+
+        // Header/Label
+        const header = document.createElement('div');
+        header.innerText = app.name;
+        header.style.backgroundColor = app.color;
+        header.style.color = 'white';
+        header.style.padding = '10px';
+        header.style.fontFamily = 'Space Grotesk, sans-serif';
+        header.style.fontWeight = 'bold';
+        header.style.textAlign = 'center';
+        header.style.textTransform = 'uppercase';
+        header.style.letterSpacing = '2px';
+        div.appendChild(header);
+
+        // Iframe content
+        const iframe = document.createElement('iframe');
+        iframe.src = app.url;
+        iframe.style.width = '100%';
+        iframe.style.height = 'calc(100% - 40px)'; // Subtract header height
+        iframe.style.border = 'none';
+        iframe.style.backgroundColor = 'transparent';
+        div.appendChild(iframe);
+
+        // CSS3D Object
+        const object = new CSS3DObject(div);
+        object.position.set(startX + (index * (planeWidth + gap)), 0, -1000); // Positioned back a bit
+        // object.rotation.y = 0; // Face forward
+
+        group.add(object);
+    });
+
+    cssScene.add(group);
+}
+
 function setupRenderers() {
     // WebGL Renderer (Background)
     // We might need to reuse the existing canvas or create a new one.
@@ -357,9 +420,15 @@ export function transformTo3D() {
 
     // Add a floor grid for reference if not already added
     if (!scene.getObjectByName("gridHelper")) {
-        const gridHelper = new THREE.GridHelper(5000, 50);
+        // Expanded grid: 20000 size, 200 divisions
+        const gridHelper = new THREE.GridHelper(20000, 200, 0x444444, 0x222222);
         gridHelper.name = "gridHelper";
         scene.add(gridHelper);
+    }
+
+    // Create App Planes if not already created
+    if (!cssScene.getObjectByName("appPlanesGroup")) {
+        createAppPlanes();
     }
 }
 
@@ -395,6 +464,21 @@ export function exit3DMode() {
     const gridHelper = scene.getObjectByName("gridHelper");
     if (gridHelper) {
         scene.remove(gridHelper);
+    }
+
+    // Remove App Planes
+    const appGroup = cssScene.getObjectByName("appPlanesGroup");
+    if (appGroup) {
+        cssScene.remove(appGroup);
+        // Clean up DOM elements? 
+        // CSS3DObject removes the element from the container when removed from scene?
+        // Actually, we might want to keep them to preserve state, but for now let's remove to be clean.
+        // However, removing the object from the scene doesn't automatically remove the DOM element if we created it manually.
+        // But since we are creating them in createAppPlanes, we should probably clear them.
+        // For simplicity in this iteration, we will just hide/show or let them be re-created if we check for existence.
+        // But the check `!cssScene.getObjectByName("appPlanesGroup")` handles re-creation.
+        // To fully clean up, we should traverse and remove elements.
+        // Let's just remove the group from the scene for now.
     }
 }
 

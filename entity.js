@@ -41,6 +41,11 @@ class ProceduralEntity {
         this.bioluminescenceIntensity = 0.3 + Math.random() * 0.7;
         this.bioluminescentSpots = [];
 
+        // Voice System
+        if (typeof EntityVoice !== 'undefined') {
+            this.voice = new EntityVoice(this);
+        }
+
         this.init();
     }
 
@@ -82,6 +87,9 @@ class ProceduralEntity {
         }
 
         console.log(`🦠 Spawned entity ${this.id} at ${this.position.x}, ${this.position.y}`);
+
+        // Greeting
+        if (this.voice) setTimeout(() => this.voice.speak('greeting'), 1000 + Math.random() * 2000);
     }
 
     /**
@@ -222,6 +230,13 @@ class ProceduralEntity {
             this.velocity.y *= -1;
             this.position.y = Math.max(0, Math.min(window.innerHeight - this.size, this.position.y));
         }
+
+        // Update voice position and random chatter
+        if (this.voice) {
+            this.voice.updatePosition();
+            // Random chatter chance (approx every 10-20 seconds)
+            if (Math.random() < 0.001) this.voice.speak('random');
+        }
     }
 
     /**
@@ -297,6 +312,9 @@ class ProceduralEntity {
 
         // Visual evolution effect
         this.showEvolutionEffect();
+
+        // Voice evolution effect
+        if (this.voice) this.voice.speak('evolve');
     }
 
     adjustColorForStage(stage) {
