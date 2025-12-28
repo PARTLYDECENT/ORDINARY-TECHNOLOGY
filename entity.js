@@ -46,6 +46,23 @@ class ProceduralEntity {
             this.voice = new EntityVoice(this);
         }
 
+        // Personality System
+        const personalities = ['curious', 'shy', 'aggressive', 'peaceful', 'fearful', 'friendly'];
+        this.personality = config.personality || personalities[Math.floor(Math.random() * personalities.length)];
+
+        // Movement Trail
+        this.trail = [];
+        this.maxTrailLength = 20;
+        this.trailEnabled = false; // Enabled at higher stages
+
+        // Energy Field
+        this.energyField = {
+            enabled: false,
+            radius: 0,
+            intensity: 0,
+            color: this.color
+        };
+
         this.init();
     }
 
@@ -152,6 +169,37 @@ class ProceduralEntity {
                     offset: Math.random() * Math.PI * 2
                 });
             }
+
+            // Fractal branching for Transcendent and Cosmic entities
+            if (this.fractalTentacles && segmentCount >= 2) {
+                const branchPoint = Math.floor(segmentCount / 2);
+                const branchDistance = bodyRadius + (branchPoint + 1) * (this.size * 0.15);
+                const branchCount = 2;
+
+                for (let b = 0; b < branchCount; b++) {
+                    const branchAngle = angle + (b === 0 ? -0.5 : 0.5);
+                    const branchSegments = Math.floor(segmentCount / 2);
+
+                    for (let bs = 0; bs < branchSegments; bs++) {
+                        const bDistance = branchDistance + (bs + 1) * (this.size * 0.1);
+                        const bRadius = this.particleRadius * (1 - bs / branchSegments) * 0.4;
+
+                        this.particles.push({
+                            x: Math.cos(branchAngle) * bDistance,
+                            y: Math.sin(branchAngle) * bDistance,
+                            baseX: Math.cos(branchAngle) * bDistance,
+                            baseY: Math.sin(branchAngle) * bDistance,
+                            radius: bRadius,
+                            type: 'fractal-tentacle',
+                            tentacleIndex: t,
+                            branchIndex: b,
+                            segmentIndex: bs,
+                            angle: branchAngle,
+                            offset: Math.random() * Math.PI * 2
+                        });
+                    }
+                }
+            }
         }
 
         // Create eye particles
@@ -202,6 +250,28 @@ class ProceduralEntity {
         // Animate particles
         this.animateParticles();
 
+        // Apply behaviors if systems are available
+        if (typeof window !== 'undefined' && window.entityManager) {
+            const allEntities = window.entityManager.entities || [];
+
+            // Apply behavior system
+            if (window.entityBehaviors && this.stage >= 1) {
+                const behaviorForce = window.entityBehaviors.applyAllBehaviors(this, allEntities);
+                this.velocity.x += behaviorForce.x * 0.1;
+                this.velocity.y += behaviorForce.y * 0.1;
+            }
+
+            // Update ability effects
+            if (window.entityAbilities) {
+                window.entityAbilities.updateEffects(this);
+
+                // Auto-trigger abilities for AI entities
+                if (this.stage >= 3) {
+                    window.entityAbilities.autoTriggerAbilities(this, allEntities, window.entityManager);
+                }
+            }
+        }
+
         // Update velocity for bouncing behavior
         this.velocity.x += (Math.random() - 0.5) * 0.5;
         this.velocity.y += (Math.random() - 0.5) * 0.5;
@@ -214,12 +284,27 @@ class ProceduralEntity {
             this.velocity.y = (this.velocity.y / currentSpeed) * maxSpeed;
         }
 
+        // Update trail
+        if (this.trailEnabled) {
+            this.trail.push({ x: this.position.x, y: this.position.y, time: Date.now() });
+            if (this.trail.length > this.maxTrailLength) {
+                this.trail.shift();
+            }
+        }
+
         // Update position
         this.position.x += this.velocity.x;
         this.position.y += this.velocity.y;
 
         // Update rotation
         this.rotation += this.rotationSpeed;
+
+        // Cosmic stage: color cycling
+        if (this.stage === 5) {
+            const hue = (Date.now() / 50) % 360;
+            this.color = `hsl(${hue}, 100%, 80%)`;
+            this.energyField.color = `hsl(${(hue + 180) % 360}, 100%, 70%)`;
+        }
 
         // Bounce off edges
         if (this.position.x <= 0 || this.position.x >= window.innerWidth - this.size) {
@@ -257,6 +342,13 @@ class ProceduralEntity {
                 const perpAngle = particle.angle + Math.PI / 2;
                 particle.x = particle.baseX + Math.cos(perpAngle) * wave;
                 particle.y = particle.baseY + Math.sin(perpAngle) * wave;
+            } else if (particle.type === 'fractal-tentacle') {
+                // More chaotic wave for fractal branches
+                const wave = Math.sin(time * 4 + particle.segmentIndex * 0.7 + particle.offset) * 4;
+                const wave2 = Math.cos(time * 3.5 + particle.branchIndex + particle.offset) * 3;
+                const perpAngle = particle.angle + Math.PI / 2;
+                particle.x = particle.baseX + Math.cos(perpAngle) * wave + Math.sin(perpAngle) * wave2;
+                particle.y = particle.baseY + Math.sin(perpAngle) * wave + Math.cos(perpAngle) * wave2;
             }
         });
     }
@@ -270,6 +362,8 @@ class ProceduralEntity {
     }
 
     getStageForPoints(points) {
+        if (points >= 1800) return 5; // Cosmic
+        if (points >= 1200) return 4; // Transcendent
         if (points >= 600) return 3; // Apex
         if (points >= 300) return 2; // Creature
         if (points >= 100) return 1; // Cell
@@ -296,6 +390,7 @@ class ProceduralEntity {
                 this.speed *= 1.2;
                 this.shape = ['star', 'diamond'][Math.floor(Math.random() * 2)];
                 this.color = this.adjustColorForStage(2);
+                this.trailEnabled = true; // Enable movement trails
                 break;
             case 3: // Apex stage
                 this.size *= 1.5;
@@ -304,6 +399,34 @@ class ProceduralEntity {
                 this.speed *= 1.3;
                 this.color = this.adjustColorForStage(3);
                 this.rotationSpeed *= 0.5; // Slower, more majestic
+                break;
+            case 4: // Transcendent stage - EXOTIC
+                this.size *= 1.6;
+                this.tentacles = Math.min(this.tentacles + 8, 24);
+                this.glowIntensity *= 3;
+                this.speed *= 1.4;
+                this.color = this.adjustColorForStage(4);
+                this.rotationSpeed *= 0.3;
+                this.fractalTentacles = true; // Enable fractal branching
+                this.energyField.enabled = true;
+                this.energyField.radius = this.size * 2;
+                this.energyField.intensity = 0.5;
+                this.skinPattern = 'fractal'; // Special pattern
+                break;
+            case 5: // Cosmic stage - REALITY-BENDING
+                this.size *= 1.8;
+                this.tentacles = Math.min(this.tentacles + 12, 32);
+                this.glowIntensity *= 4;
+                this.speed *= 1.5;
+                this.color = this.adjustColorForStage(5);
+                this.rotationSpeed *= 0.2;
+                this.fractalTentacles = true;
+                this.energyField.enabled = true;
+                this.energyField.radius = this.size * 3;
+                this.energyField.intensity = 1.0;
+                this.holographic = true; // Holographic projections
+                this.multiForm = true; // Multiple overlapping forms
+                this.skinPattern = 'cosmic'; // Ultimate pattern
                 break;
         }
 
@@ -325,6 +448,10 @@ class ProceduralEntity {
                 return `hsl(${270 + Math.random() * 60}, 80%, 65%)`;
             case 3: // Apex - golds/oranges/reds
                 return `hsl(${30 + Math.random() * 40}, 90%, 70%)`;
+            case 4: // Transcendent - cyan/electric blue
+                return `hsl(${180 + Math.random() * 40}, 95%, 75%)`;
+            case 5: // Cosmic - prismatic/rainbow (will cycle)
+                return `hsl(${Math.random() * 360}, 100%, 80%)`;
             default:
                 return this.color;
         }
@@ -491,6 +618,17 @@ if (typeof window !== 'undefined') {
 
     // Create global entity manager
     window.entityManager = new EntityManager();
+
+    // Initialize behavior and ability systems
+    if (typeof EntityBehaviors !== 'undefined') {
+        window.entityBehaviors = new EntityBehaviors();
+        console.log('🧠 EntityBehaviors system initialized!');
+    }
+
+    if (typeof EntityAbilities !== 'undefined') {
+        window.entityAbilities = new EntityAbilities();
+        console.log('✨ EntityAbilities system initialized!');
+    }
 
     console.log('🦠 Entity.js loaded! Use entityManager.spawn() to create organisms.');
 }
