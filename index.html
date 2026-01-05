@@ -4269,8 +4269,7 @@
               allowfullscreen></iframe>
           </div>
 
-          <canvas id="babylon-canvas"
-            style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;"></canvas>
+
 
 
 
@@ -8838,53 +8837,56 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
 <canvas id="organism-canvas"
   style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9998; pointer-events: none;"></canvas>
 
-<!-- Babylon.js & Tentacle Orb -->
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-<script src="tentacle_orb.js"></script>
+<!-- Three.js Tentacle Orb -->
+<script type="module">
+  import { TentacleOrb } from './tentacle_orb_three.js';
+  import * as THREE from 'three';
 
-<script>
-  // Initialize Babylon.js Tentacle Orb
-  document.addEventListener('DOMContentLoaded', () => {
+  // Wait for SpatialWeb to be ready
+  const checkSpatialWeb = setInterval(() => {
     try {
-      const babylonCanvas = document.getElementById('babylon-canvas');
-      if (babylonCanvas) {
-        const engine = new BABYLON.Engine(babylonCanvas, true);
-        const scene = new BABYLON.Scene(engine);
-        scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // Transparent
+      if (window.SpatialWeb && window.SpatialWeb.scene) {
+        clearInterval(checkSpatialWeb);
+        console.log("🦑 Index: SpatialWeb found. Initializing Three.js Tentacle Orb...");
 
-        const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2.5, 20, new BABYLON.Vector3(0, 0, 0), scene);
-        camera.attachControl(babylonCanvas, true);
+        try {
+          const orb = new TentacleOrb(window.SpatialWeb.scene, new THREE.Vector3(0, 200, -500), {
+            orbSize: 40,
+            length: 120,
+            thickness: 3,
+            colorTheme: {
+              orb: new THREE.Color(0x00ccff),
+              tentacleStart: new THREE.Color(0x0055aa),
+              tentacleEnd: new THREE.Color(0x00ccff),
+              accent: new THREE.Color(0xff00cc)
+            }
+          });
 
-        const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-        light.intensity = 0.8;
+          console.log("🦑 Index: Orb created. Starting animation loop.");
 
-        // Spawn the Orb
-        const tentacleOrb = new TentacleOrb(scene, new BABYLON.Vector3(0, 0, 0), {
-          orbSize: 2.0,
-          length: 4.0,
-          colorTheme: {
-            orb: new BABYLON.Color3(0, 0.8, 1),
-            tentacleStart: new BABYLON.Color3(0, 0.5, 0.8),
-            tentacleEnd: new BABYLON.Color3(0, 1, 1),
-            accent: new BABYLON.Color3(1, 0, 0.8)
+          // Hook into the animation loop
+          function animateOrb() {
+            requestAnimationFrame(animateOrb);
+            try {
+              orb.update();
+            } catch (err) {
+              console.error("🦑 Index: Error in orb update loop:", err);
+            }
           }
-        });
+          animateOrb();
+        } catch (e) {
+          console.error("🦑 Index: Failed to instantiate TentacleOrb:", e);
+        }
 
-        engine.runRenderLoop(() => {
-          scene.render();
-        });
-
-        window.addEventListener('resize', () => {
-          engine.resize();
-        });
-        console.log("🦑 Tentacle Orb initialized in main index!");
       }
-    } catch (e) {
-      console.error("Babylon.js initialization failed:", e);
+    } catch (globalErr) {
+      console.error("🦑 Index: Error in SpatialWeb check interval:", globalErr);
+      clearInterval(checkSpatialWeb);
     }
-  });
+  }, 100);
 </script>
+<script> </script>
+
 
 <!-- Entity System Scripts -->
 <script src="procedural-textures.js"></script>

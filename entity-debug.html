@@ -45,14 +45,26 @@
         <div id="status">Loading...</div>
     </div>
 
-    <!-- Canvas for rendering -->
+    <!-- 3D Canvas for Babylon.js (Tentacle Orb) -->
+    <canvas id="babylon-canvas"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0;"></canvas>
+
+    <!-- Canvas for 2D entities (on top) -->
     <canvas id="organism-canvas"
         style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none;"></canvas>
+
+    <!-- Load Babylon.js for 3D -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
     <!-- Load scripts in order -->
     <script src="procedural-textures.js"></script>
     <script src="entity-renderer.js"></script>
+    <script src="entity-behaviors.js"></script>
+    <script src="entity-abilities.js"></script>
+    <script src="entity-voice.js"></script>
     <script src="entity.js"></script>
+    <script src="tentacle_orb.js"></script>
 
     <script>
         const statusDiv = document.getElementById('status');
@@ -102,7 +114,21 @@
                     return;
                 }
 
-                // Check 5: Connect renderer
+                // Check 5: Behavior System
+                if (typeof window.entityBehaviors !== 'undefined') {
+                    log('✓ EntityBehaviors system loaded', 'success');
+                } else {
+                    log('⚠ EntityBehaviors not loaded (optional)', 'warning');
+                }
+
+                // Check 6: Ability System
+                if (typeof window.entityAbilities !== 'undefined') {
+                    log('✓ EntityAbilities system loaded', 'success');
+                } else {
+                    log('⚠ EntityAbilities not loaded (optional)', 'warning');
+                }
+
+                // Check 7: Connect renderer
                 if (!window.entityManager.renderer) {
                     try {
                         window.entityManager.renderer = new EntityRenderer(canvas);
@@ -115,24 +141,78 @@
                     log('✓ Renderer already connected', 'success');
                 }
 
-                // Check 6: Spawn test organism
+                // Check 8: Spawn test organisms at different stages
                 try {
-                    const testEntity = window.entityManager.spawn({
-                        x: window.innerWidth / 2,
-                        y: window.innerHeight / 2,
-                        size: 80,
-                        color: 'hsl(280, 80%, 65%)',
+                    // Microbe (stage 0)
+                    const microbe = window.entityManager.spawn({
+                        x: window.innerWidth * 0.2,
+                        y: window.innerHeight * 0.3,
+                        size: 40,
+                        tentacles: 4
+                    });
+                    log(`✓ Microbe spawned (Stage 0)`, 'success');
+
+                    // Cell (stage 1) - force evolution
+                    const cell = window.entityManager.spawn({
+                        x: window.innerWidth * 0.4,
+                        y: window.innerHeight * 0.3,
+                        size: 50,
+                        tentacles: 6
+                    });
+                    cell.evolutionPoints = 100;
+                    cell.checkEvolution();
+                    log(`✓ Cell spawned (Stage 1)`, 'success');
+
+                    // Creature (stage 2)
+                    const creature = window.entityManager.spawn({
+                        x: window.innerWidth * 0.6,
+                        y: window.innerHeight * 0.3,
+                        size: 60,
                         tentacles: 8
                     });
-                    log(`✓ Test entity spawned (ID: ${testEntity.id})`, 'success');
-                    log(`  - Particles: ${testEntity.particles.length}`, 'info');
-                    log(`  - Eyes: ${testEntity.eyes.length}`, 'info');
+                    creature.evolutionPoints = 300;
+                    creature.checkEvolution();
+                    log(`✓ Creature spawned (Stage 2)`, 'success');
+
+                    // Apex (stage 3)
+                    const apex = window.entityManager.spawn({
+                        x: window.innerWidth * 0.8,
+                        y: window.innerHeight * 0.3,
+                        size: 70,
+                        tentacles: 10
+                    });
+                    apex.evolutionPoints = 600;
+                    apex.checkEvolution();
+                    log(`✓ Apex spawned (Stage 3)`, 'success');
+
+                    // Transcendent (stage 4) - EXOTIC!
+                    const transcendent = window.entityManager.spawn({
+                        x: window.innerWidth * 0.3,
+                        y: window.innerHeight * 0.7,
+                        size: 80,
+                        tentacles: 12
+                    });
+                    transcendent.evolutionPoints = 1200;
+                    transcendent.checkEvolution();
+                    log(`✓ Transcendent spawned (Stage 4) - EXOTIC!`, 'success');
+
+                    // Cosmic (stage 5) - ULTIMATE!
+                    const cosmic = window.entityManager.spawn({
+                        x: window.innerWidth * 0.7,
+                        y: window.innerHeight * 0.7,
+                        size: 90,
+                        tentacles: 14
+                    });
+                    cosmic.evolutionPoints = 1800;
+                    cosmic.checkEvolution();
+                    log(`✓ Cosmic spawned (Stage 5) - ULTIMATE!`, 'success');
+
                 } catch (e) {
                     log(`✗ Spawn failed: ${e.message}`, 'error');
                     return;
                 }
 
-                // Check 7: Start animation
+                // Check 9: Start animation
                 try {
                     window.entityManager.start();
                     log('✓ Animation loop started', 'success');
@@ -141,22 +221,105 @@
                     return;
                 }
 
+                // Check 10: Initialize Babylon.js 3D Scene
+                try {
+                    const babylonCanvas = document.getElementById('babylon-canvas');
+                    if (!babylonCanvas) {
+                        log('⚠ Babylon canvas not found, skipping 3D tentacle orb', 'warning');
+                    } else {
+                        log('Initializing Babylon.js 3D scene...', 'info');
+
+                        const engine = new BABYLON.Engine(babylonCanvas, true);
+                        const scene = new BABYLON.Scene(engine);
+                        scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // Transparent background
+
+                        // Camera
+                        const camera = new BABYLON.ArcRotateCamera("camera",
+                            Math.PI / 2, Math.PI / 3, 30,
+                            new BABYLON.Vector3(0, 0, 0), scene);
+                        camera.attachControl(babylonCanvas, true);
+                        camera.lowerRadiusLimit = 10;
+                        camera.upperRadiusLimit = 50;
+
+                        // Lighting
+                        const light1 = new BABYLON.HemisphericLight("light1",
+                            new BABYLON.Vector3(0, 1, 0), scene);
+                        light1.intensity = 0.7;
+
+                        const light2 = new BABYLON.PointLight("light2",
+                            new BABYLON.Vector3(0, 5, -10), scene);
+                        light2.intensity = 0.5;
+
+                        // Ground plane (invisible, for reference)
+                        const ground = BABYLON.MeshBuilder.CreateGround("ground",
+                            { width: 100, height: 100 }, scene);
+                        ground.isVisible = false;
+                        ground.checkCollisions = true;
+
+                        // Create tentacle orb
+                        const orbPosition = new BABYLON.Vector3(0, 2, 0);
+
+                        log('Creating tentacle orb...', 'info');
+
+                        const tentacleOrb = new TentacleOrb(scene, orbPosition, {
+                            count: 12,
+                            orbSize: 2.5, // Larger size for visibility
+                            length: 4.0,
+                            thickness: 0.05,
+                            colorTheme: {
+                                orb: new BABYLON.Color3(0.2, 0.6, 0.8),
+                                tentacleStart: new BABYLON.Color3(0.1, 0.4, 0.7),
+                                tentacleEnd: new BABYLON.Color3(0.4, 0.8, 1.0),
+                                accent: new BABYLON.Color3(0.0, 1.0, 1.0)
+                            },
+                            patrol: {
+                                enabled: true,
+                                radius: 8,
+                                speed: 0.3
+                            },
+                            glowIntensity: 1.5 // Brighter glow
+                        });
+
+                        // Wait for orb to initialize
+                        setTimeout(() => {
+                            if (tentacleOrb.orb) {
+                                log(`✓ Tentacle Orb created at position: ${orbPosition.toString()}`, 'success');
+                                log(`  - Tentacles: ${tentacleOrb.tentacles.length}`, 'info');
+                                log(`  - Orb mesh: ${tentacleOrb.orb.name}`, 'info');
+                            } else {
+                                log('⚠ Tentacle orb mesh not ready yet', 'warning');
+                            }
+                        }, 500);
+
+                        // Store globally
+                        window.babylonEngine = engine;
+                        window.babylonScene = scene;
+                        window.tentacleOrb = tentacleOrb;
+
+                        // Render loop
+                        engine.runRenderLoop(() => {
+                            scene.render();
+                        });
+
+                        // Handle resize
+                        window.addEventListener('resize', () => {
+                            engine.resize();
+                        });
+
+                        log('✓ Babylon.js scene initialized', 'success');
+                        log('✓ Tentacle Orb spawned in 3D!', 'success');
+                    }
+                } catch (e) {
+                    log(`⚠ Babylon.js setup failed: ${e.message}`, 'warning');
+                    console.error(e);
+                }
+
                 // Success!
                 log('', 'info');
                 log('🎉 ALL SYSTEMS GO!', 'success');
-                log('You should see a purple organism in the center', 'success');
-
-                // Spawn more after 2 seconds
-                setTimeout(() => {
-                    for (let i = 0; i < 4; i++) {
-                        window.entityManager.spawn({
-                            x: Math.random() * window.innerWidth,
-                            y: Math.random() * window.innerHeight,
-                            size: 40 + Math.random() * 40
-                        });
-                    }
-                    log(`Spawned 4 more organisms (total: ${window.entityManager.entities.length})`, 'info');
-                }, 2000);
+                log('Watch the entities evolve and use abilities!', 'success');
+                log('Move your mouse to see curiosity behavior!', 'success');
+                log('🦑 3D Tentacle Orb is patrolling in the background!', 'success');
 
             }, 300); // Wait for scripts to fully load
         });

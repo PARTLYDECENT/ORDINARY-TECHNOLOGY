@@ -451,11 +451,15 @@
 
     <div class="tooltip" id="keyboardTooltip"></div>
 
-    <!-- Load Babylon.js -->
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-    <!-- Load Tentacle Orb Script -->
-    <script src="tentacle_orb.js"></script>
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -590,42 +594,73 @@
             loadVideo(0);
             cyclicVideo.pause();
 
-            // --- Babylon.js Tentacle Orb Initialization ---
+            // --- Three.js Tentacle Orb Initialization ---
             try {
-                const babylonCanvas = document.getElementById('babylon-canvas');
-                if (babylonCanvas) {
-                    const engine = new BABYLON.Engine(babylonCanvas, true);
-                    const scene = new BABYLON.Scene(engine);
-                    scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // Transparent
+                const canvas = document.getElementById('babylon-canvas');
+                if (canvas) {
+                    console.log("🦑 VideoPlayer: Canvas found. Loading modules...");
+                    import('./tentacle_orb_three.js').then(async (module) => {
+                        try {
+                            console.log("🦑 VideoPlayer: Modules loaded.");
+                            const { TentacleOrb } = module;
+                            const THREE = await import('three');
 
-                    const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2.5, 15, new BABYLON.Vector3(0, 0, 0), scene);
-                    camera.attachControl(babylonCanvas, true);
+                            const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+                            renderer.setSize(window.innerWidth, window.innerHeight);
+                            renderer.setPixelRatio(window.devicePixelRatio);
 
-                    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-                    light.intensity = 0.8;
+                            const scene = new THREE.Scene();
 
-                    // Spawn the Orb
-                    const tentacleOrb = new TentacleOrb(scene, new BABYLON.Vector3(0, 0, 0), {
-                        orbSize: 1.5,
-                        length: 3.5,
-                        colorTheme: {
-                            orb: new BABYLON.Color3(0, 0.8, 1),
-                            tentacleStart: new BABYLON.Color3(0, 0.5, 0.8),
-                            tentacleEnd: new BABYLON.Color3(0, 1, 1),
-                            accent: new BABYLON.Color3(1, 0, 0.8)
+                            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                            camera.position.z = 5;
+
+                            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                            scene.add(ambientLight);
+                            const pointLight = new THREE.PointLight(0xffffff, 1);
+                            pointLight.position.set(5, 5, 5);
+                            scene.add(pointLight);
+
+                            console.log("🦑 VideoPlayer: Creating TentacleOrb...");
+                            const orb = new TentacleOrb(scene, new THREE.Vector3(0, 0, 0), {
+                                orbSize: 1.5,
+                                length: 3.5,
+                                colorTheme: {
+                                    orb: new THREE.Color(0x00ccff),
+                                    tentacleStart: new THREE.Color(0x0055aa),
+                                    tentacleEnd: new THREE.Color(0x00ccff),
+                                    accent: new THREE.Color(0xff00cc)
+                                }
+                            });
+
+                            function animate() {
+                                requestAnimationFrame(animate);
+                                try {
+                                    orb.update();
+                                    renderer.render(scene, camera);
+                                } catch (animErr) {
+                                    console.error("🦑 VideoPlayer: Animation loop error:", animErr);
+                                }
+                            }
+                            animate();
+                            console.log("🦑 VideoPlayer: Animation started.");
+
+                            window.addEventListener('resize', () => {
+                                camera.aspect = window.innerWidth / window.innerHeight;
+                                camera.updateProjectionMatrix();
+                                renderer.setSize(window.innerWidth, window.innerHeight);
+                            });
+                            console.log("🦑 Tentacle Orb (Three.js) initialized in Video Player!");
+                        } catch (innerErr) {
+                            console.error("🦑 VideoPlayer: Error inside module promise:", innerErr);
                         }
+                    }).catch(importErr => {
+                        console.error("🦑 VideoPlayer: Failed to import modules:", importErr);
                     });
-
-                    engine.runRenderLoop(() => {
-                        scene.render();
-                    });
-
-                    window.addEventListener('resize', () => {
-                        engine.resize();
-                    });
+                } else {
+                    console.warn("🦑 VideoPlayer: Canvas element 'babylon-canvas' not found!");
                 }
             } catch (e) {
-                console.error("Babylon.js initialization failed:", e);
+                console.error("Three.js initialization failed:", e);
             }
         });
     </script>
