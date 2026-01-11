@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 
-// --- CUSTOM SHADERS ---
+// --- ADVANCED SHADERS ---
 
 const tentacleVertexShader = `
     uniform float time;
     uniform float waveIntensity;
+    uniform float wriggleSpeed;
+    uniform float wriggleAmount;
     
     varying vec2 vUv;
     varying vec3 vNormal;
     varying vec3 vViewPosition;
-    varying float vLocalZ;
+    varying float vDistance;
 
     void main() {
         vUv = uv;
@@ -17,13 +19,23 @@ const tentacleVertexShader = `
         
         vec3 transformed = position;
         
-        // Add subtle wave deformation
-        // transformed += normal * sin(time * 2.0 + position.z * 3.0) * waveIntensity * 0.02;
+        // Progress along the tentacle (0 at base, 1 at tip)
+        // Assuming the geometry is a cylinder/tube oriented along Z or mapped UV
+        float progress = uv.x; 
+        
+        // Wriggle animation in vertex shader
+        float ripple = sin(time * wriggleSpeed + progress * 5.0) * wriggleAmount * progress;
+        float ripple2 = cos(time * wriggleSpeed * 0.7 + progress * 3.0) * wriggleAmount * progress;
+        
+        transformed.x += ripple;
+        transformed.y += ripple2;
+        
+        // Slight taper at the tip
+        // transformed.xy *= (1.0 - progress * 0.5);
         
         vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
         vViewPosition = -mvPosition.xyz;
-        
-        vLocalZ = position.z; // Approximate local Z for gradient
+        vDistance = progress;
         
         gl_Position = projectionMatrix * mvPosition;
     }
@@ -41,89 +53,66 @@ const tentacleFragmentShader = `
     varying vec2 vUv;
     varying vec3 vNormal;
     varying vec3 vViewPosition;
-    varying float vLocalZ;
-
-    // Noise function
-    float noise(vec2 st) {
-        return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-    }
+    varying float vDistance;
 
     void main() {
-        // Normalized position along the tentacle (approximate)
-        float normalizedPos = vUv.x; // TubeGeometry maps U along the length
+        // Multi-layered pattern
+        float p1 = fract(vDistance * 3.0 - time * pulseSpeed);
+        float p2 = fract(vDistance * 10.0 - time * pulseSpeed * 2.0);
         
-        // Multi-layered pattern system
-        float primaryPattern = fract(normalizedPos * 5.0 - time * pulseSpeed);
-        float secondaryPattern = fract(normalizedPos * 12.0 - time * pulseSpeed * 1.3);
+        // Base color gradient
+        vec3 baseColor = mix(colorStart, colorEnd, vDistance);
         
-        // Organic noise
-        float organicNoise = noise(vec2(normalizedPos * 10.0, time * 0.5)) * 0.3;
+        // Energy pulses
+        float pulses = step(0.8, p1) * energyLevel;
+        float microPulses = step(0.95, p2) * energyLevel * 0.5;
         
-        // Energy-based color mixing
-        vec3 baseGradient = mix(colorStart, colorEnd, primaryPattern + organicNoise);
-        vec3 accentLayer = accentColor * secondaryPattern * energyLevel;
+        vec3 color = mix(baseColor, accentColor, pulses + microPulses);
         
-        vec3 combinedColor = baseGradient + accentLayer;
-        
-        // Pulsing energy
-        float energyPulse = (sin(time * 3.0 + normalizedPos * 6.0) * 0.5 + 0.5) * energyLevel;
-        combinedColor += accentColor * energyPulse * 0.3;
-        
-        // Rim lighting
+        // Rim lighting (Fresnel)
         vec3 normal = normalize(vNormal);
         vec3 viewDir = normalize(vViewPosition);
-        float rimFactor = 1.0 - abs(dot(normal, viewDir));
-        combinedColor += accentColor * rimFactor * 0.5;
+        float fresnel = pow(1.0 - abs(dot(normal, viewDir)), 3.0);
+        color += accentColor * fresnel * energyLevel;
         
-        gl_FragColor = vec4(combinedColor, opacity);
+        // Ambient occlusion at base
+        color *= smoothstep(0.0, 0.2, vDistance) * 0.8 + 0.2;
+        
+        gl_FragColor = vec4(color, opacity);
     }
 `;
 
 export class TentacleOrb {
     constructor(scene, position, config = {}) {
-        console.log("🦑 TentacleOrb: Constructor called");
-        if (!scene) {
-            console.error("🦑 TentacleOrb Error: Scene is undefined!");
-            return;
-        }
+        if (!scene) return;
         this.scene = scene;
         this.position = position ? position.clone() : new THREE.Vector3(0, 0, 0);
 
         this.config = Object.assign({
-            count: 12,
-            orbSize: 2.0,
-            length: 4.0,
-            thickness: 0.1,
-            wriggle: 1.2,
-            segments: 20,
+            count: 24, // Increased count for more detail
+            orbSize: 1.5,
+            length: 8.0,
+            thickness: 0.12,
+            wriggleAmount: 1.5,
+            wriggleSpeed: 3.0,
             colorTheme: {
-                orb: new THREE.Color(0x00ccff),
-                tentacleStart: new THREE.Color(0x0055aa),
-                tentacleEnd: new THREE.Color(0x00ccff),
-                accent: new THREE.Color(0xff00cc)
+                orb: new THREE.Color(0xD16847), // Using site theme: Burnt Orange
+                tentacleStart: new THREE.Color(0x7a0b2f), // Deep Red
+                tentacleEnd: new THREE.Color(0xFF6B3F), // Hot Ember
+                accent: new THREE.Color(0xFFFFFF)
             },
-            energyLevel: 1.0,
-            pulseSpeed: 1.0
+            energyLevel: 1.2,
+            pulseSpeed: 1.5
         }, config);
 
-        this.tentacles = [];
         this.time = 0;
-        this.clock = new THREE.Clock();
-
-        try {
-            this.init();
-            console.log("🦑 TentacleOrb: Initialization complete");
-        } catch (error) {
-            console.error("🦑 TentacleOrb Error: Initialization failed", error);
-        }
+        this.init();
     }
 
     init() {
-        console.log("🦑 TentacleOrb: Initializing components...");
         this.group = new THREE.Group();
         this.group.position.copy(this.position);
         this.scene.add(this.group);
-        console.log("🦑 TentacleOrb: Group added to scene at", this.position);
 
         this.createMaterials();
         this.createOrb();
@@ -131,18 +120,16 @@ export class TentacleOrb {
     }
 
     createMaterials() {
-        // Orb Material
         this.orbMaterial = new THREE.MeshStandardMaterial({
             color: this.config.colorTheme.orb,
             emissive: this.config.colorTheme.orb,
-            emissiveIntensity: 0.5,
-            roughness: 0.4,
-            metalness: 0.8,
+            emissiveIntensity: 1.0,
+            roughness: 0.2,
+            metalness: 0.9,
             transparent: true,
-            opacity: 0.9
+            opacity: 0.8
         });
 
-        // Tentacle Shader Material
         this.tentacleUniforms = {
             time: { value: 0 },
             colorStart: { value: this.config.colorTheme.tentacleStart },
@@ -150,7 +137,8 @@ export class TentacleOrb {
             accentColor: { value: this.config.colorTheme.accent },
             energyLevel: { value: this.config.energyLevel },
             pulseSpeed: { value: this.config.pulseSpeed },
-            waveIntensity: { value: 1.0 },
+            wriggleSpeed: { value: this.config.wriggleSpeed },
+            wriggleAmount: { value: this.config.wriggleAmount },
             opacity: { value: 1.0 }
         };
 
@@ -164,93 +152,85 @@ export class TentacleOrb {
     }
 
     createOrb() {
-        const geometry = new THREE.SphereGeometry(this.config.orbSize, 32, 32);
+        // Geometric complex core instead of just a sphere
+        const geometry = new THREE.IcosahedronGeometry(this.config.orbSize, 1);
         this.orbMesh = new THREE.Mesh(geometry, this.orbMaterial);
+        
+        // Add a wireframe shell
+        const wireframeGeom = new THREE.IcosahedronGeometry(this.config.orbSize * 1.2, 2);
+        const wireframeMat = new THREE.MeshBasicMaterial({ 
+            color: this.config.colorTheme.accent, 
+            wireframe: true, 
+            transparent: true, 
+            opacity: 0.2 
+        });
+        const shell = new THREE.Mesh(wireframeGeom, wireframeMat);
+        
         this.group.add(this.orbMesh);
+        this.group.add(shell);
+        this.shell = shell;
 
-        // Inner glow (simple point light)
-        const light = new THREE.PointLight(this.config.colorTheme.orb, 2, 20);
+        const light = new THREE.PointLight(this.config.colorTheme.tentacleEnd, 5, 20);
         this.group.add(light);
     }
 
     createTentacles() {
+        // Use a single geometry for instances or just multiple meshes
+        // For 24 tentacles, individual meshes are fine if we don't recreate them.
+        
+        // Create a base geometry: a cylinder aligned with Z axis
+        const segments = 32;
+        const radialSegments = 8;
+        const geometry = new THREE.CylinderGeometry(this.config.thickness, this.config.thickness * 0.2, this.config.length, radialSegments, segments, true);
+        
+        // Rotate so it points along Z
+        geometry.rotateX(Math.PI / 2);
+        // Offset so base is at origin
+        geometry.translate(0, 0, this.config.length / 2);
+        
+        // Add UV transformation if needed (uv.x being distance along length)
+        // CylinderGeometry UVs are usually (x=radial, y=length)
+        // Let's fix that for our shader
+        const uvs = geometry.attributes.uv.array;
+        for (let i = 0; i < uvs.length; i += 2) {
+            const temp = uvs[i];
+            uvs[i] = uvs[i+1]; // x is now length progress [0,1]
+            uvs[i+1] = temp;   // y is now radial progress
+        }
+
         for (let i = 0; i < this.config.count; i++) {
-            this.createTentacle(i);
+            const mesh = new THREE.Mesh(geometry, this.tentacleMaterial);
+            
+            // Randomly distribute on the sphere
+            const phi = Math.acos(-1 + (2 * i) / this.config.count);
+            const theta = Math.sqrt(this.config.count * Math.PI) * phi;
+            
+            mesh.rotation.set(phi, theta, 0);
+            
+            // Push out to surface
+            mesh.position.set(
+                Math.sin(phi) * Math.cos(theta) * this.config.orbSize * 0.5,
+                Math.sin(phi) * Math.sin(theta) * this.config.orbSize * 0.5,
+                Math.cos(phi) * this.config.orbSize * 0.5
+            );
+            
+            this.group.add(mesh);
         }
     }
 
-    createTentacle(index) {
-        const angle = (index / this.config.count) * Math.PI * 2;
-        const radius = this.config.orbSize * 0.8;
-
-        // Base position on the orb surface
-        const baseX = Math.cos(angle) * radius;
-        const baseZ = Math.sin(angle) * radius;
-        const baseY = (Math.random() - 0.5) * radius * 0.5;
-
-        // Create initial curve points
-        const points = [];
-        const segmentLength = this.config.length / this.config.segments;
-
-        for (let i = 0; i <= this.config.segments; i++) {
-            points.push(new THREE.Vector3(
-                baseX + (Math.cos(angle) * i * segmentLength),
-                baseY,
-                baseZ + (Math.sin(angle) * i * segmentLength)
-            ));
-        }
-
-        const curve = new THREE.CatmullRomCurve3(points);
-        const geometry = new THREE.TubeGeometry(curve, this.config.segments, this.config.thickness, 8, false);
-
-        const mesh = new THREE.Mesh(geometry, this.tentacleMaterial);
-        this.group.add(mesh);
-
-        this.tentacles.push({
-            mesh: mesh,
-            curve: curve,
-            baseAngle: angle,
-            basePos: new THREE.Vector3(baseX, baseY, baseZ),
-            index: index,
-            phaseOffset: Math.random() * Math.PI * 2
-        });
-    }
-
-    update() {
-        const delta = this.clock.getDelta();
+    update(delta) {
         this.time += delta;
-
-        // Update uniforms
         this.tentacleUniforms.time.value = this.time;
-
-        // Animate Orb (bobbing)
-        this.group.position.y = this.position.y + Math.sin(this.time * 0.5) * 0.5;
-        this.group.rotation.y += delta * 0.1;
-
-        // Animate Tentacles
-        this.tentacles.forEach(t => {
-            const points = [];
-            const segmentLength = this.config.length / this.config.segments;
-
-            for (let i = 0; i <= this.config.segments; i++) {
-                const ratio = i / this.config.segments;
-
-                // Wriggle math
-                const wriggleX = Math.sin(this.time * 2.0 + i * 0.5 + t.phaseOffset) * this.config.wriggle * ratio;
-                const wriggleY = Math.cos(this.time * 1.5 + i * 0.3 + t.phaseOffset) * this.config.wriggle * ratio;
-                const wriggleZ = Math.sin(this.time * 1.8 + i * 0.4 + t.phaseOffset) * this.config.wriggle * ratio;
-
-                points.push(new THREE.Vector3(
-                    t.basePos.x + (Math.cos(t.baseAngle) * i * segmentLength) + wriggleX,
-                    t.basePos.y + wriggleY,
-                    t.basePos.z + (Math.sin(t.baseAngle) * i * segmentLength) + wriggleZ
-                ));
-            }
-
-            // Update curve and geometry
-            t.curve.points = points;
-            t.mesh.geometry.dispose(); // Clean up old geometry
-            t.mesh.geometry = new THREE.TubeGeometry(t.curve, this.config.segments, this.config.thickness, 8, false);
-        });
+        
+        this.group.rotation.y += delta * 0.2;
+        this.group.rotation.x += delta * 0.1;
+        
+        if (this.shell) {
+            this.shell.rotation.z -= delta * 0.3;
+            this.shell.scale.setScalar(1 + Math.sin(this.time * 2) * 0.05);
+        }
+        
+        // Bobbing
+        this.group.position.y = this.position.y + Math.sin(this.time * 0.5) * 5;
     }
 }
