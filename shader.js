@@ -162,6 +162,7 @@
             this.buffers = null;
             this.startTime = Date.now();
             this.mousePos = { x: 0.5, y: 0.5 };
+            this.paused = false;
 
             this.init();
         }
@@ -259,6 +260,20 @@
                 this.mousePos.x = (event.clientX - rect.left) / this.canvas.width;
                 this.mousePos.y = 1.0 - (event.clientY - rect.top) / this.canvas.height;
             });
+
+            // Mutual Exclusion Events
+            window.addEventListener('spatial-web-3d-active', () => {
+                this.paused = true;
+                console.log("⏸️ Background Shader Paused (3D Mode Active)");
+            });
+
+            window.addEventListener('spatial-web-3d-inactive', () => {
+                if (this.paused) {
+                    this.paused = false;
+                    console.log("▶️ Background Shader Resumed");
+                    this.render();
+                }
+            });
         }
 
         resizeCanvas() {
@@ -274,6 +289,8 @@
         }
 
         render() {
+            if (this.paused) return; // Stop rendering when paused
+
             if (!this.gl || !this.programInfo || !this.buffers) {
                 console.warn('Shader not ready, retrying...');
                 requestAnimationFrame(this.render.bind(this));

@@ -622,6 +622,7 @@ function toggle3DMode() { if (is3DMode) exit3DMode(); else transformTo3D(); }
 
 export function transformTo3D() {
     is3DMode = true;
+    window.dispatchEvent(new CustomEvent('spatial-web-3d-active'));
 
     // Lazy load overlays only when needed
     createOverlays();
@@ -656,6 +657,7 @@ export function transformTo3D() {
 
 export function exit3DMode() {
     is3DMode = false;
+    window.dispatchEvent(new CustomEvent('spatial-web-3d-inactive'));
     moveState.forward = moveState.backward = moveState.left = moveState.right = false;
     // Button is disabled, no need to update text
     const overlay = document.getElementById('instructions-overlay');
