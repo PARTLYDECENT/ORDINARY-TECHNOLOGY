@@ -612,35 +612,42 @@ function createOverlays() {
 
 // Load Custom 3D Cursor
 function loadCursor() {
+    console.log("Attempting to load cursor.glb...");
     const loader = new GLTFLoader();
     loader.load('cursor.glb', (gltf) => {
         const cursor = gltf.scene;
-        // Position in front of camera
-        cursor.position.set(0, 0, -20);
-        cursor.scale.set(0.5, 0.5, 0.5); // Adjust scale as needed
+        console.log("Cursor GLB Loaded!", cursor);
 
-        // Ensure it renders on top
+        // DEBUG: Mega Scale & Visibility
+        cursor.position.set(0, 0, -30); // 30 units in front
+        cursor.scale.set(15, 15, 15);   // Make it HUGE to start
+
+        let meshCount = 0;
         cursor.traverse((child) => {
             if (child.isMesh) {
-                child.material.depthTest = false;
-                child.material.depthWrite = false;
-                child.material.transparent = true;
-                // Optional: Force a specific color if the model is untextured? 
-                // child.material.emissive = new THREE.Color(0xFF6B3F);
+                meshCount++;
+                console.log("Cursor Mesh Found:", child.name);
+                // Force visible material
+                child.material = new THREE.MeshBasicMaterial({
+                    color: 0x00FF00, // Bright Green for Debug
+                    depthTest: false,
+                    depthWrite: false,
+                    transparent: true,
+                    opacity: 0.8
+                });
                 child.renderOrder = 999;
             }
         });
+        console.log(`Cursor processed: ${meshCount} meshes found.`);
 
         camera.add(cursor);
-        console.log("3D Cursor loaded");
     }, undefined, (e) => {
-        console.warn("Could not load cursor.glb, using fallback", e);
-        // Fallback: Simple Ring
-        const geo = new THREE.RingGeometry(0.5, 0.6, 32);
-        const mat = new THREE.MeshBasicMaterial({ color: 0xFF6B3F, depthTest: false, depthWrite: false, transparent: true });
+        console.error("FAILED to load cursor.glb", e);
+        // Fallback
+        const geo = new THREE.RingGeometry(1, 1.2, 32);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xFF0000, depthTest: false });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(0, 0, -20);
-        mesh.renderOrder = 999;
         camera.add(mesh);
     });
 }
