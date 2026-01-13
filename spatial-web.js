@@ -43,6 +43,7 @@ export function initSpatialWeb() {
 
     camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 1, 15000);
     camera.position.set(0, 0, distance);
+    scene.add(camera); // CRITICAL: Camera must be in scene for its children to render!
 
     // 3. Setup Renderers
     setupRenderers();
