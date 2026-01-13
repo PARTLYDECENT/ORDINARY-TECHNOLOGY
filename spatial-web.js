@@ -613,32 +613,50 @@ function createOverlays() {
 // Load Custom 3D Cursor
 function loadCursor() {
     console.log("Attempting to load cursor.glb...");
+
+    // IMMEDIATE TEST: Add a simple cube to verify camera attachment works
+    const testGeo = new THREE.BoxGeometry(5, 5, 5);
+    const testMat = new THREE.MeshBasicMaterial({
+        color: 0xFF0000, // Bright Red
+        depthTest: false,
+        depthWrite: false
+    });
+    const testCube = new THREE.Mesh(testGeo, testMat);
+    testCube.position.set(0, 0, -20); // 20 units in front of camera
+    testCube.renderOrder = 999;
+    camera.add(testCube);
+    console.log("TEST CUBE ADDED TO CAMERA - You should see a RED CUBE");
+
     const loader = new GLTFLoader();
     loader.load('cursor.glb', (gltf) => {
         const cursor = gltf.scene;
         console.log("Cursor GLB Loaded!", cursor);
 
         // DEBUG: Mega Scale & Visibility
-        cursor.position.set(0, 0, -30); // 30 units in front
+        cursor.position.set(5, 0, -20); // Offset to the right of test cube
         cursor.scale.set(15, 15, 15);   // Make it HUGE to start
 
         let meshCount = 0;
         cursor.traverse((child) => {
             if (child.isMesh) {
                 meshCount++;
-                console.log("Cursor Mesh Found:", child.name);
+                console.log("Cursor Mesh Found:", child.name, "Geometry:", child.geometry);
                 // Force visible material
                 child.material = new THREE.MeshBasicMaterial({
                     color: 0x00FF00, // Bright Green for Debug
                     depthTest: false,
                     depthWrite: false,
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 1.0 // Full opacity
                 });
                 child.renderOrder = 999;
             }
         });
         console.log(`Cursor processed: ${meshCount} meshes found.`);
+
+        if (meshCount === 0) {
+            console.error("WARNING: GLB loaded but contains ZERO meshes!");
+        }
 
         camera.add(cursor);
     }, undefined, (e) => {
