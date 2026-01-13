@@ -70,10 +70,36 @@
         uniform float uTime;
         uniform vec2 uMouse;
 
-        // Include PRNG and Noise functions
-        ${prng}
-        ${noise}
-        ${fbm}
+        // PRNG function
+        float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+        }
+
+        // Noise function
+        float noise(vec2 st) {
+            vec2 i = floor(st);
+            vec2 f = fract(st);
+            float a = random(i);
+            float b = random(i + vec2(1.0, 0.0));
+            float c = random(i + vec2(0.0, 1.0));
+            float d = random(i + vec2(1.0, 1.0));
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+        }
+
+        // FBM function
+        float fbm(vec2 st) {
+            float value = 0.0;
+            float amplitude = 0.5;
+            float frequency = 1.0;
+            for (int i = 0; i < 4; i++) {
+                value += amplitude * noise(st * frequency);
+                st *= 2.0;
+                amplitude *= 0.5;
+                frequency *= 2.0;
+            }
+            return value;
+        }
 
         // Function to create a grid/wall pattern
         float wallPattern(vec2 uv, float scale) {
@@ -236,6 +262,7 @@
             this.buffers = this.initBuffers(this.gl);
             this.setupEventListeners();
             this.resizeCanvas();
+            console.log('Shader initialized successfully, starting animation loop');
             requestAnimationFrame(this.render.bind(this));
         }
 
@@ -322,36 +349,47 @@
 
         render() {
             if (!this.gl || !this.programInfo || !this.buffers) {
+                console.warn('Shader not ready, retrying...');
                 requestAnimationFrame(this.render.bind(this));
                 return;
             }
 
-            const currentTime = (Date.now() - this.startTime) / 1000.0;
+            try {
+                const currentTime = (Date.now() - this.startTime) / 1000.0;
 
-            this.resizeCanvas();
+                this.resizeCanvas();
 
-            this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
-            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-            this.gl.useProgram(this.programInfo.program);
+                this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+                this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+                this.gl.useProgram(this.programInfo.program);
 
-            // Set uniforms
-            this.gl.uniform2f(this.programInfo.uniformLocations.resolution, this.gl.canvas.width, this.gl.canvas.height);
-            this.gl.uniform1f(this.programInfo.uniformLocations.time, currentTime);
-            this.gl.uniform2f(this.programInfo.uniformLocations.mouse, this.mousePos.x, this.mousePos.y);
+                // Set uniforms
+                this.gl.uniform2f(this.programInfo.uniformLocations.resolution, this.gl.canvas.width, this.gl.canvas.height);
+                this.gl.uniform1f(this.programInfo.uniformLocations.time, currentTime);
+                this.gl.uniform2f(this.programInfo.uniformLocations.mouse, this.mousePos.x, this.mousePos.y);
 
-            // Position attribute
-            const attribs = this.programInfo.attribLocations;
+                // Position attribute
+                const attribs = this.programInfo.attribLocations;
 
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
-            this.gl.vertexAttribPointer(attribs.vertexPosition, 2, this.gl.FLOAT, false, 0, 0);
-            this.gl.enableVertexAttribArray(attribs.vertexPosition);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+                this.gl.vertexAttribPointer(attribs.vertexPosition, 2, this.gl.FLOAT, false, 0, 0);
+                this.gl.enableVertexAttribArray(attribs.vertexPosition);
 
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
-            this.gl.vertexAttribPointer(attribs.textureCoord, 2, this.gl.FLOAT, false, 0, 0);
-            this.gl.enableVertexAttribArray(attribs.textureCoord);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
+                this.gl.vertexAttribPointer(attribs.textureCoord, 2, this.gl.FLOAT, false, 0, 0);
+                this.gl.enableVertexAttribArray(attribs.textureCoord);
 
-            // Draw the quad
-            this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+                // Draw the quad
+                this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+
+                // Check for GL errors
+                const error = this.gl.getError();
+                if (error !== this.gl.NO_ERROR) {
+                    console.error('WebGL Error:', error);
+                }
+            } catch (e) {
+                console.error('Render error:', e);
+            }
 
             requestAnimationFrame(this.render.bind(this));
         }
