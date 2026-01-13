@@ -91,6 +91,7 @@ export function initSpatialWeb() {
     setupAudio();
     createInfiniteGrid();
     createGridCreatures();
+    loadCursor(); // Load the 3D cursor
 }
 
 // Navigation State
@@ -605,11 +606,43 @@ function createOverlays() {
             <div id="hud-status" style="font-size: 14px; margin-top: 8px; opacity: 0.9; color: white;">INITIALIZING...</div>
             <div id="hud-coords" style="font-size: 11px; margin-top: 5px; opacity: 0.7; color: rgba(255,255,255,0.6);">X: 0 Y: 0 Z: 0</div>
         </div>
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; border: 1px solid rgba(255,107,63,0.3); border-radius: 50%; pointer-events: none;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; background: var(--tertiary); border-radius: 50%; pointer-events: none;"></div>
-        </div>
     `;
     document.body.appendChild(hud);
+}
+
+// Load Custom 3D Cursor
+function loadCursor() {
+    const loader = new GLTFLoader();
+    loader.load('cursor.glb', (gltf) => {
+        const cursor = gltf.scene;
+        // Position in front of camera
+        cursor.position.set(0, 0, -20);
+        cursor.scale.set(0.5, 0.5, 0.5); // Adjust scale as needed
+
+        // Ensure it renders on top
+        cursor.traverse((child) => {
+            if (child.isMesh) {
+                child.material.depthTest = false;
+                child.material.depthWrite = false;
+                child.material.transparent = true;
+                // Optional: Force a specific color if the model is untextured? 
+                // child.material.emissive = new THREE.Color(0xFF6B3F);
+                child.renderOrder = 999;
+            }
+        });
+
+        camera.add(cursor);
+        console.log("3D Cursor loaded");
+    }, undefined, (e) => {
+        console.warn("Could not load cursor.glb, using fallback", e);
+        // Fallback: Simple Ring
+        const geo = new THREE.RingGeometry(0.5, 0.6, 32);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xFF6B3F, depthTest: false, depthWrite: false, transparent: true });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(0, 0, -20);
+        mesh.renderOrder = 999;
+        camera.add(mesh);
+    });
 }
 
 // is3DMode is now global at top
