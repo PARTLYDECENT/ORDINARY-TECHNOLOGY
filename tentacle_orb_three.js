@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
 // --- ADVANCED SHADERS ---
 
@@ -155,17 +155,17 @@ export class TentacleOrb {
         // Geometric complex core instead of just a sphere
         const geometry = new THREE.IcosahedronGeometry(this.config.orbSize, 1);
         this.orbMesh = new THREE.Mesh(geometry, this.orbMaterial);
-        
+
         // Add a wireframe shell
         const wireframeGeom = new THREE.IcosahedronGeometry(this.config.orbSize * 1.2, 2);
-        const wireframeMat = new THREE.MeshBasicMaterial({ 
-            color: this.config.colorTheme.accent, 
-            wireframe: true, 
-            transparent: true, 
-            opacity: 0.2 
+        const wireframeMat = new THREE.MeshBasicMaterial({
+            color: this.config.colorTheme.accent,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.2
         });
         const shell = new THREE.Mesh(wireframeGeom, wireframeMat);
-        
+
         this.group.add(this.orbMesh);
         this.group.add(shell);
         this.shell = shell;
@@ -177,43 +177,43 @@ export class TentacleOrb {
     createTentacles() {
         // Use a single geometry for instances or just multiple meshes
         // For 24 tentacles, individual meshes are fine if we don't recreate them.
-        
+
         // Create a base geometry: a cylinder aligned with Z axis
         const segments = 32;
         const radialSegments = 8;
         const geometry = new THREE.CylinderGeometry(this.config.thickness, this.config.thickness * 0.2, this.config.length, radialSegments, segments, true);
-        
+
         // Rotate so it points along Z
         geometry.rotateX(Math.PI / 2);
         // Offset so base is at origin
         geometry.translate(0, 0, this.config.length / 2);
-        
+
         // Add UV transformation if needed (uv.x being distance along length)
         // CylinderGeometry UVs are usually (x=radial, y=length)
         // Let's fix that for our shader
         const uvs = geometry.attributes.uv.array;
         for (let i = 0; i < uvs.length; i += 2) {
             const temp = uvs[i];
-            uvs[i] = uvs[i+1]; // x is now length progress [0,1]
-            uvs[i+1] = temp;   // y is now radial progress
+            uvs[i] = uvs[i + 1]; // x is now length progress [0,1]
+            uvs[i + 1] = temp;   // y is now radial progress
         }
 
         for (let i = 0; i < this.config.count; i++) {
             const mesh = new THREE.Mesh(geometry, this.tentacleMaterial);
-            
+
             // Randomly distribute on the sphere
             const phi = Math.acos(-1 + (2 * i) / this.config.count);
             const theta = Math.sqrt(this.config.count * Math.PI) * phi;
-            
+
             mesh.rotation.set(phi, theta, 0);
-            
+
             // Push out to surface
             mesh.position.set(
                 Math.sin(phi) * Math.cos(theta) * this.config.orbSize * 0.5,
                 Math.sin(phi) * Math.sin(theta) * this.config.orbSize * 0.5,
                 Math.cos(phi) * this.config.orbSize * 0.5
             );
-            
+
             this.group.add(mesh);
         }
     }
@@ -221,15 +221,15 @@ export class TentacleOrb {
     update(delta) {
         this.time += delta;
         this.tentacleUniforms.time.value = this.time;
-        
+
         this.group.rotation.y += delta * 0.2;
         this.group.rotation.x += delta * 0.1;
-        
+
         if (this.shell) {
             this.shell.rotation.z -= delta * 0.3;
             this.shell.scale.setScalar(1 + Math.sin(this.time * 2) * 0.05);
         }
-        
+
         // Bobbing
         this.group.position.y = this.position.y + Math.sin(this.time * 0.5) * 5;
     }
