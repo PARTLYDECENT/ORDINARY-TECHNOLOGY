@@ -16,6 +16,7 @@
 
     // Fragment Shader - 3D Infinite Grid World (Synthwave Style)
     const fsSource = `
+        #extension GL_OES_standard_derivatives : enable
         precision highp float;
         
         varying highp vec2 vTextureCoord;
