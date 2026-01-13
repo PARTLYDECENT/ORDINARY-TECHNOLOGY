@@ -1,52 +1,6 @@
 (function () {
     "use strict";
 
-    // Basic pseudo-random number generator for shaders
-    const prng = `
-        float random(vec2 st) {
-            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-        }
-    `;
-
-    // Noise function (Value Noise)
-    const noise = `
-        float noise(vec2 st) {
-            vec2 i = floor(st);
-            vec2 f = fract(st);
-
-            // Four corners in 2D of a tile
-            float a = random(i);
-            float b = random(i + vec2(1.0, 0.0));
-            float c = random(i + vec2(0.0, 1.0));
-            float d = random(i + vec2(1.0, 1.0));
-
-            // Smooth interpolation
-            vec2 u = f * f * (3.0 - 2.0 * f);
-
-            return mix(a, b, u.x) +
-                   (c - a) * u.y * (1.0 - u.x) +
-                   (d - b) * u.x * u.y;
-        }
-    `;
-
-    // Fractional Brownian Motion (adds layers of noise)
-    const fbm = `
-        #define OCTAVES 4
-        float fbm(vec2 st) {
-            float value = 0.0;
-            float amplitude = 0.5;
-            float frequency = 1.0;
-
-            for (int i = 0; i < OCTAVES; i++) {
-                value += amplitude * noise(st * frequency);
-                st *= 2.0;
-                amplitude *= 0.5;
-                frequency *= 2.0;
-            }
-            return value;
-        }
-    `;
-
     // Vertex Shader (simple full-screen quad)
     const vsSource = `
         attribute vec4 aVertexPosition;
@@ -60,156 +14,121 @@
         }
     `;
 
-    // Fragment Shader - Backrooms/Tomb Raider uncanny style
+    // Fragment Shader - 3D Infinite Grid World (Synthwave Style)
     const fsSource = `
         precision highp float;
-
+        
         varying highp vec2 vTextureCoord;
 
         uniform vec2 uResolution;
         uniform float uTime;
         uniform vec2 uMouse;
 
-        // PRNG function
-        float random(vec2 st) {
-            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+        /*
+        * 3D GRID WORLD SHADER
+        * Simple infinite moving grid with retro synthwave aesthetic.
+        * User Request: "SEMI GOOD 3D WORLD SIMPLE NOTHING INSANE LIKE A GRIDWORLD"
+        */
+
+        // --- Hash Function ---
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
         }
 
-        // Noise function
-        float noise(vec2 st) {
-            vec2 i = floor(st);
-            vec2 f = fract(st);
-            float a = random(i);
-            float b = random(i + vec2(1.0, 0.0));
-            float c = random(i + vec2(0.0, 1.0));
-            float d = random(i + vec2(1.0, 1.0));
-            vec2 u = f * f * (3.0 - 2.0 * f);
-            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+        // --- 3D Camera / Ray Functions ---
+        vec3 getRayDir(vec2 uv, vec3 p, vec3 l, float z) {
+            vec3 f = normalize(l - p),
+                 r = normalize(cross(vec3(0, 1, 0), f)),
+                 u = cross(f, r),
+                 c = f * z,
+                 i = c + uv.x * r + uv.y * u;
+            return normalize(i);
         }
 
-        // FBM function
-        float fbm(vec2 st) {
-            float value = 0.0;
-            float amplitude = 0.5;
-            float frequency = 1.0;
-            for (int i = 0; i < 4; i++) {
-                value += amplitude * noise(st * frequency);
-                st *= 2.0;
-                amplitude *= 0.5;
-                frequency *= 2.0;
-            }
-            return value;
-        }
-
-        // Function to create a grid/wall pattern
-        float wallPattern(vec2 uv, float scale) {
-            vec2 grid = fract(uv * scale);
-            float lines = max(
-                smoothstep(0.05, 0.07, grid.x) * smoothstep(0.95, 0.93, grid.x),
-                smoothstep(0.05, 0.07, grid.y) * smoothstep(0.95, 0.93, grid.y)
-            );
-            return lines;
-        }
-
-        // Create distorted lighting effect
-        float lighting(vec2 uv, float time) {
-            // Create a slow pulsing light source
-            float dist = length(uv - vec2(0.5 + sin(time * 0.2) * 0.2, 0.5 + cos(time * 0.3) * 0.1));
-            float light = smoothstep(0.8, 0.0, dist);
-            
-            // Add flickering
-            float flicker = 0.95 + 0.05 * sin(time * 10.0);
-            
-            return light * flicker;
-        }
-
-        void main(void) {
-            // Use texture coordinates and correct aspect ratio
+        void main() {
+            // Correct Aspect Ratio
+            // uResolution is set in JS: this.gl.uniform2f(..., canvas.width, canvas.height)
             vec2 uv = vTextureCoord;
             float aspect = uResolution.x / uResolution.y;
             uv.x *= aspect;
             
-            // Center coordinates (for various effects)
-            vec2 centered_uv = (uv - vec2(aspect * 0.5, 0.5)) * 2.0;
+            // Center UVs for 3D camera (0,0 is center)
+            uv = (uv - vec2(aspect * 0.5, 0.5)) * 2.0;
 
-            // --- Create a backrooms-like environment ---
+            // --- Camera Setup ---
+            float speed = 2.0;
+            float forwardTime = uTime * speed;
             
-            // Base color (sickly yellow-green of the backrooms)
-            vec3 backroomsYellow = vec3(0.7, 0.65, 0.3);
+            // Camera Position: Fly at y=1.0
+            vec3 ro = vec3(0.0, 1.0, forwardTime); 
             
-            // Wall pattern with slight distortion
-            vec2 distortedUV = uv;
-            distortedUV.x += sin(uv.y * 20.0 + uTime * 0.2) * 0.01;
-            distortedUV.y += cos(uv.x * 15.0 + uTime * 0.1) * 0.01;
+            // Look At Point: Look ahead
+            vec3 lookAt = ro + vec3(0.0, -0.2, 10.0);
             
-            // Create wall tiles
-            float walls = wallPattern(distortedUV, 3.0);
+            // Get Ray Direction
+            vec3 rd = getRayDir(uv, ro, lookAt, 1.0);
+
+            // --- Render ---
+            vec3 col = vec3(0.0); // Background color
+
+            // --- Sky ---
+            // Gradient: Dark blue to black
+            // Use rd.y for sky gradient based on look angle
+            float sky = max(0.0, rd.y);
+            col = mix(vec3(0.05, 0.0, 0.1), vec3(0.0), pow(sky, 0.5));
             
-            // Add some noise texture for grime/mold
-            float grime = noise(uv * 15.0) * 0.2;
-            float timeMold = fbm(uv * 4.0 + uTime * 0.05) * 0.15;
-            
-            // Lighting with flickering and shadows
-            float light = lighting(uv / vec2(aspect, 1.0), uTime);
-            
-            // Vignette effect for claustrophobic feel
-            float vignette = smoothstep(1.4, 0.2, length(centered_uv));
-            
-            // Add a water puddle effect on the floor
-            float puddle = 0.0;
-            if (uv.y < 0.4) {
-                // Distorted reflection
-                vec2 reflectionUV = vec2(uv.x, 0.8 - uv.y);
-                reflectionUV.x += sin(uv.y * 40.0 + uTime) * 0.02;
-                float reflectionWalls = wallPattern(reflectionUV, 3.0);
-                puddle = reflectionWalls * smoothstep(0.4, 0.2, uv.y) * 0.3;
-                puddle *= (0.5 + 0.5 * sin(uv.x * 30.0 + uTime)); // Ripple effect
+            // Stars in the sky
+            if (rd.y > 0.0) {
+                float stars = pow(hash(uv * 50.0), 50.0);
+                col += vec3(stars);
             }
-            
-            // Add some dust particles floating in the air
-            float dust = 0.0;
-            for (int i = 0; i < 5; i++) {
-                float t = mod(uTime * 0.1 + float(i) * 0.2, 1.0);
-                vec2 dustPos = vec2(
-                    mod(random(vec2(float(i), 0.0)) + sin(uTime * 0.1 + float(i)), aspect),
-                    mod(t + random(vec2(0.0, float(i))), 1.0)
-                );
-                dust += smoothstep(0.02, 0.0, length(uv - dustPos)) * 0.5;
-            }
-            
-            // Occasional shadows moving across walls (uncanny)
-            float shadow = 0.0;
-            float shadowTime = mod(uTime * 0.2, 20.0);
-            if (shadowTime > 8.0 && shadowTime < 10.0) {
-                vec2 shadowPos = vec2(mod(shadowTime - 8.0, aspect), 0.5);
-                shadow = smoothstep(0.3, 0.0, length(uv - shadowPos)) * 0.5;
-            }
-            
-            // Combine all elements
-            vec3 finalColor = backroomsYellow;
-            finalColor *= mix(0.2, 1.0, walls); // Apply wall pattern
-            finalColor -= shadow; // Apply moving shadows
-            finalColor = mix(finalColor, vec3(0.1, 0.12, 0.0), grime); // Add grime
-            finalColor = mix(finalColor, vec3(0.06, 0.15, 0.06), timeMold); // Add mold
-            finalColor += dust * vec3(1.0, 0.9, 0.7); // Add dust
-            finalColor += puddle * vec3(0.2, 0.25, 0.3); // Add water puddles
-            finalColor *= light * 1.5; // Apply lighting
-            finalColor *= vignette; // Apply vignette
-            
-            // Add scanlines for a horror/old camera effect
-            float scanline = sin(gl_FragCoord.y * 0.5 - uTime * 10.0) * 0.5 + 0.5;
-            finalColor *= 0.8 + 0.2 * scanline;
-            
-            // Occasional glitch effect
-            float glitchTime = mod(uTime, 15.0);
-            if (glitchTime > 14.0 && glitchTime < 14.2) {
-                if (random(uv + fract(uTime)) > 0.7) {
-                    finalColor.rb = finalColor.br; // Swap channels
-                    finalColor += vec3(0.1, 0.0, 0.1) * random(uv);
+
+            // --- Ground Intersection (Plane y=0) ---
+            if (rd.y < 0.0) {
+                float t = -ro.y / rd.y;
+                if (t > 0.0) {
+                    vec3 p = ro + t * rd;
+                    
+                    // --- Grid Pattern ---
+                    float scale = 1.0;
+                    vec2 coord = p.xz * scale;
+                    
+                    // Anti-aliased grid lines
+                    vec2 grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
+                    float line = min(grid.x, grid.y);
+                    float gridIntensity = 1.0 - min(line, 1.0);
+                    
+                    // Base Colors
+                    vec3 floorColor = vec3(0.0, 0.0, 0.05 + 0.05 * sin(p.z * 0.1)); // Subtle scrolling variation
+                    vec3 gridColor = vec3(0.0, 1.0, 0.8); // Cyan Grid
+                    
+                    // Fade grid lines in distance slightly less than fog to make them pop
+                    gridColor *= 1.5; 
+
+                    vec3 finalGround = mix(floorColor, gridColor, gridIntensity);
+
+                    // --- Fog ---
+                    // Exponential fog fading to black/sky color
+                    float dist = distance(ro, p);
+                    float fogFactor = 1.0 - exp(-dist * 0.08);
+                    
+                    col = mix(finalGround, vec3(0.0, 0.05, 0.1), fogFactor);
+                    
+                    // Horizon Glow
+                    float horizon = smoothstep(20.0, 40.0, dist);
+                    col += vec3(0.0, 0.3, 0.5) * horizon * 0.5;
                 }
             }
-            
-            gl_FragColor = vec4(finalColor, 1.0);
+
+            // --- Retro Post-Processing ---
+            // Vignette
+            float vignette = smoothstep(1.5, 0.5, length(uv * 0.5)); // We scaled UV up, so scale down for vignette
+            col *= vignette;
+
+            // Gamma
+            col = pow(col, vec3(0.4545));
+
+            gl_FragColor = vec4(col, 1.0);
         }
     `;
 
@@ -223,7 +142,13 @@
                 document.body.insertBefore(this.canvas, document.body.firstChild);
             }
 
-            this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
+            this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl') || this.canvas.getContext('webgl2');
+
+            // ENABLE DERIVATIVES extension for OES_standard_derivatives if WebGL1
+            // fwidth() requires OES_standard_derivatives in WebGL 1
+            if (this.gl) {
+                this.gl.getExtension('OES_standard_derivatives');
+            }
 
             if (!this.gl) {
                 console.error("WebGL not supported or disabled.");
