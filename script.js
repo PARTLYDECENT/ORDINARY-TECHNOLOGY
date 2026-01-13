@@ -186,7 +186,8 @@ function setupWebGLRendering() {
 }
 
 // Call WebGL setup on page load
-document.addEventListener('DOMContentLoaded', setupWebGLRendering);
+// DISABLED: shader.js now handles the background shader
+// document.addEventListener('DOMContentLoaded', setupWebGLRendering);
 
 // Navigation functions with button animation
 function animateButtonAndNavigate(selector, url) {
