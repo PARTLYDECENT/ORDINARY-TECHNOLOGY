@@ -101,6 +101,8 @@ const moveState = {
     backward: false,
     left: false,
     right: false,
+    up: false,
+    down: false,
     speed: 60
 };
 
@@ -108,7 +110,7 @@ function setupNavigation() {
     document.addEventListener('keydown', (event) => {
         if (!is3DMode) return;
 
-        const handled = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyE'].includes(event.code);
+        const handled = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyE', 'KeyQ', 'KeyZ'].includes(event.code);
 
         if (handled) {
             event.stopPropagation();
@@ -120,6 +122,8 @@ function setupNavigation() {
             case 'KeyS': moveState.backward = true; break;
             case 'KeyA': moveState.left = true; break;
             case 'KeyD': moveState.right = true; break;
+            case 'KeyQ': moveState.up = true; break;
+            case 'KeyZ': moveState.down = true; break;
             case 'KeyE': exit3DMode(); break;
         }
     }, false);
@@ -127,7 +131,7 @@ function setupNavigation() {
     document.addEventListener('keyup', (event) => {
         if (!is3DMode) return;
 
-        const handled = ['KeyW', 'KeyS', 'KeyA', 'KeyD'].includes(event.code);
+        const handled = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyZ'].includes(event.code);
 
         if (handled) {
             event.stopPropagation();
@@ -139,6 +143,8 @@ function setupNavigation() {
             case 'KeyS': moveState.backward = false; break;
             case 'KeyA': moveState.left = false; break;
             case 'KeyD': moveState.right = false; break;
+            case 'KeyQ': moveState.up = false; break;
+            case 'KeyZ': moveState.down = false; break;
         }
     }, false);
 }
@@ -150,6 +156,10 @@ function updateCameraMovement(delta) {
     if (moveState.backward) controls.moveForward(-actualSpeed);
     if (moveState.right) controls.moveRight(actualSpeed);
     if (moveState.left) controls.moveRight(-actualSpeed);
+
+    // Vertical movement (global Y axis)
+    if (moveState.up) camera.position.y += actualSpeed;
+    if (moveState.down) camera.position.y -= actualSpeed;
 }
 
 function setupAgents() {
@@ -544,6 +554,92 @@ function createAppPlanes() {
     cssScene.add(group);
 }
 
+function createAnnouncementPlane() {
+    if (cssScene.getObjectByName("announcementPlane")) return;
+
+    const w = 1000, h = 400;
+    const div = document.createElement('div');
+    div.style.width = w + 'px';
+    div.style.height = h + 'px';
+    div.style.backgroundColor = 'rgba(20, 0, 0, 0.9)';
+    div.style.border = '4px solid #ff0000';
+    div.style.borderRadius = '20px';
+    div.style.overflow = 'hidden';
+    div.style.boxShadow = '0 0 50px #ff0000, inset 0 0 20px #ff0000';
+    div.style.display = 'flex';
+    div.style.flexDirection = 'column';
+    div.style.alignItems = 'center';
+    div.style.justifyContent = 'center';
+    div.style.fontFamily = "'Space Grotesk', sans-serif";
+    div.style.color = '#ff0000';
+    div.style.position = 'relative';
+
+    const header = document.createElement('div');
+    header.innerText = "CRITICAL ANNOUNCEMENT";
+    header.style.width = '100%';
+    header.style.padding = '15px';
+    header.style.backgroundColor = '#ff0000';
+    header.style.color = 'black';
+    header.style.fontWeight = 'bold';
+    header.style.textAlign = 'center';
+    header.style.fontSize = '24px';
+    header.style.letterSpacing = '10px';
+    div.appendChild(header);
+
+    const body = document.createElement('div');
+    body.style.flex = '1';
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
+    body.style.alignItems = 'center';
+    body.style.justifyContent = 'center';
+    body.style.width = '100%';
+    body.style.position = 'relative';
+
+    const redactedText = document.createElement('div');
+    redactedText.innerHTML = "SYSTEM STATUS: <span style='background-color:#ff0000; color:#ff0000; user-select:none;'>[REDACTED]</span><br>CLEARANCE LEVEL: <span style='background-color:#ff0000; color:#ff0000; user-select:none;'>[LOCKED]</span>";
+    redactedText.style.fontSize = '32px';
+    redactedText.style.textAlign = 'center';
+    redactedText.style.marginTop = '20px';
+    redactedText.style.lineHeight = '1.6';
+    body.appendChild(redactedText);
+
+    const warnIcon = document.createElement('div');
+    warnIcon.innerText = "⚠️";
+    warnIcon.style.fontSize = '80px';
+    warnIcon.style.marginBottom = '10px';
+    warnIcon.style.animation = 'pulse 1s infinite alternate';
+    body.appendChild(warnIcon);
+
+    // Glitch overlay effect
+    const glitch = document.createElement('div');
+    glitch.style.position = 'absolute';
+    glitch.style.top = '0'; glitch.style.left = '0';
+    glitch.style.width = '100%'; glitch.style.height = '100%';
+    glitch.style.background = 'repeating-linear-gradient(0deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 1px, transparent 2px, transparent 3px)';
+    glitch.style.pointerEvents = 'none';
+    body.appendChild(glitch);
+
+    div.appendChild(body);
+
+    const object = new CSS3DObject(div);
+    object.name = "announcementPlane";
+    object.position.set(0, 600, -2500); // Prominent position
+    cssScene.add(object);
+
+    // Add pulse animation keyframe if not exists
+    if (!document.getElementById('announcement-styles')) {
+        const style = document.createElement('style');
+        style.id = 'announcement-styles';
+        style.innerHTML = `
+            @keyframes pulse {
+                from { opacity: 1; transform: scale(1); }
+                to { opacity: 0.3; transform: scale(1.1); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
 function setupRenderers() {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -590,6 +686,7 @@ function createOverlays() {
     overlay.innerHTML = `
         <h2 style="color:var(--tertiary); margin-bottom:15px;">3D MODE ACTIVE</h2>
         <p style="margin-bottom:10px;"><b>WASD</b> TO MOVE | <b>MOUSE</b> TO LOOK</p>
+        <p style="margin-bottom:10px;"><b>Q</b> / <b>Z</b> TO FLY UP / DOWN</p>
         <p style="margin-bottom:10px;"><b>ESC</b> TO UNLOCK CURSOR</p>
         <p><b>E</b> TO EXIT</p>
     `;
@@ -673,6 +770,7 @@ export function transformTo3D() {
     camera.lookAt(0, 0, 0);
     // Infinite grid is always present, no need to add
     if (!cssScene.getObjectByName("appPlanesGroup")) createAppPlanes();
+    createAnnouncementPlane();
 
     // Show Renderers
     if (renderer) renderer.domElement.style.display = 'block';
@@ -687,7 +785,7 @@ export function transformTo3D() {
 export function exit3DMode() {
     is3DMode = false;
     window.dispatchEvent(new CustomEvent('spatial-web-3d-inactive'));
-    moveState.forward = moveState.backward = moveState.left = moveState.right = false;
+    moveState.forward = moveState.backward = moveState.left = moveState.right = moveState.up = moveState.down = false;
     // Button is disabled, no need to update text
     const overlay = document.getElementById('instructions-overlay');
     const hud = document.getElementById('hud-display');
