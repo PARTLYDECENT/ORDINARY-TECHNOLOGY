@@ -523,6 +523,24 @@ class EntityManager {
         // Initialize renderer when DOM is ready
         if (typeof window !== 'undefined') {
             this.initializeRenderer();
+
+            // Listen for 3D mode toggle
+            window.addEventListener('spatial-web-3d-active', () => this.handle3DMode(true));
+            window.addEventListener('spatial-web-3d-inactive', () => this.handle3DMode(false));
+        }
+    }
+
+    handle3DMode(active) {
+        if (active) {
+            console.log('🛑 EntityManager: 3D Mode Active - Pausing 2D entities');
+            this.stop();
+            if (this.renderer) {
+                // Clear the canvas so they disappear
+                this.renderer.clearCanvas();
+            }
+        } else {
+            console.log('▶️ EntityManager: 3D Mode Inactive - Resuming 2D entities');
+            this.start();
         }
     }
 

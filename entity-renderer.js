@@ -46,6 +46,13 @@ class EntityRenderer {
     }
 
     /**
+     * Clear the visual canvas without removing entities
+     */
+    clearCanvas() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    /**
      * Main render loop - draws all entities
      */
     render() {
