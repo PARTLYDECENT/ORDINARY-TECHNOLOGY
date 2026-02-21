@@ -2325,19 +2325,36 @@
         if (window._vGain) {
           try { window._vGain.gain.linearRampToValueAtTime(0, vAudioCtx.currentTime + 1.5); } catch (e) { }
         }
-        // Fade overlay out
+
+        // Hide voxel elements
+        const canvasContainer = document.getElementById('voxel-canvas-container');
+        const voxelUi = document.getElementById('voxel-ui');
+        if (canvasContainer) canvasContainer.style.opacity = '0';
+        if (voxelUi) voxelUi.style.opacity = '0';
+
+        // Show intromessage.html iframe
         const overlay = document.getElementById('intro-overlay');
-        overlay.style.opacity = '0';
-        overlay.style.pointerEvents = 'none';
-        setTimeout(() => {
-          // Cleanup Three.js resources
-          if (vRenderer) { vRenderer.dispose(); vRenderer.domElement.remove(); }
-          if (window._vOsc) { try { window._vOsc.stop(); } catch (e) { } }
-          if (vAudioCtx) { try { vAudioCtx.close(); } catch (e) { } }
-          overlay.remove();
-          document.body.style.overflow = '';
-          window.removeEventListener('resize', vOnWindowResize);
-        }, 2000);
+        const iframeStr = '<iframe id="intro-message-iframe" src="intromessage.html" style="width:100%;height:100%;border:none;position:absolute;top:0;left:0;z-index:999999;background:black;"></iframe>';
+        overlay.insertAdjacentHTML('beforeend', iframeStr);
+
+        // Listen for completion
+        window.addEventListener('message', function onMessage(event) {
+          if (event.data === 'introComplete') {
+            window.removeEventListener('message', onMessage);
+            overlay.style.transition = 'opacity 1s ease';
+            overlay.style.opacity = '0';
+            overlay.style.pointerEvents = 'none';
+            setTimeout(() => {
+              // Cleanup Three.js resources
+              if (vRenderer) { vRenderer.dispose(); vRenderer.domElement.remove(); }
+              if (window._vOsc) { try { window._vOsc.stop(); } catch (e) { } }
+              if (vAudioCtx) { try { vAudioCtx.close(); } catch (e) { } }
+              overlay.remove();
+              document.body.style.overflow = '';
+              window.removeEventListener('resize', vOnWindowResize);
+            }, 2000);
+          }
+        });
       }
 
       function vAnimate() {

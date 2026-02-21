@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUI | Monolith System</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 800px;
+        }
+
+        /* 3D Black and White Grid Background */
+        .grid-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .grid-plane {
+            position: absolute;
+            bottom: -30vh;
+            left: -50vw;
+            width: 200vw;
+            height: 150vh;
+            background-image:
+                linear-gradient(to right, #333 1px, transparent 1px),
+                linear-gradient(to bottom, #333 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: rotateX(75deg);
+            transform-origin: center center;
+            animation: gridMove 2s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% {
+                transform: rotateX(75deg) translateY(0);
+            }
+
+            100% {
+                transform: rotateX(75deg) translateY(50px);
+            }
+        }
+
+        /* Layout for the Two Windows */
+        .ui-wrapper {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 90%;
+            max-width: 800px;
+        }
+
+        .window {
+            background: #000;
+            border: 2px solid #fff;
+            padding: 20px;
+            box-shadow: 10px 10px 0px rgba(255, 255, 255, 0.1);
+        }
+
+        .window-header {
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Visualizer Window */
+        #viz-window {
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #viz-canvas {
+            width: 100%;
+            flex-grow: 1;
+            background: #050505;
+        }
+
+        /* Text Window */
+        #text-window {
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #dialogue-text {
+            font-size: 1.2rem;
+            line-height: 1.5;
+            flex-grow: 1;
+        }
+
+        .caret {
+            display: inline-block;
+            width: 10px;
+            height: 1.2rem;
+            background: #fff;
+            vertical-align: middle;
+            animation: blink 0.8s steps(2, start) infinite;
+        }
+
+        @keyframes blink {
+            to {
+                visibility: hidden;
+            }
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        button {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 10px 20px;
+            font-family: inherit;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="grid-container">
+        <div class="grid-plane"></div>
+    </div>
+
+    <div class="ui-wrapper">
+        <!-- Window 1: Visualizer -->
+        <div class="window" id="viz-window">
+            <div class="window-header">
+                <span>FREQ_ANALYSIS // <span id="viz-mode-text">MODE_01</span></span>
+                <span id="status-ind">IDLE</span>
+            </div>
+            <canvas id="viz-canvas"></canvas>
+        </div>
+
+        <!-- Window 2: Text Display -->
+        <div class="window" id="text-window">
+            <div class="window-header">
+                <span>TRANSCRIPT_LOG</span>
+                <span>SYSTEM_READY</span>
+            </div>
+            <div id="dialogue-text">
+                AWAITING INPUT...<span class="caret"></span>
+            </div>
+            <div class="controls">
+                <button onclick="startTransmission()">Play Audio</button>
+                <button onclick="stopTransmission()">Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('viz-canvas');
+        const ctx = canvas.getContext('2d');
+        const dialogueBox = document.getElementById('dialogue-text');
+        const statusInd = document.getElementById('status-ind');
+        const vizModeText = document.getElementById('viz-mode-text');
+
+        let isTransmitting = false;
+        let typeInterval = null;
+        let vizMode = 0; // 0: Bars, 1: Wave, 2: Center-Mirrored
+
+        // Auto-switch visualizer every 4 seconds
+        setInterval(() => {
+            vizMode = (vizMode + 1) % 3;
+            vizModeText.innerText = `MODE_0${vizMode + 1}`;
+        }, 4000);
+
+        // Audio Data Array (Simulated since Browser TTS cannot be routed to Web Audio API)
+        const dataArray = new Uint8Array(64);
+
+        const story = "Soichiro Honda's empire didn't start with the NSX. It started with failure. Before the war, he poured everything into casting piston rings for Toyota. They rejected his first batch. He retooled, won the contract, and then? B-29 bombers and an earthquake leveled his factories. He had nothing left but surplus radio engines and a hot water bottle for a gas tank. He strapped them to bicycles just to get people moving through the rubble of Hamamatsu. From that ash, he built the largest internal combustion engine manufacturer on earth. His engineering—stuff like CVCC and VTEC—forced everyone, even the giants at Ford and Chevy, to rethink what a motor could do. He proved that success is just the one percent of your work that survives the ninety-nine percent that is failure. That is the soul of the machine.";
+
+        function resize() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function draw() {
+            requestAnimationFrame(draw);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Manage fake highs and lows
+            if (isTransmitting) {
+                for (let i = 0; i < dataArray.length; i++) {
+                    dataArray[i] = Math.max(0, dataArray[i] - 15); // Decay
+
+                    // Randomly spike "lows" (index 0-20) and "highs" (index 40-64)
+                    if (Math.random() > 0.85) {
+                        if (i < 20) dataArray[i] = 150 + Math.random() * 105; // Bass hits
+                        else if (i > 40) dataArray[i] = 100 + Math.random() * 100; // Treble spikes
+                        else dataArray[i] = 50 + Math.random() * 150; // Mids
+                    }
+                }
+            } else {
+                for (let i = 0; i < dataArray.length; i++) {
+                    dataArray[i] = Math.max(0, dataArray[i] - 10);
+                }
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+
+            const w = canvas.width;
+            const h = canvas.height;
+
+            if (vizMode === 0) {
+                // MODE 1: Standard Bars
+                const barWidth = (w / dataArray.length) - 1;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const barHeight = (dataArray[i] / 255) * h;
+                    ctx.fillRect(i * (barWidth + 1), h - barHeight, barWidth, barHeight);
+                }
+            }
+            else if (vizMode === 1) {
+                // MODE 2: Waveform Oscilloscope
+                ctx.beginPath();
+                const sliceWidth = w / dataArray.length;
+                let x = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const v = dataArray[i] / 255;
+                    const y = h - (v * h);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                ctx.lineTo(canvas.width, canvas.height);
+                ctx.lineTo(0, canvas.height);
+                ctx.stroke();
+            }
+            else if (vizMode === 2) {
+                // MODE 3: Center-Mirrored Spectrum
+                const halfW = w / 2;
+                const barWidth = (halfW / dataArray.length) - 1;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const barHeight = (dataArray[i] / 255) * h;
+                    // Draw Right side
+                    ctx.fillRect(halfW + (i * (barWidth + 1)), (h / 2) - (barHeight / 2), barWidth, barHeight);
+                    // Draw Left side
+                    ctx.fillRect(halfW - (i * (barWidth + 1)) - barWidth, (h / 2) - (barHeight / 2), barWidth, barHeight);
+                }
+            }
+        }
+
+        function typeText() {
+            let charIndex = 0;
+            dialogueBox.innerHTML = ''; // Clear text
+
+            typeInterval = setInterval(() => {
+                if (!isTransmitting) {
+                    clearInterval(typeInterval);
+                    return;
+                }
+
+                if (charIndex < story.length) {
+                    dialogueBox.innerText = story.substring(0, charIndex + 1);
+
+                    // Keep Caret
+                    const caret = document.createElement('span');
+                    caret.className = 'caret';
+                    dialogueBox.appendChild(caret);
+
+                    // Spike data heavily when a new character is spoken
+                    if (dataArray) {
+                        dataArray[Math.floor(Math.random() * 20)] = 255; // Force low spike
+                        dataArray[40 + Math.floor(Math.random() * 20)] = 200; // Force high spike
+                    }
+
+                    charIndex++;
+                } else {
+                    clearInterval(typeInterval);
+                }
+            }, 40); // 40ms typing speed closely matches speech rate
+        }
+
+        function startTransmission() {
+            if (isTransmitting) return;
+
+            window.speechSynthesis.cancel();
+            if (typeInterval) clearInterval(typeInterval);
+
+            isTransmitting = true;
+            statusInd.innerText = "ACTIVE";
+
+            const utterance = new SpeechSynthesisUtterance(story);
+            const voices = window.speechSynthesis.getVoices();
+
+            // Use the originally requested voice profile
+            const targetVoice = voices.find(v => v.name.includes('Google UK English Male')) || voices[0];
+            utterance.voice = targetVoice;
+            utterance.pitch = 0.8;
+            utterance.rate = 0.9;
+
+            utterance.onend = () => {
+                isTransmitting = false;
+                statusInd.innerText = "IDLE";
+                setTimeout(() => {
+                    window.parent.postMessage('introComplete', '*');
+                }, 1000);
+            };
+
+            utterance.onerror = () => stopTransmission();
+
+            window.speechSynthesis.speak(utterance);
+            typeText();
+        }
+
+        function stopTransmission() {
+            window.speechSynthesis.cancel();
+            if (typeInterval) clearInterval(typeInterval);
+            isTransmitting = false;
+            statusInd.innerText = "IDLE";
+            dialogueBox.innerHTML = 'TRANSMISSION ABORTED...<span class="caret"></span>';
+            dataArray.fill(0);
+            window.parent.postMessage('introComplete', '*');
+        }
+
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        }
+
+        draw();
+    </script>
+
+</body>
+
+</html>
