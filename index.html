@@ -2738,27 +2738,7 @@
         color: #fff;
       }
 
-      /* OS Modules Grid */
-      .os-modules-grid {
-        display: grid;
-        grid-template-columns: 1fr 300px;
-        grid-template-rows: 1fr 1fr;
-        gap: 20px;
-        margin-top: auto;
-        /* Pushes to bottom if space allows */
-      }
-
-      @media (max-width: 768px) {
-        .os-modules-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .tentacle-os-frame {
-          width: 95vw;
-          height: 85vh;
-        }
-      }
-
+      /* Base Module Styles */
       .os-module {
         background: rgba(15, 2, 2, 0.7);
         border: 1px solid rgba(255, 68, 68, 0.3);
@@ -2766,15 +2746,132 @@
         padding: 15px;
         position: relative;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .os-module.double-span {
+        grid-column: span 2;
+      }
+
+      @media (max-width: 1000px) {
+        .os-module.double-span {
+          grid-column: span 1;
+        }
       }
 
       .os-module-title {
         color: #ff4444;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         letter-spacing: 2px;
         margin-bottom: 10px;
         border-bottom: 1px solid rgba(255, 68, 68, 0.2);
         padding-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .os-module-title .pulse {
+        width: 8px;
+        height: 8px;
+        background: #00ffaa;
+        border-radius: 50%;
+        animation: blink 2s infinite;
+      }
+
+      /* Frequency Analyzer */
+      .freq-analyzer-container {
+        flex: 1;
+        min-height: 120px;
+        position: relative;
+      }
+
+      #freqCanvas {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+      }
+
+      .freq-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(transparent, transparent 2px, rgba(200, 30, 30, 0.1) 3px, rgba(200, 30, 30, 0.1) 4px);
+        pointer-events: none;
+      }
+
+      /* Node Mapper */
+      .node-mapper-container {
+        flex: 1;
+        min-height: 250px;
+        position: relative;
+        border: 1px dashed rgba(255, 107, 63, 0.3);
+        cursor: crosshair;
+      }
+
+      #nodeCanvas {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+      }
+
+      /* Decryption Module */
+      .cipher-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        flex: 1;
+      }
+
+      .cipher-input {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid #ff6b3f;
+        color: #fff;
+        padding: 10px;
+        font-family: 'Share Tech Mono', monospace;
+        min-height: 60px;
+        resize: vertical;
+      }
+
+      .cipher-output {
+        flex: 1;
+        min-height: 80px;
+        background: rgba(20, 5, 5, 0.8);
+        border: 1px solid #ff4444;
+        color: #00ffaa;
+        padding: 10px;
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+        overflow-y: auto;
+      }
+
+      .cipher-btn {
+        background: linear-gradient(90deg, #ff4444, #7a0b2f);
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        border-radius: 3px;
+        transition: filter 0.2s;
+      }
+
+      .cipher-btn:hover {
+        filter: brightness(1.2);
+      }
+
+      /* OS Modules Grid Structure */
+      .os-modules-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: auto;
       }
 
       /* Radar Module */
@@ -2923,6 +3020,30 @@
         <div class="tentacle-status">SYMBIOSIS: ACTIVE</div>
       </div>
 
+      <!-- Aria Voice Subtitles Overlay -->
+      <div id="aria-subtitles" style="
+          position: absolute;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 80%;
+          text-align: center;
+          color: #00ffaa;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 1rem;
+          background: rgba(0, 50, 20, 0.7);
+          border: 1px solid #00ffaa;
+          padding: 10px;
+          border-radius: 5px;
+          box-shadow: 0 0 15px rgba(0,255,170,0.5);
+          z-index: 100;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.3s ease-in-out;
+      ">
+        <strong style="color: #fff;">[ARIA_VOICE]:</strong> <span id="aria-text"></span>
+      </div>
+
       <div class="tentacle-content">
         <!-- Main Desktop Icons -->
         <div class="os-desktop">
@@ -2996,10 +3117,12 @@
         <!-- Active Modules Grid -->
         <div class="os-modules-grid">
 
-          <!-- Sub-Terminal Module -->
-          <div class="os-module" style="grid-column: 1 / -1;">
-            <div class="os-module-title">OS.CONSOLE_ACCESS</div>
-            <div class="os-console">
+          <!-- Sub-Terminal Module (Spans full width top) -->
+          <div class="os-module double-span">
+            <div class="os-module-title"><span>OS.CONSOLE_ACCESS</span>
+              <div class="pulse"></div>
+            </div>
+            <div class="os-console" style="height: 100px;">
               <div class="os-console-lines" id="console-output">
                 <div>Type 'help' for available commands.</div>
               </div>
@@ -3010,10 +3133,29 @@
             </div>
           </div>
 
+          <!-- Decryption Module -->
+          <div class="os-module" style="min-height: 250px;">
+            <div class="os-module-title">CIPHER.DECRYPT // ALIEN_TX</div>
+            <div class="cipher-container">
+              <textarea class="cipher-input" id="cipher-in" placeholder="INPUT RAW DATA STREAM..."></textarea>
+              <button class="cipher-btn" onclick="startDecryption()">PROCESS CASCADE</button>
+              <div class="cipher-output" id="cipher-out">OUTPUT_WAIT...</div>
+            </div>
+          </div>
+
+          <!-- Frequency Analyzer Module -->
+          <div class="os-module">
+            <div class="os-module-title">FREQ.ANALYZER // AMBIENT_EQ</div>
+            <div class="freq-analyzer-container">
+              <canvas id="freqCanvas"></canvas>
+              <div class="freq-overlay"></div>
+            </div>
+          </div>
+
           <!-- Radar Tracking Module -->
           <div class="os-module">
             <div class="os-module-title">ANOMALY.RADAR</div>
-            <div class="radar-container">
+            <div class="radar-container" style="flex:1; max-height: 150px; border-radius:10px;">
               <div class="radar-sweep"></div>
               <!-- Blips added via JS -->
               <div class="radar-blip" style="top: 30%; left: 60%; animation-delay: 0.5s;"></div>
@@ -3022,20 +3164,12 @@
             </div>
           </div>
 
-          <!-- Neural Metrics Module (Replacing BTC ticker visually) -->
-          <div class="os-module">
-            <div class="os-module-title">NEURAL.DATA_SIPHON</div>
-            <div id="btc-ticker" style="text-align: center; font-family: monospace;">
-              <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px;">
-                <div
-                  style="width: 24px; height: 24px; background: #f7931a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; color:#000;">
-                  ₿</div>
-                <span style="font-size: 16px; font-weight: bold; color:#ddd;">BTC_INTERCEPT</span>
-              </div>
-              <div id="btc-price"
-                style="font-size: 24px; color: #ff6b3f; font-weight: bold; text-shadow: 0 0 10px rgba(255,107,63,0.5);">
-                Loading...</div>
-              <div id="btc-change" style="font-size: 12px; margin-top: 5px;">--</div>
+          <!-- Node Mapper Module (Double span bottom) -->
+          <div class="os-module double-span">
+            <div class="os-module-title"><span>NODE.MAPPER // NEURAL_GRID</span><span
+                style="color:#00ffaa;">[INTERACTIVE]</span></div>
+            <div class="node-mapper-container" id="nodeMapperContainer">
+              <canvas id="nodeCanvas"></canvas>
             </div>
           </div>
 
@@ -3066,8 +3200,11 @@
       }
       updateBTC();
       setInterval(updateBTC, 60000);
+    </script>
+    <script src="narrator.js"></script>
 
-      // --- TENTACLE OS LOGIC ---
+    <!-- TENTACLE OS LOGIC -->
+    <script>
       const osFrame = document.getElementById('tentacle-os');
       const bootScreen = document.getElementById('os-boot');
       const bootText = document.getElementById('boot-text');
@@ -3077,7 +3214,7 @@
       // Haptic helper for OS interactions
       function pulseHaptic() {
         if (navigator.vibrate) {
-          try { navigator.vibrate(15); } catch(e){}
+          try { navigator.vibrate(15); } catch (e) { }
         }
       }
 
@@ -3121,7 +3258,7 @@
 
       // CLI Logic
       if (cliInput) {
-        cliInput.addEventListener('keydown', function(e) {
+        cliInput.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') {
             const cmd = this.value.trim().toLowerCase();
             this.value = '';
@@ -3132,11 +3269,11 @@
 
       function processCommand(cmd) {
         printToConsole(`<span style="color:#fff;">root@tentacle:~#</span> ${cmd}`);
-        
+
         let response = "";
-        switch(cmd) {
+        switch (cmd) {
           case 'help':
-            response = "AVAILABLE COMMANDS:<br>- status: Check symbiosis link<br>- ping: Scan for anomalies<br>- override: Force system recalibration<br>- clear: Clear terminal";
+            response = "AVAILABLE COMMANDS:<br>- status: Check symbiosis link<br>- ping: Scan for anomalies<br>- override: Force system recalibration<br>- clear: Clear terminal<br>- analyze [on/off]: Toggle ambient frequency analysis<br>- scan network: Initialize Node Mapper";
             break;
           case 'status':
             response = "SYMBIOSIS: ACTIVE<br>NEURAL LOAD: 42%<br>VOID RESONANCE: STABLE";
@@ -3148,6 +3285,18 @@
             response = "INITIATING OVERRIDE...<br>REALITY DISTORTION ENGAGED.";
             toggleRealityDistortion();
             break;
+          case 'analyze on':
+            response = "FREQ.ANALYZER ONLINE.";
+            startAudioVisualizer();
+            break;
+          case 'analyze off':
+            response = "FREQ.ANALYZER OFFLINE.";
+            stopAudioVisualizer();
+            break;
+          case 'scan network':
+            response = "NODE.MAPPER EXPANDED. SCANNING SECTORS.";
+            document.getElementById('nodeMapperContainer').scrollIntoView({ behavior: 'smooth' });
+            break;
           case 'clear':
             cliOutput.innerHTML = '';
             return;
@@ -3155,6 +3304,7 @@
             return;
           default:
             response = `ERR: COMMAND '${cmd}' NOT RECOGNIZED IN THIS ENTITY.`;
+            if (window.AriaNarrator && Math.random() > 0.5) window.AriaNarrator.speak("Input command un-recognized.", () => showAriaSubtitle("Input command unrecognized."), () => hideAriaSubtitle());
         }
 
         setTimeout(() => {
@@ -3173,15 +3323,27 @@
         cliOutput.scrollTop = cliOutput.scrollHeight;
       }
 
+      function showAriaSubtitle(text) {
+        const subtitleBox = document.getElementById('aria-subtitles');
+        const subtitleText = document.getElementById('aria-text');
+
+        subtitleBox.style.opacity = '1';
+        subtitleText.textContent = text;
+      }
+
+      function hideAriaSubtitle() {
+        document.getElementById('aria-subtitles').style.opacity = '0';
+      }
+
       // Boot Sequence
       function runBootSequence() {
         osFrame.style.opacity = '0';
         osFrame.style.transform = 'translateY(20px)';
-        
+
         setTimeout(() => {
           osFrame.style.opacity = '1';
           osFrame.style.transform = 'translateY(0)';
-          
+
           const lines = [
             "INITIALIZING NEURAL LINK...",
             "ESTABLISHING SYMBIOSIS...",
@@ -3190,31 +3352,42 @@
             "SYS_SHELL UPGRADED -> TENTACLE_OS v1.0",
             "ACCESS GRANTED."
           ];
-          
+
           let currentLine = 0;
           bootText.innerHTML = "";
-          
+
           function typeLine() {
             if (currentLine < lines.length) {
               const p = document.createElement('div');
               p.textContent = lines[currentLine];
               p.style.marginBottom = "5px";
               bootText.appendChild(p);
-              
+
               if (currentLine === lines.length - 1) {
                 p.style.color = "#00ffaa"; // Success color for last line
               }
-              
+
               currentLine++;
               pulseHaptic();
               setTimeout(typeLine, 300 + Math.random() * 200);
             } else {
               setTimeout(() => {
                 bootScreen.classList.add('os-boot-hidden');
+
+                // Trigger Aria's Voice when the OS finishes booting
+                const welcomeMessage = "Biological entity detected. Welcome to Tentacle O S Core. I am Aria. Neural link established. How can I assist you with this simulation?";
+                if (window.AriaNarrator) {
+                  window.AriaNarrator.speak(
+                    welcomeMessage,
+                    () => showAriaSubtitle(welcomeMessage),
+                    () => hideAriaSubtitle()
+                  );
+                }
+
               }, 800);
             }
           }
-          
+
           typeLine();
         }, 500); // slight delay after load before starting boot
       }
@@ -5784,6 +5957,221 @@
 
               // Global reference for debugging
               window.QUANTUM_TAB_ENGINE = quantumEngine;
+
+              // ==========================================
+              // ALIEN OS MINI-TOOLS LOGIC
+              // ==========================================
+
+              // 1. Decryption Module (CIPHER.DECRYPT)
+      window.startDecryption = function() {
+        const inputStr = document.getElementById('cipher-in').value;
+        const outBox = document.getElementById('cipher-out');
+        if(!inputStr) return;
+
+                outBox.innerHTML = '';
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+{}|:<>?';
+                const targetText = "[DECRYPTED SIGNAL]: " + inputStr.split('').reverse().join(''); // Simple fake decryption
+
+                // Aria feedback
+                if (window.AriaNarrator && Math.random() > 0.3) {
+                  window.AriaNarrator.speak("Initiating decryption cascade.", () => showAriaSubtitle("Initiating decryption cascade."), () => hideAriaSubtitle());
+                }
+
+                let iterations = 0;
+                const maxIters = 20;
+                const interval = setInterval(() => {
+                  let currentStr = "";
+                  for (let i = 0; i < targetText.length; i++) {
+                    if (i < iterations) currentStr += targetText[i];
+                    else currentStr += chars[Math.floor(Math.random() * chars.length)];
+                  }
+                  outBox.innerText = currentStr;
+
+                  if (iterations >= targetText.length) {
+                    clearInterval(interval);
+                    // pulseHaptic(); // Assuming pulseHaptic is defined elsewhere or will be added
+                    if (window.AriaNarrator && Math.random() > 0.5) window.AriaNarrator.speak("Signal decoded.", () => showAriaSubtitle("Signal decoded."), () => hideAriaSubtitle());
+                  }
+                  iterations += 1;
+                }, 50);
+              }
+
+              // 2. Frequency Analyzer
+              const fCanvas = document.getElementById('freqCanvas');
+              const fCtx = fCanvas.getContext('2d');
+              let audioCtx, analyser, dataArray, freqAnimId;
+              let freqActive = false;
+
+              function resizeFreq() {
+                fCanvas.width = fCanvas.parentElement.clientWidth;
+                fCanvas.height = fCanvas.parentElement.clientHeight;
+              }
+              window.addEventListener('resize', resizeFreq);
+              resizeFreq();
+
+      window.startAudioVisualizer = function() {
+        if (freqActive) return;
+        freqActive = true;
+
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+          // Fake oscillator input to give it something to visualize without requiring mic perms
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(50, audioCtx.currentTime);
+
+          // Modulate it slightly
+          const lfo = audioCtx.createOscillator();
+          lfo.frequency.value = 0.5;
+          const gainNode = audioCtx.createGain();
+          lfo.connect(gainNode.gain);
+          osc.connect(gainNode);
+
+          gainNode.connect(analyser); // Connect to analyser, but NOT to destination (so it's silent)
+          osc.start();
+          lfo.start();
+        }
+
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        drawFreq();
+      }
+
+      window.stopAudioVisualizer = function() {
+        freqActive = false;
+        cancelAnimationFrame(freqAnimId);
+        fCtx.clearRect(0, 0, fCanvas.width, fCanvas.height);
+      }
+
+              function drawFreq() {
+                if (!freqActive) return;
+                freqAnimId = requestAnimationFrame(drawFreq);
+
+                analyser.getByteFrequencyData(dataArray);
+
+                fCtx.fillStyle = 'rgba(15, 2, 2, 0.2)';
+                fCtx.fillRect(0, 0, fCanvas.width, fCanvas.height);
+
+                const barWidth = (fCanvas.width / dataArray.length) * 1.5;
+                let x = 0;
+
+                for (let i = 0; i < dataArray.length; i++) {
+                  // Add some fake jitter for "alien" effect
+                  const jitter = Math.random() * 20;
+                  const barHeight = (dataArray[i] / 255) * fCanvas.height * 0.8 + jitter;
+
+                  fCtx.fillStyle = `rgb(${dataArray[i] + 100}, 50, 50)`;
+                  fCtx.fillRect(x, fCanvas.height - barHeight, barWidth - 1, barHeight);
+                  x += barWidth;
+                }
+              }
+
+              // 3. Node Mapper
+              const nCanvas = document.getElementById('nodeCanvas');
+              const nCtx = nCanvas.getContext('2d');
+              let nodes = [];
+              let draggedNode = null;
+              let nmAnimId;
+
+              function resizeNodeMap() {
+                nCanvas.width = nCanvas.parentElement.clientWidth;
+                nCanvas.height = nCanvas.parentElement.clientHeight;
+              }
+              window.addEventListener('resize', resizeNodeMap);
+              resizeNodeMap();
+
+              function initNodes() {
+                nodes = [];
+                for (let i = 0; i < 15; i++) {
+                  nodes.push({
+                    x: Math.random() * nCanvas.width,
+                    y: Math.random() * nCanvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    radius: Math.random() * 3 + 2,
+                    links: [] // Populated dynamically
+                  });
+                }
+              }
+
+              function drawNodes() {
+                nmAnimId = requestAnimationFrame(drawNodes);
+
+                nCtx.fillStyle = 'rgba(10, 5, 5, 0.3)';
+                nCtx.fillRect(0, 0, nCanvas.width, nCanvas.height);
+
+                // Update & wrap
+                nodes.forEach(n => {
+                  if (n !== draggedNode) {
+                    n.x += n.vx;
+                    n.y += n.vy;
+                    if (n.x < 0) n.x = nCanvas.width;
+                    if (n.x > nCanvas.width) n.x = 0;
+                    if (n.y < 0) n.y = nCanvas.height;
+                    if (n.y > nCanvas.height) n.y = 0;
+                  }
+                });
+
+                // Draw links
+                nCtx.lineWidth = 1;
+                for (let i = 0; i < nodes.length; i++) {
+                  for (let j = i + 1; j < nodes.length; j++) {
+                    const dx = nodes[i].x - nodes[j].x;
+                    const dy = nodes[i].y - nodes[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 100) {
+                      nCtx.strokeStyle = `rgba(0, 255, 170, ${1 - dist / 100})`;
+                      nCtx.beginPath();
+                      nCtx.moveTo(nodes[i].x, nodes[i].y);
+                      nCtx.lineTo(nodes[j].x, nodes[j].y);
+                      nCtx.stroke();
+                    }
+                  }
+                }
+
+                // Draw points
+                nodes.forEach(n => {
+                  nCtx.fillStyle = n === draggedNode ? '#ff0000' : '#ff6b3f';
+                  nCtx.beginPath();
+                  nCtx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+                  nCtx.fill();
+                });
+              }
+
+              // Node Map Interaction
+              nCanvas.addEventListener('mousedown', (e) => {
+                const rect = nCanvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+
+                draggedNode = nodes.find(n => {
+                  const dx = mx - n.x;
+                  const dy = my - n.y;
+                  return Math.sqrt(dx * dx + dy * dy) < 15;
+                });
+                // if(draggedNode && window.AriaNarrator && Math.random() > 0.7) { // Assuming AriaNarrator is defined elsewhere
+                //     window.AriaNarrator.speak("Node selected.", () => showAriaSubtitle("Node selected."), () => hideAriaSubtitle());
+                // }
+              });
+
+              window.addEventListener('mousemove', (e) => {
+                if (draggedNode) {
+                  const rect = nCanvas.getBoundingClientRect();
+                  draggedNode.x = e.clientX - rect.left;
+                  draggedNode.y = e.clientY - rect.top;
+                }
+              });
+
+              window.addEventListener('mouseup', () => { draggedNode = null; });
+              nCanvas.addEventListener('touchstart', (e) => { /* Mobile support basic */ const t = e.touches[0]; nCanvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY })); });
+
+              // Start node map loop immediately
+              initNodes();
+              drawNodes();
             });
           </script>
 
