@@ -203,17 +203,39 @@ class ProceduralEntity {
         }
 
         // Create eye particles
-        const eyeCount = Math.random() > 0.5 ? 2 : 1;
+        const eyeCount = this.stage >= 4 ? 3 : (Math.random() > 0.5 ? 2 : 1);
         const eyeSize = this.size * 0.15;
 
         for (let i = 0; i < eyeCount; i++) {
-            const xPos = eyeCount === 2 ? (i === 0 ? -1 : 1) * this.size * 0.2 : 0;
+            const angle = (i / eyeCount) * Math.PI * 2;
+            const dist = eyeCount > 2 ? this.size * 0.2 : (eyeCount === 2 ? (i === 0 ? -1 : 1) * this.size * 0.2 : 0);
 
             this.eyes.push({
-                x: xPos,
-                y: -this.size * 0.15,
+                x: eyeCount > 2 ? Math.cos(angle) * dist : dist,
+                y: eyeCount > 2 ? Math.sin(angle) * dist : -this.size * 0.15,
                 radius: eyeSize
             });
+        }
+
+        // Orbital particles (Stage 5+)
+        if (this.stage >= 5) {
+            const orbitalCount = this.stage >= 6 ? 12 : 5;
+            for (let i = 0; i < orbitalCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = this.size * (1.2 + Math.random() * 0.5);
+                this.particles.push({
+                    x: Math.cos(angle) * dist,
+                    y: Math.sin(angle) * dist,
+                    baseX: Math.cos(angle) * dist,
+                    baseY: Math.sin(angle) * dist,
+                    radius: this.particleRadius * 0.3,
+                    type: 'orbital',
+                    angle: angle,
+                    speed: 0.02 + Math.random() * 0.03,
+                    dist: dist,
+                    offset: Math.random() * Math.PI * 2
+                });
+            }
         }
     }
 
@@ -306,6 +328,13 @@ class ProceduralEntity {
             this.energyField.color = `hsl(${(hue + 180) % 360}, 100%, 70%)`;
         }
 
+        // Singularity stage: reality glitching
+        if (this.stage === 6) {
+            this.color = (Math.floor(Date.now() / 100) % 2 === 0) ? '#ffffff' : '#000000';
+            this.energyField.color = '#ffffff';
+            this.glowIntensity = 2 + Math.sin(Date.now() / 200);
+        }
+
         // Bounce off edges
         if (this.position.x <= 0 || this.position.x >= window.innerWidth - this.size) {
             this.velocity.x *= -1;
@@ -349,6 +378,11 @@ class ProceduralEntity {
                 const perpAngle = particle.angle + Math.PI / 2;
                 particle.x = particle.baseX + Math.cos(perpAngle) * wave + Math.sin(perpAngle) * wave2;
                 particle.y = particle.baseY + Math.sin(perpAngle) * wave + Math.cos(perpAngle) * wave2;
+            } else if (particle.type === 'orbital') {
+                // Rotating orbitals
+                particle.angle += particle.speed;
+                particle.x = Math.cos(particle.angle) * particle.dist;
+                particle.y = Math.sin(particle.angle) * particle.dist;
             }
         });
     }
@@ -356,12 +390,13 @@ class ProceduralEntity {
     // Evolution System Methods
     checkEvolution() {
         const newStage = this.getStageForPoints(this.evolutionPoints);
-        if (newStage > this.stage && newStage <= 3) {
+        if (newStage > this.stage && newStage <= 6) {
             this.evolve(newStage);
         }
     }
 
     getStageForPoints(points) {
+        if (points >= 3600) return 6; // Void Singularity
         if (points >= 1800) return 5; // Cosmic
         if (points >= 1200) return 4; // Transcendent
         if (points >= 600) return 3; // Apex
@@ -427,6 +462,19 @@ class ProceduralEntity {
                 this.holographic = true; // Holographic projections
                 this.multiForm = true; // Multiple overlapping forms
                 this.skinPattern = 'cosmic'; // Ultimate pattern
+                break;
+            case 6: // Void Singularity stage - EXISTENTIAL ERROR
+                this.size *= 2.0;
+                this.tentacles = 0; // All tentacles absorbed into the void
+                this.glowIntensity = 5;
+                this.speed *= 1.1; // Majestic but slow
+                this.color = '#000000';
+                this.rotationSpeed *= 0.1;
+                this.energyField.enabled = true;
+                this.energyField.radius = this.size * 4;
+                this.energyField.intensity = 2.0;
+                this.skinPattern = 'none'; // Void is featureless
+                this.bioluminescenceIntensity = 0;
                 break;
         }
 

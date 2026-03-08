@@ -173,6 +173,11 @@ class EntityRenderer {
             this.renderMergeEffect(ctx, entity);
         }
 
+        // Void Singularity (Stage 6)
+        if (entity.stage >= 6) {
+            this.renderVoidSingularity(ctx, entity);
+        }
+
         // Phasing transparency
         if (entity.phasing && entity.phasing.active) {
             // Already handled via globalAlpha in main render
@@ -641,10 +646,64 @@ class EntityRenderer {
             const y = Math.sin(angle) * distance;
             const size = 3 * (1 - progress);
 
-            ctx.fillStyle = effect.absorbedColor.replace(')', `, ${1 - progress})`).replace('hsl', 'hsla');
+            ctx.fillStyle = (effect.absorbedColor || '#fff').replace(')', `, ${1 - progress})`).replace('hsl', 'hsla');
             ctx.beginPath();
             ctx.arc(x, y, size, 0, Math.PI * 2);
             ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    /**
+     * Render Void Singularity effect (Stage 6)
+     */
+    renderVoidSingularity(ctx, entity) {
+        const time = this.time;
+        const size = entity.size * 0.4;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'difference'; // Inversion effect
+
+        // Inner void core
+        const coreGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+        coreGradient.addColorStop(0, 'white'); // Becomes black due to 'difference'
+        coreGradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.5)');
+        coreGradient.addColorStop(1, 'transparent');
+
+        ctx.fillStyle = coreGradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * (1 + Math.sin(time * 5) * 0.1), 0, Math.PI * 2);
+        ctx.fill();
+
+        // Event horizon ring
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const ringRadius = size * 1.5 + Math.cos(time * 3) * 5;
+        ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Accretion disk particles
+        const particleCount = 12;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = time * 2 + (i / particleCount) * Math.PI * 2;
+            const dist = ringRadius * (1.2 + Math.sin(time + i) * 0.3);
+            const px = Math.cos(angle) * dist;
+            const py = Math.sin(angle) * dist;
+
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Connecting line
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(px, py);
+            ctx.stroke();
         }
 
         ctx.restore();

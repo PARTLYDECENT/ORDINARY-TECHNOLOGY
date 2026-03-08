@@ -16,10 +16,12 @@ class EntityVoice {
         this.timbre = ['sine', 'square', 'sawtooth', 'triangle'][Math.floor(Math.random() * 4)];
         this.chatters = Math.random() > 0.5; // Some talk more than others
 
-        // Proto-language syllables
+        // Proto-language syllables (Guttural, Clicky, and Exotic)
         this.syllables = [
-            'ka', 'tu', 'bar', 'ix', 'no', 'ze', 'la', 'qui', 'om', 'ra',
-            'shh', 'glip', 'fop', 'wex', 'yuin', 'zzt', 'krr', 'plip'
+            'khu', 'z\'ka', 'gh-r', 'th\'un', 'n\'ga', 'x-l', 'mra', 'v\'lo',
+            'sh-na', 'd-ra', 'p\'ta', 'o\'mu', 'k\'lra', 'z\'nu', 'ærr', 'θo',
+            'ðu', 'ŋa', 'χi', 'ʔa', 'qov', 'xul', 'ʃar', 'ʒu', 'ʋi', 'ʕa', 'ħo',
+            'krix', 'vash', 'nuum', 'glot', 'zark', 'feek', 'vrod', 'thra'
         ];
 
         this.speechBubble = null;
@@ -37,17 +39,36 @@ class EntityVoice {
     }
 
     /**
-     * Generate a procedural word
+     * Generate a procedural word with proto-language rules
      */
     generateWord() {
         const length = 1 + Math.floor(Math.random() * 3);
         let word = '';
         for (let i = 0; i < length; i++) {
-            const syllable = this.syllables[Math.floor(Math.random() * this.syllables.length)];
+            let syllable = this.syllables[Math.floor(Math.random() * this.syllables.length)];
+
+            // Chance to mutate syllable
+            if (Math.random() > 0.8) syllable = syllable.replace('a', 'ä').replace('o', 'ö').replace('u', 'ü');
+
             word += syllable;
-            if (i < length - 1 && Math.random() > 0.7) word += '-';
+            if (i < length - 1 && Math.random() > 0.7) word += '\'';
         }
-        return word.toUpperCase();
+        return word;
+    }
+
+    /**
+     * Generate a procedural sentence
+     */
+    generateSentence() {
+        const wordCount = 2 + Math.floor(Math.random() * 4);
+        const words = [];
+        for (let i = 0; i < wordCount; i++) {
+            words.push(this.generateWord());
+        }
+
+        // Add a proto-punctuation
+        const punctuation = ['.', '!', '?', '...', '~'][Math.floor(Math.random() * 5)];
+        return words.join(' ') + punctuation;
     }
 
     /**
@@ -62,11 +83,18 @@ class EntityVoice {
             this.audioCtx.resume();
         }
 
-        const word = this.generateWord();
-        this.showSpeechBubble(word, type);
+        let text;
+        // Higher stage entities speak in sentences
+        if (this.entity.stage >= 3 || (type === 'evolve' && this.entity.stage >= 2)) {
+            text = this.generateSentence();
+        } else {
+            text = this.generateWord().toUpperCase();
+        }
+
+        this.showSpeechBubble(text, type);
         this.playSound(type);
 
-        console.log(`🔊 [${this.entity.id}] says: "${word}"`);
+        console.log(`🔊 [${this.entity.id}] (${type}) : "${text}"`);
     }
 
     /**
@@ -86,29 +114,37 @@ class EntityVoice {
         // Style based on type
         let color = this.entity.color || '#fff';
         let scale = 1;
+        let blur = '0px';
 
         if (type === 'evolve') {
-            color = '#ff00ff'; // Special color for evolution
-            scale = 1.5;
-            bubble.style.fontWeight = 'bold';
+            color = '#00ffff';
+            scale = 1.6;
+            bubble.style.fontWeight = '900';
+            bubble.style.letterSpacing = '2px';
+        } else if (this.entity.stage >= 4) {
+            blur = '1px'; // Exotic/Cosmic entities have shimmering speech
+            scale = 1.2;
         }
 
         bubble.style.cssText = `
-            position: fixed;
-            pointer-events: none;
-            color: ${color};
-            background: rgba(0, 0, 0, 0.6);
-            padding: 4px 8px;
-            border-radius: 4px;
-            border: 1px solid ${color};
-            font-family: 'Space Grotesk', monospace;
-            font-size: 12px;
-            transform: translate(-50%, -100%) scale(${scale});
-            transition: opacity 0.3s, transform 0.3s;
-            z-index: 10000;
-            opacity: 0;
-            text-shadow: 0 0 5px ${color};
-        `;
+        position: fixed;
+        pointer-events: none;
+        color: ${color};
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 2px solid ${color};
+        font-family: 'Space Grotesk', 'Courier New', monospace;
+        font-size: 14px;
+        transform: translate(-50%, -100%) scale(${scale});
+        transition: opacity 0.4s, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        z-index: 10000;
+        opacity: 0;
+        text-shadow: 0 0 10px ${color};
+        filter: blur(${blur});
+        white-space: nowrap;
+    `;
 
         document.body.appendChild(bubble);
         this.speechBubble = bubble;
@@ -116,76 +152,103 @@ class EntityVoice {
         // Animate in
         requestAnimationFrame(() => {
             bubble.style.opacity = '1';
-            bubble.style.transform = `translate(-50%, -120%) scale(${scale})`;
+            bubble.style.transform = `translate(-50%, -140%) scale(${scale})`;
         });
 
         // Update position immediately
         this.updatePosition();
 
         // Auto remove
+        const duration = text.length * 100 + 2000; // Duration based on text length
         this.speechTimer = setTimeout(() => {
             if (this.speechBubble) {
                 this.speechBubble.style.opacity = '0';
+                this.speechBubble.style.transform = `translate(-50%, -160%) scale(${scale * 0.8})`;
                 setTimeout(() => {
                     if (this.speechBubble) this.speechBubble.remove();
                     this.speechBubble = null;
-                }, 300);
+                }, 400);
             }
-        }, 2000 + Math.random() * 1000);
+        }, duration);
     }
 
     /**
-     * Update bubble position to follow entity
+     * Update bubble position to follow entity with smooth interpolation
      */
     updatePosition() {
         if (this.speechBubble && this.entity) {
             const x = this.entity.position.x;
-            const y = this.entity.position.y - (this.entity.size * 1.2); // Above entity
+            const y = this.entity.position.y - (this.entity.size * 0.8);
+
+            // Use transform for smoother movement than left/top
             this.speechBubble.style.left = `${x}px`;
             this.speechBubble.style.top = `${y}px`;
         }
     }
 
     /**
-     * Audio: Synthesize sound
+     * Audio: Synthesize sound with more complex FM/AM synthesis for proto-feeling
      */
     playSound(type) {
         if (!this.audioCtx) return;
 
         const osc = this.audioCtx.createOscillator();
+        const mod = this.audioCtx.createOscillator();
+        const modGain = this.audioCtx.createGain();
         const gain = this.audioCtx.createGain();
 
         osc.connect(gain);
         gain.connect(this.audioCtx.destination);
 
-        osc.type = this.timbre;
+        // FM Synthesis for weirdness
+        mod.connect(modGain);
+        modGain.connect(osc.frequency);
 
-        // Pitch modulation based on type
+        osc.type = this.timbre;
+        mod.type = 'sine';
+
         const now = this.audioCtx.currentTime;
         let freq = this.basePitch;
 
         // Adjust pitch by size (larger = deeper)
-        freq /= (this.entity.size / 20);
+        freq /= (this.entity.size / 30);
 
         if (type === 'evolve') {
-            // Rising tone
+            // High-energy ascending sequence
             osc.frequency.setValueAtTime(freq, now);
-            osc.frequency.exponentialRampToValueAtTime(freq * 2, now + 0.5);
-            gain.gain.setValueAtTime(0.3, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+            osc.frequency.exponentialRampToValueAtTime(freq * 4, now + 0.8);
+
+            mod.frequency.setValueAtTime(freq / 2, now);
+            modGain.gain.setValueAtTime(freq, now);
+            modGain.gain.exponentialRampToValueAtTime(1, now + 0.8);
+
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.4, now + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
             osc.start(now);
-            osc.stop(now + 1.0);
+            mod.start(now);
+            osc.stop(now + 1.2);
+            mod.stop(now + 1.2);
         } else {
-            // Random chatter
-            osc.frequency.setValueAtTime(freq, now);
-            osc.frequency.linearRampToValueAtTime(freq + this.pitchMod, now + 0.1);
-            osc.frequency.linearRampToValueAtTime(freq, now + 0.2);
+            // Glitchy chatter
+            const duration = 0.2 + Math.random() * 0.4;
 
-            gain.gain.setValueAtTime(0.1, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            osc.frequency.setValueAtTime(freq, now);
+            for (let i = 0; i < 5; i++) {
+                osc.frequency.linearRampToValueAtTime(freq * (1 + Math.random()), now + (duration * i / 5));
+            }
+
+            mod.frequency.setValueAtTime(freq * 2, now);
+            modGain.gain.setValueAtTime(freq * 0.5, now);
+
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
             osc.start(now);
-            osc.stop(now + 0.3);
+            mod.start(now);
+            osc.stop(now + duration);
+            mod.stop(now + duration);
         }
     }
 }
