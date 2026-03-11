@@ -2118,6 +2118,7 @@
     (function () {
       let vScene, vCamera, vRenderer, vClock;
       let vVoxels = [];
+      let vInstancedMesh;
       let vSteamParticles = [];
       let vAsteroids = [];
       let vSkyboxGroup;
@@ -2179,12 +2180,13 @@
       }
 
       function vSetupAudio() {
-        const introAudio = new Audio('assets/sfx/loadingintro.mp3');
-        introAudio.volume = 0.7;
-        introAudio.play().catch(e => { });
-        window._vOutroAudio = new Audio('assets/sfx/loadingoutro.mp3');
-        window._vOutroAudio.volume = 0.8;
-        window._vOutroAudio.load();
+        // Commented out missing audio files to prevent 404 errors
+        // const introAudio = new Audio('assets/sfx/loadingintro.mp3');
+        // introAudio.volume = 0.7;
+        // introAudio.play().catch(e => { });
+        // window._vOutroAudio = new Audio('assets/sfx/loadingoutro.mp3');
+        // window._vOutroAudio.volume = 0.8;
+        // window._vOutroAudio.load();
 
         vAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = vAudioCtx.createOscillator();
@@ -2301,52 +2303,85 @@
       }
 
       function vCreateVoxelTree() {
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a2e15, roughness: 0.9 });
-        const leafColors = [0x2e8b57, 0x3cb371, 0x228b22, 0x006400, 0x8f9779];
-        const leafMaterials = leafColors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
+        const trunkColor = new THREE.Color(0x4a2e15);
+        const leafColors = [0x2e8b57, 0x3cb371, 0x228b22, 0x006400, 0x8f9779].map(c => new THREE.Color(c));
         const voxelGeo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+        const voxelMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
 
-        function addVoxel(x, y, z, mat, type) {
-          const mesh = new THREE.Mesh(voxelGeo, mat);
-          mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true;
-          vScene.add(mesh);
-          let delayMs;
-          if (type === 'leaf') {
-            const distToCenter = Math.sqrt(x * x + (y - 12) * (y - 12) + z * z);
-            delayMs = Math.random() * 1200 + (8 - distToCenter) * 150;
-          } else {
-            delayMs = 1500 + (12 - y) * 150 + Math.random() * 500;
-          }
-          vVoxels.push({
-            mesh: mesh, delayMs: delayMs,
-            velocity: new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2),
-            rotSpeed: new THREE.Vector3(Math.random() * 5, Math.random() * 5, Math.random() * 5),
-            isFallen: false, scale: 1.0
-          });
-        }
-
-        for (let y = 0; y < 10; y++) {
-          addVoxel(0, y, 0, trunkMat, 'trunk');
-          if (y < 4) {
-            addVoxel(1, 0, 0, trunkMat, 'trunk');
-            addVoxel(-1, 0, 0, trunkMat, 'trunk');
-            addVoxel(0, 0, 1, trunkMat, 'trunk');
-            addVoxel(0, 0, -1, trunkMat, 'trunk');
-          }
-        }
         const leafRadius = 4.5;
+        let voxelCount = 0;
+
+        // Pre-calculate voxel count for InstancedMesh
+        for (let y = 0; y < 10; y++) {
+          voxelCount++;
+          if (y < 4) voxelCount += 4;
+        }
         for (let x = -5; x <= 5; x++) {
           for (let y = 8; y <= 16; y++) {
             for (let z = -5; z <= 5; z++) {
               const dist = Math.sqrt(x * x + (y - 12) * (y - 12) + z * z);
               if (dist < leafRadius + Math.random() * 1.5 && dist > 0.5) {
-                const mat = leafMaterials[Math.floor(Math.random() * leafMaterials.length)];
-                addVoxel(x, y, z, mat, 'leaf');
+                voxelCount++;
               }
             }
           }
         }
-        vVoxels.forEach(v => { v.mesh.position.z += 3; v.mesh.position.x += 2; });
+
+        vInstancedMesh = new THREE.InstancedMesh(voxelGeo, voxelMat, voxelCount);
+        vInstancedMesh.castShadow = true;
+        vInstancedMesh.receiveShadow = true;
+        vScene.add(vInstancedMesh);
+
+        const dummy = new THREE.Object3D();
+        let i = 0;
+
+        function addVoxel(x, y, z, colorObj, type) {
+          x += 2; z += 3; // apply original offsets
+          dummy.position.set(x, y, z);
+          dummy.updateMatrix();
+          vInstancedMesh.setMatrixAt(i, dummy.matrix);
+          vInstancedMesh.setColorAt(i, colorObj);
+
+          let delayMs;
+          if (type === 'leaf') {
+            const distToCenter = Math.sqrt((x - 2) * (x - 2) + (y - 12) * (y - 12) + (z - 3) * (z - 3));
+            delayMs = Math.random() * 1200 + (8 - distToCenter) * 150;
+          } else {
+            delayMs = 1500 + (12 - y) * 150 + Math.random() * 500;
+          }
+
+          vVoxels.push({
+            index: i, delayMs: delayMs,
+            position: new THREE.Vector3(x, y, z),
+            velocity: new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2),
+            rotation: new THREE.Euler(0, 0, 0),
+            rotSpeed: new THREE.Vector3(Math.random() * 5, Math.random() * 5, Math.random() * 5),
+            isFallen: false, scale: 1.0
+          });
+          i++;
+        }
+
+        for (let y = 0; y < 10; y++) {
+          addVoxel(0, y, 0, trunkColor, 'trunk');
+          if (y < 4) {
+            addVoxel(1, 0, 0, trunkColor, 'trunk');
+            addVoxel(-1, 0, 0, trunkColor, 'trunk');
+            addVoxel(0, 0, 1, trunkColor, 'trunk');
+            addVoxel(0, 0, -1, trunkColor, 'trunk');
+          }
+        }
+
+        for (let x = -5; x <= 5; x++) {
+          for (let y = 8; y <= 16; y++) {
+            for (let z = -5; z <= 5; z++) {
+              const dist = Math.sqrt(x * x + (y - 12) * (y - 12) + z * z);
+              if (dist < leafRadius + Math.random() * 1.5 && dist > 0.5) {
+                const colorObj = leafColors[Math.floor(Math.random() * leafColors.length)];
+                addVoxel(x, y, z, colorObj, 'leaf');
+              }
+            }
+          }
+        }
       }
 
       function vUpdateCamera(elapsed) {
@@ -2477,6 +2512,9 @@
 
         if (vIsRotting) {
           const rotTimeMs = elapsed - 3000;
+          let needsUpdate = false;
+          const dummy = new THREE.Object3D();
+
           vVoxels.forEach(v => {
             if (rotTimeMs > v.delayMs && !v.isFallen) {
               v.isFallen = true;
@@ -2486,20 +2524,31 @@
               }
             }
             if (v.isFallen && v.scale > 0) {
+              needsUpdate = true;
               v.velocity.y -= 9.8 * deltaTime;
-              v.mesh.position.addScaledVector(v.velocity, deltaTime);
-              v.mesh.rotation.x += v.rotSpeed.x * deltaTime;
-              v.mesh.rotation.y += v.rotSpeed.y * deltaTime;
-              v.mesh.rotation.z += v.rotSpeed.z * deltaTime;
+              v.position.addScaledVector(v.velocity, deltaTime);
+              v.rotation.x += v.rotSpeed.x * deltaTime;
+              v.rotation.y += v.rotSpeed.y * deltaTime;
+              v.rotation.z += v.rotSpeed.z * deltaTime;
               v.scale -= 0.5 * deltaTime;
               if (v.scale < 0) v.scale = 0;
-              v.mesh.scale.set(v.scale, v.scale, v.scale);
-              if (v.mesh.position.y < -3.5 && v.velocity.y < 0) {
-                v.mesh.position.y = -3.5;
+
+              if (v.position.y < -3.5 && v.velocity.y < 0) {
+                v.position.y = -3.5;
                 v.velocity.y *= -0.3; v.velocity.x *= 0.7; v.velocity.z *= 0.7;
               }
+
+              dummy.position.copy(v.position);
+              dummy.rotation.copy(v.rotation);
+              dummy.scale.set(v.scale, v.scale, v.scale);
+              dummy.updateMatrix();
+              vInstancedMesh.setMatrixAt(v.index, dummy.matrix);
             }
           });
+
+          if (needsUpdate && vInstancedMesh) {
+            vInstancedMesh.instanceMatrix.needsUpdate = true;
+          }
         }
 
         if (vSkyboxGroup) {
@@ -2610,6 +2659,48 @@
         100% {
           transform: scale(1.1);
           opacity: 0.8;
+        }
+      }
+
+      /* Binary Data Grid Runtime Animation */
+      .tentacle-binary-bg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: 0.15;
+      }
+
+      .tentacle-binary-bg::before {
+        content: '01010011 01011001 01010011 01010100 01000101 01001101 00100000 01001111 01001110 01001100 01001001 01001110 01000101\A 01001110 01000101 01010101 01010010 01000001 01001100 00100000 01001100 01001001 01001110 01001011 00100000 01000001 01000011 01010100 01001001 01010110 01000101\A 10010110 01100101 11010101 00110100 11001011 01011001 10101100 00100000 01110011 11001010 10110010 10010101 10010000\A 01010011 01011001 01010011 01010100 01000101 01001101 00100000 01001111 01001110 01001100 01001001 01001110 01000101\A 01001110 01000101 01010101 01010010 01000001 01001100 00100000 01001100 01001001 01001110 01001011 00100000 01000001 01000011 01010100 01001001 01010110 01000101\A 10010110 01100101 11010101 00110100 11001011 01011001 10101100 00100000 01110011 11001010 10110010 10010101 10010000\A 01010011 01011001 01010011 01010100 01000101 01001101 00100000 01001111 01001110 01001100 01001001 01001110 01000101\A 01001110 01000101 01010101 01010010 01000001 01001100 00100000 01001100 01001001 01001110 01001011 00100000 01000001 01000011 01010100 01001001 01010110 01000101';
+        position: absolute;
+        top: -100%;
+        left: 0;
+        width: 100%;
+        height: 200%;
+        color: #00ffaa;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 1.2rem;
+        line-height: 1.2;
+        white-space: pre-wrap;
+        word-break: break-all;
+        animation: binary-scroll 15s linear infinite;
+        text-shadow: 0 0 5px rgba(0, 255, 170, 0.5);
+        background-image: linear-gradient(0deg, transparent 24%, rgba(0, 255, 170, 0.1) 25%, rgba(0, 255, 170, 0.1) 26%, transparent 27%, transparent 74%, rgba(0, 255, 170, 0.1) 75%, rgba(0, 255, 170, 0.1) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 255, 170, 0.1) 25%, rgba(0, 255, 170, 0.1) 26%, transparent 27%, transparent 74%, rgba(0, 255, 170, 0.1) 75%, rgba(0, 255, 170, 0.1) 76%, transparent 77%, transparent);
+        background-size: 50px 50px;
+      }
+
+      @keyframes binary-scroll {
+        0% {
+          transform: translateY(0);
+        }
+
+        100% {
+          transform: translateY(50%);
         }
       }
 
@@ -3358,26 +3449,305 @@
     <!-- TENTACLE OS FRAME -->
     <div class="tentacle-os-frame" id="tentacle-os">
       <div class="tentacle-bg-fx"></div>
+      <div class="tentacle-binary-bg"></div>
 
       <!-- Pseudo Boot Screen -->
       <div class="os-boot-screen" id="os-boot">
         <div id="boot-text"></div>
       </div>
 
-      <div class="tentacle-header" id="os-drag-handle">
-        <div class="tentacle-controls">
-          <button class="os-btn close" onclick="closeOS()"></button>
-          <button class="os-btn min" onclick="toggleMinOS()"></button>
-          <button class="os-btn max" onclick="toggleMaxOS()"></button>
-        </div>
-        <div class="tentacle-title">TENTACLE_OS // CORE</div>
-        <div class="tentacle-status">
-          <button id="narration-toggle" onclick="toggleNarration()"
-            style="background:none;border:1px solid #00ffaa;color:#00ffaa;font-family:inherit;font-size:0.6rem;padding:2px 8px;cursor:pointer;border-radius:3px;margin-right:8px;"
-            title="Toggle Aria's real-time voice narration">🔊 ARIA: ON</button>
-          SYMBIOSIS: ACTIVE
-        </div>
+      <div class="tentacle-header" id="os-drag-handle"
+        style="position: relative; overflow: hidden; padding: 0; min-height: 40px; cursor: move;">
+        <canvas id="header-canvas"
+          style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 0; pointer-events: none;"></canvas>
       </div>
+
+      <script>
+        // Custom Shader Animation for OS Header (Optical Illusion)
+        requestAnimationFrame(() => {
+          const canvas = document.getElementById('header-canvas');
+          if (!canvas) return;
+
+          const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: false });
+          const scene = new THREE.Scene();
+          const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+          const uniforms = {
+            uTime: { value: 0.0 },
+            uResolution: { value: new THREE.Vector2() }
+          };
+
+          const material = new THREE.ShaderMaterial({
+            uniforms: uniforms,
+            vertexShader: `
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+              }
+            `,
+            fragmentShader: `
+              uniform float uTime;
+              uniform vec2 uResolution;
+              
+              #define MAX_STEPS 60
+              #define MAX_DIST 20.0
+              #define SURF_DIST 0.01
+
+              // 2D Rotation matrix
+              mat2 rot(float a) {
+                  float s = sin(a), c = cos(a);
+                  return mat2(c, -s, s, c);
+              }
+
+              // SDF Primitives
+              float sdBox(vec3 p, vec3 b) {
+                  vec3 q = abs(p) - b;
+                  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+              }
+              
+              float sdSphere(vec3 p, float s) {
+                  return length(p) - s;
+              }
+
+              // ====== SCENE 0: THE BACKROOMS ======
+              float mapBackrooms(vec3 p) {
+                  vec3 zp = p;
+                  zp.z = mod(zp.z, 4.0) - 2.0;
+                  zp.x += sin(p.z * 1.5 + uTime) * 0.1;
+                  zp.y += cos(p.z * 1.0 + uTime * 0.8) * 0.1;
+                  float room = -sdBox(zp, vec3(2.0, 1.5, 2.0));
+                  vec3 pp = zp;
+                  pp.x = mod(pp.x + 1.0, 2.0) - 1.0;
+                  float pillar = sdBox(pp, vec3(0.1, 1.5, 0.1));
+                  return min(room, pillar);
+              }
+              vec3 colBackrooms(vec3 p, vec3 n, vec3 ro, float d, vec2 uv) {
+                  vec3 baseColor = vec3(0.8, 0.7, 0.4);
+                  vec3 lightPos = vec3(0.0, 1.4, ro.z - 2.0);
+                  vec3 l = normalize(lightPos - p);
+                  float dif = clamp(dot(n, l), 0.0, 1.0);
+                  float flicker = smoothstep(0., 1., sin(uTime * 20.0)) * 0.2 + 0.8;
+                  if (sin(uTime * 5.0) > 0.95) flicker = 0.1;
+                  vec3 col = baseColor * dif * flicker;
+                  float mold = smoothstep(-1.0, -1.5, p.y);
+                  col = mix(col, vec3(0.2, 0.3, 0.1), mold * 0.5);
+                  float fog = 1.0 - exp(-0.15 * d);
+                  return mix(col, vec3(0.05, 0.04, 0.02), fog);
+              }
+
+              // ====== SCENE 1: CYBER TUNNEL ======
+              float mapCyber(vec3 p) {
+                  vec3 zp = p;
+                  zp.z = mod(zp.z, 2.0) - 1.0;
+                  zp.xy *= rot(p.z * 0.5 + uTime * 0.5);
+                  float tunnel = -sdBox(zp, vec3(1.5, 1.5, 2.0));
+                  vec3 rings = p;
+                  rings.z = mod(rings.z, 0.5) - 0.25;
+                  float ring = sdBox(rings, vec3(1.4, 1.4, 0.02));
+                  return max(tunnel, -ring); // Cut grooves
+              }
+              vec3 colCyber(vec3 p, vec3 n, vec3 ro, float d, vec2 uv) {
+                  float wire = smoothstep(0.95, 1.0, sin(p.z * 20.0 - uTime * 10.0));
+                  vec3 col = mix(vec3(0.01, 0.02, 0.05), vec3(0.0, 1.0, 0.6), wire);
+                  float dif = max(0.0, dot(n, normalize(vec3(0.0, 0.0, -1.0))));
+                  col *= dif * 1.5;
+                  float fog = 1.0 - exp(-0.2 * d);
+                  return mix(col, vec3(0.0), fog);
+              }
+
+              // ====== SCENE 2: MEAT MATRIX ======
+              float smin( float a, float b, float k ) {
+                  float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
+                  return mix( b, a, h ) - k*h*(1.0-h);
+              }
+              float mapMeat(vec3 p) {
+                  vec3 zp = p;
+                  // Organic wavy displacement
+                  float disp = sin(p.x * 3.0 + uTime * 2.0) * cos(p.y * 3.0 - uTime) * sin(p.z * 2.0) * 0.3;
+                  zp.z = mod(zp.z, 5.0) - 2.5;
+                  float cave = -sdSphere(zp, 2.5) + disp;
+                  vec3 vp = p;
+                  vp.x = mod(vp.x + 1.5, 3.0) - 1.5;
+                  vp.z = mod(vp.z + 1.5, 3.0) - 1.5;
+                  float vein = sdBox(vp, vec3(0.1, 4.0, 0.1)) + disp * 0.5;
+                  return smin(cave, vein, 0.5); // Smooth blend
+              }
+              vec3 colMeat(vec3 p, vec3 n, vec3 ro, float d, vec2 uv) {
+                  vec3 col = vec3(0.4, 0.05, 0.05); // Deep flesh red
+                  float pulse = sin(p.z * 5.0 - uTime * 3.0) * 0.5 + 0.5;
+                  col += vec3(0.3, 0.0, 0.0) * pulse;
+                  float spec = pow(max(0.0, dot(reflect(normalize(p - ro), n), normalize(vec3(0.0, 1.0, -1.0)))), 16.0);
+                  col += vec3(1.0, 0.6, 0.6) * spec * 0.5; // Wet specularity
+                  float fog = 1.0 - exp(-0.1 * d);
+                  return mix(col, vec3(0.05, 0.0, 0.0), fog);
+              }
+
+              // ====== SCENE 3: FRACTAL GLASS ======
+              float mapGlass(vec3 p) {
+                  vec3 zp = p;
+                  zp.xy *= rot(uTime * 0.2);
+                  for(int i=0; i<4; i++) {
+                      zp = abs(zp) - 0.5;
+                      zp.xy *= rot(0.5);
+                      zp.xz *= rot(0.3);
+                  }
+                  float d1 = sdBox(zp, vec3(0.2));
+                  float tunnel = -sdSphere(p, 3.0);
+                  return min(d1, tunnel);
+              }
+              vec3 colGlass(vec3 p, vec3 n, vec3 ro, float d, vec2 uv) {
+                  vec3 r = reflect(normalize(p - ro), n);
+                  float fresnel = pow(1.0 - max(dot(n, normalize(ro - p)), 0.0), 3.0);
+                  vec3 glassCol = mix(vec3(0.1, 0.2, 0.3), vec3(0.5, 0.8, 1.0), fresnel);
+                  glassCol += vec3(1.0, 0.5, 0.2) * pow(max(dot(r, vec3(0.0, 1.0, -1.0)), 0.0), 32.0);
+                  float fog = 1.0 - exp(-0.08 * d);
+                  return mix(glassCol, vec3(0.0), fog);
+              }
+
+
+              // MASTER MAPPER
+              float currentScene() {
+                  return mod(floor(uTime / 8.0), 4.0); // Change scene every 8 seconds
+              }
+
+              float GetDist(vec3 p) {
+                  float sc = currentScene();
+                  float d0 = mapBackrooms(p);
+                  float d1 = mapCyber(p);
+                  float d2 = mapMeat(p);
+                  float d3 = mapGlass(p);
+
+                  float t = fract(uTime / 8.0);
+                  float blend = smoothstep(0.9, 1.0, t); // 1-second transition
+
+                  if (sc == 0.0) return mix(d0, d1, blend);
+                  if (sc == 1.0) return mix(d1, d2, blend);
+                  if (sc == 2.0) return mix(d2, d3, blend);
+                  return mix(d3, d0, blend);
+              }
+
+              vec3 GetNormal(vec3 p) {
+                  float d = GetDist(p);
+                  vec2 e = vec2(0.001, 0);
+                  vec3 n = d - vec3(
+                      GetDist(p - e.xyy), GetDist(p - e.yxy), GetDist(p - e.yyx)
+                  );
+                  return normalize(n);
+              }
+
+              float RayMarch(vec3 ro, vec3 rd) {
+                  float dO = 0.0;
+                  for (int i = 0; i < MAX_STEPS; i++) {
+                      vec3 p = ro + rd * dO;
+                      float dS = GetDist(p);
+                      dO += dS;
+                      if (dO > MAX_DIST || abs(dS) < SURF_DIST) break;
+                  }
+                  return dO;
+              }
+
+              void main() {
+                  vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+
+                  // Camera
+                  vec3 ro = vec3(0.0, 0.0, -uTime * 3.0);
+                  
+                  float sc = currentScene();
+                  if (sc == 0.0 || (sc == 3.0 && fract(uTime/8.0) > 0.9)) {
+                      // Backrooms wobble
+                      ro.x += sin(uTime * 1.2) * 0.2;
+                      ro.y += cos(uTime * 2.1) * 0.1;
+                  }
+
+                  vec3 lookAt = vec3(sin(uTime * 0.5) * 0.5, 0., ro.z - 1.0);
+                  vec3 f = normalize(lookAt - ro);
+                  vec3 r = cross(vec3(0.0, 1.0, 0.0), f);
+                  vec3 u = cross(f, r);
+                  vec3 c = ro + f * 0.8;
+                  vec3 i = c + uv.x * r + uv.y * u;
+                  vec3 rd = normalize(i - ro);
+
+                  if (sc == 0.0) {
+                      rd.xy *= rot(sin(uTime * 0.7) * 0.1); // Backrooms look around
+                  } else if (sc == 1.0) {
+                      rd.xy *= rot(uTime * 0.2); // Cyber spin
+                  } else if (sc == 3.0) {
+                      rd.xy *= rot(sin(uTime * 0.5) * 0.5); // Glass sway
+                  }
+
+                  float d = RayMarch(ro, rd);
+                  vec3 col = vec3(0.0);
+
+                  if (d < MAX_DIST) {
+                      vec3 p = ro + rd * d;
+                      vec3 n = GetNormal(p);
+                      
+                      vec3 c0 = colBackrooms(p, n, ro, d, uv);
+                      vec3 c1 = colCyber(p, n, ro, d, uv);
+                      vec3 c2 = colMeat(p, n, ro, d, uv);
+                      vec3 c3 = colGlass(p, n, ro, d, uv);
+
+                      float t = fract(uTime / 8.0);
+                      float blend = smoothstep(0.9, 1.0, t); // 1-second transition
+
+                      if (sc == 0.0) col = mix(c0, c1, blend);
+                      else if (sc == 1.0) col = mix(c1, c2, blend);
+                      else if (sc == 2.0) col = mix(c2, c3, blend);
+                      else col = mix(c3, c0, blend);
+                  }
+
+                  // Post-processing
+                  float noise = fract(sin(dot(uv, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
+                  
+                  if (sc == 0.0) {
+                      // Backrooms VHS
+                      col -= noise * 0.1;
+                      if (mod(gl_FragCoord.y + uTime * 50.0, 20.0) < 1.0) col *= 0.8;
+                  } else if (sc == 1.0) {
+                      // Cyber scanlines
+                      if (mod(gl_FragCoord.y, 4.0) < 1.0) col *= 0.5;
+                  } else if (sc == 2.0) {
+                      // Meat film grain
+                      col -= noise * 0.15;
+                      col.r += noise * 0.05;
+                  }
+
+                  // Vignette / Chromatic Aberration mapping for all
+                  float dEdge = length(uv);
+                  if (dEdge > 0.3) {
+                      col.r += 0.05 * dEdge;
+                      col.b -= 0.05 * dEdge;
+                  }
+                  col *= smoothstep(0.8, 0.4, dEdge); // Outer edge shadow
+
+                  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+              }
+            `
+          });
+
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+          scene.add(mesh);
+
+          function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            renderer.setSize(rect.width, rect.height, false);
+            uniforms.uResolution.value.set(rect.width, rect.height);
+          }
+
+          window.addEventListener('resize', resize);
+          resize();
+
+          function animate(time) {
+            requestAnimationFrame(animate);
+            if (canvas.width === 0 || canvas.height === 0) return;
+            uniforms.uTime.value = time * 0.001;
+            renderer.render(scene, camera);
+          }
+          requestAnimationFrame(animate);
+        });
+      </script>
 
       <!-- Aria Voice Subtitles Overlay -->
       <div id="aria-subtitles" style="
@@ -4589,18 +4959,18 @@
     function createPulseWave() {
       const pulse = document.createElement('div');
       pulse.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: rgba(var(--rgb-secondary), 0.8);
-        z-index: 100;
-        pointer-events: none;
-        box-shadow: 0 0 20px rgba(var(--rgb-secondary), 0.8), 0 0 40px rgba(var(--rgb-secondary), 0.4);
-      `;
+    position: fixed;
+    top: 50 %;
+    left: 50 %;
+    transform: translate(-50 %, -50 %);
+    width: 10px;
+    height: 10px;
+    border - radius: 50 %;
+    background: rgba(var(--rgb - secondary), 0.8);
+    z - index: 100;
+    pointer - events: none;
+    box - shadow: 0 0 20px rgba(var(--rgb - secondary), 0.8), 0 0 40px rgba(var(--rgb - secondary), 0.4);
+    `;
       document.body.appendChild(pulse);
 
       showNotification('PULSE WAVE EMITTED');
@@ -4642,66 +5012,68 @@
         const overlay = document.createElement('div');
         overlay.id = 'reality-distortion-overlay';
         overlay.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100vw;
-          height: 100vh;
-          pointer-events: none;
-          z-index: 999999;
-          background: repeating-linear-gradient(
-            0deg,
-            rgba(255,0,255,0.03) 0px,
-            transparent 2px,
-            transparent 4px,
-            rgba(0,255,255,0.03) 6px
-          );
-          animation: scanlines 0.1s linear infinite, glitchShift 0.3s infinite;
-        `;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer - events: none;
+    z - index: 999999;
+    background: repeating - linear - gradient(
+      0deg,
+      rgba(255, 0, 255, 0.03) 0px,
+      transparent 2px,
+      transparent 4px,
+      rgba(0, 255, 255, 0.03) 6px
+    );
+    animation: scanlines 0.1s linear infinite, glitchShift 0.3s infinite;
+    `;
         document.body.appendChild(overlay);
 
         // Add chromatic aberration style
         const style = document.createElement('style');
         style.id = 'reality-distortion-styles';
         style.textContent = `
-          @keyframes scanlines {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(4px); }
+    @keyframes scanlines {
+      0 % { transform: translateY(0); }
+      100 % { transform: translateY(4px); }
+    }
+    @keyframes glitchShift {
+      0 %, 100 % { transform: translateX(0) scaleY(1); }
+      33 % { transform: translateX(-5px) scaleY(0.98); }
+      66 % { transform: translateX(5px) scaleY(1.02); }
+    }
+    @keyframes rgbSplit {
+      0 % { text- shadow: -2px 0 red, 2px 0 cyan;
+    }
+    50 % { text- shadow: 2px 0 red, -2px 0 cyan; }
+    100 % { text- shadow: -2px 0 red, 2px 0 cyan; }
           }
-          @keyframes glitchShift {
-            0%, 100% { transform: translateX(0) scaleY(1); }
-            33% { transform: translateX(-5px) scaleY(0.98); }
-            66% { transform: translateX(5px) scaleY(1.02); }
+    @keyframes warpText {
+      0 % { transform: perspective(500px) rotateY(0deg) rotateX(0deg); }
+      25 % { transform: perspective(500px) rotateY(5deg) rotateX(- 3deg) scale(1.05);
+    }
+    50 % { transform: perspective(500px) rotateY(- 5deg) rotateX(3deg) scale(0.95); }
+    75 % { transform: perspective(500px) rotateY(3deg) rotateX(- 5deg) scale(1.02); }
+    100 % { transform: perspective(500px) rotateY(0deg) rotateX(0deg); }
           }
-          @keyframes rgbSplit {
-            0% { text-shadow: -2px 0 red, 2px 0 cyan; }
-            50% { text-shadow: 2px 0 red, -2px 0 cyan; }
-            100% { text-shadow: -2px 0 red, 2px 0 cyan; }
-          }
-          @keyframes warpText {
-            0% { transform: perspective(500px) rotateY(0deg) rotateX(0deg); }
-            25% { transform: perspective(500px) rotateY(5deg) rotateX(-3deg) scale(1.05); }
-            50% { transform: perspective(500px) rotateY(-5deg) rotateX(3deg) scale(0.95); }
-            75% { transform: perspective(500px) rotateY(3deg) rotateX(-5deg) scale(1.02); }
-            100% { transform: perspective(500px) rotateY(0deg) rotateX(0deg); }
-          }
-          @keyframes kaleidoscope {
-            0% { filter: hue-rotate(0deg) saturate(2) contrast(1.5); }
-            100% { filter: hue-rotate(360deg) saturate(2) contrast(1.5); }
-          }
-          @keyframes shake {
-            0%, 100% { transform: translate(0, 0); }
-            10% { transform: translate(-2px, 2px); }
-            20% { transform: translate(2px, -2px); }
-            30% { transform: translate(-2px, -2px); }
-            40% { transform: translate(2px, 2px); }
-            50% { transform: translate(-2px, 2px); }
-            60% { transform: translate(2px, -2px); }
-            70% { transform: translate(-2px, -2px); }
-            80% { transform: translate(2px, 2px); }
-            90% { transform: translate(-2px, -2px); }
-          }
-        `;
+    @keyframes kaleidoscope {
+      0 % { filter: hue - rotate(0deg) saturate(2) contrast(1.5); }
+      100 % { filter: hue - rotate(360deg) saturate(2) contrast(1.5); }
+    }
+    @keyframes shake {
+      0 %, 100 % { transform: translate(0, 0); }
+      10 % { transform: translate(-2px, 2px); }
+      20 % { transform: translate(2px, -2px); }
+      30 % { transform: translate(-2px, -2px); }
+      40 % { transform: translate(2px, 2px); }
+      50 % { transform: translate(-2px, 2px); }
+      60 % { transform: translate(2px, -2px); }
+      70 % { transform: translate(-2px, -2px); }
+      80 % { transform: translate(2px, 2px); }
+      90 % { transform: translate(-2px, -2px); }
+    }
+    `;
         document.head.appendChild(style);
 
         // Apply INSANE effects to elements
@@ -4709,11 +5081,11 @@
         elements.forEach((el, index) => {
           el.style.transition = 'all 0.3s ease';
           el.style.animation = `
-            warpText 2s infinite ease-in-out ${index * 0.1}s,
-            rgbSplit 0.5s infinite,
-            kaleidoscope 5s infinite linear,
-            shake 0.8s infinite
-          `;
+            warpText 2s infinite ease -in -out ${index * 0.1} s,
+      rgbSplit 0.5s infinite,
+        kaleidoscope 5s infinite linear,
+          shake 0.8s infinite
+            `;
           rgbSplitElements.push(el);
         });
 
@@ -4728,24 +5100,24 @@
             const scale = 1 + Math.sin(phase * 3 + index) * 0.1;
 
             el.style.transform = `
-              perspective(1000px) 
-              rotateX(${rotation}deg) 
-              rotateY(${rotation * 1.5}deg) 
-              rotateZ(${offset * 5}deg)
-              scale(${scale})
-              translateZ(${offset * 20}px)
-            `;
+    perspective(1000px)
+    rotateX(${rotation}deg)
+    rotateY(${rotation * 1.5}deg)
+    rotateZ(${offset * 5}deg)
+    scale(${scale})
+    translateZ(${offset * 20}px)
+      `;
 
             // Random glitch moments
             if (Math.random() > 0.95) {
               el.style.filter = `
-                invert(${Math.random()}) 
-                hue-rotate(${Math.random() * 360}deg)
-                saturate(${2 + Math.random() * 3})
-                contrast(${1 + Math.random()})
+    invert(${Math.random()})
+    hue - rotate(${Math.random() * 360}deg)
+    saturate(${2 + Math.random() * 3})
+    contrast(${1 + Math.random()})
               `;
               setTimeout(() => {
-                el.style.filter = `hue-rotate(${phase * 50}deg) saturate(2)`;
+                el.style.filter = `hue - rotate(${phase * 50}deg) saturate(2)`;
               }, 100);
             }
           });
@@ -4765,26 +5137,26 @@
           setTimeout(() => {
             const particle = document.createElement('div');
             particle.style.cssText = `
-              position: fixed;
-              width: 4px;
-              height: 4px;
-              background: ${['#FF00FF', '#00FFFF', '#FFFF00'][Math.floor(Math.random() * 3)]};
-              border-radius: 50%;
-              left: ${Math.random() * 100}vw;
-              top: ${Math.random() * 100}vh;
-              pointer-events: none;
-              z-index: 999998;
-              animation: particleExplode ${1 + Math.random()}s ease-out forwards;
-            `;
+    position: fixed;
+    width: 4px;
+    height: 4px;
+    background: ${['#FF00FF', '#00FFFF', '#FFFF00'][Math.floor(Math.random() * 3)]};
+    border - radius: 50 %;
+    left: ${Math.random() * 100} vw;
+    top: ${Math.random() * 100} vh;
+    pointer - events: none;
+    z - index: 999998;
+    animation: particleExplode ${1 + Math.random()}s ease - out forwards;
+    `;
             document.body.appendChild(particle);
 
             const particleStyle = document.createElement('style');
             particleStyle.textContent = `
-              @keyframes particleExplode {
-                0% { transform: translate(0, 0) scale(1); opacity: 1; }
-                100% { transform: translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px) scale(0); opacity: 0; }
-              }
-            `;
+    @keyframes particleExplode {
+      0 % { transform: translate(0, 0) scale(1); opacity: 1; }
+      100 % { transform: translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px) scale(0); opacity: 0; }
+    }
+    `;
             document.head.appendChild(particleStyle);
 
             setTimeout(() => {
@@ -4835,20 +5207,20 @@
 
       const overlay = document.createElement('div');
       overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        color: var(--secondary);
-        font-family: 'Space Grotesk', monospace;
-      `;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100 %;
+    height: 100 %;
+    background: rgba(0, 0, 0, 0.8);
+    z - index: 1000;
+    display: flex;
+    flex - direction: column;
+    align - items: center;
+    justify - content: center;
+    color: var(--secondary);
+    font - family: 'Space Grotesk', monospace;
+    `;
 
       const title = document.createElement('h2');
       title.textContent = 'NEURAL INTERFACE';
@@ -4856,27 +5228,27 @@
 
       const brainContainer = document.createElement('div');
       brainContainer.style.cssText = `
-        width: 300px;
-        height: 300px;
-        position: relative;
-        margin-bottom: 30px;
-      `;
+    width: 300px;
+    height: 300px;
+    position: relative;
+    margin - bottom: 30px;
+    `;
 
       // Create neural network visualization
       for (let i = 0; i < 100; i++) {
         const node = document.createElement('div');
         const size = Math.random() * 6 + 2;
         node.style.cssText = `
-          position: absolute;
-          width: ${size}px;
-          height: ${size}px;
-          background: rgba(var(--rgb-secondary), ${Math.random() * 0.5 + 0.3});
-          border-radius: 50%;
-          top: ${Math.random() * 100}%;
-          left: ${Math.random() * 100}%;
-          box-shadow: 0 0 ${size * 2}px rgba(var(--rgb-secondary), 0.8);
-          animation: pulse ${Math.random() * 3 + 1}s infinite alternate ease-in-out;
-        `;
+    position: absolute;
+    width: ${size} px;
+    height: ${size} px;
+    background: rgba(var(--rgb - secondary), ${Math.random() * 0.5 + 0.3});
+    border - radius: 50 %;
+    top: ${Math.random() * 100}%;
+    left: ${Math.random() * 100}%;
+    box - shadow: 0 0 ${size * 2}px rgba(var(--rgb - secondary), 0.8);
+    animation: pulse ${Math.random() * 3 + 1}s infinite alternate ease -in -out;
+    `;
         brainContainer.appendChild(node);
       }
 
@@ -4884,15 +5256,15 @@
       for (let i = 0; i < 80; i++) {
         const connection = document.createElement('div');
         connection.style.cssText = `
-          position: absolute;
-          width: ${Math.random() * 100 + 50}px;
-          height: 1px;
-          background: linear-gradient(90deg, rgba(var(--rgb-secondary), 0), rgba(var(--rgb-secondary), 0.8), rgba(var(--rgb-secondary), 0));
-          top: ${Math.random() * 100}%;
-          left: ${Math.random() * 100}%;
-          transform: rotate(${Math.random() * 360}deg);
-          opacity: ${Math.random() * 0.5 + 0.1};
-        `;
+    position: absolute;
+    width: ${Math.random() * 100 + 50} px;
+    height: 1px;
+    background: linear - gradient(90deg, rgba(var(--rgb - secondary), 0), rgba(var(--rgb - secondary), 0.8), rgba(var(--rgb - secondary), 0));
+    top: ${Math.random() * 100}%;
+    left: ${Math.random() * 100}%;
+    transform: rotate(${Math.random() * 360}deg);
+    opacity: ${Math.random() * 0.5 + 0.1};
+    `;
         brainContainer.appendChild(connection);
       }
 
@@ -4903,15 +5275,15 @@
       const closeButton = document.createElement('button');
       closeButton.textContent = 'DISCONNECT';
       closeButton.style.cssText = `
-        background: transparent;
-        border: 1px solid var(--secondary);
-        color: var(--secondary);
-        padding: 10px 20px;
-        cursor: pointer;
-        font-family: 'Space Grotesk', monospace;
-        letter-spacing: 2px;
-        transition: all 0.3s ease;
-      `;
+    background: transparent;
+    border: 1px solid var(--secondary);
+    color: var(--secondary);
+    padding: 10px 20px;
+    cursor: pointer;
+    font - family: 'Space Grotesk', monospace;
+    letter - spacing: 2px;
+    transition: all 0.3s ease;
+    `;
       closeButton.addEventListener('mouseover', () => {
         closeButton.style.background = 'rgba(var(--rgb-secondary), 0.2)';
       });
@@ -4963,20 +5335,20 @@
 
       const overlay = document.createElement('div');
       overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        color: var(--primary);
-        font-family: 'Space Grotesk', monospace;
-      `;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100 %;
+    height: 100 %;
+    background: rgba(0, 0, 0, 0.8);
+    z - index: 1000;
+    display: flex;
+    flex - direction: column;
+    align - items: center;
+    justify - content: center;
+    color: var(--primary);
+    font - family: 'Space Grotesk', monospace;
+    `;
 
       const title = document.createElement('h2');
       title.textContent = 'QUANTUM CALCULATOR';
@@ -4984,37 +5356,37 @@
 
       const display = document.createElement('div');
       display.style.cssText = `
-        width: 300px;
-        height: 60px;
-        background: rgba(0, 0, 0, 0.5);
-        border: 1px solid var(--primary);
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        padding: 0 20px;
-        font-size: 24px;
-        overflow: hidden;
-        font-family: monospace;
-        position: relative;
-      `;
+    width: 300px;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--primary);
+    margin - bottom: 20px;
+    display: flex;
+    align - items: center;
+    justify - content: flex - end;
+    padding: 0 20px;
+    font - size: 24px;
+    overflow: hidden;
+    font - family: monospace;
+    position: relative;
+    `;
 
       // Add quantum noise effect to display
       const quantumNoise = document.createElement('div');
       quantumNoise.style.cssText = `
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, 
-          rgba(209, 104, 71, 0) 0%,
-          rgba(209, 104, 71, 0.1) 50%,
-          rgba(209, 104, 71, 0) 100%);
-        opacity: 0.5;
-        pointer-events: none;
-        animation: quantumScan 2s infinite linear;
-      `;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100 %;
+    height: 100 %;
+    background: linear - gradient(90deg,
+      rgba(209, 104, 71, 0) 0 %,
+      rgba(209, 104, 71, 0.1) 50 %,
+      rgba(209, 104, 71, 0) 100 %);
+    opacity: 0.5;
+    pointer - events: none;
+    animation: quantumScan 2s infinite linear;
+    `;
       display.appendChild(quantumNoise);
 
       const displayText = document.createElement('div');
@@ -5023,11 +5395,11 @@
 
       const buttonContainer = document.createElement('div');
       buttonContainer.style.cssText = `
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-        width: 300px;
-      `;
+    display: grid;
+    grid - template - columns: repeat(4, 1fr);
+    gap: 10px;
+    width: 300px;
+    `;
 
       const buttons = [
         '7', '8', '9', '/',
@@ -5041,14 +5413,14 @@
         const button = document.createElement('button');
         button.textContent = btn;
         button.style.cssText = `
-          background: rgba(0, 0, 0, 0.7);
-          border: 1px solid var(--primary);
-          color: var(--primary);
-          padding: 15px;
-          cursor: pointer;
-          font-family: 'Space Grotesk', monospace;
-          transition: all 0.2s ease;
-        `;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 15px;
+    cursor: pointer;
+    font - family: 'Space Grotesk', monospace;
+    transition: all 0.2s ease;
+    `;
 
         button.addEventListener('mouseover', () => {
           button.style.background = 'rgba(209, 104, 71, 0.2)';
@@ -5071,14 +5443,14 @@
               // Show quantum calculation animation
               const calcEffect = document.createElement('div');
               calcEffect.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(209, 104, 71, 0.3);
-                pointer-events: none;
-              `;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100 %;
+    height: 100 %;
+    background: rgba(209, 104, 71, 0.3);
+    pointer - events: none;
+    `;
               display.appendChild(calcEffect);
 
               setTimeout(() => {
@@ -5114,16 +5486,16 @@
       const closeButton = document.createElement('button');
       closeButton.textContent = 'CLOSE';
       closeButton.style.cssText = `
-        background: transparent;
-        border: 1px solid var(--primary);
-        color: var(--primary);
-        padding: 10px 20px;
-        cursor: pointer;
-        font-family: 'Space Grotesk', monospace;
-        letter-spacing: 2px;
-        margin-top: 20px;
-        transition: all 0.3s ease;
-      `;
+    background: transparent;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 10px 20px;
+    cursor: pointer;
+    font - family: 'Space Grotesk', monospace;
+    letter - spacing: 2px;
+    margin - top: 20px;
+    transition: all 0.3s ease;
+    `;
 
       closeButton.addEventListener('mouseover', () => {
         closeButton.style.background = 'rgba(209, 104, 71, 0.2)';
@@ -5301,7 +5673,7 @@
       outputDiv.style.display = 'block'; // Show it once something is printed
 
       const line = document.createElement('div');
-      line.className = `console-line ${type}`;
+      line.className = `console - line ${type} `;
 
       if (isHTML) {
         line.innerHTML = text;
@@ -5352,7 +5724,7 @@
         }
         historyIndex = -1; // Reset history navigation
 
-        printToConsole(`> ${rawInput}`, 'input');
+        printToConsole(`> ${rawInput} `, 'input');
 
         const parts = input.split(' ');
         const command = parts[0].toLowerCase();
@@ -5377,7 +5749,7 @@
         switch (command) {
           case 'help':
             const helpText = `
-              <table style="width:100%; text-align:left; border-collapse: collapse;">
+      < table style = "width:100%; text-align:left; border-collapse: collapse;" >
                 <tr><th style="color:var(--secondary); padding-right:15px; padding-bottom:5px;">COMMAND</th><th style="color:var(--secondary); padding-bottom:5px;">DESCRIPTION</th></tr>
                 <tr><td style="padding:2px 0;">help</td><td>Display this help message</td></tr>
                 <tr><td style="padding:2px 0;">ls / dir</td><td>List available sector maps and modules</td></tr>
@@ -5391,9 +5763,9 @@
                 <tr><td style="padding:2px 0;">matrix</td><td>Toggle matrix visual overlay</td></tr>
                 <tr><td style="padding:2px 0;">sysinfo</td><td>Display internal OS parameters</td></tr>
                 <tr><td style="padding:2px 0;">shader [dir]</td><td>Transmit directive to root background shader</td></tr>
-              </table>
-              <div style="margin-top: 5px; color:rgba(255,255,255,0.5);">Hint: Use UP and DOWN arrows to navigate command history.</div>
-            `;
+              </table >
+      <div style="margin-top: 5px; color:rgba(255,255,255,0.5);">Hint: Use UP and DOWN arrows to navigate command history.</div>
+    `;
             printToConsole(helpText, 'normal', true);
             break;
 
@@ -5407,20 +5779,20 @@
             ];
             const eggKeys = Object.keys(eggCommands).join(', ');
 
-            let lsHTML = `<div style="color: var(--secondary); margin-bottom: 5px;">DIRECTORY LISTING: /root/modules/</div>`;
-            lsHTML += `<ul style="list-style-type: none; padding-left: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px;">`;
-            endpoints.forEach(ep => { lsHTML += `<li><span style="color:#fff;">[dir]</span> ${ep}</li>`; });
-            lsHTML += `</ul>`;
+            let lsHTML = `< div style = "color: var(--secondary); margin-bottom: 5px;" > DIRECTORY LISTING: /root/modules /</div > `;
+            lsHTML += `< ul style = "list-style-type: none; padding-left: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px;" > `;
+            endpoints.forEach(ep => { lsHTML += `< li > <span style="color:#fff;">[dir]</span> ${ep}</li > `; });
+            lsHTML += `</ul > `;
 
-            lsHTML += `<div style="color: var(--tertiary); margin-top: 10px; margin-bottom: 5px;">ARCHIVE NODES: /root/archives/</div>`;
-            lsHTML += `<div style="color: #aaa; word-break: break-all;">${eggKeys}</div>`;
+            lsHTML += `< div style = "color: var(--tertiary); margin-top: 10px; margin-bottom: 5px;" > ARCHIVE NODES: /root/archives /</div > `;
+            lsHTML += `< div style = "color: #aaa; word-break: break-all;" > ${eggKeys}</div > `;
 
             printToConsole(lsHTML, 'normal', true);
             break;
 
           case 'nav':
             if (!args) {
-              printToConsole(`Error: missing operand. Usage: nav [target]`, 'error');
+              printToConsole(`Error: missing operand.Usage: nav[target]`, 'error');
             } else {
               handleNavCommand(args);
             }
@@ -5489,7 +5861,7 @@
               root.style.setProperty('--tertiary', '#4da6ff');
               themeFound = true;
             } else {
-              printToConsole(`Theme '${themeArg}' unknown. Try orange, green, red, or blue.`, 'error');
+              printToConsole(`Theme '${themeArg}' unknown.Try orange, green, red, or blue.`, 'error');
             }
             if (themeFound) {
               printToConsole(`ENVIRONMENTAL THEME OVERRIDDEN: [${themeArg.toUpperCase()}]`, 'system');
@@ -5506,12 +5878,12 @@
 
           case 'sysinfo':
             const infoHTML = `
-              <div style="color:var(--secondary)">TENTACLE OS // KERNEL v2.0-2026</div>
-              <div>Build Date: Oct 24, 2025</div>
+      < div style = "color:var(--secondary)" > TENTACLE OS // KERNEL v2.0-2026</div>
+        < div > Build Date: Oct 24, 2025</div >
               <div>Architecture: WebGL/Space Grotesk Spatial Computing</div>
               <div>Node Memory Allocation: 4096MB</div>
               <div>Status: S2 PRODUCTION BUILD AAA</div>
-            `;
+    `;
             printToConsole(infoHTML, 'normal', true);
             break;
 
@@ -5523,7 +5895,7 @@
             if (typeof window.updateShader === 'function') {
               printToConsole(`Transmitting directive '${args}' to main shader...`, 'system');
               window.updateShader(args);
-              printToConsole(`SHADER DIRECTIVE [${args.toUpperCase()}] EXECUTED.`, 'system');
+              printToConsole(`SHADER DIRECTIVE[${args.toUpperCase()}]EXECUTED.`, 'system');
             } else {
               printToConsole(`SHADER_SYSTEM OFFLINE OR UNRESPONSIVE.`, 'error');
             }
@@ -5538,8 +5910,8 @@
     // --- Showcase Click Handler (function remains the same) ---
     function handleShowcaseClick(moduleId) {
       console.log("Interfacing with module:", moduleId);
-      if (typeof printToConsole === 'function') printToConsole(`MODULE_INTERFACE [${moduleId.toUpperCase()}] STATUS: ACTIVE_PENDING...`, 'system');
-      else showNotification(`MODULE_INTERFACE [${moduleId.toUpperCase()}] STATUS: ACTIVE_PENDING...`);
+      if (typeof printToConsole === 'function') printToConsole(`MODULE_INTERFACE[${moduleId.toUpperCase()}]STATUS: ACTIVE_PENDING...`, 'system');
+      else showNotification(`MODULE_INTERFACE[${moduleId.toUpperCase()}]STATUS: ACTIVE_PENDING...`);
     }
 
     // --- Navigation Command Helper (function remains the same) ---
@@ -5575,17 +5947,17 @@
       const notification = document.createElement('div');
       notification.id = 'consoleNotification';
       notification.style.cssText = `
-            position: fixed; bottom: 8rem;
-            left: 50%; padding: 0.9rem 1.8rem;
-            background: rgba(var(--rgb-secondary), 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(var(--rgb-secondary), 0.5); border-radius: 4px;
-            color: var(--secondary); font-family: 'Space Grotesk', monospace; font-size: 0.95rem;
-            z-index: 101; text-align: center; text-transform: uppercase;
-            box-shadow: 0 0 25px rgba(var(--rgb-secondary), 0.4);
-            transform: translateX(-50%); 
-            animation: fadeIn 0.3s ease-out forwards, fadeOut 0.4s ease-in 3.5s forwards;
-        `;
+    position: fixed; bottom: 8rem;
+    left: 50 %; padding: 0.9rem 1.8rem;
+    background: rgba(var(--rgb - secondary), 0.1);
+    backdrop - filter: blur(10px);
+    border: 1px solid rgba(var(--rgb - secondary), 0.5); border - radius: 4px;
+    color: var(--secondary); font - family: 'Space Grotesk', monospace; font - size: 0.95rem;
+    z - index: 101; text - align: center; text - transform: uppercase;
+    box - shadow: 0 0 25px rgba(var(--rgb - secondary), 0.4);
+    transform: translateX(-50 %);
+    animation: fadeIn 0.3s ease - out forwards, fadeOut 0.4s ease -in 3.5s forwards;
+    `;
       notification.textContent = message;
       document.body.appendChild(notification);
 
@@ -5687,13 +6059,13 @@
         particle.classList.add('sand-particle');
 
         const size = Math.random() * 3 + 1; // Particle size 1px to 4px
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
+        particle.style.width = `${size} px`;
+        particle.style.height = `${size} px`;
         particle.style.backgroundColor = sandColors[Math.floor(Math.random() * sandColors.length)];
 
         // Initial position spread across the container, including starting off-screen for entry effect
-        particle.style.left = `${Math.random() * 120 - 10}%`; // -10% to 110%
-        particle.style.top = `${Math.random() * 120 - 10}%`;
+        particle.style.left = `${Math.random() * 120 - 10}% `; // -10% to 110%
+        particle.style.top = `${Math.random() * 120 - 10}% `;
 
         particle.dataset.vx = (Math.random() - 0.3) * 3 + 1; // Base horizontal velocity (mostly right to left)
         particle.dataset.vy = (Math.random() - 0.5) * 2;     // Vertical velocity (slight up/down drift)
@@ -5733,8 +6105,8 @@
 
         if (age > life) {
           // Reset particle to re-enter
-          particle.style.left = `${100 + Math.random() * 20}%`; // Re-enter from right
-          particle.style.top = `${Math.random() * 100}%`;
+          particle.style.left = `${100 + Math.random() * 20}% `; // Re-enter from right
+          particle.style.top = `${Math.random() * 100}% `;
           particle.style.opacity = '0';
           particle.dataset.startTime = currentTime + Math.random() * 500;
           particle.dataset.vx = (Math.random() - 0.3) * 3 + 1;
@@ -5751,8 +6123,8 @@
         if (y < -10) y = 110;
         if (y > 110) y = -10;
 
-        particle.style.left = `${x}%`;
-        particle.style.top = `${y}%`;
+        particle.style.left = `${x}% `;
+        particle.style.top = `${y}% `;
 
         // Fade in/out based on life
         const lifeRatio = age / life;
@@ -6127,7 +6499,7 @@
                 <iframe id="main-video-player"
                   src="https://www.youtube.com/embed/921VbDVdaFA?autoplay=0&mute=0&controls=1&modestbranding=1&rel=0"
                   title="Main YouTube Video Player"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowfullscreen>
                 </iframe>
               </div>
@@ -6420,7 +6792,7 @@
 
                   // Occasionally add extra chaos
                   if (Math.random() < 0.2) {
-                    return `${randomParticle} ${baseTitle} ${randomParticle}`;
+                    return `${randomParticle} ${baseTitle} ${randomParticle} `;
                   }
 
                   return baseTitle;
@@ -6760,244 +7132,244 @@
               const commandPanel = document.createElement('div');
               commandPanel.id = 'command-panel';
               commandPanel.innerHTML = `
-        <div id="command-header">
+              < div id = "command-header" >
             <span>Command Panel</span>
             <button id="minimize-btn">−</button>
             <button id="close-btn">×</button>
-        </div>
-        <div id="command-body">
-            <div id="command-output"></div>
-            <div id="command-input-container">
-                <input type="text" id="command-input" placeholder="Type command (help for options)">
-                <button id="execute-btn">Run</button>
-            </div>
-            <div id="command-tabs">
-                <button class="tab-btn active" data-tab="history">History</button>
-                <button class="tab-btn" data-tab="elements">Elements</button>
-                <button class="tab-btn" data-tab="styles">Styles</button>
-            </div>
-            <div id="command-tab-content">
-                <div id="history-tab" class="tab-content active">
+        </div >
+              <div id="command-body">
+                <div id="command-output"></div>
+                <div id="command-input-container">
+                  <input type="text" id="command-input" placeholder="Type command (help for options)">
+                    <button id="execute-btn">Run</button>
+                </div>
+                <div id="command-tabs">
+                  <button class="tab-btn active" data-tab="history">History</button>
+                  <button class="tab-btn" data-tab="elements">Elements</button>
+                  <button class="tab-btn" data-tab="styles">Styles</button>
+                </div>
+                <div id="command-tab-content">
+                  <div id="history-tab" class="tab-content active">
                     <div id="command-history"></div>
-                </div>
-                <div id="elements-tab" class="tab-content">
+                  </div>
+                  <div id="elements-tab" class="tab-content">
                     <div id="elements-list"></div>
-                </div>
-                <div id="styles-tab" class="tab-content">
+                  </div>
+                  <div id="styles-tab" class="tab-content">
                     <div id="styles-list"></div>
+                  </div>
                 </div>
-            </div>
-        </div>
-    `;
+              </div>
+            `;
 
               // Style the command panel
               const style = document.createElement('style');
               style.textContent = `
-    #command-panel {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 400px;
-      max-height: 600px;
-      background: linear-gradient(180deg, rgba(var(--rgb-primary), 0.06), rgba(8,8,10,0.95));
-      color: rgba(255,255,255,0.95);
-      border-radius: 10px;
-      border: 1px solid rgba(var(--rgb-primary),0.12);
-      box-shadow: 0 18px 40px rgba(0,0,0,0.6), 0 6px 22px rgba(var(--rgb-primary),0.03);
-      font-family: 'Space Grotesk', 'Consolas', 'Monaco', monospace;
-      z-index: 10000;
-      transition: all 0.28s cubic-bezier(.2,.9,.2,1);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+            #command - panel {
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              width: 400px;
+              max - height: 600px;
+              background: linear - gradient(180deg, rgba(var(--rgb - primary), 0.06), rgba(8, 8, 10, 0.95));
+              color: rgba(255, 255, 255, 0.95);
+              border - radius: 10px;
+              border: 1px solid rgba(var(--rgb - primary), 0.12);
+              box - shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 6px 22px rgba(var(--rgb - primary), 0.03);
+              font - family: 'Space Grotesk', 'Consolas', 'Monaco', monospace;
+              z - index: 10000;
+              transition: all 0.28s cubic - bezier(.2, .9, .2, 1);
+              display: flex;
+              flex - direction: column;
+              overflow: hidden;
+            }
 
-    /* header uses primary red tint to match hardpoint */
-    #command-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
-      background: linear-gradient(90deg, rgba(var(--rgb-primary),0.12), rgba(0,0,0,0.2));
-      color: var(--text);
-      border-radius: 10px 10px 0 0;
-      cursor: move;
-      font-family: 'Space Grotesk', monospace;
-      font-weight: 700;
-    }
+            /* header uses primary red tint to match hardpoint */
+            #command - header {
+              display: flex;
+              justify - content: space - between;
+              align - items: center;
+              padding: 10px 12px;
+              background: linear - gradient(90deg, rgba(var(--rgb - primary), 0.12), rgba(0, 0, 0, 0.2));
+              color: var(--text);
+              border - radius: 10px 10px 0 0;
+              cursor: move;
+              font - family: 'Space Grotesk', monospace;
+              font - weight: 700;
+            }
+
+            #minimize - btn, #close - btn {
+              background: none;
+              border: none;
+              color: white;
+              font - size: 18px;
+              cursor: pointer;
+              padding: 0;
+              width: 24px;
+              height: 24px;
+              display: flex;
+              align - items: center;
+              justify - content: center;
+              margin - left: 5px;
+            }
+
+            #close - btn:hover {
+              background - color: rgba(255, 255, 255, 0.2);
+              border - radius: 4px;
+            }
+
+            #command - body {
+              padding: 14px;
+              flex: 1;
+              display: flex;
+              flex - direction: column;
+              overflow: hidden;
+              background: linear - gradient(180deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.4));
+            }
+
+            #command - output {
+              background: rgba(0, 0, 0, 0.45);
+              padding: 10px;
+              border - radius: 6px;
+              margin - bottom: 10px;
+              min - height: 80px;
+              font - size: 14px;
+              white - space: pre - wrap;
+              overflow - y: auto;
+              flex - shrink: 0;
+              border: 1px solid rgba(var(--rgb - primary), 0.06);
+            }
+
+            #command - input - container {
+              display: flex;
+              margin - bottom: 10px;
+              flex - shrink: 0;
+            }
+
+            #command - input {
+              flex: 1;
+              padding: 8px;
+              background - color: #1e1e1e;
+              color: #d4d4d4;
+              border: 1px solid #3e3e42;
+              border - radius: 4px;
+              font - family: inherit;
+            }
+
+            #execute - btn {
+              margin - left: 8px;
+              padding: 8px 12px;
+              background: linear - gradient(180deg, rgba(var(--rgb - secondary), 0.12), rgba(var(--rgb - primary), 0.08));
+              color: white;
+              border: 1px solid rgba(var(--rgb - primary), 0.08);
+              border - radius: 6px;
+              cursor: pointer;
+              box - shadow: 0 6px 18px rgba(var(--rgb - primary), 0.06);
+            }
+
+            #command - tabs {
+              display: flex;
+              margin - bottom: 10px;
+              border - bottom: 1px solid #3e3e42;
+              flex - shrink: 0;
+            }
         
-        #minimize-btn, #close-btn {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 0;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-left: 5px;
-        }
+        .tab - btn {
+              background: none;
+              border: none;
+              color: #d4d4d4;
+              padding: 8px 12px;
+              cursor: pointer;
+              border - bottom: 2px solid transparent;
+              margin - right: 5px;
+            }
         
-        #close-btn:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
+        .tab - btn.active {
+              border - bottom: 2px solid #007acc;
+              color: #007acc;
+            }
+
+            #command - tab - content {
+              flex: 1;
+              overflow - y: auto;
+            }
         
-    #command-body {
-      padding: 14px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.4));
-    }
+        .tab - content {
+              display: none;
+              height: 100 %;
+            }
         
-    #command-output {
-      background: rgba(0,0,0,0.45);
-      padding: 10px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-      min-height: 80px;
-      font-size: 14px;
-      white-space: pre-wrap;
-      overflow-y: auto;
-      flex-shrink: 0;
-      border: 1px solid rgba(var(--rgb-primary),0.06);
-    }
+        .tab - content.active {
+              display: block;
+            }
+
+            #command - history, #elements - list, #styles - list {
+              background - color: #1e1e1e;
+              border - radius: 4px;
+              padding: 10px;
+              height: 100 %;
+              overflow - y: auto;
+            }
         
-        #command-input-container {
-            display: flex;
-            margin-bottom: 10px;
-            flex-shrink: 0;
-        }
+        .command - history - item, .element - item, .style - item {
+              padding: 6px 8px;
+              border - bottom: 1px solid #3e3e42;
+              cursor: pointer;
+              font - size: 13px;
+            }
         
-        #command-input {
-            flex: 1;
-            padding: 8px;
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            border: 1px solid #3e3e42;
-            border-radius: 4px;
-            font-family: inherit;
-        }
+        .command - history - item: last - child, .element - item: last - child, .style - item: last - child {
+              border - bottom: none;
+            }
         
-    #execute-btn {
-      margin-left: 8px;
-      padding: 8px 12px;
-      background: linear-gradient(180deg, rgba(var(--rgb-secondary),0.12), rgba(var(--rgb-primary),0.08));
-      color: white;
-      border: 1px solid rgba(var(--rgb-primary),0.08);
-      border-radius: 6px;
-      cursor: pointer;
-      box-shadow: 0 6px 18px rgba(var(--rgb-primary),0.06);
-    }
+        .element - item: hover, .style - item:hover {
+              background - color: #2a2d2e;
+            }
         
-        #command-tabs {
-            display: flex;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #3e3e42;
-            flex-shrink: 0;
-        }
+        .element - item.selected {
+              background - color: #094771;
+            }
+
+            #command - panel.minimized {
+              width: 220px;
+              height: 44px;
+              overflow: visible;
+            }
+
+            #command - panel.minimized #command - body {
+              display: none;
+            }
         
-        .tab-btn {
-            background: none;
-            border: none;
-            color: #d4d4d4;
-            padding: 8px 12px;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            margin-right: 5px;
-        }
+        .highlight - element {
+              outline: 2px dashed #ff9900!important;
+              outline - offset: 2px!important;
+            }
         
-        .tab-btn.active {
-            border-bottom: 2px solid #007acc;
-            color: #007acc;
-        }
+        .color - picker {
+              display: inline - block;
+              width: 20px;
+              height: 20px;
+              border: 1px solid #ccc;
+              cursor: pointer;
+              margin - left: 10px;
+            }
         
-        #command-tab-content {
-            flex: 1;
-            overflow-y: auto;
-        }
+        .style - value {
+              float: right;
+              color: #569cd6;
+            }
         
-        .tab-content {
-            display: none;
-            height: 100%;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        #command-history, #elements-list, #styles-list {
-            background-color: #1e1e1e;
-            border-radius: 4px;
-            padding: 10px;
-            height: 100%;
-            overflow-y: auto;
-        }
-        
-        .command-history-item, .element-item, .style-item {
-            padding: 6px 8px;
-            border-bottom: 1px solid #3e3e42;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        
-        .command-history-item:last-child, .element-item:last-child, .style-item:last-child {
-            border-bottom: none;
-        }
-        
-        .element-item:hover, .style-item:hover {
-            background-color: #2a2d2e;
-        }
-        
-        .element-item.selected {
-            background-color: #094771;
-        }
-        
-    #command-panel.minimized {
-      width: 220px;
-      height: 44px;
-      overflow: visible;
-    }
-        
-    #command-panel.minimized #command-body {
-      display: none;
-    }
-        
-        .highlight-element {
-            outline: 2px dashed #ff9900 !important;
-            outline-offset: 2px !important;
-        }
-        
-        .color-picker {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 1px solid #ccc;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        
-        .style-value {
-            float: right;
-            color: #569cd6;
-        }
-        
-        .style-input {
-            width: 100%;
-            padding: 4px;
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            border: 1px solid #3e3e42;
-            border-radius: 3px;
-            font-family: inherit;
-            font-size: 12px;
-        }
-    `;
+        .style - input {
+              width: 100 %;
+              padding: 4px;
+              background - color: #1e1e1e;
+              color: #d4d4d4;
+              border: 1px solid #3e3e42;
+              border - radius: 3px;
+              font - family: inherit;
+              font - size: 12px;
+            }
+            `;
 
               // Add to document
               document.head.appendChild(style);
@@ -7039,7 +7411,7 @@
                   document.querySelectorAll('.tab-content').forEach(content => {
                     content.classList.remove('active');
                   });
-                  document.getElementById(`${tabName}-tab`).classList.add('active');
+                  document.getElementById(`${tabName} -tab`).classList.add('active');
 
                   // Refresh content if needed
                   if (tabName === 'elements') {
@@ -7062,8 +7434,8 @@
 
               document.addEventListener('mousemove', (e) => {
                 if (isDragging) {
-                  commandPanelElement.style.left = `${e.clientX - dragOffsetX}px`;
-                  commandPanelElement.style.top = `${e.clientY - dragOffsetY}px`;
+                  commandPanelElement.style.left = `${e.clientX - dragOffsetX} px`;
+                  commandPanelElement.style.top = `${e.clientY - dragOffsetY} px`;
                   commandPanelElement.style.bottom = 'auto';
                   commandPanelElement.style.right = 'auto';
                 }
@@ -7095,7 +7467,7 @@
 
                 const historyItem = document.createElement('div');
                 historyItem.className = 'command-history-item';
-                historyItem.textContent = `> ${command}`;
+                historyItem.textContent = `> ${command} `;
                 historyItem.addEventListener('click', () => {
                   commandInput.value = command;
                   commandInput.focus();
@@ -7133,7 +7505,7 @@
 
                 for (const [type, elements] of Object.entries(elementTypes)) {
                   const category = document.createElement('div');
-                  category.innerHTML = `<strong>${type} (${elements.length})</strong>`;
+                  category.innerHTML = `< strong > ${type} (${elements.length})</strong > `;
                   category.style.marginTop = '10px';
                   category.style.marginBottom = '5px';
                   elementsList.appendChild(category);
@@ -7145,9 +7517,9 @@
                     const item = document.createElement('div');
                     item.className = 'element-item';
 
-                    let description = `<${type}`;
-                    if (el.id) description += `#${el.id}`;
-                    if (el.className) description += `.${el.className.replace(/\s+/g, '.')}`;
+                    let description = `< ${type} `;
+                    if (el.id) description += `#${el.id} `;
+                    if (el.className) description += `.${el.className.replace(/\s+/g, '.')} `;
                     description += '>';
 
                     // Add some text content if available
@@ -7198,7 +7570,7 @@
                   const value = computedStyle.getPropertyValue(prop);
 
                   item.innerHTML = `
-                <div>${prop.replace(/-/g, ' ')}</div>
+              < div > ${prop.replace(/-/g, ' ')}</div >
                 <div class="style-value">${value}</div>
             `;
 
@@ -7387,42 +7759,42 @@
               // Command implementations
               function showHelp() {
                 const helpText = `Available commands:
-        
-help - Show this help
-select - Select an element by clicking on it
-hide - Hide selected element
-show - Show selected element
-color [value] - Change text color of selected element
-background [value] - Change background color of selected element
-fontsize [value] - Change font size of selected element
-dark - Enable dark mode
-light - Enable light mode
-reset - Reset all changes
-info - Show page information
-elements [tag] - List all elements of a specific type
-remove - Remove selected element
-disable - Disable selected element
-enable - Enable selected element
-width [value] - Change width of selected element
-height [value] - Change height of selected element
-padding [value] - Change padding of selected element
-margin [value] - Change margin of selected element
-border [value] - Change border of selected element
-opacity [value] - Change opacity of selected element (0-1)
-text [value] - Change text content of selected element
-html [value] - Change HTML content of selected element
-class [name] - Add class to selected element
-id [name] - Change ID of selected element
-scroll - Scroll to selected element
-focus - Focus on selected element
-screenshot - Take a screenshot of the page
-inspect - Inspect selected element (like browser dev tools)
-parent - Select parent of current element
-children - List children of current element
-next - Select next sibling element
-prev - Select previous sibling element
-toggle [attr] - Toggle boolean attribute (e.g., hidden, disabled)
-refresh - Reload the page`;
+
+              help - Show this help
+            select - Select an element by clicking on it
+            hide - Hide selected element
+            show - Show selected element
+            color[value] - Change text color of selected element
+            background[value] - Change background color of selected element
+            fontsize[value] - Change font size of selected element
+            dark - Enable dark mode
+            light - Enable light mode
+            reset - Reset all changes
+            info - Show page information
+            elements[tag] - List all elements of a specific type
+            remove - Remove selected element
+            disable - Disable selected element
+            enable - Enable selected element
+            width[value] - Change width of selected element
+            height[value] - Change height of selected element
+            padding[value] - Change padding of selected element
+            margin[value] - Change margin of selected element
+            border[value] - Change border of selected element
+            opacity[value] - Change opacity of selected element(0 - 1)
+            text[value] - Change text content of selected element
+            html[value] - Change HTML content of selected element
+            class [name] - Add class to selected element
+            id[name] - Change ID of selected element
+            scroll - Scroll to selected element
+            focus - Focus on selected element
+            screenshot - Take a screenshot of the page
+            inspect - Inspect selected element(like browser dev tools)
+            parent - Select parent of current element
+            children - List children of current element
+            next - Select next sibling element
+            prev - Select previous sibling element
+            toggle[attr] - Toggle boolean attribute(e.g., hidden, disabled)
+            refresh - Reload the page`;
 
                 commandOutput.textContent = helpText;
               }
@@ -7462,7 +7834,7 @@ refresh - Reload the page`;
                     });
                   }
 
-                  commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
+                  commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()} ${selectedElement.id ? `#${selectedElement.id}` : ''} ${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
 
                   // Update styles tab if active
                   if (document.querySelector('#styles-tab').classList.contains('active')) {
@@ -7502,7 +7874,7 @@ refresh - Reload the page`;
                   });
                 }
 
-                commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()}${selectedElement.id ? `#${selectedElement.id}` : ''}${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
+                commandOutput.textContent = `Selected: <${selectedElement.tagName.toLowerCase()} ${selectedElement.id ? `#${selectedElement.id}` : ''} ${selectedElement.className ? `.${selectedElement.className.replace(/\s+/g, '.')}` : ''}>`;
 
                 // Update styles tab if active
                 if (document.querySelector('#styles-tab').classList.contains('active')) {
@@ -7638,12 +8010,12 @@ refresh - Reload the page`;
                 const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
 
                 commandOutput.textContent = `Page Information:
-Title: ${title}
-URL: ${url}
-Total elements: ${elementsCount}
-Load time: ${loadTime}ms
-Viewport: ${window.innerWidth}x${window.innerHeight}
-User Agent: ${navigator.userAgent.substring(0, 60)}...`;
+                    Title: ${title}
+                    URL: ${url}
+                    Total elements: ${elementsCount}
+                    Load time: ${loadTime}ms
+                    Viewport: ${window.innerWidth}x${window.innerHeight}
+                    User Agent: ${navigator.userAgent.substring(0, 60)}...`;
               }
 
               function listElements(tag) {
@@ -8894,6 +9266,7 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
     <script src="entity-renderer.js"></script>
     <script src="entity-voice.js"></script>
     <script src="entity.js"></script>
+    <script src="hgt25.js"></script>
 
     <!-- Placeholder Organism Container -->
     <div id="organism-container"
@@ -8946,7 +9319,7 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
 
             // Spawn organisms
             console.log('🌱 Attempting to spawn organisms...');
-            const count = 3 + Math.floor(Math.random() * 3);
+            const count = 2 + Math.floor(Math.random() * 3); // Reduced by 1 — Void Symbiote fills the gap
 
             for (let i = 0; i < count; i++) {
               try {
@@ -8965,6 +9338,12 @@ User Agent: ${navigator.userAgent.substring(0, 60)}...`;
             console.log('▶️ Starting EntityManager loop...');
             window.entityManager.start();
             console.log(`✨ Advanced organism rendering system active! Spawned ${count} entities.`);
+
+            // Spawn Void Symbiote (hgt25.js)
+            if (typeof VoidSymbiote !== 'undefined') {
+              window.voidSymbiote = new VoidSymbiote();
+              console.log('🕳️ Void Symbiote entity active!');
+            }
 
           } catch (e) {
             console.error('🔥 CRITICAL ERROR initializing organisms:', e);
