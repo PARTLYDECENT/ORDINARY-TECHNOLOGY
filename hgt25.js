@@ -12,6 +12,7 @@ class VoidSymbiote {
         this.canvas = null;
         this.gl = null;
         this.program = null;
+        this.container = options.container || null;
         this.width = 0;
         this.height = 0;
 
@@ -45,12 +46,20 @@ class VoidSymbiote {
     init() {
         // Create overlay canvas
         this.canvas = document.createElement('canvas');
-        this.canvas.id = 'symbiote-canvas';
+        this.canvas.id = 'symbiote-canvas-' + this.id;
+        
+        const targetContainer = this.container || document.body;
+        const isBody = targetContainer === document.body;
+        
         this.canvas.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            position: ${isBody ? 'fixed' : 'absolute'}; 
+            top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 998; mix-blend-mode: screen;
         `;
-        document.body.appendChild(this.canvas);
+        targetContainer.appendChild(this.canvas);
+        if (!isBody && getComputedStyle(targetContainer).position === 'static') {
+            targetContainer.style.position = 'relative';
+        }
 
         this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
         if (!this.gl) {
@@ -223,11 +232,35 @@ class VoidSymbiote {
     }
 
     resize() {
-        this.width = this.canvas.width = window.innerWidth;
-        this.height = this.canvas.height = window.innerHeight;
-        if (this.gl) {
-            this.gl.viewport(0, 0, this.width, this.height);
-            this.gl.uniform2f(this.uniforms.resolution, this.width, this.height);
+        if (!this.canvas) return;
+        const targetContainer = this.container || document.body;
+        const isBody = targetContainer === document.body;
+        
+        let targetW = isBody ? window.innerWidth : targetContainer.clientWidth;
+        let targetH = isBody ? window.innerHeight : targetContainer.clientHeight;
+        
+        // Defensive: If container size is 0, wait or fallback
+        if (targetW === 0 || targetH === 0) {
+            const rect = targetContainer.getBoundingClientRect();
+            targetW = rect.width;
+            targetH = rect.height;
+        }
+        
+        // Final fallback to screen size if still 0
+        if (targetW === 0) targetW = window.innerWidth;
+        if (targetH === 0) targetH = window.innerHeight;
+
+        if (this.width !== targetW || this.height !== targetH) {
+            this.width = this.canvas.width = targetW;
+            this.height = this.canvas.height = targetH;
+            
+            if (this.gl) {
+                this.gl.viewport(0, 0, this.width, this.height);
+                this.gl.uniform2f(this.uniforms.resolution, this.width, this.height);
+            }
+            
+            // Re-build body if dimensions changed significantly
+            if (this.nodes.length === 0) this.buildBody();
         }
     }
 
@@ -344,13 +377,13 @@ class VoidSymbiote {
         this.currentIntensity += (this.targetIntensity - this.currentIntensity) * 0.05;
 
         // Edge avoidance
-        const margin = 200;
+        const margin = Math.min(this.width, this.height) * 0.2;
         if (core.x < margin || core.x > this.width - margin || core.y < margin || core.y > this.height - margin) {
             const angleToCenter = Math.atan2(this.height / 2 - core.y, this.width / 2 - core.x);
             let diff = angleToCenter - this.wanderAngle;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
-            this.wanderAngle += diff * 0.03;
+            this.wanderAngle += diff * 0.05;
         }
 
         const swimPerpX = Math.cos(this.wanderAngle + Math.PI / 2);
@@ -428,7 +461,10 @@ class VoidSymbiote {
 
     // ─── RENDER LOOP ─────────────────────────────────────
     animate() {
-        if (!this.alive || !this.gl) return;
+        if (!this.alive || !this.gl || this.width === 0 || this.height === 0) {
+            if (this.alive) requestAnimationFrame(() => this.animate());
+            return;
+        }
 
         this.updateAI();
         this.solveLinks();
@@ -469,5 +505,5 @@ class VoidSymbiote {
 // Auto-init
 if (typeof window !== 'undefined') {
     window.VoidSymbiote = VoidSymbiote;
-    console.log('🕳️ hgt25.js loaded — use new VoidSymbiote() to spawn');
+    console.log('🕳️ hgt25.js loaded — use new VoidSymbiote({ container: el }) to spawn');
 }

@@ -520,6 +520,7 @@ function createAppPlanes() {
         { name: "Video", url: "videoPlayer.html", color: "#E89B6A" },
         { name: "AI", url: "ai.html", color: "#FF6B3F" },
         { name: "Game", url: "game.html", color: "#306d3f" },
+        { name: "Microlife", url: "microlife.html", color: "#E89B6A" },
         { name: "Forum", url: "forum.html", color: "#4A4A52" },
         { name: "Settings", url: "settings.html", color: "#B8865C" }
     ];

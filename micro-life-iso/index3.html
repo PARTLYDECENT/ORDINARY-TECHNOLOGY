@@ -1,0 +1,129 @@
+        // 3. Draw Antennae
+        if (this.dna.antenna > 0) {
+            ctx.strokeStyle = this.color; ctx.lineWidth = 1.5; ctx.beginPath();
+            if (this.dna.antenna === 1) { ctx.moveTo(pos.x, pos.y - 16 + stretch); ctx.lineTo(pos.x, pos.y - 22 + stretch); }
+            else { ctx.moveTo(pos.x - 3, pos.y - 15 + stretch); ctx.lineTo(pos.x - 6, pos.y - 20 + stretch); ctx.moveTo(pos.x + 3, pos.y - 15 + stretch); ctx.lineTo(pos.x + 6, pos.y - 20 + stretch); }
+            ctx.stroke(); ctx.fillStyle = '#fde047';
+            if (this.dna.antenna === 1) { ctx.beginPath(); ctx.arc(pos.x, pos.y - 23 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); }
+            else { ctx.beginPath(); ctx.arc(pos.x - 6, pos.y - 21 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 6, pos.y - 21 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); }
+        }
+        let eyeOffset = {x:0, y:0};
+        if (this.state === 'SEEK' || this.state === 'RETURN' || this.state === 'WANDER') {
+            let targetX = this.target ? this.target.x : this.wx; eyeOffset.x = (targetX > this.x) ? 1.5 : -1.5;
+        }
+        ctx.fillStyle = 'white'; let eyeY = pos.y - 10 + stretch;
+        if (this.dna.eyes === 1) {
+            ctx.beginPath(); ctx.arc(pos.x, eyeY - 2, 4, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(pos.x + eyeOffset.x, eyeY - 2, 2, 0, Math.PI*2); ctx.fill();
+        } else if (this.dna.eyes === 2) {
+            ctx.beginPath(); ctx.arc(pos.x - 3.5, eyeY, 3, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 3.5, eyeY, 3, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(pos.x - 3.5 + eyeOffset.x, eyeY, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 3.5 + eyeOffset.x, eyeY, 1.5, 0, Math.PI*2); ctx.fill();
+        } else {
+            ctx.beginPath(); ctx.arc(pos.x - 4, eyeY + 1, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, eyeY + 1, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x, eyeY - 3, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(pos.x - 4 + eyeOffset.x, eyeY + 1, 1, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4 + eyeOffset.x, eyeY + 1, 1, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + eyeOffset.x, eyeY - 3, 1.2, 0, Math.PI*2); ctx.fill();
+        }
+        if (this.state === 'FLEE') { ctx.fillStyle = '#ef4444'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('!', pos.x - 4, pos.y - 28 + stretch); }
+        if (this.carryingFood) {
+            ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 24 + stretch, 5, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#d97706'; ctx.lineWidth = 1; ctx.stroke();
+        }
+//     } // Micro.draw continues in chunk2.. wait, chunk2 ended at draw body. So this is correct. I am manually splicing it.
+// } this brace matched the class definition, which I put in chunk 4?
+// Let's just create chunk 3 up to Titan
+// wait, I can just write the rest of the JS in `index3.html` up to the end!
+
+class Soldier extends Entity { // ... I will paste the rest here.
+    constructor(x, y) { super(x, y); this.type = 'micro'; this.isSoldier = true; this.color = '#64748b'; this.state = 'PATROL'; this.target = null; this.speed = 0.04; this.wx = x; this.wy = y; }
+    update() {
+        super.update(); let predators = entities.filter(e => e.isHostile); let closestPred = null; let predDist = Infinity;
+        for (let p of predators) { let d = dist(this.x, this.y, p.x, p.y); if (d < 12 && d < predDist) { predDist = d; closestPred = p; } }
+        if (closestPred) { this.state = 'ATTACK'; this.target = closestPred; } else { if (this.state === 'ATTACK') this.state = 'PATROL'; }
+        switch(this.state) {
+            case 'ATTACK':
+                if (!this.target || !entities.includes(this.target)) { this.state = 'PATROL'; break; }
+                let dx = this.target.x - this.x; let dy = this.target.y - this.y; let distance = Math.hypot(dx, dy);
+                if (distance > 0.8) { this.x += (dx / distance) * this.speed; this.y += (dy / distance) * this.speed; }
+                else { this.target.hp -= 2; if (this.target.hp <= 0) { entities = entities.filter(e => e !== this.target); updateUI(); } } break;
+            case 'PATROL':
+                let px = this.wx - this.x; let py = this.wy - this.y; let pDist = Math.hypot(px, py);
+                if (pDist > 0.1) { this.x += (px / pDist) * (this.speed * 0.6); this.y += (py / pDist) * (this.speed * 0.6); }
+                else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 10 - 5))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 10 - 5))); } } break;
+        }
+        this.z = Math.abs(Math.sin(Date.now() * 0.02 + this.id)) * 6;
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let stretch = this.z > 2 ? 2 : -2; 
+        let shadowPos = toScreen(this.x, this.y, 0); ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 9, 4.5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = this.color; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 8, 11 - stretch/2, 11 + stretch, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.moveTo(pos.x - 5, pos.y - 18 + stretch); ctx.lineTo(pos.x, pos.y - 24 + stretch); ctx.lineTo(pos.x + 5, pos.y - 18 + stretch); ctx.fill();
+        ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(pos.x - 4, pos.y - 12 + stretch, 2.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, pos.y - 12 + stretch, 2.5, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pos.x - 7, pos.y - 15 + stretch); ctx.lineTo(pos.x - 2, pos.y - 13 + stretch); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos.x + 7, pos.y - 15 + stretch); ctx.lineTo(pos.x + 2, pos.y - 13 + stretch); ctx.stroke();
+        if (this.hp && this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 28 + stretch, 16, 3); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 7, pos.y - 27 + stretch, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Medic extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'micro'; this.color = '#f8fafc'; this.state = 'PATROL'; this.speed = 0.035; this.wx = x; this.wy = y; this.hp = 100; this.maxHp = 100; }
+    update() {
+        super.update(); let targets = entities.filter(e => !e.isHostile && e.hp !== undefined && e.hp < e.maxHp);
+        let closest = null; let cDist = Infinity;
+        for(let t of targets) { let d = dist(this.x, this.y, t.x, t.y); if(d < 15 && d < cDist) { cDist = d; closest = t; } }
+        if(closest) { this.state = 'HEAL'; this.target = closest; } else { this.state = 'PATROL'; }
+        if(this.state === 'HEAL' && this.target && entities.includes(this.target) && this.target.hp < this.target.maxHp) {
+            let dx = this.target.x - this.x; let dy = this.target.y - this.y; let d = Math.hypot(dx, dy);
+            if(d > 1.2) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; this.z = Math.abs(Math.sin(Date.now()*0.02+this.id))*5; }
+            else {
+                this.target.hp = Math.min(this.target.maxHp, this.target.hp + 0.5); this.z = Math.abs(Math.sin(Date.now() * 0.05)) * 4;
+                if (Math.random() < 0.2) { ctx.fillStyle = '#34d399'; let tPos = toScreen(this.target.x, this.target.y, this.target.z + 10); ctx.fillRect(tPos.x + Math.random()*10-5, tPos.y - Math.random()*10, 2, 2); }
+            }
+        } else {
+            let px = this.wx - this.x; let py = this.wy - this.y; let pDist = Math.hypot(px, py);
+            if (pDist > 0.1) { this.x += (px / pDist) * (this.speed * 0.6); this.y += (py / pDist) * (this.speed * 0.6); }
+            else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 10 - 5))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 10 - 5))); } }
+            this.z = Math.abs(Math.sin(Date.now()*0.02+this.id))*4;
+        }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let stretch = this.z > 2 ? 1 : -1;
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = this.color; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 8, 10 - stretch, 10 + stretch, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 1, pos.y - 14 + stretch, 2, 6); ctx.fillRect(pos.x - 3, pos.y - 12 + stretch, 6, 2);
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(pos.x - 3, pos.y - 7 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 3, pos.y - 7 + stretch, 1.5, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 20 + stretch, 16, 3); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 7, pos.y - 19 + stretch, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Titan extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'micro'; this.isSoldier = true; this.hp = 250; this.maxHp = 250; this.state = 'PATROL'; this.target = null; this.speed = 0.02; this.wx = x; this.wy = y; }
+    update() {
+        super.update(); let predators = entities.filter(e => e.isHostile); let closestPred = null; let predDist = Infinity;
+        for (let p of predators) { let d = dist(this.x, this.y, p.x, p.y); if (d < 15 && d < predDist) { predDist = d; closestPred = p; } }
+        if (closestPred) { this.state = 'ATTACK'; this.target = closestPred; } else { if (this.state === 'ATTACK') this.state = 'PATROL'; }
+        if(this.state === 'ATTACK') {
+            if (!this.target || !entities.includes(this.target)) { this.state = 'PATROL'; return; }
+            let dx = this.target.x - this.x; let dy = this.target.y - this.y; let d = Math.hypot(dx, dy);
+            if (d > 1.2) { this.x += (dx / d) * this.speed; this.y += (dy / d) * this.speed; this.z = Math.abs(Math.sin(Date.now() * 0.015 + this.id)) * 4; }
+            else { this.target.hp -= 4; this.z = Math.abs(Math.sin(Date.now() * 0.08)) * 6; if (this.target.hp <= 0) { entities = entities.filter(e => e !== this.target); updateUI(); } }
+        } else {
+            let px = this.wx - this.x; let py = this.wy - this.y; let pDist = Math.hypot(px, py);
+            if (pDist > 0.1) { this.x += (px / pDist) * (this.speed * 0.5); this.y += (py / pDist) * (this.speed * 0.5); this.z = Math.abs(Math.sin(Date.now() * 0.01 + this.id)) * 3; }
+            else { this.z = 0; if (Math.random() < 0.01) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 8 - 4))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 8 - 4))); } }
+        }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let stretch = this.z > 2 ? 1 : -1; 
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#18181b'; ctx.fillRect(pos.x - 12, pos.y - 18 + stretch, 24, 18); ctx.fillStyle = '#3f3f46'; ctx.fillRect(pos.x - 14, pos.y - 16 + stretch, 28, 6); ctx.fillRect(pos.x - 10, pos.y - 8 + stretch, 20, 6);
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 6, pos.y - 14 + stretch, 12, 2);
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 12, pos.y - 25 + stretch, 24, 4); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 11, pos.y - 24 + stretch, 22 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Wall extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'wall'; this.hp = 100; this.maxHp = 100; this.isStatic = true; this.depth = this.x + this.y; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(pos.x - 12, pos.y); ctx.lineTo(pos.x - 4, pos.y + 4); ctx.lineTo(pos.x - 4, pos.y - 15); ctx.lineTo(pos.x - 12, pos.y - 10); ctx.fill();
+        ctx.fillStyle = '#92400e'; ctx.beginPath(); ctx.moveTo(pos.x - 4, pos.y + 4); ctx.lineTo(pos.x + 4, pos.y + 8); ctx.lineTo(pos.x + 4, pos.y - 12); ctx.lineTo(pos.x - 4, pos.y - 15); ctx.fill();
+        ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.moveTo(pos.x + 4, pos.y + 8); ctx.lineTo(pos.x + 12, pos.y + 4); ctx.lineTo(pos.x + 12, pos.y - 10); ctx.lineTo(pos.x + 4, pos.y - 12); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 25, 20, 4); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 9, pos.y - 24, 18 * (this.hp / this.maxHp), 2); }
+    }
+}

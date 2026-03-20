@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Micro Life - Iso Remake</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a202c; /* Dark border */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        /* UI Styling */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="p-4 sm:p-6 flex flex-col justify-between">
+        
+        <!-- Top Bar: Resources -->
+        <div class="interactive flex gap-4">
+            <div class="bg-slate-800/90 border-2 border-slate-700 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]"></div>
+                <div>
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider block">Food Collected</span>
+                    <span id="ui-food" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800/90 border-2 border-slate-700 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.5)]"></div>
+                <div>
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider block">Micro Population</span>
+                    <span id="ui-pop" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800/90 border-2 border-red-900 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)] flex items-center justify-center text-xs">💀</div>
+                <div>
+                    <span class="text-xs text-red-400 font-bold uppercase tracking-wider block">Threats</span>
+                    <span id="ui-threats" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Bar: Controls -->
+        <div class="interactive flex justify-center pb-4 w-full px-4">
+            <div class="bg-slate-800/90 border-2 border-slate-700 rounded-2xl p-4 shadow-2xl flex flex-wrap gap-3 items-center justify-center max-w-full overflow-x-auto">
+                <button id="btn-hatch" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Worker</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">10 Food</span>
+                </button>
+                <button id="btn-soldier" class="bg-slate-600 hover:bg-slate-500 active:bg-slate-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Soldier</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">25 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden sm:block"></div>
+                <button id="btn-wall" class="bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Wall</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">5 Food</span>
+                </button>
+                <button id="btn-farm" class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Farm</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">20 Food</span>
+                </button>
+                <button id="btn-turret" class="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Turret</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">30 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden sm:block"></div>
+                <button id="btn-medic" class="bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Medic</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">30 Food</span>
+                </button>
+                <button id="btn-titan" class="bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 text-white font-bold py-2 px-4 rounded-xl border border-zinc-600 transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Titan</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">50 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden sm:block"></div>
+                <button id="btn-spikes" class="bg-stone-600 hover:bg-stone-500 active:bg-stone-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Spikes</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">10 Food</span>
+                </button>
+                <button id="btn-silo" class="bg-red-700 hover:bg-red-600 active:bg-red-800 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Silo</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">40 Food</span>
+                </button>
+                <button id="btn-lantern" class="bg-yellow-600 hover:bg-yellow-500 active:bg-yellow-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Lantern</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">15 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden lg:block"></div>
+                <div class="text-xs text-slate-400 max-w-[150px] hidden lg:block" id="ui-hint">
+                    <p><b>Drag</b> to pan camera.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+/**
+ * ISOMETRIC MICRO LIFE REMAKE
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const TILE_W = 64;
+const TILE_H = 32;
+const MAP_SIZE = 40; 
+let resources = 100; 
+let camera = { x: 0, y: 0 };
+let isDragging = false;
+let lastMouse = { x: 0, y: 0 };
+let entities = [];
+let nextId = 0;
+let dayTime = 0; 
+let lightLevel = 1; 
+
+let buildMode = null; 
+let mouseX = 0, mouseY = 0;
+
+const COLORS = ['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6'];
+
+const uiFood = document.getElementById('ui-food');
+const uiPop = document.getElementById('ui-pop');
+const uiThreats = document.getElementById('ui-threats');
+const btnHatch = document.getElementById('btn-hatch');
+const btnSoldier = document.getElementById('btn-soldier');
+const btnWall = document.getElementById('btn-wall');
+const btnFarm = document.getElementById('btn-farm');
+const btnTurret = document.getElementById('btn-turret');
+const btnMedic = document.getElementById('btn-medic');
+const btnTitan = document.getElementById('btn-titan');
+const btnSpikes = document.getElementById('btn-spikes');
+const btnSilo = document.getElementById('btn-silo');
+const btnLantern = document.getElementById('btn-lantern');
+const uiHint = document.getElementById('ui-hint');
+
+let patterns = {};
+function createTextures() {
+    const createTex = (base, colors, type) => {
+        const tc = document.createElement('canvas'); tc.width = 128; tc.height = 128;
+        const tctx = tc.getContext('2d');
+        tctx.fillStyle = base; tctx.fillRect(0, 0, 128, 128);
+        for(let i=0; i<40; i++) {
+            tctx.fillStyle = colors[Math.floor(Math.random() * 2)]; tctx.globalAlpha = 0.3;
+            tctx.beginPath(); tctx.arc(Math.random()*128, Math.random()*128, Math.random()*15 + 5, 0, Math.PI*2); tctx.fill();
+        }
+        tctx.globalAlpha = 1.0;
+        for(let i=0; i<300; i++) {
+            tctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+            tctx.beginPath(); tctx.arc(Math.random()*128, Math.random()*128, Math.random()*1.5 + 0.2, 0, Math.PI*2); tctx.fill();
+        }
+        for(let i=0; i<40; i++) {
+            tctx.strokeStyle = colors[0]; tctx.lineWidth = type === 'dirt' ? 1.5 : 1; tctx.globalAlpha = 0.6;
+            tctx.beginPath(); let x = Math.random()*128; let y = Math.random()*128; tctx.moveTo(x, y);
+            if(type === 'dirt') { tctx.lineTo(x + Math.random()*8-4, y + Math.random()*8-4); tctx.lineTo(x + Math.random()*12-6, y + Math.random()*12-6); }
+            else { tctx.lineTo(x + Math.random()*4-2, y - Math.random()*10-4); } tctx.stroke();
+        }
+        return ctx.createPattern(tc, 'repeat');
+    };
+    patterns['GRASS'] = createTex('#15803d', ['#14532d', '#166534', '#22c55e', '#4ade80'], 'grass');
+    patterns['DARK_GRASS'] = createTex('#166534', ['#064e3b', '#14532d', '#15803d', '#22c55e'], 'grass');
+    patterns['DIRT'] = createTex('#a16207', ['#451a03', '#713f12', '#854d0e', '#ca8a04'], 'dirt');
+}
+
+let mapGrid = [];
+function generateMap() {
+    for(let x=0; x<MAP_SIZE; x++) {
+        mapGrid[x] = [];
+        for(let y=0; y<MAP_SIZE; y++) {
+            let nx = x * 0.4; let ny = y * 0.4;
+            let noise = Math.sin(nx) + Math.cos(ny) + (Math.random() * 0.5);
+            let distToCenter = Math.hypot(x - MAP_SIZE/2, y - MAP_SIZE/2);
+            let type = 'GRASS'; let edgeColor = '#14532d';
+            if (distToCenter < 2.5 || noise < -0.5) { type = 'DIRT'; edgeColor = '#713f12'; }
+            else if (noise > 0.8) { type = 'DARK_GRASS'; edgeColor = '#14532d'; }
+            let numDetails = Math.floor(Math.random() * 5);
+            for(let i=0; i<numDetails; i++) {
+                let dx = x + 0.1 + Math.random() * 0.8; let dy = y + 0.1 + Math.random() * 0.8;
+                if (type === 'GRASS' || type === 'DARK_GRASS') {
+                    let r = Math.random();
+                    if (r < 0.5) entities.push(new Grass(dx, dy, type));
+                    else if (r < 0.7) entities.push(new Fern(dx, dy));
+                    else if (r < 0.85) entities.push(new Flower(dx, dy));
+                    else entities.push(new Mushroom(dx, dy));
+                } else if (type === 'DIRT') { entities.push(new Pebble(dx, dy)); }
+            }
+            mapGrid[x][y] = { type, edgeColor, pattern: patterns[type] };
+        }
+    }
+}
+
+function toScreen(mapX, mapY, z = 0) {
+    return { x: (mapX - mapY) * (TILE_W / 2) + camera.x, y: (mapX + mapY) * (TILE_H / 2) - z + camera.y };
+}
+function toMap(screenX, screenY) {
+    let adjX = screenX - camera.x; let adjY = screenY - camera.y;
+    let mapX = (adjX / (TILE_W / 2) + adjY / (TILE_H / 2)) / 2;
+    let mapY = (adjY / (TILE_H / 2) - adjX / (TILE_W / 2)) / 2;
+    return { x: Math.floor(mapX), y: Math.floor(mapY) };
+}
+function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+class Entity {
+    constructor(x, y) { this.id = nextId++; this.x = x; this.y = y; this.z = 0; this.depth = 0; }
+    update() { this.depth = this.x + this.y + (this.z * 0.1); }
+    draw(ctx) {}
+}
+class Grass extends Entity {
+    constructor(x, y, type) {
+        super(x, y); this.type = 'grass'; this.isStatic = true; this.depth = this.x + this.y; this.clusterType = type;
+        this.blades = []; let numBlades = Math.floor(Math.random() * 5) + 3;
+        for(let b = 0; b < numBlades; b++) {
+            this.blades.push({ offsetX: (Math.random() - 0.5) * 8, height: Math.random() * 12 + 6, curve: (Math.random() - 0.5) * 10,
+                shade: Math.random() > 0.5 ? (type === 'GRASS' ? '#4ade80' : '#22c55e') : (type === 'GRASS' ? '#22c55e' : '#16a34a') });
+        }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z);
+        ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y, 5, 2.5, 0, 0, Math.PI*2); ctx.fill();
+        let time = Date.now() * 0.002; let wind = Math.sin(time + this.x * 2 + this.y * 2) * 4; 
+        this.blades.forEach(blade => {
+            ctx.strokeStyle = blade.shade; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pos.x + blade.offsetX, pos.y);
+            let windEffect = wind * (blade.height / 15);
+            ctx.quadraticCurveTo(pos.x + blade.offsetX + blade.curve / 2 + windEffect, pos.y - blade.height / 2, 
+                pos.x + blade.offsetX + blade.curve + windEffect * 1.5, pos.y - blade.height); ctx.stroke();
+        });
+    }
+}
+class Fern extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'fern'; this.isStatic = true; this.depth = this.x + this.y; this.size = Math.random() * 0.5 + 0.8; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y, 8*this.size, 4*this.size, 0, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#064e3b'; ctx.lineWidth = 2;
+        for(let i=0; i<4; i++) {
+            let angle = (i * Math.PI / 2) + (Math.sin(this.x) * 0.5); let endX = pos.x + Math.cos(angle) * 12 * this.size; let endY = pos.y + Math.sin(angle) * 8 * this.size - 6 * this.size;
+            ctx.beginPath(); ctx.moveTo(pos.x, pos.y); ctx.quadraticCurveTo(pos.x, endY, endX, endY); ctx.stroke();
+        }
+    }
+}
+class Flower extends Entity {
+    constructor(x, y) {
+        super(x, y); this.type = 'flower'; this.isStatic = true; this.depth = this.x + this.y;
+        let colors = ['#f43f5e', '#a855f7', '#3b82f6', '#eab308']; this.color = colors[Math.floor(Math.random() * colors.length)];
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let wind = Math.sin(Date.now() * 0.002 + this.x) * 2;
+        ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pos.x, pos.y); ctx.quadraticCurveTo(pos.x + wind/2, pos.y - 4, pos.x + wind, pos.y - 8); ctx.stroke();
+        ctx.fillStyle = this.color; let px = pos.x + wind; let py = pos.y - 8;
+        for(let i=0; i<5; i++) { let angle = (i / 5) * Math.PI * 2; ctx.beginPath(); ctx.arc(px + Math.cos(angle)*3, py + Math.sin(angle)*3, 2.5, 0, Math.PI*2); ctx.fill(); }
+        ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI*2); ctx.fill();
+    }
+}
+class Mushroom extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'mushroom'; this.isStatic = true; this.depth = this.x + this.y; this.color = Math.random() > 0.5 ? '#2dd4bf' : '#c084fc'; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); ctx.fillStyle = '#e2e8f0'; ctx.fillRect(pos.x - 1.5, pos.y - 6, 3, 6);
+        ctx.fillStyle = this.color; if (lightLevel < 0.5) { ctx.shadowColor = this.color; ctx.shadowBlur = 10 * (1 - lightLevel); }
+        ctx.beginPath(); ctx.arc(pos.x, pos.y - 6, 5, Math.PI, 0); ctx.fill(); ctx.shadowBlur = 0;
+    }
+}
+class Pebble extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'pebble'; this.isStatic = true; this.depth = this.x + this.y; this.size = Math.random() * 1.5 + 1; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y + 1, this.size, this.size/2, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#713f12'; ctx.beginPath(); ctx.arc(pos.x, pos.y, this.size, 0, Math.PI*2); ctx.fill();
+    }
+}
+class Nest extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'nest'; this.hp = 500; this.maxHp = 500; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y, 40, 20, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 10, 35, 18, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(125, 211, 252, 0.4)'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 15, 30, 0, Math.PI, true); ctx.lineTo(pos.x + 30, pos.y - 15); ctx.fill();
+        ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 15, 15 + Math.sin(Date.now() * 0.003) * 2, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 20, pos.y - 40, 40, 5); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 19, pos.y - 39, 38 * (this.hp / this.maxHp), 3); }
+    }
+}
+class Food extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'food'; this.z = 5; this.targetedBy = null; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z + Math.sin(Date.now() * 0.005 + this.id) * 3); let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos.x, pos.y, 6, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#d97706'; ctx.lineWidth = 1; ctx.stroke();
+    }
+}
+class Projectile extends Entity {
+    constructor(x, y, target) { super(x, y); this.type = 'projectile'; this.target = target; this.speed = 0.3; this.z = 15; }
+    update() {
+        super.update();
+        if (!this.target || !entities.includes(this.target)) { entities = entities.filter(e => e !== this); return; }
+        let dx = this.target.x - this.x; let dy = this.target.y - this.y; let distAmt = Math.hypot(dx, dy);
+        if (distAmt < 0.5) {
+            this.target.hp -= 40; entities = entities.filter(e => e !== this);
+            if (this.target.hp <= 0) { entities = entities.filter(e => e !== this.target); updateUI(); }
+        } else { this.x += (dx / distAmt) * this.speed; this.y += (dy / distAmt) * this.speed; }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); ctx.fillStyle = '#818cf8'; ctx.beginPath(); ctx.arc(pos.x, pos.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(129, 140, 248, 0.4)'; ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI*2); ctx.fill();
+    }
+}
+class Turret extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'turret'; this.hp = 150; this.maxHp = 150; this.cooldown = 0; this.range = 8; }
+    update() {
+        super.update();
+        if (this.cooldown > 0) this.cooldown--;
+        else {
+            let preds = entities.filter(e => e.isHostile);
+            for (let p of preds) {
+                if (dist(this.x, this.y, p.x, p.y) < this.range) { entities.push(new Projectile(this.x, this.y, p)); this.cooldown = 90; this.z = 5; break; }
+            }
+        }
+        if (this.z > 0) this.z -= 0.5;
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#3730a3'; ctx.beginPath(); ctx.moveTo(pos.x - 10, pos.y); ctx.lineTo(pos.x, pos.y + 5); ctx.lineTo(pos.x + 10, pos.y); ctx.lineTo(pos.x, pos.y - 5); ctx.fill();
+        ctx.fillStyle = '#4f46e5'; ctx.fillRect(pos.x - 4, pos.y - 15, 8, 15);
+        ctx.fillStyle = '#c7d2fe'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 15, 6, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 25, 20, 4); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 9, pos.y - 24, 18 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Farm extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'farm'; this.hp = 100; this.maxHp = 100; this.cooldown = 180; }
+    update() {
+        super.update();
+        if (this.cooldown > 0) {
+            let hasSilo = entities.some(e => e.type === 'silo' && dist(this.x, this.y, e.x, e.y) < 6);
+            this.cooldown -= hasSilo ? 2 : 1;
+        } else {
+            let nearbyFood = entities.filter(e => e.type === 'food' && dist(e.x, e.y, this.x, this.y) < 3);
+            if (nearbyFood.length < 5) { let fx = this.x + (Math.random() * 2 - 1); let fy = this.y + (Math.random() * 2 - 1); entities.push(new Food(fx, fy)); }
+            this.cooldown = 300; this.z = 4;
+        }
+        if (this.z > 0) this.z -= 0.1;
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 16, 8, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(pos.x - 14, pos.y); ctx.lineTo(pos.x, pos.y + 7); ctx.lineTo(pos.x + 14, pos.y); ctx.lineTo(pos.x, pos.y - 7); ctx.fill();
+        ctx.fillStyle = '#451a03'; ctx.beginPath(); ctx.moveTo(pos.x - 14, pos.y); ctx.lineTo(pos.x, pos.y + 7); ctx.lineTo(pos.x, pos.y + 12); ctx.lineTo(pos.x - 14, pos.y + 5); ctx.fill();
+        ctx.fillStyle = '#713f12'; ctx.beginPath(); ctx.moveTo(pos.x, pos.y + 7); ctx.lineTo(pos.x + 14, pos.y); ctx.lineTo(pos.x + 14, pos.y + 5); ctx.lineTo(pos.x, pos.y + 12); ctx.fill();
+        ctx.fillStyle = '#059669'; ctx.beginPath(); ctx.arc(pos.x - 4, pos.y - 8, 7, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x + 4, pos.y - 6, 6, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x, pos.y - 12, 8, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 22, 20, 4); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 9, pos.y - 21, 18 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Spikes extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'spikes'; this.hp = 50; this.maxHp = 50; this.isStatic = true; this.depth = this.x + this.y - 0.5; }
+    update() {
+        super.update();
+        entities.filter(e => e.isHostile && dist(this.x, this.y, e.x, e.y) < 0.8).forEach(p => { p.hp -= 1.0; p.z = Math.max(p.z, 2); });
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z);
+        ctx.fillStyle = '#44403c'; ctx.beginPath(); ctx.moveTo(pos.x - 12, pos.y); ctx.lineTo(pos.x, pos.y + 6); ctx.lineTo(pos.x + 12, pos.y); ctx.lineTo(pos.x, pos.y - 6); ctx.fill();
+        ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.moveTo(pos.x - 6, pos.y); ctx.lineTo(pos.x - 6, pos.y - 8); ctx.lineTo(pos.x - 4, pos.y); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(pos.x + 6, pos.y); ctx.lineTo(pos.x + 6, pos.y - 8); ctx.lineTo(pos.x + 8, pos.y); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(pos.x, pos.y + 2); ctx.lineTo(pos.x, pos.y - 6); ctx.lineTo(pos.x + 2, pos.y + 2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 12, 16, 3); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 7, pos.y - 11, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Silo extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'silo'; this.hp = 200; this.maxHp = 200; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 16, 8, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#7f1d1d'; ctx.fillRect(pos.x - 10, pos.y - 25, 20, 25); ctx.fillStyle = '#b91c1c'; ctx.fillRect(pos.x - 10, pos.y - 25, 10, 25);
+        ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 25, 10, 0, Math.PI, true); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 40, 20, 4); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 9, pos.y - 39, 18 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Lantern extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'lantern'; this.hp = 50; this.maxHp = 50; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#78350f'; ctx.fillRect(pos.x - 2, pos.y - 20, 4, 20); ctx.fillRect(pos.x - 2, pos.y - 20, 10, 3);
+        ctx.fillStyle = '#fef08a'; ctx.fillRect(pos.x + 6, pos.y - 18, 6, 8); ctx.fillStyle = '#eab308'; ctx.fillRect(pos.x + 7, pos.y - 17, 4, 6);
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 25, 16, 3); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 7, pos.y - 24, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Micro extends Entity {
+    constructor(x, y) {
+        super(x, y); this.type = 'micro'; this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+        this.state = 'IDLE'; this.target = null; this.speed = 0.03 + Math.random() * 0.02; this.carryingFood = false;
+        this.dna = { shape: Math.floor(Math.random() * 3), eyes: Math.floor(Math.random() * 3) + 1, antenna: Math.floor(Math.random() * 3), tail: Math.random() > 0.5, spots: Math.random() > 0.7 };
+        this.wx = x; this.wy = y;
+    }
+    update() {
+        super.update();
+        let predators = entities.filter(e => e.isHostile); let closestPred = null; let predDist = Infinity;
+        for (let p of predators) { let d = dist(this.x, this.y, p.x, p.y); if (d < 5 && d < predDist) { predDist = d; closestPred = p; } }
+        if (closestPred) { if (this.carryingFood) { this.carryingFood = false; entities.push(new Food(this.x, this.y)); } this.state = 'FLEE'; this.target = closestPred; }
+        else if (this.state === 'FLEE') { this.state = 'IDLE'; this.target = null; }
+
+        switch(this.state) {
+            case 'FLEE':
+                let dx = this.x - this.target.x; let dy = this.y - this.target.y; let distance = Math.hypot(dx, dy);
+                if (distance > 0) { this.x += (dx / distance) * (this.speed * 1.8); this.y += (dy / distance) * (this.speed * 1.8); }
+                this.x = Math.max(0, Math.min(MAP_SIZE - 1, this.x)); this.y = Math.max(0, Math.min(MAP_SIZE - 1, this.y)); break;
+            case 'IDLE':
+                let availableFood = entities.filter(e => e.type === 'food' && e.targetedBy === null);
+                if (availableFood.length > 0) {
+                    availableFood.sort((a, b) => dist(this.x, this.y, a.x, a.y) - dist(this.x, this.y, b.x, b.y));
+                    this.target = availableFood[0]; this.target.targetedBy = this; this.state = 'SEEK';
+                } else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 4 - 2))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 4 - 2))); this.state = 'WANDER'; } }
+                break;
+            case 'WANDER':
+                this.moveTowards(this.wx, this.wy); if (dist(this.x, this.y, this.wx, this.wy) < 0.1) this.state = 'IDLE'; break;
+            case 'SEEK':
+                if (!this.target || !entities.includes(this.target)) { this.state = 'IDLE'; break; }
+                this.moveTowards(this.target.x, this.target.y);
+                if (dist(this.x, this.y, this.target.x, this.target.y) < 0.2) { entities = entities.filter(e => e !== this.target); this.carryingFood = true; this.target = nest; this.state = 'RETURN'; }
+                break;
+            case 'RETURN':
+                this.moveTowards(nest.x, nest.y);
+                if (dist(this.x, this.y, nest.x, nest.y) < 1.0) { this.carryingFood = false; resources += 5; updateUI(); this.state = 'IDLE'; }
+                break;
+        }
+        if (this.state !== 'IDLE') this.z = Math.abs(Math.sin(Date.now() * 0.015 + this.id)) * 8; else this.z = 0;
+    }
+    moveTowards(tx, ty) {
+        let dx = tx - this.x; let dy = ty - this.y; let distance = Math.hypot(dx, dy);
+        if (distance > 0) { this.x += (dx / distance) * this.speed; this.y += (dy / distance) * this.speed; }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounceOffset = this.z; let stretch = bounceOffset > 2 ? 2 : -2; 
+        let shadowPos = toScreen(this.x, this.y, 0); ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+        if (this.dna.tail) {
+            ctx.strokeStyle = this.color; ctx.lineWidth = 3; ctx.beginPath(); let tailSwing = (this.state !== 'IDLE') ? Math.sin(Date.now() * 0.02 + this.id) * 3 : 0;
+            ctx.moveTo(pos.x, pos.y - 5); ctx.quadraticCurveTo(pos.x - 8 + tailSwing, pos.y - 2, pos.x - 12 + tailSwing, pos.y - 8); ctx.stroke();
+        }
+        ctx.fillStyle = this.color; ctx.beginPath();
+        if (this.dna.shape === 0) ctx.ellipse(pos.x, pos.y - 8, 10 - stretch/2, 10 + stretch, 0, 0, Math.PI*2);
+        else if (this.dna.shape === 1) ctx.ellipse(pos.x, pos.y - 7, 12 - stretch/2, 8 + stretch, 0, 0, Math.PI*2);
+        else ctx.ellipse(pos.x, pos.y - 10, 8 - stretch/2, 12 + stretch, 0, 0, Math.PI*2); ctx.fill();
+        if (this.dna.spots) {
+            ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.arc(pos.x - 4, pos.y - 10, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(pos.x + 3, pos.y - 5, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, pos.y - 12, 1, 0, Math.PI*2); ctx.fill();
+        }
+        // 3. Draw Antennae
+        if (this.dna.antenna > 0) {
+            ctx.strokeStyle = this.color; ctx.lineWidth = 1.5; ctx.beginPath();
+            if (this.dna.antenna === 1) { ctx.moveTo(pos.x, pos.y - 16 + stretch); ctx.lineTo(pos.x, pos.y - 22 + stretch); }
+            else { ctx.moveTo(pos.x - 3, pos.y - 15 + stretch); ctx.lineTo(pos.x - 6, pos.y - 20 + stretch); ctx.moveTo(pos.x + 3, pos.y - 15 + stretch); ctx.lineTo(pos.x + 6, pos.y - 20 + stretch); }
+            ctx.stroke(); ctx.fillStyle = '#fde047';
+            if (this.dna.antenna === 1) { ctx.beginPath(); ctx.arc(pos.x, pos.y - 23 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); }
+            else { ctx.beginPath(); ctx.arc(pos.x - 6, pos.y - 21 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 6, pos.y - 21 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); }
+        }
+        let eyeOffset = {x:0, y:0};
+        if (this.state === 'SEEK' || this.state === 'RETURN' || this.state === 'WANDER') {
+            let targetX = this.target ? this.target.x : this.wx; eyeOffset.x = (targetX > this.x) ? 1.5 : -1.5;
+        }
+        ctx.fillStyle = 'white'; let eyeY = pos.y - 10 + stretch;
+        if (this.dna.eyes === 1) {
+            ctx.beginPath(); ctx.arc(pos.x, eyeY - 2, 4, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(pos.x + eyeOffset.x, eyeY - 2, 2, 0, Math.PI*2); ctx.fill();
+        } else if (this.dna.eyes === 2) {
+            ctx.beginPath(); ctx.arc(pos.x - 3.5, eyeY, 3, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 3.5, eyeY, 3, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(pos.x - 3.5 + eyeOffset.x, eyeY, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 3.5 + eyeOffset.x, eyeY, 1.5, 0, Math.PI*2); ctx.fill();
+        } else {
+            ctx.beginPath(); ctx.arc(pos.x - 4, eyeY + 1, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, eyeY + 1, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x, eyeY - 3, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(pos.x - 4 + eyeOffset.x, eyeY + 1, 1, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4 + eyeOffset.x, eyeY + 1, 1, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + eyeOffset.x, eyeY - 3, 1.2, 0, Math.PI*2); ctx.fill();
+        }
+        if (this.state === 'FLEE') { ctx.fillStyle = '#ef4444'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('!', pos.x - 4, pos.y - 28 + stretch); }
+        if (this.carryingFood) {
+            ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 24 + stretch, 5, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#d97706'; ctx.lineWidth = 1; ctx.stroke();
+        }
+    }
+}
+
+class Soldier extends Entity { // ... I will paste the rest here.
+    constructor(x, y) { super(x, y); this.type = 'micro'; this.isSoldier = true; this.color = '#64748b'; this.state = 'PATROL'; this.target = null; this.speed = 0.04; this.wx = x; this.wy = y; }
+    update() {
+        super.update(); let predators = entities.filter(e => e.isHostile); let closestPred = null; let predDist = Infinity;
+        for (let p of predators) { let d = dist(this.x, this.y, p.x, p.y); if (d < 12 && d < predDist) { predDist = d; closestPred = p; } }
+        if (closestPred) { this.state = 'ATTACK'; this.target = closestPred; } else { if (this.state === 'ATTACK') this.state = 'PATROL'; }
+        switch(this.state) {
+            case 'ATTACK':
+                if (!this.target || !entities.includes(this.target)) { this.state = 'PATROL'; break; }
+                let dx = this.target.x - this.x; let dy = this.target.y - this.y; let distance = Math.hypot(dx, dy);
+                if (distance > 0.8) { this.x += (dx / distance) * this.speed; this.y += (dy / distance) * this.speed; }
+                else { this.target.hp -= 2; if (this.target.hp <= 0) { entities = entities.filter(e => e !== this.target); updateUI(); } } break;
+            case 'PATROL':
+                let px = this.wx - this.x; let py = this.wy - this.y; let pDist = Math.hypot(px, py);
+                if (pDist > 0.1) { this.x += (px / pDist) * (this.speed * 0.6); this.y += (py / pDist) * (this.speed * 0.6); }
+                else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 10 - 5))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 10 - 5))); } } break;
+        }
+        this.z = Math.abs(Math.sin(Date.now() * 0.02 + this.id)) * 6;
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let stretch = this.z > 2 ? 2 : -2; 
+        let shadowPos = toScreen(this.x, this.y, 0); ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 9, 4.5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = this.color; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 8, 11 - stretch/2, 11 + stretch, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.moveTo(pos.x - 5, pos.y - 18 + stretch); ctx.lineTo(pos.x, pos.y - 24 + stretch); ctx.lineTo(pos.x + 5, pos.y - 18 + stretch); ctx.fill();
+        ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(pos.x - 4, pos.y - 12 + stretch, 2.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, pos.y - 12 + stretch, 2.5, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pos.x - 7, pos.y - 15 + stretch); ctx.lineTo(pos.x - 2, pos.y - 13 + stretch); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos.x + 7, pos.y - 15 + stretch); ctx.lineTo(pos.x + 2, pos.y - 13 + stretch); ctx.stroke();
+        if (this.hp && this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 28 + stretch, 16, 3); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 7, pos.y - 27 + stretch, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Medic extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'micro'; this.color = '#f8fafc'; this.state = 'PATROL'; this.speed = 0.035; this.wx = x; this.wy = y; this.hp = 100; this.maxHp = 100; }
+    update() {
+        super.update(); let targets = entities.filter(e => !e.isHostile && e.hp !== undefined && e.hp < e.maxHp);
+        let closest = null; let cDist = Infinity;
+        for(let t of targets) { let d = dist(this.x, this.y, t.x, t.y); if(d < 15 && d < cDist) { cDist = d; closest = t; } }
+        if(closest) { this.state = 'HEAL'; this.target = closest; } else { this.state = 'PATROL'; }
+        if(this.state === 'HEAL' && this.target && entities.includes(this.target) && this.target.hp < this.target.maxHp) {
+            let dx = this.target.x - this.x; let dy = this.target.y - this.y; let d = Math.hypot(dx, dy);
+            if(d > 1.2) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; this.z = Math.abs(Math.sin(Date.now()*0.02+this.id))*5; }
+            else {
+                this.target.hp = Math.min(this.target.maxHp, this.target.hp + 0.5); this.z = Math.abs(Math.sin(Date.now() * 0.05)) * 4;
+                if (Math.random() < 0.2) { ctx.fillStyle = '#34d399'; let tPos = toScreen(this.target.x, this.target.y, this.target.z + 10); ctx.fillRect(tPos.x + Math.random()*10-5, tPos.y - Math.random()*10, 2, 2); }
+            }
+        } else {
+            let px = this.wx - this.x; let py = this.wy - this.y; let pDist = Math.hypot(px, py);
+            if (pDist > 0.1) { this.x += (px / pDist) * (this.speed * 0.6); this.y += (py / pDist) * (this.speed * 0.6); }
+            else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 10 - 5))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 10 - 5))); } }
+            this.z = Math.abs(Math.sin(Date.now()*0.02+this.id))*4;
+        }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let stretch = this.z > 2 ? 1 : -1;
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = this.color; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 8, 10 - stretch, 10 + stretch, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 1, pos.y - 14 + stretch, 2, 6); ctx.fillRect(pos.x - 3, pos.y - 12 + stretch, 6, 2);
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(pos.x - 3, pos.y - 7 + stretch, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 3, pos.y - 7 + stretch, 1.5, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 20 + stretch, 16, 3); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 7, pos.y - 19 + stretch, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Titan extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'micro'; this.isSoldier = true; this.hp = 250; this.maxHp = 250; this.state = 'PATROL'; this.target = null; this.speed = 0.02; this.wx = x; this.wy = y; }
+    update() {
+        super.update(); let predators = entities.filter(e => e.isHostile); let closestPred = null; let predDist = Infinity;
+        for (let p of predators) { let d = dist(this.x, this.y, p.x, p.y); if (d < 15 && d < predDist) { predDist = d; closestPred = p; } }
+        if (closestPred) { this.state = 'ATTACK'; this.target = closestPred; } else { if (this.state === 'ATTACK') this.state = 'PATROL'; }
+        if(this.state === 'ATTACK') {
+            if (!this.target || !entities.includes(this.target)) { this.state = 'PATROL'; return; }
+            let dx = this.target.x - this.x; let dy = this.target.y - this.y; let d = Math.hypot(dx, dy);
+            if (d > 1.2) { this.x += (dx / d) * this.speed; this.y += (dy / d) * this.speed; this.z = Math.abs(Math.sin(Date.now() * 0.015 + this.id)) * 4; }
+            else { this.target.hp -= 4; this.z = Math.abs(Math.sin(Date.now() * 0.08)) * 6; if (this.target.hp <= 0) { entities = entities.filter(e => e !== this.target); updateUI(); } }
+        } else {
+            let px = this.wx - this.x; let py = this.wy - this.y; let pDist = Math.hypot(px, py);
+            if (pDist > 0.1) { this.x += (px / pDist) * (this.speed * 0.5); this.y += (py / pDist) * (this.speed * 0.5); this.z = Math.abs(Math.sin(Date.now() * 0.01 + this.id)) * 3; }
+            else { this.z = 0; if (Math.random() < 0.01) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 8 - 4))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 8 - 4))); } }
+        }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let stretch = this.z > 2 ? 1 : -1; 
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#18181b'; ctx.fillRect(pos.x - 12, pos.y - 18 + stretch, 24, 18); ctx.fillStyle = '#3f3f46'; ctx.fillRect(pos.x - 14, pos.y - 16 + stretch, 28, 6); ctx.fillRect(pos.x - 10, pos.y - 8 + stretch, 20, 6);
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 6, pos.y - 14 + stretch, 12, 2);
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 12, pos.y - 25 + stretch, 24, 4); ctx.fillStyle = '#10b981'; ctx.fillRect(pos.x - 11, pos.y - 24 + stretch, 22 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Wall extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'wall'; this.hp = 100; this.maxHp = 100; this.isStatic = true; this.depth = this.x + this.y; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(pos.x - 12, pos.y); ctx.lineTo(pos.x - 4, pos.y + 4); ctx.lineTo(pos.x - 4, pos.y - 15); ctx.lineTo(pos.x - 12, pos.y - 10); ctx.fill();
+        ctx.fillStyle = '#92400e'; ctx.beginPath(); ctx.moveTo(pos.x - 4, pos.y + 4); ctx.lineTo(pos.x + 4, pos.y + 8); ctx.lineTo(pos.x + 4, pos.y - 12); ctx.lineTo(pos.x - 4, pos.y - 15); ctx.fill();
+        ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.moveTo(pos.x + 4, pos.y + 8); ctx.lineTo(pos.x + 12, pos.y + 4); ctx.lineTo(pos.x + 12, pos.y - 10); ctx.lineTo(pos.x + 4, pos.y - 12); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 25, 20, 4); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 9, pos.y - 24, 18 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Predator extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'predator'; this.isHostile = true; this.hp = 100; this.maxHp = 100; this.speed = 0.038; this.wallDamage = 0.5; this.state = 'WANDER'; this.wx = x; this.wy = y; this.cooldown = 0; }
+    update() {
+        super.update();
+        if (this.cooldown > 0) { this.cooldown--; this.z = Math.abs(Math.sin(Date.now() * 0.005)) * 2; return; }
+        let micros = entities.filter(e => e.type === 'micro' || e.type === 'beetle'); let target = null; let closest = Infinity;
+        for (let m of micros) { let d = dist(this.x, this.y, m.x, m.y); if (d < 8 && d < closest) { closest = d; target = m; } }
+        if (target) {
+            this.state = 'CHASE'; let dx = target.x - this.x; let dy = target.y - this.y; let distance = Math.hypot(dx, dy);
+            if (distance > 0) {
+                let nextX = this.x + (dx / distance) * this.speed; let nextY = this.y + (dy / distance) * this.speed;
+                let buildTypes = ['wall', 'farm', 'turret', 'silo', 'lantern', 'spikes', 'nest'];
+                let hitBuilding = entities.find(e => buildTypes.includes(e.type) && dist(nextX, nextY, e.x, e.y) < 0.8);
+                if (hitBuilding) { hitBuilding.hp -= this.wallDamage; this.z = Math.abs(Math.sin(Date.now() * 0.05)) * 4; if (hitBuilding.hp <= 0 && hitBuilding.type !== 'nest') { entities = entities.filter(e => e !== hitBuilding); } }
+                else { this.x = nextX; this.y = nextY; }
+            }
+            if (closest < 0.5) {
+                if (target.type === 'beetle') { for(let i=0; i<4; i++) entities.push(new Food(target.x + Math.random(), target.y + Math.random())); }
+                entities = entities.filter(e => e !== target); this.cooldown = 180; this.state = 'WANDER'; updateUI(); 
+            }
+        } else {
+            this.state = 'WANDER'; let dx = this.wx - this.x; let dy = this.wy - this.y; let distance = Math.hypot(dx, dy);
+            if (distance > 0.1) {
+                let nextX = this.x + (dx / distance) * (this.speed * 0.5); let nextY = this.y + (dy / distance) * (this.speed * 0.5);
+                let buildTypes = ['wall', 'farm', 'turret', 'silo', 'lantern', 'spikes', 'nest'];
+                let hitBuilding = entities.find(e => buildTypes.includes(e.type) && dist(nextX, nextY, e.x, e.y) < 0.8);
+                if (hitBuilding) { hitBuilding.hp -= this.wallDamage; this.z = Math.abs(Math.sin(Date.now() * 0.05)) * 4; if (hitBuilding.hp <= 0 && hitBuilding.type !== 'nest') entities = entities.filter(e => e !== hitBuilding); this.wx = this.x - dx; this.wy = this.y - dy; }
+                else { this.x = nextX; this.y = nextY; }
+            } else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 8 - 4))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 8 - 4))); } }
+        }
+        if (this.state === 'CHASE') this.z = Math.abs(Math.sin(Date.now() * 0.02 + this.id)) * 6; else if (this.state === 'WANDER') this.z = Math.abs(Math.sin(Date.now() * 0.01 + this.id)) * 3;
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounce = this.z; let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#7f1d1d'; ctx.beginPath();
+        for(let i = 0; i < 8; i++) { let angle = (i / 8) * Math.PI * 2; let radius = i % 2 === 0 ? 12 : 6; let px = pos.x + Math.cos(angle) * radius; let py = pos.y - 6 - bounce + Math.sin(angle) * radius; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(pos.x - 4, pos.y - 8 - bounce, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, pos.y - 8 - bounce, 2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pos.x - 7, pos.y - 11 - bounce); ctx.lineTo(pos.x - 2, pos.y - 9 - bounce); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos.x + 7, pos.y - 11 - bounce); ctx.lineTo(pos.x + 2, pos.y - 9 - bounce); ctx.stroke();
+        if (this.cooldown > 0) { ctx.fillStyle = '#fca5a5'; ctx.font = '10px sans-serif'; ctx.fillText('...', pos.x - 6, pos.y - 20 - bounce); }
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 20 - bounce, 20, 4); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 9, pos.y - 19 - bounce, 18 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Weaver extends Predator {
+    constructor(x, y) { super(x, y); this.type = 'weaver'; this.hp = 40; this.maxHp = 40; this.speed = 0.065; this.wallDamage = 0.2; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounce = this.z;
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#4c1d95'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 4 - bounce, 6, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x, pos.y - 8 - bounce, 4, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#2e1065'; ctx.lineWidth = 1.5;
+        for(let i=0; i<4; i++) {
+            let legSwing = Math.sin(Date.now() * 0.04 + i) * 3; if (this.state === 'IDLE') legSwing = 0;
+            ctx.beginPath(); ctx.moveTo(pos.x, pos.y - 4 - bounce); ctx.lineTo(pos.x - 10 + legSwing, pos.y - 8 - bounce); ctx.lineTo(pos.x - 12 + legSwing, pos.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(pos.x, pos.y - 4 - bounce); ctx.lineTo(pos.x + 10 - legSwing, pos.y - 8 - bounce); ctx.lineTo(pos.x + 12 - legSwing, pos.y); ctx.stroke();
+        }
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 18 - bounce, 16, 3); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 7, pos.y - 17 - bounce, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Goliath extends Predator {
+    constructor(x, y) { super(x, y); this.type = 'goliath'; this.hp = 300; this.maxHp = 300; this.speed = 0.018; this.wallDamage = 2.0; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounce = this.z * 0.5;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#3f3f46'; ctx.fillRect(pos.x - 12, pos.y - 20 - bounce, 24, 20); ctx.fillStyle = '#991b1b'; ctx.fillRect(pos.x - 14, pos.y - 22 - bounce, 28, 8); ctx.fillRect(pos.x - 10, pos.y - 12 - bounce, 20, 8);
+        ctx.fillStyle = '#f87171'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 18 - bounce, 3, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 12, pos.y - 28 - bounce, 24, 4); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 11, pos.y - 27 - bounce, 22 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Beetle extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'beetle'; this.hp = 50; this.speed = 0.015; this.wx = x; this.wy = y; }
+    update() {
+        super.update(); let dx = this.wx - this.x; let dy = this.wy - this.y; let distAmt = Math.hypot(dx, dy);
+        if (distAmt > 0.1) { this.x += (dx / distAmt) * this.speed; this.y += (dy / distAmt) * this.speed; this.z = Math.abs(Math.sin(Date.now() * 0.01 + this.id)) * 2; }
+        else { this.z = 0; if (Math.random() < 0.01) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 6 - 3))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 6 - 3))); } }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#854d0e'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 4, 7, 5, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#a16207'; ctx.beginPath(); ctx.ellipse(pos.x + 2, pos.y - 5, 3, 2, Math.PI/4, 0, Math.PI*2); ctx.fill();
+    }
+}
+
+let nest;
+function init() {
+    window.addEventListener('resize', resizeCanvas); resizeCanvas(); createTextures(); generateMap();
+    camera.x = canvas.width / 2; camera.y = canvas.height / 2 - (MAP_SIZE * TILE_H / 2);
+    nest = new Nest(MAP_SIZE / 2, MAP_SIZE / 2); entities.push(nest);
+    spawnMicro(MAP_SIZE/2 + 2, MAP_SIZE/2); spawnMicro(MAP_SIZE/2 - 2, MAP_SIZE/2 + 1); spawnMicro(MAP_SIZE/2, MAP_SIZE/2 + 2);
+    for(let i=0; i<15; i++) spawnFood(); spawnEnemy(); for(let i=0; i<5; i++) spawnBeetle();
+    setupInput(); updateUI(); requestAnimationFrame(gameLoop);
+}
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function spawnMicro(x, y) { let m = new Micro(x || MAP_SIZE/2, y || MAP_SIZE/2); entities.push(m); updateUI(); }
+function spawnFood() {
+    let fx, fy; do { fx = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; fy = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; } while (dist(fx, fy, MAP_SIZE/2, MAP_SIZE/2) < 3);
+    entities.push(new Food(fx, fy));
+}
+function spawnEnemy() {
+    let px = Math.random() > 0.5 ? 2 : MAP_SIZE - 3; let py = Math.random() > 0.5 ? 2 : MAP_SIZE - 3; let r = Math.random();
+    if (r < 0.6) entities.push(new Predator(px, py)); else if (r < 0.85) entities.push(new Weaver(px, py)); else entities.push(new Goliath(px, py)); updateUI();
+}
+function spawnBeetle() { let bx = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; let by = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; entities.push(new Beetle(bx, by)); }
+
+function setupInput() {
+    canvas.addEventListener('mousedown', e => { if (buildMode) { placeBuilding(); return; } isDragging = true; lastMouse = { x: e.clientX, y: e.clientY }; });
+    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; if (isDragging) { camera.x += (e.clientX - lastMouse.x); camera.y += (e.clientY - lastMouse.y); lastMouse = { x: e.clientX, y: e.clientY }; } });
+    canvas.addEventListener('touchstart', e => { if (buildMode) { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; placeBuilding(); return; } isDragging = true; lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+    window.addEventListener('touchend', () => isDragging = false);
+    window.addEventListener('touchmove', e => { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; if (isDragging) { camera.x += (e.touches[0].clientX - lastMouse.x); camera.y += (e.touches[0].clientY - lastMouse.y); lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } }, {passive: false});
+    canvas.addEventListener('contextmenu', e => { e.preventDefault(); cancelBuildMode(); }); window.addEventListener('keydown', e => { if (e.key === 'Escape') cancelBuildMode(); });
+    btnHatch.addEventListener('click', () => { if (resources >= 10) { resources -= 10; spawnMicro(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1)); } else triggerShake(btnHatch); updateUI(); });
+    btnSoldier.addEventListener('click', () => { if (resources >= 25) { resources -= 25; entities.push(new Soldier(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1))); } else triggerShake(btnSoldier); updateUI(); });
+    btnMedic.addEventListener('click', () => { if (resources >= 30) { resources -= 30; entities.push(new Medic(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1))); } else triggerShake(btnMedic); updateUI(); });
+    btnTitan.addEventListener('click', () => { if (resources >= 50) { resources -= 50; entities.push(new Titan(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1))); } else triggerShake(btnTitan); updateUI(); });
+    btnWall.addEventListener('click', () => toggleBuildMode('wall', 5)); btnSpikes.addEventListener('click', () => toggleBuildMode('spikes', 10)); btnLantern.addEventListener('click', () => toggleBuildMode('lantern', 15)); btnFarm.addEventListener('click', () => toggleBuildMode('farm', 20)); btnTurret.addEventListener('click', () => toggleBuildMode('turret', 30)); btnSilo.addEventListener('click', () => toggleBuildMode('silo', 40));
+}
+function triggerShake(btn) { btn.classList.add('bg-red-500'); setTimeout(() => btn.classList.remove('bg-red-500'), 200); }
+function toggleBuildMode(type, cost) { if (buildMode === type) { cancelBuildMode(); } else if (resources >= cost) { buildMode = type; uiHint.innerHTML = `<p class="text-yellow-400 font-bold">Place ${type.toUpperCase()}... (Right-click/Esc to cancel)</p>`; } else { let btnMap = { 'farm':btnFarm, 'turret':btnTurret, 'wall':btnWall, 'spikes':btnSpikes, 'lantern':btnLantern, 'silo':btnSilo }; if(btnMap[type]) triggerShake(btnMap[type]); } }
+function cancelBuildMode() { buildMode = null; uiHint.innerHTML = `<p><b>Drag</b> to pan camera.</p>`; }
+function placeBuilding() {
+    if (!buildMode) return; let mapPos = toMap(mouseX, mouseY); let costs = { 'wall':5, 'spikes':10, 'lantern':15, 'farm':20, 'turret':30, 'silo':40 }; let cost = costs[buildMode];
+    if (mapPos.x < 0 || mapPos.x >= MAP_SIZE || mapPos.y < 0 || mapPos.y >= MAP_SIZE) return;
+    let blockedTypes = ['nest', 'farm', 'turret', 'wall', 'silo', 'lantern', 'spikes']; let blocked = entities.some(e => blockedTypes.includes(e.type) && Math.floor(e.x) === mapPos.x && Math.floor(e.y) === mapPos.y);
+    if (blocked) return;
+    if (resources >= cost) {
+        resources -= cost;
+        if (buildMode === 'farm') entities.push(new Farm(mapPos.x + 0.5, mapPos.y + 0.5)); else if (buildMode === 'turret') entities.push(new Turret(mapPos.x + 0.5, mapPos.y + 0.5));
+        else if (buildMode === 'wall') entities.push(new Wall(mapPos.x + 0.5, mapPos.y + 0.5)); else if (buildMode === 'spikes') entities.push(new Spikes(mapPos.x + 0.5, mapPos.y + 0.5));
+        else if (buildMode === 'silo') entities.push(new Silo(mapPos.x + 0.5, mapPos.y + 0.5)); else if (buildMode === 'lantern') entities.push(new Lantern(mapPos.x + 0.5, mapPos.y + 0.5));
+        updateUI(); if (resources < cost) cancelBuildMode();
+    }
+}
+function updateUI() {
+    uiFood.innerText = resources; let microCount = entities.filter(e => e.type === 'micro').length; uiPop.innerText = microCount;
+    let threatCount = entities.filter(e => e.isHostile).length; if (uiThreats) uiThreats.innerText = threatCount;
+    if (resources >= 10) btnHatch.classList.remove('opacity-50', 'cursor-not-allowed'); else btnHatch.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 25) btnSoldier.classList.remove('opacity-50', 'cursor-not-allowed'); else btnSoldier.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 30) btnMedic.classList.remove('opacity-50', 'cursor-not-allowed'); else btnMedic.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 50) btnTitan.classList.remove('opacity-50', 'cursor-not-allowed'); else btnTitan.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 5) btnWall.classList.remove('opacity-50', 'cursor-not-allowed'); else btnWall.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 10) btnSpikes.classList.remove('opacity-50', 'cursor-not-allowed'); else btnSpikes.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 15) btnLantern.classList.remove('opacity-50', 'cursor-not-allowed'); else btnLantern.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 20) btnFarm.classList.remove('opacity-50', 'cursor-not-allowed'); else btnFarm.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 30) btnTurret.classList.remove('opacity-50', 'cursor-not-allowed'); else btnTurret.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 40) btnSilo.classList.remove('opacity-50', 'cursor-not-allowed'); else btnSilo.classList.add('opacity-50', 'cursor-not-allowed');
+}
+function drawGrid() {
+    let matrix = new DOMMatrix(); matrix.translateSelf(camera.x, camera.y); let padding = TILE_W * 2;
+    for (let x = 0; x < MAP_SIZE; x++) {
+        for (let y = 0; y < MAP_SIZE; y++) {
+            let pos0 = toScreen(x, y); if (pos0.x < -padding || pos0.x > canvas.width + padding || pos0.y < -padding || pos0.y > canvas.height + padding) continue;
+            let tile = mapGrid[x][y]; let pos1 = toScreen(x + 1, y); let pos2 = toScreen(x + 1, y + 1); let pos3 = toScreen(x, y + 1);
+            tile.pattern.setTransform(matrix);
+            ctx.beginPath(); ctx.moveTo(pos0.x, pos0.y); ctx.lineTo(pos1.x, pos1.y); ctx.lineTo(pos2.x, pos2.y); ctx.lineTo(pos3.x, pos3.y); ctx.closePath(); ctx.fillStyle = tile.pattern; ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pos3.x, pos3.y); ctx.lineTo(pos0.x, pos0.y); ctx.lineTo(pos1.x, pos1.y); ctx.stroke();
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'; ctx.beginPath(); ctx.moveTo(pos1.x, pos1.y); ctx.lineTo(pos2.x, pos2.y); ctx.lineTo(pos3.x, pos3.y); ctx.stroke();
+            ctx.strokeStyle = tile.edgeColor; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(pos0.x, pos0.y); ctx.lineTo(pos1.x, pos1.y); ctx.lineTo(pos2.x, pos2.y); ctx.lineTo(pos3.x, pos3.y); ctx.closePath(); ctx.stroke();
+        }
+    }
+}
+function gameLoop() {
+    ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height); drawGrid();
+    dayTime += 0.0005; lightLevel = (Math.sin(dayTime) + 1) / 2;
+    if (lightLevel < 0.8) {
+        ctx.fillStyle = `rgba(10, 10, 40, ${0.7 * (1 - lightLevel)})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let lanterns = entities.filter(e => e.type === 'lantern');
+        if (lanterns.length > 0) {
+            ctx.globalCompositeOperation = 'screen';
+            lanterns.forEach(l => {
+                let pos = toScreen(l.x, l.y, 0); let glowRadius = 150 + Math.sin(Date.now() * 0.005 + l.id) * 5;
+                let grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowRadius);
+                grad.addColorStop(0, `rgba(253, 224, 71, ${0.5 * (1 - lightLevel)})`); grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+                ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(pos.x, pos.y, glowRadius, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.globalCompositeOperation = 'source-over';
+        }
+    }
+    if (Math.random() < 0.02 && entities.filter(e => e.type === 'food').length < 40) spawnFood();
+    if (Math.random() < 0.0005 && entities.filter(e => e.isHostile).length < 8) spawnEnemy();
+    if (Math.random() < 0.002 && entities.filter(e => e.type === 'beetle').length < 6) spawnBeetle();
+    entities.forEach(e => e.update()); entities.sort((a, b) => a.depth - b.depth);
+    let padding = 100; entities.forEach(e => { let screenPos = toScreen(e.x, e.y, 0); if (screenPos.x > -padding && screenPos.x < canvas.width + padding && screenPos.y > -padding && screenPos.y < canvas.height + padding) e.draw(ctx); });
+    if (buildMode) {
+        let mapPos = toMap(mouseX, mouseY);
+        if (mapPos.x >= 0 && mapPos.x < MAP_SIZE && mapPos.y >= 0 && mapPos.y < MAP_SIZE) {
+            let screenPos = toScreen(mapPos.x + 0.5, mapPos.y + 0.5, 0); let p0 = toScreen(mapPos.x, mapPos.y); let p1 = toScreen(mapPos.x+1, mapPos.y); let p2 = toScreen(mapPos.x+1, mapPos.y+1); let p3 = toScreen(mapPos.x, mapPos.y+1);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.fill();
+            ctx.globalAlpha = 0.5;
+            if (buildMode === 'farm') { ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(screenPos.x - 14, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y + 7); ctx.lineTo(screenPos.x + 14, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y - 7); ctx.fill(); ctx.fillStyle = '#059669'; ctx.beginPath(); ctx.arc(screenPos.x, screenPos.y - 10, 10, 0, Math.PI*2); ctx.fill(); }
+            else if (buildMode === 'turret') { ctx.fillStyle = '#3730a3'; ctx.beginPath(); ctx.moveTo(screenPos.x - 10, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y + 5); ctx.lineTo(screenPos.x + 10, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y - 5); ctx.fill(); ctx.fillStyle = '#4f46e5'; ctx.fillRect(screenPos.x - 4, screenPos.y - 15, 8, 15); }
+            else if (buildMode === 'wall') { ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(screenPos.x - 12, screenPos.y); ctx.lineTo(screenPos.x - 4, screenPos.y + 4); ctx.lineTo(screenPos.x - 4, screenPos.y - 15); ctx.lineTo(screenPos.x - 12, screenPos.y - 10); ctx.fill(); ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.moveTo(screenPos.x + 4, screenPos.y + 8); ctx.lineTo(screenPos.x + 12, screenPos.y + 4); ctx.lineTo(screenPos.x + 12, screenPos.y - 10); ctx.lineTo(screenPos.x + 4, screenPos.y - 12); ctx.fill(); }
+            else if (buildMode === 'spikes') { ctx.fillStyle = '#44403c'; ctx.beginPath(); ctx.moveTo(screenPos.x - 12, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y + 6); ctx.lineTo(screenPos.x + 12, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y - 6); ctx.fill(); ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.moveTo(screenPos.x - 6, screenPos.y); ctx.lineTo(screenPos.x - 6, screenPos.y - 8); ctx.lineTo(screenPos.x - 4, screenPos.y); ctx.fill(); }
+            else if (buildMode === 'lantern') { ctx.fillStyle = '#78350f'; ctx.fillRect(screenPos.x - 2, screenPos.y - 20, 4, 20); ctx.fillStyle = '#fef08a'; ctx.fillRect(screenPos.x + 6, screenPos.y - 18, 6, 8); }
+            else if (buildMode === 'silo') { ctx.fillStyle = '#7f1d1d'; ctx.fillRect(screenPos.x - 10, screenPos.y - 25, 20, 25); ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(screenPos.x, screenPos.y - 25, 10, 0, Math.PI, true); ctx.fill(); }
+            ctx.globalAlpha = 1.0;
+        }
+    }
+    requestAnimationFrame(gameLoop);
+}
+window.onload = init;
+</script>
+</body>
+</html>

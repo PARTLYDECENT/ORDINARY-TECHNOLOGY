@@ -1,0 +1,205 @@
+class Predator extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'predator'; this.isHostile = true; this.hp = 100; this.maxHp = 100; this.speed = 0.038; this.wallDamage = 0.5; this.state = 'WANDER'; this.wx = x; this.wy = y; this.cooldown = 0; }
+    update() {
+        super.update();
+        if (this.cooldown > 0) { this.cooldown--; this.z = Math.abs(Math.sin(Date.now() * 0.005)) * 2; return; }
+        let micros = entities.filter(e => e.type === 'micro' || e.type === 'beetle'); let target = null; let closest = Infinity;
+        for (let m of micros) { let d = dist(this.x, this.y, m.x, m.y); if (d < 8 && d < closest) { closest = d; target = m; } }
+        if (target) {
+            this.state = 'CHASE'; let dx = target.x - this.x; let dy = target.y - this.y; let distance = Math.hypot(dx, dy);
+            if (distance > 0) {
+                let nextX = this.x + (dx / distance) * this.speed; let nextY = this.y + (dy / distance) * this.speed;
+                let buildTypes = ['wall', 'farm', 'turret', 'silo', 'lantern', 'spikes', 'nest'];
+                let hitBuilding = entities.find(e => buildTypes.includes(e.type) && dist(nextX, nextY, e.x, e.y) < 0.8);
+                if (hitBuilding) { hitBuilding.hp -= this.wallDamage; this.z = Math.abs(Math.sin(Date.now() * 0.05)) * 4; if (hitBuilding.hp <= 0 && hitBuilding.type !== 'nest') { entities = entities.filter(e => e !== hitBuilding); } }
+                else { this.x = nextX; this.y = nextY; }
+            }
+            if (closest < 0.5) {
+                if (target.type === 'beetle') { for(let i=0; i<4; i++) entities.push(new Food(target.x + Math.random(), target.y + Math.random())); }
+                entities = entities.filter(e => e !== target); this.cooldown = 180; this.state = 'WANDER'; updateUI(); 
+            }
+        } else {
+            this.state = 'WANDER'; let dx = this.wx - this.x; let dy = this.wy - this.y; let distance = Math.hypot(dx, dy);
+            if (distance > 0.1) {
+                let nextX = this.x + (dx / distance) * (this.speed * 0.5); let nextY = this.y + (dy / distance) * (this.speed * 0.5);
+                let buildTypes = ['wall', 'farm', 'turret', 'silo', 'lantern', 'spikes', 'nest'];
+                let hitBuilding = entities.find(e => buildTypes.includes(e.type) && dist(nextX, nextY, e.x, e.y) < 0.8);
+                if (hitBuilding) { hitBuilding.hp -= this.wallDamage; this.z = Math.abs(Math.sin(Date.now() * 0.05)) * 4; if (hitBuilding.hp <= 0 && hitBuilding.type !== 'nest') entities = entities.filter(e => e !== hitBuilding); this.wx = this.x - dx; this.wy = this.y - dy; }
+                else { this.x = nextX; this.y = nextY; }
+            } else { if (Math.random() < 0.02) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 8 - 4))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 8 - 4))); } }
+        }
+        if (this.state === 'CHASE') this.z = Math.abs(Math.sin(Date.now() * 0.02 + this.id)) * 6; else if (this.state === 'WANDER') this.z = Math.abs(Math.sin(Date.now() * 0.01 + this.id)) * 3;
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounce = this.z; let shadowPos = toScreen(this.x, this.y, 0);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(shadowPos.x, shadowPos.y, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#7f1d1d'; ctx.beginPath();
+        for(let i = 0; i < 8; i++) { let angle = (i / 8) * Math.PI * 2; let radius = i % 2 === 0 ? 12 : 6; let px = pos.x + Math.cos(angle) * radius; let py = pos.y - 6 - bounce + Math.sin(angle) * radius; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(pos.x - 4, pos.y - 8 - bounce, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x + 4, pos.y - 8 - bounce, 2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pos.x - 7, pos.y - 11 - bounce); ctx.lineTo(pos.x - 2, pos.y - 9 - bounce); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos.x + 7, pos.y - 11 - bounce); ctx.lineTo(pos.x + 2, pos.y - 9 - bounce); ctx.stroke();
+        if (this.cooldown > 0) { ctx.fillStyle = '#fca5a5'; ctx.font = '10px sans-serif'; ctx.fillText('...', pos.x - 6, pos.y - 20 - bounce); }
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 10, pos.y - 20 - bounce, 20, 4); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 9, pos.y - 19 - bounce, 18 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Weaver extends Predator {
+    constructor(x, y) { super(x, y); this.type = 'weaver'; this.hp = 40; this.maxHp = 40; this.speed = 0.065; this.wallDamage = 0.2; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounce = this.z;
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#4c1d95'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 4 - bounce, 6, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x, pos.y - 8 - bounce, 4, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#2e1065'; ctx.lineWidth = 1.5;
+        for(let i=0; i<4; i++) {
+            let legSwing = Math.sin(Date.now() * 0.04 + i) * 3; if (this.state === 'IDLE') legSwing = 0;
+            ctx.beginPath(); ctx.moveTo(pos.x, pos.y - 4 - bounce); ctx.lineTo(pos.x - 10 + legSwing, pos.y - 8 - bounce); ctx.lineTo(pos.x - 12 + legSwing, pos.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(pos.x, pos.y - 4 - bounce); ctx.lineTo(pos.x + 10 - legSwing, pos.y - 8 - bounce); ctx.lineTo(pos.x + 12 - legSwing, pos.y); ctx.stroke();
+        }
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 8, pos.y - 18 - bounce, 16, 3); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 7, pos.y - 17 - bounce, 14 * (this.hp / this.maxHp), 1.5); }
+    }
+}
+class Goliath extends Predator {
+    constructor(x, y) { super(x, y); this.type = 'goliath'; this.hp = 300; this.maxHp = 300; this.speed = 0.018; this.wallDamage = 2.0; }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); let bounce = this.z * 0.5;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#3f3f46'; ctx.fillRect(pos.x - 12, pos.y - 20 - bounce, 24, 20); ctx.fillStyle = '#991b1b'; ctx.fillRect(pos.x - 14, pos.y - 22 - bounce, 28, 8); ctx.fillRect(pos.x - 10, pos.y - 12 - bounce, 20, 8);
+        ctx.fillStyle = '#f87171'; ctx.beginPath(); ctx.arc(pos.x, pos.y - 18 - bounce, 3, 0, Math.PI*2); ctx.fill();
+        if (this.hp < this.maxHp) { ctx.fillStyle = '#000'; ctx.fillRect(pos.x - 12, pos.y - 28 - bounce, 24, 4); ctx.fillStyle = '#ef4444'; ctx.fillRect(pos.x - 11, pos.y - 27 - bounce, 22 * (this.hp / this.maxHp), 2); }
+    }
+}
+class Beetle extends Entity {
+    constructor(x, y) { super(x, y); this.type = 'beetle'; this.hp = 50; this.speed = 0.015; this.wx = x; this.wy = y; }
+    update() {
+        super.update(); let dx = this.wx - this.x; let dy = this.wy - this.y; let distAmt = Math.hypot(dx, dy);
+        if (distAmt > 0.1) { this.x += (dx / distAmt) * this.speed; this.y += (dy / distAmt) * this.speed; this.z = Math.abs(Math.sin(Date.now() * 0.01 + this.id)) * 2; }
+        else { this.z = 0; if (Math.random() < 0.01) { this.wx = Math.max(0, Math.min(MAP_SIZE - 1, this.x + (Math.random() * 6 - 3))); this.wy = Math.max(0, Math.min(MAP_SIZE - 1, this.y + (Math.random() * 6 - 3))); } }
+    }
+    draw(ctx) {
+        let pos = toScreen(this.x, this.y, this.z); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(toScreen(this.x, this.y, 0).x, toScreen(this.x, this.y, 0).y, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#854d0e'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 4, 7, 5, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#a16207'; ctx.beginPath(); ctx.ellipse(pos.x + 2, pos.y - 5, 3, 2, Math.PI/4, 0, Math.PI*2); ctx.fill();
+    }
+}
+
+let nest;
+function init() {
+    window.addEventListener('resize', resizeCanvas); resizeCanvas(); createTextures(); generateMap();
+    camera.x = canvas.width / 2; camera.y = canvas.height / 2 - (MAP_SIZE * TILE_H / 2);
+    nest = new Nest(MAP_SIZE / 2, MAP_SIZE / 2); entities.push(nest);
+    spawnMicro(MAP_SIZE/2 + 2, MAP_SIZE/2); spawnMicro(MAP_SIZE/2 - 2, MAP_SIZE/2 + 1); spawnMicro(MAP_SIZE/2, MAP_SIZE/2 + 2);
+    for(let i=0; i<15; i++) spawnFood(); spawnEnemy(); for(let i=0; i<5; i++) spawnBeetle();
+    setupInput(); updateUI(); requestAnimationFrame(gameLoop);
+}
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function spawnMicro(x, y) { let m = new Micro(x || MAP_SIZE/2, y || MAP_SIZE/2); entities.push(m); updateUI(); }
+function spawnFood() {
+    let fx, fy; do { fx = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; fy = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; } while (dist(fx, fy, MAP_SIZE/2, MAP_SIZE/2) < 3);
+    entities.push(new Food(fx, fy));
+}
+function spawnEnemy() {
+    let px = Math.random() > 0.5 ? 2 : MAP_SIZE - 3; let py = Math.random() > 0.5 ? 2 : MAP_SIZE - 3; let r = Math.random();
+    if (r < 0.6) entities.push(new Predator(px, py)); else if (r < 0.85) entities.push(new Weaver(px, py)); else entities.push(new Goliath(px, py)); updateUI();
+}
+function spawnBeetle() { let bx = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; let by = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1; entities.push(new Beetle(bx, by)); }
+
+function setupInput() {
+    canvas.addEventListener('mousedown', e => { if (buildMode) { placeBuilding(); return; } isDragging = true; lastMouse = { x: e.clientX, y: e.clientY }; });
+    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; if (isDragging) { camera.x += (e.clientX - lastMouse.x); camera.y += (e.clientY - lastMouse.y); lastMouse = { x: e.clientX, y: e.clientY }; } });
+    canvas.addEventListener('touchstart', e => { if (buildMode) { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; placeBuilding(); return; } isDragging = true; lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+    window.addEventListener('touchend', () => isDragging = false);
+    window.addEventListener('touchmove', e => { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; if (isDragging) { camera.x += (e.touches[0].clientX - lastMouse.x); camera.y += (e.touches[0].clientY - lastMouse.y); lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } }, {passive: false});
+    canvas.addEventListener('contextmenu', e => { e.preventDefault(); cancelBuildMode(); }); window.addEventListener('keydown', e => { if (e.key === 'Escape') cancelBuildMode(); });
+    btnHatch.addEventListener('click', () => { if (resources >= 10) { resources -= 10; spawnMicro(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1)); } else triggerShake(btnHatch); updateUI(); });
+    btnSoldier.addEventListener('click', () => { if (resources >= 25) { resources -= 25; entities.push(new Soldier(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1))); } else triggerShake(btnSoldier); updateUI(); });
+    btnMedic.addEventListener('click', () => { if (resources >= 30) { resources -= 30; entities.push(new Medic(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1))); } else triggerShake(btnMedic); updateUI(); });
+    btnTitan.addEventListener('click', () => { if (resources >= 50) { resources -= 50; entities.push(new Titan(MAP_SIZE/2 + (Math.random()*2-1), MAP_SIZE/2 + (Math.random()*2-1))); } else triggerShake(btnTitan); updateUI(); });
+    btnWall.addEventListener('click', () => toggleBuildMode('wall', 5)); btnSpikes.addEventListener('click', () => toggleBuildMode('spikes', 10)); btnLantern.addEventListener('click', () => toggleBuildMode('lantern', 15)); btnFarm.addEventListener('click', () => toggleBuildMode('farm', 20)); btnTurret.addEventListener('click', () => toggleBuildMode('turret', 30)); btnSilo.addEventListener('click', () => toggleBuildMode('silo', 40));
+}
+function triggerShake(btn) { btn.classList.add('bg-red-500'); setTimeout(() => btn.classList.remove('bg-red-500'), 200); }
+function toggleBuildMode(type, cost) { if (buildMode === type) { cancelBuildMode(); } else if (resources >= cost) { buildMode = type; uiHint.innerHTML = `<p class="text-yellow-400 font-bold">Place ${type.toUpperCase()}... (Right-click/Esc to cancel)</p>`; } else { let btnMap = { 'farm':btnFarm, 'turret':btnTurret, 'wall':btnWall, 'spikes':btnSpikes, 'lantern':btnLantern, 'silo':btnSilo }; if(btnMap[type]) triggerShake(btnMap[type]); } }
+function cancelBuildMode() { buildMode = null; uiHint.innerHTML = `<p><b>Drag</b> to pan camera.</p>`; }
+function placeBuilding() {
+    if (!buildMode) return; let mapPos = toMap(mouseX, mouseY); let costs = { 'wall':5, 'spikes':10, 'lantern':15, 'farm':20, 'turret':30, 'silo':40 }; let cost = costs[buildMode];
+    if (mapPos.x < 0 || mapPos.x >= MAP_SIZE || mapPos.y < 0 || mapPos.y >= MAP_SIZE) return;
+    let blockedTypes = ['nest', 'farm', 'turret', 'wall', 'silo', 'lantern', 'spikes']; let blocked = entities.some(e => blockedTypes.includes(e.type) && Math.floor(e.x) === mapPos.x && Math.floor(e.y) === mapPos.y);
+    if (blocked) return;
+    if (resources >= cost) {
+        resources -= cost;
+        if (buildMode === 'farm') entities.push(new Farm(mapPos.x + 0.5, mapPos.y + 0.5)); else if (buildMode === 'turret') entities.push(new Turret(mapPos.x + 0.5, mapPos.y + 0.5));
+        else if (buildMode === 'wall') entities.push(new Wall(mapPos.x + 0.5, mapPos.y + 0.5)); else if (buildMode === 'spikes') entities.push(new Spikes(mapPos.x + 0.5, mapPos.y + 0.5));
+        else if (buildMode === 'silo') entities.push(new Silo(mapPos.x + 0.5, mapPos.y + 0.5)); else if (buildMode === 'lantern') entities.push(new Lantern(mapPos.x + 0.5, mapPos.y + 0.5));
+        updateUI(); if (resources < cost) cancelBuildMode();
+    }
+}
+function updateUI() {
+    uiFood.innerText = resources; let microCount = entities.filter(e => e.type === 'micro').length; uiPop.innerText = microCount;
+    let threatCount = entities.filter(e => e.isHostile).length; if (uiThreats) uiThreats.innerText = threatCount;
+    if (resources >= 10) btnHatch.classList.remove('opacity-50', 'cursor-not-allowed'); else btnHatch.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 25) btnSoldier.classList.remove('opacity-50', 'cursor-not-allowed'); else btnSoldier.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 30) btnMedic.classList.remove('opacity-50', 'cursor-not-allowed'); else btnMedic.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 50) btnTitan.classList.remove('opacity-50', 'cursor-not-allowed'); else btnTitan.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 5) btnWall.classList.remove('opacity-50', 'cursor-not-allowed'); else btnWall.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 10) btnSpikes.classList.remove('opacity-50', 'cursor-not-allowed'); else btnSpikes.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 15) btnLantern.classList.remove('opacity-50', 'cursor-not-allowed'); else btnLantern.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 20) btnFarm.classList.remove('opacity-50', 'cursor-not-allowed'); else btnFarm.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 30) btnTurret.classList.remove('opacity-50', 'cursor-not-allowed'); else btnTurret.classList.add('opacity-50', 'cursor-not-allowed');
+    if (resources >= 40) btnSilo.classList.remove('opacity-50', 'cursor-not-allowed'); else btnSilo.classList.add('opacity-50', 'cursor-not-allowed');
+}
+function drawGrid() {
+    let matrix = new DOMMatrix(); matrix.translateSelf(camera.x, camera.y); let padding = TILE_W * 2;
+    for (let x = 0; x < MAP_SIZE; x++) {
+        for (let y = 0; y < MAP_SIZE; y++) {
+            let pos0 = toScreen(x, y); if (pos0.x < -padding || pos0.x > canvas.width + padding || pos0.y < -padding || pos0.y > canvas.height + padding) continue;
+            let tile = mapGrid[x][y]; let pos1 = toScreen(x + 1, y); let pos2 = toScreen(x + 1, y + 1); let pos3 = toScreen(x, y + 1);
+            tile.pattern.setTransform(matrix);
+            ctx.beginPath(); ctx.moveTo(pos0.x, pos0.y); ctx.lineTo(pos1.x, pos1.y); ctx.lineTo(pos2.x, pos2.y); ctx.lineTo(pos3.x, pos3.y); ctx.closePath(); ctx.fillStyle = tile.pattern; ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pos3.x, pos3.y); ctx.lineTo(pos0.x, pos0.y); ctx.lineTo(pos1.x, pos1.y); ctx.stroke();
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'; ctx.beginPath(); ctx.moveTo(pos1.x, pos1.y); ctx.lineTo(pos2.x, pos2.y); ctx.lineTo(pos3.x, pos3.y); ctx.stroke();
+            ctx.strokeStyle = tile.edgeColor; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(pos0.x, pos0.y); ctx.lineTo(pos1.x, pos1.y); ctx.lineTo(pos2.x, pos2.y); ctx.lineTo(pos3.x, pos3.y); ctx.closePath(); ctx.stroke();
+        }
+    }
+}
+function gameLoop() {
+    ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height); drawGrid();
+    dayTime += 0.0005; lightLevel = (Math.sin(dayTime) + 1) / 2;
+    if (lightLevel < 0.8) {
+        ctx.fillStyle = `rgba(10, 10, 40, ${0.7 * (1 - lightLevel)})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let lanterns = entities.filter(e => e.type === 'lantern');
+        if (lanterns.length > 0) {
+            ctx.globalCompositeOperation = 'screen';
+            lanterns.forEach(l => {
+                let pos = toScreen(l.x, l.y, 0); let glowRadius = 150 + Math.sin(Date.now() * 0.005 + l.id) * 5;
+                let grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowRadius);
+                grad.addColorStop(0, `rgba(253, 224, 71, ${0.5 * (1 - lightLevel)})`); grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+                ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(pos.x, pos.y, glowRadius, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.globalCompositeOperation = 'source-over';
+        }
+    }
+    if (Math.random() < 0.02 && entities.filter(e => e.type === 'food').length < 40) spawnFood();
+    if (Math.random() < 0.0005 && entities.filter(e => e.isHostile).length < 8) spawnEnemy();
+    if (Math.random() < 0.002 && entities.filter(e => e.type === 'beetle').length < 6) spawnBeetle();
+    entities.forEach(e => e.update()); entities.sort((a, b) => a.depth - b.depth);
+    let padding = 100; entities.forEach(e => { let screenPos = toScreen(e.x, e.y, 0); if (screenPos.x > -padding && screenPos.x < canvas.width + padding && screenPos.y > -padding && screenPos.y < canvas.height + padding) e.draw(ctx); });
+    if (buildMode) {
+        let mapPos = toMap(mouseX, mouseY);
+        if (mapPos.x >= 0 && mapPos.x < MAP_SIZE && mapPos.y >= 0 && mapPos.y < MAP_SIZE) {
+            let screenPos = toScreen(mapPos.x + 0.5, mapPos.y + 0.5, 0); let p0 = toScreen(mapPos.x, mapPos.y); let p1 = toScreen(mapPos.x+1, mapPos.y); let p2 = toScreen(mapPos.x+1, mapPos.y+1); let p3 = toScreen(mapPos.x, mapPos.y+1);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.fill();
+            ctx.globalAlpha = 0.5;
+            if (buildMode === 'farm') { ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(screenPos.x - 14, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y + 7); ctx.lineTo(screenPos.x + 14, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y - 7); ctx.fill(); ctx.fillStyle = '#059669'; ctx.beginPath(); ctx.arc(screenPos.x, screenPos.y - 10, 10, 0, Math.PI*2); ctx.fill(); }
+            else if (buildMode === 'turret') { ctx.fillStyle = '#3730a3'; ctx.beginPath(); ctx.moveTo(screenPos.x - 10, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y + 5); ctx.lineTo(screenPos.x + 10, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y - 5); ctx.fill(); ctx.fillStyle = '#4f46e5'; ctx.fillRect(screenPos.x - 4, screenPos.y - 15, 8, 15); }
+            else if (buildMode === 'wall') { ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.moveTo(screenPos.x - 12, screenPos.y); ctx.lineTo(screenPos.x - 4, screenPos.y + 4); ctx.lineTo(screenPos.x - 4, screenPos.y - 15); ctx.lineTo(screenPos.x - 12, screenPos.y - 10); ctx.fill(); ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.moveTo(screenPos.x + 4, screenPos.y + 8); ctx.lineTo(screenPos.x + 12, screenPos.y + 4); ctx.lineTo(screenPos.x + 12, screenPos.y - 10); ctx.lineTo(screenPos.x + 4, screenPos.y - 12); ctx.fill(); }
+            else if (buildMode === 'spikes') { ctx.fillStyle = '#44403c'; ctx.beginPath(); ctx.moveTo(screenPos.x - 12, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y + 6); ctx.lineTo(screenPos.x + 12, screenPos.y); ctx.lineTo(screenPos.x, screenPos.y - 6); ctx.fill(); ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.moveTo(screenPos.x - 6, screenPos.y); ctx.lineTo(screenPos.x - 6, screenPos.y - 8); ctx.lineTo(screenPos.x - 4, screenPos.y); ctx.fill(); }
+            else if (buildMode === 'lantern') { ctx.fillStyle = '#78350f'; ctx.fillRect(screenPos.x - 2, screenPos.y - 20, 4, 20); ctx.fillStyle = '#fef08a'; ctx.fillRect(screenPos.x + 6, screenPos.y - 18, 6, 8); }
+            else if (buildMode === 'silo') { ctx.fillStyle = '#7f1d1d'; ctx.fillRect(screenPos.x - 10, screenPos.y - 25, 20, 25); ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(screenPos.x, screenPos.y - 25, 10, 0, Math.PI, true); ctx.fill(); }
+            ctx.globalAlpha = 1.0;
+        }
+    }
+    requestAnimationFrame(gameLoop);
+}
+window.onload = init;
+</script>
+</body>
+</html>

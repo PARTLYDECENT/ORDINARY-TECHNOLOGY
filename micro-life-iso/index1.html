@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Micro Life - Iso Remake</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a202c; /* Dark border */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        /* UI Styling */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="p-4 sm:p-6 flex flex-col justify-between">
+        
+        <!-- Top Bar: Resources -->
+        <div class="interactive flex gap-4">
+            <div class="bg-slate-800/90 border-2 border-slate-700 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]"></div>
+                <div>
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider block">Food Collected</span>
+                    <span id="ui-food" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800/90 border-2 border-slate-700 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.5)]"></div>
+                <div>
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider block">Micro Population</span>
+                    <span id="ui-pop" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800/90 border-2 border-red-900 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)] flex items-center justify-center text-xs">💀</div>
+                <div>
+                    <span class="text-xs text-red-400 font-bold uppercase tracking-wider block">Threats</span>
+                    <span id="ui-threats" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Bar: Controls -->
+        <div class="interactive flex justify-center pb-4 w-full px-4">
+            <div class="bg-slate-800/90 border-2 border-slate-700 rounded-2xl p-4 shadow-2xl flex flex-wrap gap-3 items-center justify-center max-w-full overflow-x-auto">
+                <button id="btn-hatch" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Worker</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">10 Food</span>
+                </button>
+                <button id="btn-soldier" class="bg-slate-600 hover:bg-slate-500 active:bg-slate-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Soldier</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">25 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden sm:block"></div>
+                <button id="btn-wall" class="bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Wall</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">5 Food</span>
+                </button>
+                <button id="btn-farm" class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Farm</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">20 Food</span>
+                </button>
+                <button id="btn-turret" class="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Turret</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">30 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden sm:block"></div>
+                <button id="btn-medic" class="bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Medic</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">30 Food</span>
+                </button>
+                <button id="btn-titan" class="bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 text-white font-bold py-2 px-4 rounded-xl border border-zinc-600 transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Titan</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">50 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden sm:block"></div>
+                <button id="btn-spikes" class="bg-stone-600 hover:bg-stone-500 active:bg-stone-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Spikes</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">10 Food</span>
+                </button>
+                <button id="btn-silo" class="bg-red-700 hover:bg-red-600 active:bg-red-800 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Silo</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">40 Food</span>
+                </button>
+                <button id="btn-lantern" class="bg-yellow-600 hover:bg-yellow-500 active:bg-yellow-700 text-white font-bold py-2 px-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 flex flex-col items-center shrink-0">
+                    <span class="text-sm">Lantern</span>
+                    <span class="text-[10px] bg-black/30 px-1 py-0.5 rounded mt-1">15 Food</span>
+                </button>
+                <div class="w-px h-10 bg-slate-600 hidden lg:block"></div>
+                <div class="text-xs text-slate-400 max-w-[150px] hidden lg:block" id="ui-hint">
+                    <p><b>Drag</b> to pan camera.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const TILE_W = 64;
+const TILE_H = 32;
+const MAP_SIZE = 40;
+let resources = 100;
+let camera = { x: 0, y: 0 };
+let isDragging = false;
+let lastMouse = { x: 0, y: 0 };
+let entities = [];
+let nextId = 0;
+let dayTime = 0;
+let lightLevel = 1;
+let buildMode = null;
+let mouseX = 0, mouseY = 0;
+const COLORS = ['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6'];
+const uiFood = document.getElementById('ui-food');
+const uiPop = document.getElementById('ui-pop');
+const uiThreats = document.getElementById('ui-threats');
+const btnHatch = document.getElementById('btn-hatch');
+const btnSoldier = document.getElementById('btn-soldier');
+const btnWall = document.getElementById('btn-wall');
+const btnFarm = document.getElementById('btn-farm');
+const btnTurret = document.getElementById('btn-turret');
+const btnMedic = document.getElementById('btn-medic');
+const btnTitan = document.getElementById('btn-titan');
+const btnSpikes = document.getElementById('btn-spikes');
+const btnSilo = document.getElementById('btn-silo');
+const btnLantern = document.getElementById('btn-lantern');
+const uiHint = document.getElementById('ui-hint');
+let patterns = {};
+function createTextures() {
+    const createTex = (base, colors, type) => {
+        const tc = document.createElement('canvas'); tc.width = 128; tc.height = 128;
+        const tctx = tc.getContext('2d');
+        tctx.fillStyle = base; tctx.fillRect(0, 0, 128, 128);
+        for(let i=0; i<40; i++) {
+            tctx.fillStyle = colors[Math.floor(Math.random() * 2)]; tctx.globalAlpha = 0.3;
+            tctx.beginPath(); tctx.arc(Math.random()*128, Math.random()*128, Math.random()*15 + 5, 0, Math.PI*2); tctx.fill();
+        }
+        tctx.globalAlpha = 1.0;
+        for(let i=0; i<300; i++) {
+            tctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+            tctx.beginPath(); tctx.arc(Math.random()*128, Math.random()*128, Math.random()*1.5 + 0.2, 0, Math.PI*2); tctx.fill();
+        }
+        for(let i=0; i<40; i++) {
+            tctx.strokeStyle = colors[0]; tctx.lineWidth = type === 'dirt' ? 1.5 : 1; tctx.globalAlpha = 0.6;
+            tctx.beginPath(); let x = Math.random()*128; let y = Math.random()*128; tctx.moveTo(x, y);
+            if(type === 'dirt') { tctx.lineTo(x + Math.random()*8-4, y + Math.random()*8-4); tctx.lineTo(x + Math.random()*12-6, y + Math.random()*12-6); }
+            else { tctx.lineTo(x + Math.random()*4-2, y - Math.random()*10-4); } tctx.stroke();
+        }
+        return ctx.createPattern(tc, 'repeat');
+    };
+    patterns['GRASS'] = createTex('#15803d', ['#14532d', '#166534', '#22c55e', '#4ade80'], 'grass');
+    patterns['DARK_GRASS'] = createTex('#166534', ['#064e3b', '#14532d', '#15803d', '#22c55e'], 'grass');
+    patterns['DIRT'] = createTex('#a16207', ['#451a03', '#713f12', '#854d0e', '#ca8a04'], 'dirt');
+}
+let mapGrid = [];
+function generateMap() {
+    for(let x=0; x<MAP_SIZE; x++) {
+        mapGrid[x] = [];
+        for(let y=0; y<MAP_SIZE; y++) {
+            let nx = x * 0.4; let ny = y * 0.4;
+            let noise = Math.sin(nx) + Math.cos(ny) + (Math.random() * 0.5);
+            let distToCenter = Math.hypot(x - MAP_SIZE/2, y - MAP_SIZE/2);
+            let type = 'GRASS'; let edgeColor = '#14532d';
+            if (distToCenter < 2.5 || noise < -0.5) { type = 'DIRT'; edgeColor = '#713f12'; }
+            else if (noise > 0.8) { type = 'DARK_GRASS'; edgeColor = '#14532d'; }
+            let numDetails = Math.floor(Math.random() * 5);
+            for(let i=0; i<numDetails; i++) {
+                let dx = x + 0.1 + Math.random() * 0.8; let dy = y + 0.1 + Math.random() * 0.8;
+                if (type === 'GRASS' || type === 'DARK_GRASS') {
+                    let r = Math.random();
+                    if (r < 0.5) entities.push(new Grass(dx, dy, type));
+                    else if (r < 0.7) entities.push(new Fern(dx, dy));
+                    else if (r < 0.85) entities.push(new Flower(dx, dy));
+                    else entities.push(new Mushroom(dx, dy));
+                } else if (type === 'DIRT') { entities.push(new Pebble(dx, dy)); }
+            }
+            mapGrid[x][y] = { type, edgeColor, pattern: patterns[type] };
+        }
+    }
+}
+function toScreen(mapX, mapY, z = 0) {
+    return { x: (mapX - mapY) * (TILE_W / 2) + camera.x, y: (mapX + mapY) * (TILE_H / 2) - z + camera.y };
+}
+function toMap(screenX, screenY) {
+    let adjX = screenX - camera.x; let adjY = screenY - camera.y;
+    let mapX = (adjX / (TILE_W / 2) + adjY / (TILE_H / 2)) / 2;
+    let mapY = (adjY / (TILE_H / 2) - adjX / (TILE_W / 2)) / 2;
+    return { x: Math.floor(mapX), y: Math.floor(mapY) };
+}
+function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+
+class Entity {
+    constructor(x, y) {
+        this.id = nextId++;
+        this.x = x;
+        this.y = y;
+        this.z = 0;
+        this.type = 'entity';
+        this.depth = 0;
+        this.isStatic = false;
+    }
+    update() { if (!this.isStatic) this.depth = this.x + this.y; }
+    draw(ctx) {}
+}
