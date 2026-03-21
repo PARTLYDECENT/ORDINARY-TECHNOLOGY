@@ -531,4 +531,19 @@ const createVisualizers = (visualizerCtx, W, H, CX, CY, dataArray, bufferLength)
     return [drawViz1, drawViz2, drawViz3, drawViz4, drawViz5, drawViz6, drawViz7, drawViz8, drawViz9, drawViz10, drawViz11, drawViz12, drawViz13, drawViz14, drawViz15, drawViz16, drawViz17, drawViz18, drawViz19, drawViz20];
 };
 
-export { createVisualizers, getAverageAmplitude, t, initWebGLBackground, renderCurrentBackground };
+function drawHeart(ctx, x, y, size, opacity) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.3);
+    ctx.bezierCurveTo(size * 0.5, -size * 0.3, size * 1.5, size * 0.3, 0, size * 1.5);
+    ctx.bezierCurveTo(-size * 1.5, size * 0.3, -size * 0.5, -size * 0.3, 0, size * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(255, 105, 180, ${opacity})`;
+    ctx.shadowBlur = 20 * opacity;
+    ctx.shadowColor = 'rgba(255, 20, 147, 0.8)';
+    ctx.fill();
+    ctx.restore();
+}
+
+export { createVisualizers, getAverageAmplitude, t, initWebGLBackground, renderCurrentBackground, drawHeart };

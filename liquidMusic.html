@@ -371,6 +371,7 @@
                 item.addEventListener('click', () => {
                     if (currentTrackIndex !== i) {
                         currentTrackIndex = loadTrack(i, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState);
+                        hasSpokenEasterEgg = false;
                         playTrack();
                     } else {
                         musicPlayer.paused ? playTrack() : pauseTrack();
@@ -388,6 +389,7 @@
             if (active && playlistEl.style.display !== 'none') active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
+        let hasSpokenEasterEgg = false;
         function startAllAnimations() {
             if (!visualizerAnimationId) {
                 const loopVis = () => {
@@ -396,6 +398,25 @@
                     analyser.getByteFrequencyData(dataArray);
                     visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
                     if (visualizers[currentVisualizer - 1]) visualizers[currentVisualizer - 1]();
+
+                    // --- Easter Egg Trigger ---
+                    if (currentTrackIndex === 7 && currentVisualizer === 14) {
+                        const bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
+                        const heartSize = 40 + bass * 60;
+                        import('./js/music/translator.js').then(module => {
+                            module.drawHeart(visualizerCtx, visualizerCanvas.width / 2, visualizerCanvas.height / 2, heartSize, 0.8 + bass * 0.2);
+                        });
+
+                        if (!hasSpokenEasterEgg) {
+                            hasSpokenEasterEgg = true;
+                            const utterance = new SpeechSynthesisUtterance("Thank you so much, you're awesome dude");
+                            const voices = window.speechSynthesis.getVoices();
+                            utterance.voice = voices.find(v => v.name.includes('Aria') || v.name.includes('Female')) || voices[0];
+                            utterance.pitch = 1.1; 
+                            utterance.rate = 0.95;
+                            window.speechSynthesis.speak(utterance);
+                        }
+                    }
                 };
                 loopVis();
             }
@@ -452,8 +473,8 @@
 
         window.addEventListener('resize', resizeCanvas);
         playPauseBtn.addEventListener('click', () => musicPlayer.paused ? playTrack() : pauseTrack());
-        nextTrackBtn.addEventListener('click', () => { currentTrackIndex = loadTrack(currentTrackIndex + 1, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState); playTrack(); });
-        prevTrackBtn.addEventListener('click', () => { currentTrackIndex = loadTrack(currentTrackIndex - 1, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState); playTrack(); });
+        nextTrackBtn.addEventListener('click', () => { currentTrackIndex = loadTrack(currentTrackIndex + 1, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState); hasSpokenEasterEgg = false; playTrack(); });
+        prevTrackBtn.addEventListener('click', () => { currentTrackIndex = loadTrack(currentTrackIndex - 1, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState); hasSpokenEasterEgg = false; playTrack(); });
         musicPlayer.addEventListener('timeupdate', () => {
             if (!musicPlayer.duration) return;
             progressBar.style.width = `${(musicPlayer.currentTime / musicPlayer.duration) * 100}%`;
