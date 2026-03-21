@@ -284,25 +284,11 @@
         </div>
     </div>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    <script type="module">
+        import { initAudioContext, applyFilterSettings } from './js/music/equalizer.js';
+        import { tracks, formatTime, loadTrack } from './js/music/features.js';
+        import { createVisualizers, getAverageAmplitude, initWebGLBackground, renderCurrentBackground } from './js/music/translator.js';
 
-        // --- SECTION: YOUR PLAYLIST ---
-        // Just edit this list! Make sure the 'src' matches the file name in your root folder.
-        const tracks = [
-            { src: 'assets/music/1.mp3',  title: 'Signal 01' },
-            { src: 'assets/music/2.mp3',  title: 'Signal 02' },
-            { src: 'assets/music/3.mp3',  title: 'Signal 03' },
-            { src: 'assets/music/4.mp3',  title: 'Signal 04' },
-            { src: 'assets/music/5.mp3',  title: 'Signal 05' },
-            { src: 'assets/music/6.mp3',  title: 'Signal 06' },
-            { src: 'assets/music/7.mp3',  title: 'Signal 07' },
-            { src: 'assets/music/8.mp3',  title: 'Signal 08' },
-            { src: 'assets/music/9.mp3',  title: 'Signal 09' },
-            { src: 'assets/music/10.mp3', title: 'Signal 10' }
-        ];
-
-        // --- SECTION: ELEMENT SELECTORS ---
         const $ = id => document.getElementById(id);
         const musicPlayer = $('musicPlayer');
         const playPauseBtn = $('playPause');
@@ -325,109 +311,54 @@
         const filterQSlider = $('filterQ');
         const filterFreqValueDisplay = $('filterFreqValue');
         const filterQValueDisplay = $('filterQValue');
-        const vizControls = document.querySelector('.visualizer-controls');
 
-        // --- SECTION: STATE VARIABLES ---
-        let audioContext, analyser, source, filterNode;
-        let dataArray, bufferLength;
+        let audioCtx, analyser, dataArray, bufferLength, filterNode;
         let isAudioContextInitialized = false;
         let currentTrackIndex = 0;
         let currentVisualizer = 1;
+        let visualizers = [];
         let visualizerAnimationId = null;
         let bgAnimationId = null;
 
-        // --- SECTION: AUDIO INITIALIZATION ---
-        function initAudioContext() {
-            if (isAudioContextInitialized) return;
-            try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Create the audio graph nodes
-                source = audioContext.createMediaElementSource(musicPlayer);
-                analyser = audioContext.createAnalyser();
-                filterNode = audioContext.createBiquadFilter();
-
-                // Configure nodes
-                analyser.fftSize = 1024;
-                analyser.smoothingTimeConstant = 0.75;
-                bufferLength = analyser.frequencyBinCount;
-                dataArray = new Uint8Array(bufferLength);
-
-                // Connect the graph: source -> filter -> analyser -> speakers
-                source.connect(filterNode);
-                filterNode.connect(analyser);
-                analyser.connect(audioContext.destination);
-
-                isAudioContextInitialized = true;
-                console.log("Cryo-Audio Core Online (with Modulator). State:", audioContext.state);
-                
-                // Load saved filter settings now that the node exists
-                loadFilterSettings();
-            } catch (e) {
-                console.error("Audio Core Init Failure:", e);
-                alert("Your browser does not support the Web Audio API. Player cannot start.");
-                playPauseBtn.textContent = 'Error';
-                playPauseBtn.disabled = true;
-            }
+        function initPlayer() {
+            totalTracksEl.textContent = tracks.length.toString().padStart(2, '0');
+            createPlaylist();
+            loadTrack(0, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState);
+            initWebGLBackground(bgCanvas);
+            resizeCanvas();
         }
 
-        // --- SECTION: PLAYER LOGIC ---
-        function loadTrack(index) {
-            currentTrackIndex = (index + tracks.length) % tracks.length;
-            const track = tracks[currentTrackIndex];
-            musicPlayer.src = track.src;
-            trackTitleEl.textContent = track.title;
-            currentTrackNumEl.textContent = (currentTrackIndex + 1).toString().padStart(2, '0');
-            updatePlaylistActiveState();
+        function handleInitAudio() {
+            if (isAudioContextInitialized) return;
+            try {
+                const audioInfo = initAudioContext(musicPlayer);
+                audioCtx = audioInfo.audioContext;
+                analyser = audioInfo.analyser;
+                dataArray = audioInfo.dataArray;
+                bufferLength = audioInfo.bufferLength;
+                filterNode = audioInfo.filterNode;
+                isAudioContextInitialized = true;
+
+                visualizers = createVisualizers(visualizerCtx, () => visualizerCanvas.width, () => visualizerCanvas.height, () => visualizerCanvas.width/2, () => visualizerCanvas.height/2, dataArray, bufferLength);
+                
+                loadFilterSettings();
+                startAllAnimations();
+            } catch (e) {
+                console.error("Initialization failed", e);
+            }
         }
 
         function playTrack() {
-            // The magic happens here: if the context is suspended, resume it. This is required by browsers.
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
-            
-            const playPromise = musicPlayer.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    playPauseBtn.textContent = 'Disengage';
-                    startAllAnimations();
-                }).catch(error => {
-                    console.error("Playback failed:", error);
-                    // If it fails, reset the button so the user can try again.
-                    playPauseBtn.textContent = 'Engage';
-                });
-            }
+            handleInitAudio();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            musicPlayer.play().then(() => {
+                playPauseBtn.textContent = 'Disengage';
+            }).catch(err => console.error("Play error:", err));
         }
 
         function pauseTrack() {
             musicPlayer.pause();
             playPauseBtn.textContent = 'Engage';
-        }
-
-        function handlePlayPause() {
-            // FIRST CLICK EVER: Initialize the entire audio system.
-            if (!isAudioContextInitialized) {
-                initAudioContext();
-            }
-            
-            // If initialization failed, do nothing.
-            if (!isAudioContextInitialized) return;
-
-            // Toggle play/pause
-            if (musicPlayer.paused) {
-                playTrack();
-            } else {
-                pauseTrack();
-            }
-        }
-
-        // --- SECTION: UI & UPDATES ---
-        function updateProgress() {
-            if (!musicPlayer.duration || !isFinite(musicPlayer.duration) || musicPlayer.duration <= 0) return;
-            const progressPercent = (musicPlayer.currentTime / musicPlayer.duration) * 100;
-            progressBar.style.width = `${progressPercent}%`;
-            currentTimeEl.textContent = formatTime(musicPlayer.currentTime);
         }
 
         function createPlaylist() {
@@ -438,88 +369,52 @@
                 item.dataset.index = i;
                 item.innerHTML = `<span>${(i+1).toString().padStart(2,'0')}</span><div class="playlist-item-indicator"><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div></div><span>${track.title}</span>`;
                 item.addEventListener('click', () => {
-                    if (!isAudioContextInitialized) {
-                        initAudioContext();
-                    }
                     if (currentTrackIndex !== i) {
-                        loadTrack(i);
+                        currentTrackIndex = loadTrack(i, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState);
                         playTrack();
                     } else {
-                        handlePlayPause();
+                        musicPlayer.paused ? playTrack() : pauseTrack();
                     }
                 });
                 playlistEl.appendChild(item);
             });
-            updatePlaylistActiveState();
         }
 
-        function updatePlaylistActiveState() {
+        function updatePlaylistActiveState(index) {
             document.querySelectorAll('.playlist-item').forEach(item => {
-                item.classList.toggle('active', parseInt(item.dataset.index) === currentTrackIndex);
+                item.classList.toggle('active', parseInt(item.dataset.index) === index);
             });
-            const activeItem = playlistEl.querySelector('.playlist-item.active');
-            if (activeItem && playlistEl.style.display !== 'none') {
-                activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            const active = playlistEl.querySelector('.playlist-item.active');
+            if (active && playlistEl.style.display !== 'none') active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function startAllAnimations() {
+            if (!visualizerAnimationId) {
+                const loopVis = () => {
+                    visualizerAnimationId = requestAnimationFrame(loopVis);
+                    if (!isAudioContextInitialized || musicPlayer.paused) return;
+                    analyser.getByteFrequencyData(dataArray);
+                    visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+                    if (visualizers[currentVisualizer - 1]) visualizers[currentVisualizer - 1]();
+                };
+                loopVis();
             }
-        }
-        
-        function formatTime(s) {
-            if (isNaN(s) || !isFinite(s)) return '0:00';
-            const m = Math.floor(s / 60);
-            const sec = Math.floor(s % 60).toString().padStart(2, '0');
-            return `${m}:${sec}`;
-        }
-
-        // --- SECTION: FILTER MODULATOR ---
-        const MIN_FREQ = 20, MAX_FREQ = 20000;
-        const MIN_LOG_FREQ = Math.log(MIN_FREQ), MAX_LOG_FREQ = Math.log(MAX_FREQ);
-        const LOG_FREQ_SCALE = (MAX_LOG_FREQ - MIN_LOG_FREQ) / 100;
-        const MIN_Q = 0.1, MAX_Q = 30;
-        const MIN_LOG_Q = Math.log(MIN_Q), MAX_LOG_Q = Math.log(MAX_Q);
-        const LOG_Q_SCALE = (MAX_LOG_Q - MIN_LOG_Q) / 100;
-
-        function sliderToFreq(val) { return Math.exp(MIN_LOG_FREQ + LOG_FREQ_SCALE * parseFloat(val)); }
-        function sliderToQ(val) { return Math.exp(MIN_LOG_Q + LOG_Q_SCALE * parseFloat(val)); }
-
-        function applyFilterSettings() {
-            if (!isAudioContextInitialized) return;
-            const activeTypeButton = document.querySelector('.filter-type-selector button.active');
-            const type = activeTypeButton ? activeTypeButton.dataset.filtertype : 'off';
-
-            if (type === 'off') {
-                filterNode.type = "allpass";
-                filterNode.frequency.setTargetAtTime(audioContext.sampleRate / 2, audioContext.currentTime, 0.01);
-                filterNode.Q.setTargetAtTime(1, audioContext.currentTime, 0.01);
-            } else {
-                filterNode.type = type;
-                const freq = sliderToFreq(filterFreqSlider.value);
-                const q = sliderToQ(filterQSlider.value);
-                filterNode.frequency.setTargetAtTime(freq, audioContext.currentTime, 0.01);
-                filterNode.Q.setTargetAtTime(q, audioContext.currentTime, 0.01);
+            if (!bgAnimationId) {
+                const loopBg = () => {
+                    bgAnimationId = requestAnimationFrame(loopBg);
+                    let reactivity = 0, bass = 0;
+                    if (isAudioContextInitialized && !musicPlayer.paused) {
+                        reactivity = getAverageAmplitude(dataArray, 0, bufferLength);
+                        bass = getAverageAmplitude(dataArray, 0, bufferLength * 0.1);
+                    }
+                    renderCurrentBackground(bgCanvas, reactivity, bass);
+                };
+                loopBg();
             }
-            updateFilterValueDisplays();
-            saveCurrentFilterSettings();
-        }
-        
-        function updateFilterValueDisplays() {
-            const freq = sliderToFreq(filterFreqSlider.value);
-            const q = sliderToQ(filterQSlider.value);
-            filterFreqValueDisplay.textContent = freq < 1000 ? `${freq.toFixed(0)}Hz` : `${(freq/1000).toFixed(1)}kHz`;
-            filterQValueDisplay.textContent = q.toFixed(1);
-        }
-
-        function saveCurrentFilterSettings() {
-            const activeTypeButton = document.querySelector('.filter-type-selector button.active');
-            const settings = {
-                type: activeTypeButton ? activeTypeButton.dataset.filtertype : 'off',
-                freqSlider: filterFreqSlider.value,
-                qSlider: filterQSlider.value
-            };
-            localStorage.setItem('neuromanticFilterSettingsV2', JSON.stringify(settings));
         }
 
         function loadFilterSettings() {
-            const saved = localStorage.getItem('neuromanticFilterSettingsV2');
+            const saved = localStorage.getItem('neuromanticFilterSettingsV3');
             if (saved) {
                 const settings = JSON.parse(saved);
                 filterFreqSlider.value = settings.freqSlider || "100";
@@ -530,835 +425,70 @@
                     btn.setAttribute('aria-pressed', isActive);
                 });
             }
-            applyFilterSettings();
+            syncFilters();
         }
 
-        // --- SECTION: VISUALIZERS & ANIMATIONS ---
-        const W = () => visualizerCanvas.width;
-        const H = () => visualizerCanvas.height;
-        const CX = () => W() / 2;
-        const CY = () => H() / 2;
-        const t = () => performance.now() / 1000;
-        
-        function getAverageAmplitude(arr, start, end) {
-            let sum = 0;
-            start = Math.max(0, Math.floor(start));
-            end = Math.min(arr.length, Math.ceil(end));
-            if (start >= end) return 0;
-            for (let i = start; i < end; i++) { sum += arr[i]; }
-            return sum / (end - start) / 255;
-        }
-
-        function startAllAnimations() {
-            if (!visualizerAnimationId) { renderVisualizer(); }
-            if (!bgAnimationId) { renderCurrentBackground(); }
-        }
-
-        function renderVisualizer() {
-            visualizerAnimationId = requestAnimationFrame(renderVisualizer);
-            if (!isAudioContextInitialized || musicPlayer.paused) return;
+        function syncFilters() {
+            const activeBtn = document.querySelector('.filter-type-selector button.active');
+            const type = activeBtn ? activeBtn.dataset.filtertype : 'off';
+            applyFilterSettings(type, filterFreqSlider.value, filterQSlider.value);
             
-            analyser.getByteFrequencyData(dataArray);
-            visualizerCtx.clearRect(0, 0, W(), H());
-            const index = currentVisualizer - 1;
-            if (visualizers[index]) {
-                visualizers[index]();
-            }
-        }
-        
-        function drawViz1(){
-            const barW=(W()/bufferLength)*2.0; const time=t(); visualizerCtx.save();
-            visualizerCtx.globalCompositeOperation='lighter';
-            for(let i=0,x=0;i<bufferLength;i++){
-                const amp=Math.pow(dataArray[i]/255, 1.5);
-                const h=Math.max(2, amp*H()*1.2);
-                const hue=(i/bufferLength)*120+160+Math.sin(time)*30;
-                // 3D Tower Effect
-                const grad=visualizerCtx.createLinearGradient(x,H(),x+barW,H()-h);
-                grad.addColorStop(0,`hsla(${hue},100%,40%,0.9)`);
-                grad.addColorStop(0.5,`hsla(${(hue+40)%360},100%,60%,0.7)`);
-                grad.addColorStop(1,`hsla(${(hue+80)%360},100%,80%,0.4)`);
-                visualizerCtx.fillStyle=grad;
-                // Main bar
-                visualizerCtx.fillRect(x,H()-h,barW-1,h);
-                // Top Cap Glow
-                visualizerCtx.shadowColor=`hsla(${hue},100%,70%,0.8)`;
-                visualizerCtx.shadowBlur=15*amp;
-                visualizerCtx.fillStyle='#fff';
-                visualizerCtx.fillRect(x,H()-h-2,barW-1,4);
-                // Perspective shadow/reflection
-                visualizerCtx.fillStyle=`hsla(${hue},100%,20%,0.2)`;
-                visualizerCtx.fillRect(x+barW*0.5,H()-h*0.5,barW*0.5,h*0.5);
-                x+=barW;
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz2(){
-            const time=t()*0.8; const cx=CX(); const cy=CY(); const maxR=Math.min(cx,cy)*0.9;
-            visualizerCtx.save(); visualizerCtx.globalCompositeOperation='lighter';
-            const step=4;
-            for(let i=0;i<bufferLength;i+=step){
-                const amp=Math.pow(dataArray[i]/255, 1.2);
-                const ang=(Math.PI*2*i/bufferLength)+time;
-                const r=amp*maxR*(0.5+0.5*Math.sin(time*2+i*0.1));
-                const x=cx+Math.cos(ang)*r; const y=cy+Math.sin(ang)*r;
-                const hue=(i/bufferLength)*360+time*60;
-                // Orbital connections
-                if(i>step){
-                    const prevAmp=Math.pow(dataArray[i-step]/255, 1.2);
-                    const prevAng=(Math.PI*2*(i-step)/bufferLength)+time;
-                    const prevR=prevAmp*maxR*(0.5+0.5*Math.sin(time*2+(i-step)*0.1));
-                    const px=cx+Math.cos(prevAng)*prevR; const py=cy+Math.sin(prevAng)*prevR;
-                    visualizerCtx.strokeStyle=`hsla(${hue},100%,60%,${0.1+amp*0.5})`;
-                    visualizerCtx.lineWidth=0.5+amp*3;
-                    visualizerCtx.beginPath(); visualizerCtx.moveTo(px,py); visualizerCtx.lineTo(x,y); visualizerCtx.stroke();
-                }
-                // Floating Geometry
-                visualizerCtx.fillStyle=`hsla(${hue},100%,70%,${0.5+amp*0.5})`;
-                visualizerCtx.beginPath(); visualizerCtx.arc(x,y,2+amp*10,0,Math.PI*2); visualizerCtx.fill();
-                // Core pulse
-                if(amp>0.8){
-                    visualizerCtx.strokeStyle='#fff'; visualizerCtx.lineWidth=1;
-                    visualizerCtx.beginPath(); visualizerCtx.arc(x,y,5+amp*20,0,Math.PI*2); visualizerCtx.stroke();
-                }
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz3(){
-            const time=t(); const waveH=H()*0.8; visualizerCtx.save();
-            const layers=4;
-            for(let l=0; l<layers; l++){
-                const lFrac=l/layers;
-                visualizerCtx.beginPath();
-                visualizerCtx.lineWidth=2+lFrac*5;
-                const hue=(time*20+l*40+180)%360;
-                visualizerCtx.strokeStyle=`hsla(${hue},90%,${50+lFrac*20}%,${0.3+lFrac*0.5})`;
-                let ox=0, oy=H()/2;
-                for(let i=0; i<bufferLength; i+=10){
-                    const x=(i/bufferLength)*W();
-                    const amp=(dataArray[i]/255);
-                    const y=H()/2 + Math.sin(i*0.05+time*(1+lFrac)+l)*waveH*amp*0.5 + (l-layers/2)*40;
-                    if(i===0) visualizerCtx.moveTo(x,y);
-                    else visualizerCtx.quadraticCurveTo(ox,oy,(x+ox)/2,(y+oy)/2);
-                    ox=x; oy=y;
-                }
-                visualizerCtx.stroke();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz4(){
-            const cx=CX(); const cy=CY(); const time=t(); visualizerCtx.save();
-            visualizerCtx.fillStyle='rgba(2,3,5,0.15)'; visualizerCtx.fillRect(0,0,W(),H());
-            visualizerCtx.globalCompositeOperation='lighter';
-            const bass=getAverageAmplitude(dataArray,0,bufferLength*0.1);
-            // Cosmic Core
-            const coreR=20+bass*H()*0.4;
-            const grad=visualizerCtx.createRadialGradient(cx,cy,0,cx,cy,coreR);
-            grad.addColorStop(0,'#fff');
-            grad.addColorStop(0.2,`hsla(280,100%,70%,${0.8*bass})`);
-            grad.addColorStop(0.5,`hsla(200,100%,50%,${0.4*bass})`);
-            grad.addColorStop(1,'transparent');
-            visualizerCtx.fillStyle=grad;
-            visualizerCtx.beginPath(); visualizerCtx.arc(cx,cy,coreR,0,Math.PI*2); visualizerCtx.fill();
-            // Accretion Disk / Rings
-            const numRings=12;
-            for(let i=0; i<numRings; i++){
-                const fr=i/numRings;
-                const amp=(dataArray[Math.floor(fr*bufferLength)]/255);
-                const r=(coreR*0.5) + fr*H()*0.6;
-                const tilt=Math.sin(time*0.5+i)*0.5;
-                visualizerCtx.strokeStyle=`hsla(${200+fr*100},100%,60%,${0.1+amp*0.5})`;
-                visualizerCtx.lineWidth=1+amp*4;
-                visualizerCtx.save();
-                visualizerCtx.translate(cx,cy); visualizerCtx.rotate(time*0.2+i);
-                visualizerCtx.scale(1, 0.3+tilt);
-                visualizerCtx.beginPath(); visualizerCtx.arc(0,0,r,0,Math.PI*2); visualizerCtx.stroke();
-                visualizerCtx.restore();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz5(){
-            const cols=40; const cellW=W()/cols; const time=t(); visualizerCtx.save();
-            for(let i=0; i<cols; i++){
-                const amp=Math.pow(dataArray[Math.floor((i/cols)*bufferLength)]/255, 1.5);
-                const x=i*cellW;
-                const height=amp*H()*0.9;
-                const hue=(i/cols)*60+120+Math.sin(time)*30;
-                // Stacked Voxels
-                const voxels=Math.floor(10+amp*20);
-                for(let v=0; v<voxels; v++){
-                    const vFrac=v/voxels;
-                    const vy=H() - (v/voxels)*height;
-                    const vSize=cellW*0.8*(1-vFrac*0.5);
-                    visualizerCtx.fillStyle=`hsla(${hue},100%,${40+vFrac*40}%,${0.6+amp*0.4})`;
-                    visualizerCtx.fillRect(x+cellW*0.1, vy, vSize, cellW*0.2);
-                    if(v===voxels-1 && amp>0.7){ // Top voxel beam
-                        visualizerCtx.shadowBlur=20*amp; visualizerCtx.shadowColor=visualizerCtx.fillStyle;
-                        visualizerCtx.fillRect(x+cellW*0.3, 0, cellW*0.4, vy);
-                    }
-                }
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz6(){
-            const cx=CX(); const cy=CY(); const time=t(); visualizerCtx.save();
-            const slices=8;
-            for(let s=0; s<slices; s++){
-                visualizerCtx.save();
-                visualizerCtx.translate(cx,cy);
-                visualizerCtx.rotate((s/slices)*Math.PI*2 + time*0.1);
-                // Draw Half Slice
-                const barWidth=(W()*0.4)/bufferLength;
-                for(let i=0; i<bufferLength/slices; i++){
-                    const amp=dataArray[i]/255;
-                    const h=amp*H()*0.4;
-                    const hue=(i/bufferLength)*360+time*50;
-                    visualizerCtx.fillStyle=`hsla(${hue},100%,60%,0.7)`;
-                    visualizerCtx.fillRect(i*barWidth, -h/2, barWidth-1, h);
-                }
-                visualizerCtx.restore();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz7(){
-            const time=t(); const cx=CX(); const cy=CY(); visualizerCtx.save();
-            visualizerCtx.translate(cx,cy);
-            const petals=12;
-            for(let p=0; p<petals; p++){
-                const pAng=(p/petals)*Math.PI*2 + time*0.2;
-                visualizerCtx.save();
-                visualizerCtx.rotate(pAng);
-                const amp=Math.pow(getAverageAmplitude(dataArray, (p/petals)*bufferLength, ((p+1)/petals)*bufferLength), 1.2);
-                const pLen=50 + amp*H()*0.4;
-                const pWidth=20 + amp*100;
-                const hue=(p/petals)*360+time*40;
-                const grad=visualizerCtx.createRadialGradient(pLen,0,0,pLen,0,pWidth);
-                grad.addColorStop(0,`hsla(${hue},100%,70%,0.9)`);
-                grad.addColorStop(1,`transparent`);
-                visualizerCtx.fillStyle=grad;
-                // Fractal Geometry
-                visualizerCtx.beginPath();
-                visualizerCtx.moveTo(0,0);
-                visualizerCtx.bezierCurveTo(pLen*0.5, pWidth, pLen, pWidth*0.5, pLen, 0);
-                visualizerCtx.bezierCurveTo(pLen, -pWidth*0.5, pLen*0.5, -pWidth, 0, 0);
-                visualizerCtx.fill();
-                // Internal patterns
-                visualizerCtx.strokeStyle='#fff'; visualizerCtx.lineWidth=0.5;
-                visualizerCtx.stroke();
-                visualizerCtx.restore();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz8(){
-            const cx=CX(); const cy=CY(); const time=t(); visualizerCtx.save();
-            const numRings=20;
-            const bass=getAverageAmplitude(dataArray, 0, bufferLength*0.1);
-            for(let i=0; i<numRings; i++){
-                const fr=i/numRings;
-                const amp=dataArray[Math.floor(fr*bufferLength)]/255;
-                const r=fr*Math.min(W(),H())*0.6*(1.0 + 0.1*Math.sin(time*2+i));
-                visualizerCtx.lineWidth=1 + amp*10 + bass*5;
-                const hue=(fr*360 + time*50)%360;
-                // Chromatic Aberration Simulation
-                visualizerCtx.strokeStyle=`hsla(${hue},100%,60%,0.5)`;
-                visualizerCtx.beginPath(); visualizerCtx.arc(cx+amp*10,cy,r,0,Math.PI*2); visualizerCtx.stroke();
-                visualizerCtx.strokeStyle=`hsla(${(hue+120)%360},100%,60%,0.5)`;
-                visualizerCtx.beginPath(); visualizerCtx.arc(cx-amp*10,cy,r,0,Math.PI*2); visualizerCtx.stroke();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz9(){
-            const time=t(); visualizerCtx.save();
-            visualizerCtx.fillStyle='rgba(2,3,5,0.2)'; visualizerCtx.fillRect(0,0,W(),H());
-            const tracks=30;
-            for(let i=0; i<tracks; i++){
-                const amp=Math.pow(dataArray[Math.floor((i/tracks)*bufferLength)]/255, 1.5);
-                const x=(i/tracks)*W();
-                const speed=5+amp*20;
-                const offset=(time*speed + i*100) % (H()+200) - 100;
-                const h=50+amp*200;
-                const hue=160+amp*60;
-                // Volumetric Drop
-                const grad=visualizerCtx.createLinearGradient(x,offset-h,x,offset);
-                grad.addColorStop(0,'transparent');
-                grad.addColorStop(0.5,`hsla(${hue},80%,60%,${0.2+amp*0.3})`);
-                grad.addColorStop(1,`hsla(${hue},100%,80%,${0.5+amp*0.5})`);
-                visualizerCtx.fillStyle=grad;
-                visualizerCtx.fillRect(x,offset-h,2+amp*4,h);
-                // Floor Splash
-                if(offset>H()-50){
-                    const sAmp=(offset-(H()-50))/50;
-                    visualizerCtx.strokeStyle=`hsla(${hue},100%,80%,${(1-sAmp)*amp})`;
-                    visualizerCtx.beginPath(); visualizerCtx.ellipse(x,H()-10,20*sAmp*amp,5*sAmp*amp,0,0,Math.PI*2); visualizerCtx.stroke();
-                }
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz10(){
-            const cx=CX(); const cy=CY(); const time=t(); visualizerCtx.save();
-            visualizerCtx.lineWidth=1.5;
-            const low=getAverageAmplitude(dataArray, 0, bufferLength*0.2);
-            const mid=getAverageAmplitude(dataArray, bufferLength*0.2, bufferLength*0.6);
-            const high=getAverageAmplitude(dataArray, bufferLength*0.6, bufferLength);
-            const freqX=2+low*5; const freqY=3+mid*5; const scale=Math.min(cx,cy)*0.8;
-            const iterations=200;
-            visualizerCtx.beginPath();
-            for(let i=0; i<iterations; i++){
-                const fr=i/iterations;
-                const ang=fr*Math.PI*2;
-                const x=cx + Math.sin(ang*freqX+time)*scale;
-                const y=cy + Math.cos(ang*freqY+time*1.2)*scale;
-                const hue=(fr*360 + time*100)%360;
-                visualizerCtx.strokeStyle=`hsla(${hue},100%,60%,${0.5+high*0.5})`;
-                if(i===0) visualizerCtx.moveTo(x,y);
-                else visualizerCtx.lineTo(x,y);
-                // Extra Web nodes
-                if(i%20===0 && high>0.5){
-                    visualizerCtx.fillStyle='#fff'; visualizerCtx.beginPath(); visualizerCtx.arc(x,y,2+high*5,0,Math.PI*2); visualizerCtx.fill();
-                }
-            }
-            visualizerCtx.stroke();
-            visualizerCtx.restore();
-        }
-        function drawViz11(){
-            const barHeight=H()/bufferLength; const cx=CX(); const time=t(); visualizerCtx.save();
-            visualizerCtx.globalCompositeOperation='lighter';
-            for(let i=0;i<bufferLength/2;i++){
-                const amp=Math.pow(dataArray[i]/255, 1.4);
-                const w=Math.max(2, amp*W()*0.6);
-                const y=CY() + (i-bufferLength/4)*barHeight*2;
-                const hue=(i/(bufferLength/2))*100+200+Math.sin(time)*40;
-                // Neon Horizon Bars
-                const grad=visualizerCtx.createLinearGradient(cx-w,y,cx+w,y);
-                grad.addColorStop(0,'transparent');
-                grad.addColorStop(0.5,`hsla(${hue},100%,60%,${0.4+amp*0.6})`);
-                grad.addColorStop(1,'transparent');
-                visualizerCtx.fillStyle=grad;
-                visualizerCtx.fillRect(cx-w,y,w*2,barHeight-1);
-                // Highlight pulse
-                if(amp>0.7){
-                    visualizerCtx.fillStyle='#fff';
-                    visualizerCtx.fillRect(cx-w*0.1,y,w*0.2,barHeight-1);
-                }
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz12(){
-            const time=t(); const cx=CX(); const cy=CY(); visualizerCtx.save();
-            visualizerCtx.translate(cx,cy);
-            const bass=getAverageAmplitude(dataArray, 0, bufferLength*0.2);
-            const mid=getAverageAmplitude(dataArray, bufferLength*0.2, bufferLength*0.6);
-            const sides=3 + Math.floor(bass*7);
-            const radius=50 + mid*H()*0.5;
-            const angleStep=(Math.PI*2)/sides;
-            // Recursive Fractal Polygon
-            for(let l=0; l<4; l++){
-                const lFrac=l/4;
-                const lRadius=radius * (1.0 - lFrac*0.8);
-                visualizerCtx.rotate(time*0.2 + l*0.5);
-                visualizerCtx.strokeStyle=`hsla(${120+l*40+time*30},100%,60%,${0.8-lFrac*0.6})`;
-                visualizerCtx.lineWidth=2 + bass*10;
-                visualizerCtx.beginPath();
-                for(let i=0; i<=sides; i++){
-                    const ang=i*angleStep;
-                    const x=Math.cos(ang)*lRadius; const y=Math.sin(ang)*lRadius;
-                    if(i===0) visualizerCtx.moveTo(x,y);
-                    else visualizerCtx.lineTo(x,y);
-                }
-                visualizerCtx.closePath();
-                visualizerCtx.stroke();
-                // Nodes
-                if(bass>0.5){
-                   visualizerCtx.fillStyle='#fff';
-                   for(let i=0; i<sides; i++){
-                       const x=Math.cos(i*angleStep)*lRadius; const y=Math.sin(i*angleStep)*lRadius;
-                       visualizerCtx.beginPath(); visualizerCtx.arc(x,y,2+bass*5,0,Math.PI*2); visualizerCtx.fill();
-                   }
-                }
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz13(){
-            const cols=24; const rows=12; const cellW=W()/cols; const cellH=H()/rows; visualizerCtx.save();
-            visualizerCtx.globalAlpha=0.8;
-            for(let r=0; r<rows; r++){
-                for(let c=0; c<cols; c++){
-                    const idx=Math.floor(((r*cols+c)/(rows*cols))*bufferLength);
-                    const amp=dataArray[idx]/255;
-                    if(amp<0.1) continue;
-                    const hue=(c/cols)*100+100;
-                    const brightness=30+amp*70;
-                    // Glitchy Data Stream
-                    const gX=Math.sin(t()*10+r)*amp*20;
-                    visualizerCtx.fillStyle=`hsla(${hue},100%,${brightness}%,${0.5+amp*0.5})`;
-                    visualizerCtx.fillRect(c*cellW + gX, r*cellH, cellW-2, cellH-2);
-                    // Accents
-                    if(amp>0.8){
-                        visualizerCtx.fillStyle='#fff';
-                        visualizerCtx.fillRect(c*cellW+gX, r*cellH, cellW*0.2, cellH-2);
-                    }
-                }
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz14(){
-            const cx=CX(); const cy=CY(); const time=t(); visualizerCtx.save();
-            visualizerCtx.translate(cx,cy); visualizerCtx.rotate(time*0.1);
-            const overall=getAverageAmplitude(dataArray, 0, bufferLength);
-            // Energy Sphere
-            const baseR=H()*0.2 + overall*H()*0.3;
-            const points=32;
-            visualizerCtx.strokeStyle=`hsla(${120+time*20},100%,60%,0.6)`;
-            visualizerCtx.lineWidth=2;
-            for(let i=0; i<points; i++){
-                const ang=(i/points)*Math.PI*2;
-                const amp=dataArray[Math.floor((i/points)*bufferLength)]/255;
-                const r=baseR + amp*50;
-                const x=Math.cos(ang)*r; const y=Math.sin(ang)*r;
-                // Connect to core
-                visualizerCtx.beginPath(); visualizerCtx.moveTo(0,0); visualizerCtx.lineTo(x,y); 
-                visualizerCtx.strokeStyle=`hsla(${120+i*5+time*20},100%,70%,${0.1+amp*0.5})`;
-                visualizerCtx.stroke();
-                // Outer shell
-                visualizerCtx.fillStyle='#fff';
-                visualizerCtx.beginPath(); visualizerCtx.arc(x,y,1+amp*5,0,Math.PI*2); visualizerCtx.fill();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz15(){
-            const time=t(); visualizerCtx.save();
-            const lines=15;
-            for(let i=0; i<lines; i++){
-                const iFrac=i/lines;
-                const y=H()*0.1 + iFrac*H()*0.8;
-                visualizerCtx.beginPath();
-                const hue=(180+iFrac*120+time*30)%360;
-                visualizerCtx.strokeStyle=`hsla(${hue},100%,60%,0.6)`;
-                visualizerCtx.lineWidth=1+iFrac*4;
-                for(let x=0; x<W(); x+=10){
-                    const xFrac=x/W();
-                    const amp=dataArray[Math.floor(xFrac*(bufferLength/2))]/255;
-                    const yOff=Math.sin(x*0.01 + time*2 + iFrac*10)*50*amp + Math.cos(x*0.02 - time + iFrac*5)*30;
-                    if(x===0) visualizerCtx.moveTo(x, y+yOff);
-                    else visualizerCtx.lineTo(x, y+yOff);
-                }
-                visualizerCtx.stroke();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz16(){
-            const cx=CX(); const cy=CY(); const time=t(); visualizerCtx.save();
-            visualizerCtx.translate(cx,cy);
-            const slices=12;
-            const bass=getAverageAmplitude(dataArray, 0, bufferLength*0.1);
-            for(let s=0; s<slices; s++){
-                visualizerCtx.save();
-                visualizerCtx.rotate((s/slices)*Math.PI*2 + time*0.5);
-                const amp=dataArray[Math.floor((s/slices)*bufferLength)]/255;
-                const h=amp*H()*0.5;
-                const grad=visualizerCtx.createLinearGradient(0,0,0,h);
-                grad.addColorStop(0,`hsla(${s*30+time*60},100%,70%,0.9)`);
-                grad.addColorStop(1,'transparent');
-                visualizerCtx.fillStyle=grad;
-                // Kaleidoscope Blade
-                visualizerCtx.beginPath();
-                visualizerCtx.moveTo(0,0);
-                visualizerCtx.lineTo(20+bass*100, h);
-                visualizerCtx.lineTo(-20-bass*100, h);
-                visualizerCtx.closePath(); visualizerCtx.fill();
-                visualizerCtx.restore();
-            }
-            visualizerCtx.restore();
-        }
-        function drawViz17(){
-            const time=t(); visualizerCtx.save();
-            const bass=getAverageAmplitude(dataArray, 0, bufferLength*0.1);
-            const high=getAverageAmplitude(dataArray, bufferLength*0.8, bufferLength);
-            // Volumetric Bass Shockwaves
-            if(bass>0.6){
-                const numRings=5;
-                for(let i=0; i<numRings; i++){
-                    const r=(time*500 + i*100) % (W()*0.8);
-                    const opacity=(1 - r/(W()*0.8))*bass;
-                    visualizerCtx.strokeStyle=`hsla(${200+bass*100},100%,70%,${opacity})`;
-                    visualizerCtx.lineWidth=2+high*20;
-                    visualizerCtx.beginPath(); visualizerCtx.arc(CX(),CY(),r,0,Math.PI*2); visualizerCtx.stroke();
-                }
-            }
-            // Background Distortions
-            visualizerCtx.globalAlpha=bass*0.3;
-            visualizerCtx.fillStyle='#fff'; visualizerCtx.beginPath(); visualizerCtx.arc(CX(),CY(),bass*100,0,Math.PI*2); visualizerCtx.fill();
-            visualizerCtx.restore();
-        }
-        function drawViz18(){
-            const cols=20, rows=15; const cellW=W()/cols, cellH=H()/rows; visualizerCtx.save();
-            const time=t();
-            for(let r=0; r<rows; r++){
-                for(let c=0; c<cols; c++){
-                    const idx=Math.floor(((r*cols+c)/(rows*cols))*(bufferLength*0.5));
-                    const amp=dataArray[idx]/255;
-                    const noise=Math.sin(c*0.5+time)*Math.cos(r*0.5+time);
-                    const size=2+amp*15 + noise*5;
-                    const hue=(180+amp*120+time*50)%360;
-                    visualizerCtx.fillStyle=`hsla(${hue},100%,${50+amp*30}%,${0.4+amp*0.6})`;
-                    visualizerCtx.beginPath();
-                    visualizerCtx.arc(c*cellW+cellW/2, r*cellH+cellH/2, size, 0, Math.PI*2);
-                    visualizerCtx.fill();
-                    if(amp>0.8){
-                        visualizerCtx.lineWidth=1; visualizerCtx.strokeStyle='#fff';
-                        visualizerCtx.stroke();
-                    }
-                }
-            }
-            visualizerCtx.restore();
-        }
-        drawViz19.stars=[];
-        function drawViz19(){
-            visualizerCtx.fillStyle='rgba(2,3,5,0.2)'; visualizerCtx.fillRect(0,0,W(),H());
-            visualizerCtx.save(); visualizerCtx.translate(CX(),CY());
-            const overallAmp=getAverageAmplitude(dataArray,0,bufferLength);
-            const speed=2 + overallAmp*25;
-            if(drawViz19.stars.length===0){
-                for(let i=0;i<200;i++) drawViz19.stars.push({x:(Math.random()-0.5)*W()*2,y:(Math.random()-0.5)*H()*2,z:Math.random()*W()});
-            }
-            drawViz19.stars.forEach(star=>{
-                star.z-=speed;
-                if(star.z<=0){ star.z=W(); star.x=(Math.random()-0.5)*W()*2; star.y=(Math.random()-0.5)*H()*2; }
-                const k=128/star.z; const px=star.x*k; const py=star.y*k;
-                const size=(1-star.z/W())*3 + overallAmp*5;
-                // Star Warp Sreaks
-                const prevK=128/(star.z+speed);
-                const ppx=star.x*prevK; const ppy=star.y*prevK;
-                visualizerCtx.strokeStyle=`rgba(224,240,248,${(1-star.z/W())})`;
-                visualizerCtx.lineWidth=size;
-                visualizerCtx.beginPath(); visualizerCtx.moveTo(ppx,ppy); visualizerCtx.lineTo(px,py); visualizerCtx.stroke();
-                // Star Core
-                visualizerCtx.fillStyle='#fff'; visualizerCtx.beginPath(); visualizerCtx.arc(px,py,size*0.4,0,Math.PI*2); visualizerCtx.fill();
-            });
-            visualizerCtx.restore();
-        }
-        function drawViz20(){
-            const time=t(); const cx=CX(); const cy=CY(); visualizerCtx.save();
-            const points=60; const overall=getAverageAmplitude(dataArray, 0, bufferLength);
-            for(let k=0; k<2; k++){
-                const kOff=k*Math.PI;
-                visualizerCtx.beginPath();
-                visualizerCtx.lineWidth=2+overall*10;
-                visualizerCtx.strokeStyle=`hsla(${180+k*120+time*40},100%,60%,0.8)`;
-                for(let i=0; i<points; i++){
-                    const fr=i/points;
-                    const ang=fr*Math.PI*6 + time*2 + kOff;
-                    const amp=dataArray[Math.floor(fr*bufferLength)]/255;
-                    const r=30 + amp*100 + overall*50;
-                    const x=cx + Math.cos(ang)*r;
-                    const y=(fr*H()*0.8) + H()*0.1;
-                    if(i===0) visualizerCtx.moveTo(x,y);
-                    else visualizerCtx.lineTo(x,y);
-                    // Bonds
-                    if(k===0){
-                        const ang2=fr*Math.PI*6 + time*2 + Math.PI;
-                        const x2=cx+Math.cos(ang2)*r;
-                        visualizerCtx.save(); visualizerCtx.lineWidth=1; visualizerCtx.strokeStyle='rgba(255,255,255,0.2)';
-                        visualizerCtx.beginPath(); visualizerCtx.moveTo(x,y); visualizerCtx.lineTo(x2,y); visualizerCtx.stroke(); visualizerCtx.restore();
-                    }
-                    // Atoms
-                    if(i%5===0){
-                        visualizerCtx.fillStyle=visualizerCtx.strokeStyle;
-                        visualizerCtx.beginPath(); visualizerCtx.arc(x,y,4+amp*8,0,Math.PI*2); visualizerCtx.fill();
-                    }
-                }
-                visualizerCtx.stroke();
-            }
-            visualizerCtx.restore();
-        }
-        
-        const visualizers = [drawViz1, drawViz2, drawViz3, drawViz4, drawViz5, drawViz6, drawViz7, drawViz8, drawViz9, drawViz10, drawViz11, drawViz12, drawViz13, drawViz14, drawViz15, drawViz16, drawViz17, drawViz18, drawViz19, drawViz20];
-        
-        // --- All Background Effect functions are below ---
-        // --- SDF Wireframe Grid Background (WebGL) ---
-        let glBgProgram = null, glBgGL = null, glBgTimeUniform = null, glBgResUniform = null, glBgReactUniform = null, glBgBassUniform = null;
-        let bgReactivity = 0, bgBassLevel = 0;
+            const freq = Math.exp(Math.log(20) + (Math.log(20000) - Math.log(20)) / 100 * parseFloat(filterFreqSlider.value));
+            filterFreqValueDisplay.textContent = freq < 1000 ? `${freq.toFixed(0)}Hz` : `${(freq/1000).toFixed(1)}kHz`;
+            const q = Math.exp(Math.log(0.1) + (Math.log(30) - Math.log(0.1)) / 100 * parseFloat(filterQSlider.value));
+            filterQValueDisplay.textContent = q.toFixed(1);
 
-        const sdfVertexShader = `attribute vec2 a_position; void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`;
-        const sdfFragmentShader = `
-        precision highp float;
-        uniform float u_time;
-        uniform vec2 u_resolution;
-        uniform float u_reactivity;
-        uniform float u_bass;
-
-        mat2 rot(float a) { float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
-
-        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
-
-        float sdGrid(vec2 p, float s) {
-            p = abs(fract(p * s) - 0.5);
-            return min(p.x, p.y);
+            localStorage.setItem('neuromanticFilterSettingsV3', JSON.stringify({
+                type, freqSlider: filterFreqSlider.value, qSlider: filterQSlider.value
+            }));
         }
 
-        // --- Sakura Tree SDF & Splat Logic ---
-        float sdLine(vec2 p, vec2 a, vec2 b) {
-            vec2 pa = p - a, ba = b - a;
-            float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-            return length(pa - ba * h);
+        function resizeCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            visualizerCanvas.width = visualizerCanvas.offsetWidth;
+            visualizerCanvas.height = visualizerCanvas.offsetHeight;
         }
 
-        void main() {
-            vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
-            float t = u_time * 0.3;
-            float react = u_reactivity;
-            float bass = u_bass;
-
-            // Perspective base
-            float horizon = 0.3 + bass * 0.1;
-            float planeDist = 1.0 / (uv.y + horizon + 0.001);
-            vec2 planeUV = vec2(uv.x * planeDist, planeDist);
-
-            // Morph/warp grid
-            float warp1 = sin(planeUV.y * 0.5 + t * 2.0) * (0.15 + react * 0.4);
-            float warp2 = cos(planeUV.x * 0.8 + t * 1.5) * (0.1 + react * 0.3);
-            vec2 warpedPlaneUV = planeUV + vec2(warp1, warp2);
-            warpedPlaneUV *= rot(t * 0.1 + bass * 0.3);
-
-            // Grid rendering
-            float gridScale1 = 0.8 + react * 0.5;
-            float gridScale2 = gridScale1 * 3.0;
-            float line1 = smoothstep(0.02, 0.0, sdGrid(warpedPlaneUV, gridScale1));
-            float line2 = smoothstep(0.03, 0.01, sdGrid(warpedPlaneUV, gridScale2)) * 0.4;
-            float grid = (line1 + line2) * (1.0 / (1.0 + planeDist * planeDist * 0.01));
-
-            // --- Sakura Tree Layer ---
-            float treeLayer = 0.0;
-            vec3 splatColor = vec3(0.0);
-            
-            // Tree positioning in "3D" space
-            // We place trees periodically on the grid
-            vec2 treeID = floor(planeUV * 0.2);
-            vec2 localTreeUV = fract(planeUV * 0.2) - 0.5;
-            
-            // Random variation per tree
-            float h = hash(treeID);
-            if (h > 0.6) { // Only render some trees
-                float sway = sin(t * 2.0 + h * 10.0) * 0.1;
-                vec2 trunkBase = vec2(0.0, -0.4); // Local base
-                vec2 trunkTip = vec2(sway, 0.4 + h * 0.2);
-                
-                // Project 3D-ish local coordinates back to screen space for the tree
-                // This is a simplified "billboard" trick for the trees in perspective
-                float treeDist = planeDist;
-                float treeFade = smoothstep(20.0, 5.0, treeDist) * smoothstep(-0.2, 0.2, uv.y + horizon);
-                
-                if (treeFade > 0.0) {
-                    // Normalize uv for the specific tree's screen pos
-                    vec2 treeScreenPos = vec2(treeID.x * 5.0, treeID.y * 5.0); // Rough world pos
-                    // Instead of full projection, we use the local grid tile logic
-                    vec2 p = localTreeUV * 10.0; // Scale up for tree detail
-                    
-                    // Main Trunk (Wireframed)
-                    float trunk = sdLine(p, trunkBase, trunkTip);
-                    float trunkWire = smoothstep(0.08, 0.04, trunk) * (0.5 + 0.5 * sin(p.y * 10.0 - t * 5.0));
-                    treeLayer += trunkWire * treeFade;
-
-                    // Branches
-                    for(int i=0; i<3; i++) {
-                        float fi = float(i);
-                        float bAngle = fi * 2.1 + h;
-                        vec2 bDir = vec2(sin(bAngle), cos(bAngle)) * 0.4;
-                        vec2 bStart = mix(trunkBase, trunkTip, 0.4 + fi * 0.2);
-                        vec2 bEnd = bStart + bDir + vec2(sway * 1.5, sway);
-                        
-                        float br = sdLine(p, bStart, bEnd);
-                        treeLayer += smoothstep(0.06, 0.02, br) * 0.6 * treeFade;
-                        
-                        // Gaussian Splats (Leaves/Sakura Petals)
-                        // Soft blobs at branch tips
-                        float splatDist = length(p - bEnd);
-                        float splat = exp(-pow(splatDist * 4.0, 2.0)); // Gaussian falloff
-                        float pulseSplat = splat * (0.8 + react * 0.6 + 0.2 * sin(t * 5.0 + fi));
-                        
-                        vec3 pCol = mix(vec3(1.0, 0.4, 0.7), vec3(1.0, 0.8, 0.9), h); // Pink colors
-                        splatColor += pCol * pulseSplat * treeFade;
-                    }
-                }
-            }
-
-            // Colors
-            vec3 colBase = vec3(0.0, 1.0, 0.76); // --primary-accent
-            vec3 colEnergy = vec3(0.49, 0.3, 1.0); // --tertiary-accent
-            vec3 colCyan = vec3(0.0, 0.74, 0.82); // --secondary-accent
-
-            float pulse = sin(warpedPlaneUV.y * 2.0 - t * 4.0) * 0.5 + 0.5;
-            pulse = pow(pulse, 2.0) * react;
-            vec3 gridCol = mix(colBase, colEnergy, pulse);
-            gridCol = mix(gridCol, colCyan, sin(warpedPlaneUV.x * 3.0 + t) * 0.3 + 0.3);
-
-            // Bass glow at horizon
-            float horizonGlow = exp(-pow((uv.y + horizon) * 8.0, 2.0)) * bass * 2.0;
-            
-            // Composition
-            vec3 bgColor = vec3(0.008, 0.012, 0.02);
-            vec3 finalColor = bgColor + gridCol * grid + colBase * treeLayer * 0.8;
-            finalColor += splatColor * 0.9;
-            finalColor += colEnergy * horizonGlow;
-
-            // Vignette & Scanline
-            float scanline = sin(gl_FragCoord.y * 1.5 + t * 10.0) * 0.03;
-            float vig = 1.0 - dot(uv * 0.8, uv * 0.8);
-            finalColor = (finalColor + scanline) * vig;
-
-            gl_FragColor = vec4(finalColor, 1.0);
-        }
-        `;
-
-        function initWebGLBackground() {
-            const gl = bgCanvas.getContext('webgl', { alpha: false, antialias: false });
-            if (!gl) { console.error('WebGL not supported for background'); return; }
-            glBgGL = gl;
-
-            // Compile shaders
-            function compileShader(src, type) {
-                const s = gl.createShader(type);
-                gl.shaderSource(s, src);
-                gl.compileShader(s);
-                if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-                    console.error('Shader compile error:', gl.getShaderInfoLog(s));
-                    gl.deleteShader(s); return null;
-                }
-                return s;
-            }
-            const vs = compileShader(sdfVertexShader, gl.VERTEX_SHADER);
-            const fs = compileShader(sdfFragmentShader, gl.FRAGMENT_SHADER);
-            if (!vs || !fs) return;
-
-            glBgProgram = gl.createProgram();
-            gl.attachShader(glBgProgram, vs);
-            gl.attachShader(glBgProgram, fs);
-            gl.linkProgram(glBgProgram);
-            if (!gl.getProgramParameter(glBgProgram, gl.LINK_STATUS)) {
-                console.error('Program link error:', gl.getProgramInfoLog(glBgProgram)); return;
-            }
-            gl.useProgram(glBgProgram);
-
-            // Fullscreen quad
-            const positions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
-            const buf = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-            const posLoc = gl.getAttribLocation(glBgProgram, 'a_position');
-            gl.enableVertexAttribArray(posLoc);
-            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-            // Uniforms
-            glBgTimeUniform = gl.getUniformLocation(glBgProgram, 'u_time');
-            glBgResUniform = gl.getUniformLocation(glBgProgram, 'u_resolution');
-            glBgReactUniform = gl.getUniformLocation(glBgProgram, 'u_reactivity');
-            glBgBassUniform = gl.getUniformLocation(glBgProgram, 'u_bass');
-
-            console.log('SDF Wireframe Grid background initialized (WebGL)');
-        }
-
-        function renderCurrentBackground() {
-            bgAnimationId = requestAnimationFrame(renderCurrentBackground);
-
-            // Compute reactivity from audio
-            if (isAudioContextInitialized && !musicPlayer.paused && analyser) {
-                analyser.getByteFrequencyData(dataArray);
-                let sum = 0;
-                const relevantBufferLength = Math.floor(bufferLength * 0.8);
-                for (let i = 0; i < relevantBufferLength; i++) { sum += dataArray[i]; }
-                const avg = sum / relevantBufferLength || 0;
-                bgReactivity += (Math.min(1, Math.pow(avg / 128, 1.2)) - bgReactivity) * 0.15;
-                bgBassLevel += (getAverageAmplitude(dataArray, 0, bufferLength * 0.08) - bgBassLevel) * 0.2;
-            } else {
-                bgReactivity *= 0.95;
-                bgBassLevel *= 0.95;
-            }
-
-            if (!glBgGL || !glBgProgram) return;
-            const gl = glBgGL;
-            gl.viewport(0, 0, bgCanvas.width, bgCanvas.height);
-            gl.uniform1f(glBgTimeUniform, performance.now() / 1000);
-            gl.uniform2f(glBgResUniform, bgCanvas.width, bgCanvas.height);
-            gl.uniform1f(glBgReactUniform, bgReactivity);
-            gl.uniform1f(glBgBassUniform, bgBassLevel);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        }
-
-        // --- SECTION: EVENT LISTENERS ---
-        playPauseBtn.addEventListener('click', handlePlayPause);
-        prevTrackBtn.addEventListener('click', () => { loadTrack(currentTrackIndex - 1); if (!musicPlayer.paused) playTrack(); });
-        nextTrackBtn.addEventListener('click', () => { loadTrack(currentTrackIndex + 1); if (!musicPlayer.paused) playTrack(); });
-        musicPlayer.addEventListener('ended', () => { nextTrackBtn.click(); });
-        musicPlayer.addEventListener('timeupdate', updateProgress);
-        musicPlayer.addEventListener('loadedmetadata', () => { totalTimeEl.textContent = formatTime(musicPlayer.duration); updateProgress(); });
-        musicPlayer.addEventListener('error', () => { trackTitleEl.textContent = 'Signal Lost'; pauseTrack(); });
+        window.addEventListener('resize', resizeCanvas);
+        playPauseBtn.addEventListener('click', () => musicPlayer.paused ? playTrack() : pauseTrack());
+        nextTrackBtn.addEventListener('click', () => { currentTrackIndex = loadTrack(currentTrackIndex + 1, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState); playTrack(); });
+        prevTrackBtn.addEventListener('click', () => { currentTrackIndex = loadTrack(currentTrackIndex - 1, musicPlayer, trackTitleEl, currentTrackNumEl, updatePlaylistActiveState); playTrack(); });
+        musicPlayer.addEventListener('timeupdate', () => {
+            if (!musicPlayer.duration) return;
+            progressBar.style.width = `${(musicPlayer.currentTime / musicPlayer.duration) * 100}%`;
+            currentTimeEl.textContent = formatTime(musicPlayer.currentTime);
+            totalTimeEl.textContent = formatTime(musicPlayer.duration);
+        });
+        musicPlayer.addEventListener('ended', () => nextTrackBtn.click());
         progressContainer.addEventListener('click', e => {
-            if (!musicPlayer.duration || !isAudioContextInitialized) return;
+            if (!musicPlayer.duration) return;
             const rect = progressContainer.getBoundingClientRect();
-            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            musicPlayer.currentTime = pos * musicPlayer.duration;
+            musicPlayer.currentTime = ((e.clientX - rect.left) / rect.width) * musicPlayer.duration;
         });
         playlistToggleBtn.addEventListener('click', () => {
-            const isHidden = playlistEl.style.display === 'none';
-            playlistEl.style.display = isHidden ? 'block' : 'none';
-            playlistToggleBtn.textContent = isHidden ? 'Hide Streams' : 'Cryo-Streams';
-            if (isHidden) { updatePlaylistActiveState(); }
+            const show = playlistEl.style.display === 'none';
+            playlistEl.style.display = show ? 'block' : 'none';
+            playlistToggleBtn.textContent = show ? 'Hide Streams' : 'Cryo-Streams';
+            if (show) updatePlaylistActiveState(currentTrackIndex);
         });
-        filterTypeButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                filterTypeButtons.forEach(btn => {btn.classList.remove('active'); btn.setAttribute('aria-pressed', 'false');});
-                button.classList.add('active');
-                button.setAttribute('aria-pressed', 'true');
-                applyFilterSettings();
+        filterFreqSlider.addEventListener('input', syncFilters);
+        filterQSlider.addEventListener('input', syncFilters);
+        filterTypeButtons.forEach(btn => btn.addEventListener('click', () => {
+            filterTypeButtons.forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+            btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true');
+            syncFilters();
+        }));
+        [...Array(20)].forEach((_, i) => {
+            const btn = $(`viz${i+1}`);
+            if (btn) btn.addEventListener('click', () => {
+                document.querySelectorAll('.visualizer-controls button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentVisualizer = i + 1;
             });
         });
-        filterFreqSlider.addEventListener('input', applyFilterSettings);
-        filterQSlider.addEventListener('input', applyFilterSettings);
-        vizControls.addEventListener('click', e => {
-            if (e.target.tagName === 'BUTTON') {
-                const vizIdx = parseInt(e.target.textContent);
-                if (currentVisualizer !== vizIdx) {
-                    currentVisualizer = vizIdx;
-                    vizControls.querySelector('.active').classList.remove('active');
-                    e.target.classList.add('active');
-                    if (currentVisualizer === 19) drawViz19.stars = [];
-                }
-            }
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'INPUT') return;
-            switch (e.code) {
-                case 'Space': e.preventDefault(); playPauseBtn.click(); break;
-                case 'ArrowLeft': e.preventDefault(); prevTrackBtn.click(); break;
-                case 'ArrowRight': e.preventDefault(); nextTrackBtn.click(); break;
-            }
-        });
-        window.addEventListener('resize', () => {
-            visualizerCanvas.width = visualizerCanvas.offsetWidth;
-            visualizerCanvas.height = visualizerCanvas.offsetHeight;
-            bgCanvas.width = window.innerWidth;
-            bgCanvas.height = window.innerHeight;
-        });
 
-        function initializePlayer() {
-            console.log("Neuromantic Cryo-Signal X26 (AudioMod) Initializing...");
-            visualizerCanvas.width = visualizerCanvas.offsetWidth;
-            visualizerCanvas.height = visualizerCanvas.offsetHeight;
-            bgCanvas.width = window.innerWidth;
-            bgCanvas.height = window.innerHeight;
-            
-            totalTracksEl.textContent = tracks.length.toString().padStart(2, '0');
-            createPlaylist();
-            loadTrack(0);
-            
-            initWebGLBackground();
-            startAllAnimations();
-            
-            console.log("Interface active. Awaiting user cryo-link (interaction).");
-        }
-
-        initializePlayer();
-    });
+        initPlayer();
     </script>
 </body>
 </html>
