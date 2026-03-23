@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warzone Survivor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0908;
+      --fg: #d4c8b8;
+      --accent: #e63946;
+      --muted: #2a2520;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Share Tech Mono', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .game-container {
+      position: relative;
+      width: 100%;
+      max-width: 1200px;
+      aspect-ratio: 16/9;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 4px;
+      cursor: crosshair;
+    }
+
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+    }
+
+    .stat-box {
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(230, 57, 70, 0.4);
+      padding: 10px 16px;
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
+
+    .stat-label {
+      font-size: 9px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .stat-value {
+      font-family: 'Black Ops One', cursive;
+      font-size: 24px;
+      color: var(--accent);
+    }
+
+    .health-ammo-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .health-bar {
+      width: 180px;
+      height: 10px;
+      background: #1a1210;
+      border: 1px solid #333;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .health-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #e63946, #ff6b6b);
+      transition: width 0.15s ease;
+      box-shadow: 0 0 12px rgba(230, 57, 70, 0.6);
+    }
+
+    .ammo-display {
+      font-family: 'Black Ops One', cursive;
+      font-size: 20px;
+      color: var(--fg);
+    }
+
+    .ammo-display span { color: #555; font-size: 12px; }
+
+    .weapon-bar {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .weapon-slot {
+      width: 70px;
+      height: 55px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #333;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .weapon-slot.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(230, 57, 70, 0.4);
+    }
+
+    .weapon-slot.locked { opacity: 0.35; }
+
+    .weapon-slot .key {
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font-size: 10px;
+      color: #666;
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .weapon-slot .name {
+      font-size: 8px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .weapon-slot .icon {
+      font-size: 18px;
+      margin-bottom: 2px;
+    }
+
+    .weapon-slot .unlock {
+      position: absolute;
+      bottom: 2px;
+      font-size: 7px;
+      color: #555;
+    }
+
+    .wave-announcement {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Black Ops One', cursive;
+      font-size: 56px;
+      color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      text-shadow: 0 0 40px rgba(230, 57, 70, 0.8), 0 4px 8px rgba(0,0,0,0.8);
+      text-align: center;
+    }
+
+    .wave-announcement.show {
+      animation: waveAnnounce 2.5s ease-out forwards;
+    }
+
+    .wave-announcement.small {
+      font-size: 24px;
+      color: #f4d03f;
+      text-shadow: 0 0 20px rgba(244, 208, 63, 0.8), 0 4px 8px rgba(0,0,0,0.8);
+    }
+
+    @keyframes waveAnnounce {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(2); letter-spacing: 20px; }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1); letter-spacing: 3px; }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+    }
+
+    .game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 9, 8, 0.95);
+      display: flex; flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      border-radius: 4px;
+    }
+
+    .game-over.show { opacity: 1; pointer-events: auto; }
+
+    .game-over h2 {
+      font-family: 'Black Ops One', cursive;
+      font-size: 48px;
+      color: var(--accent);
+      margin-bottom: 10px;
+      text-shadow: 0 0 30px rgba(230, 57, 70, 0.5);
+    }
+
+    .final-stats {
+      display: flex;
+      gap: 40px;
+      margin: 20px 0 30px;
+    }
+
+    .final-stat { text-align: center; }
+    .final-stat .label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 2px; }
+    .final-stat .value { font-family: 'Black Ops One', cursive; font-size: 32px; color: var(--fg); }
+
+    .btn {
+      font-family: 'Black Ops One', cursive;
+      font-size: 14px;
+      padding: 12px 36px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      background: var(--accent);
+      color: #fff;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(230, 57, 70, 0.5);
+    }
+
+    .controls-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: #2a2520;
+      pointer-events: none;
+    }
+
+    .controls-hint kbd {
+      background: #1a1a1a;
+      padding: 2px 5px;
+      border-radius: 2px;
+      margin: 0 2px;
+    }
+
+    @media (max-width: 768px) {
+      .health-bar { width: 120px; }
+      .stat-value { font-size: 18px; }
+      .wave-announcement { font-size: 32px; }
+      .weapon-slot { width: 55px; height: 45px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="ui-overlay">
+      <div class="stat-box">
+        <div class="stat-label">Kills</div>
+        <div class="stat-value" id="killCount">0</div>
+      </div>
+      
+      <div class="stat-box health-ammo-box">
+        <div class="health-bar">
+          <div class="health-fill" id="healthBar" style="width: 100%"></div>
+        </div>
+        <div class="ammo-display">
+          <span id="ammoCount">12</span> <span>/ <span id="maxAmmo">12</span></span>
+          <span id="reloadText" style="color: #e63946; margin-left: 8px;"></span>
+        </div>
+      </div>
+      
+      <div class="stat-box">
+        <div class="stat-label">Wave</div>
+        <div class="stat-value" id="waveNum">1</div>
+      </div>
+    </div>
+
+    <div class="weapon-bar" id="weaponBar"></div>
+
+    <div class="wave-announcement" id="waveAnnounce"></div>
+    
+    <div class="controls-hint">
+      <kbd>WASD</kbd> Move | <kbd>1-4</kbd> Weapons | <kbd>R</kbd> Reload | <kbd>Mouse</kbd> Shoot
+    </div>
+
+    <div class="game-over" id="gameOver">
+      <h2>TERMINATED</h2>
+      <div class="final-stats">
+        <div class="final-stat">
+          <div class="label">Kills</div>
+          <div class="value" id="finalKills">0</div>
+        </div>
+        <div class="final-stat">
+          <div class="label">Wave</div>
+          <div class="value" id="finalWave">1</div>
+        </div>
+      </div>
+      <button class="btn" id="restartBtn">Respawn</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function setupCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      return { width: rect.width, height: rect.height };
+    }
+
+    let canvasSize = setupCanvas();
+    window.addEventListener('resize', () => canvasSize = setupCanvas());
+
+    // Weapons
+    const weapons = [
+      { 
+        name: 'Pistol', icon: 'P', key: '1', 
+        damage: 38, fireRate: 0.28, reloadTime: 1.2, 
+        ammo: 12, maxAmmo: 12, spread: 0.02,
+        bulletCount: 1, bulletSpeed: 22, bulletSize: 4,
+        bulletColor: '#f4d03f', trailColor: '#d4ac0d',
+        muzzleParticles: 4, muzzleSize: 6, muzzleColor: '#f4d03f',
+        shellEject: true, shellSpeed: 3,
+        screenShake: 3,
+        unlockWave: 1, unlocked: true 
+      },
+      { 
+        name: 'SMG', icon: 'S', key: '2', 
+        damage: 16, fireRate: 0.065, reloadTime: 1.6, 
+        ammo: 35, maxAmmo: 35, spread: 0.1,
+        bulletCount: 1, bulletSpeed: 20, bulletSize: 3,
+        bulletColor: '#f7dc6f', trailColor: '#d4ac0d',
+        muzzleParticles: 3, muzzleSize: 5, muzzleColor: '#f4d03f',
+        shellEject: true, shellSpeed: 4,
+        screenShake: 2,
+        unlockWave: 2, unlocked: false 
+      },
+      { 
+        name: 'Shotgun', icon: 'SG', key: '3', 
+        damage: 22, fireRate: 0.65, reloadTime: 2.5, 
+        ammo: 6, maxAmmo: 6, spread: 0.22,
+        bulletCount: 8, bulletSpeed: 16, bulletSize: 3,
+        bulletColor: '#f39c12', trailColor: '#e67e22',
+        muzzleParticles: 12, muzzleSize: 10, muzzleColor: '#f39c12',
+        shellEject: true, shellSpeed: 2,
+        screenShake: 10,
+        unlockWave: 4, unlocked: false 
+      },
+      { 
+        name: 'Rifle', icon: 'R', key: '4', 
+        damage: 85, fireRate: 0.5, reloadTime: 2.3, 
+        ammo: 8, maxAmmo: 8, spread: 0.008,
+        bulletCount: 1, bulletSpeed: 35, bulletSize: 5,
+        bulletColor: '#ff6b6b', trailColor: '#e63946',
+        muzzleParticles: 8, muzzleSize: 8, muzzleColor: '#ff6b6b',
+        shellEject: true, shellSpeed: 5,
+        screenShake: 6,
+        unlockWave: 6, unlocked: false 
+      }
+    ];
+
+    // Game state
+    const game = {
+      running: true,
+      kills: 0,
+      wave: 1,
+      zombiesToSpawn: 5,
+      spawnTimer: 0,
+      spawnDelay: 2,
+      waveDelay: 0,
+      screenShake: 0,
+      currentWeapon: 0,
+      time: 0
+    };
+
+    // Input
+    const keys = {};
+    const mouse = { x: 0, y: 0, down: false };
+
+    document.addEventListener('keydown', e => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key >= '1' && e.key <= '4') {
+        const idx = parseInt(e.key) - 1;
+        if (weapons[idx].unlocked) switchWeapon(idx);
+      }
+    });
+    document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    });
+    canvas.addEventListener('mousedown', () => mouse.down = true);
+    canvas.addEventListener('mouseup', () => mouse.down = false);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    function switchWeapon(idx) {
+      if (game.currentWeapon === idx) return;
+      game.currentWeapon = idx;
+      player.reloading = false;
+      player.ammo = weapons[idx].ammo;
+      player.fireTimer = 0;
+      updateWeaponUI();
+    }
+
+    function updateWeaponUI() {
+      const bar = document.getElementById('weaponBar');
+      bar.innerHTML = weapons.map((w, i) => `
+        <div class="weapon-slot ${i === game.currentWeapon ? 'active' : ''} ${!w.unlocked ? 'locked' : ''}">
+          <span class="key">${w.key}</span>
+          <span class="icon">${w.icon}</span>
+          <span class="name">${w.name}</span>
+          ${!w.unlocked ? `<span class="unlock">Wave ${w.unlockWave}</span>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function checkWeaponUnlocks() {
+      weapons.forEach(w => {
+        if (!w.unlocked && game.wave >= w.unlockWave) {
+          w.unlocked = true;
+          w.ammo = w.maxAmmo;
+          const announce = document.getElementById('waveAnnounce');
+          announce.innerHTML = `WEAPON UNLOCKED<br><span style="font-size: 32px">${w.name}</span>`;
+          announce.classList.add('show', 'small');
+          setTimeout(() => announce.classList.remove('show', 'small'), 2500);
+          updateWeaponUI();
+        }
+      });
+    }
+
+    // Particles
+    const particles = [];
+    const bloodStains = [];
+
+    function createParticle(x, y, type, angle = 0, count = 1, force = 1, options = {}) {
+      for (let c = 0; c < count; c++) {
+        const p = {
+          x: x + (Math.random() - 0.5) * 6,
+          y: y + (Math.random() - 0.5) * 6,
+          vx: 0, vy: 0,
+          life: 1,
+          decay: 0.02,
+          size: 3,
+          color: '#e63946',
+          type,
+          rotation: 0,
+          rotSpeed: 0
+        };
+
+        const a = angle + (Math.random() - 0.5) * (options.spread || 0.6);
+        const spd = (options.speed || 1) * force;
+        
+        switch(type) {
+          case 'blood':
+            p.vx = Math.cos(a) * (3 + Math.random() * 5) * spd;
+            p.vy = Math.sin(a) * (3 + Math.random() * 5) * spd - 2;
+            p.decay = 0.01;
+            p.size = 3 + Math.random() * 4;
+            p.color = `rgb(${110 + Math.random() * 50}, ${Math.random() * 15}, ${Math.random() * 15})`;
+            p.gravity = 0.2;
+            break;
+            
+          case 'bloodspray':
+            p.vx = Math.cos(a) * (4 + Math.random() * 8) * spd;
+            p.vy = Math.sin(a) * (4 + Math.random() * 8) * spd - 3;
+            p.decay = 0.012;
+            p.size = 4 + Math.random() * 6;
+            p.color = `rgb(${100 + Math.random() * 60}, ${Math.random() * 20}, ${Math.random() * 15})`;
+            p.gravity = 0.25;
+            break;
+            
+          case 'muzzle':
+            const muzzleAngle = angle + (Math.random() - 0.5) * 0.5;
+            p.vx = Math.cos(muzzleAngle) * (6 + Math.random() * 8);
+            p.vy = Math.sin(muzzleAngle) * (6 + Math.random() * 8);
+            p.decay = 0.04;
+            p.size = options.size || 5;
+            p.color = options.color || '#ffaa00';
+            break;
+            
+          case 'muzzleSmoke':
+            p.vx = Math.cos(angle) * 2 + (Math.random() - 0.5) * 2;
+            p.vy = Math.sin(angle) * 2 - 1;
+            p.decay = 0.015;
+            p.size = 15 + Math.random() * 10;
+            p.color = '#1a1815';
+            break;
+            
+          case 'shell':
+            const shellAngle = angle + Math.PI/2;
+            p.vx = Math.cos(shellAngle) * (2 + Math.random() * 2) * (options.speed || 1);
+            p.vy = -5 - Math.random() * 4;
+            p.decay = 0.005;
+            p.size = 4;
+            p.color = '#b8963c';
+            p.gravity = 0.5;
+            p.rotSpeed = (Math.random() - 0.5) * 0.4;
+            break;
+            
+          case 'spark':
+            p.vx = Math.cos(a) * (3 + Math.random() * 6) * spd;
+            p.vy = Math.sin(a) * (3 + Math.random() * 6) * spd;
+            p.decay = 0.025;
+            p.size = 2 + Math.random() * 2;
+            p.color = '#f4d03f';
+            break;
+            
+          case 'ember':
+            p.vx = (Math.random() - 0.5) * 2;
+            p.vy = -1.5 - Math.random() * 2;
+            p.decay = 0.006;
+            p.size = 2 + Math.random() * 2;
+            p.color = Math.random() > 0.5 ? '#ff5522' : '#ffaa00';
+            p.gravity = -0.03;
+            break;
+            
+          case 'dust':
+            p.vx = (Math.random() - 0.5) * 2;
+            p.vy = -Math.random() * 2;
+            p.decay = 0.006;
+            p.size = 8 + Math.random() * 10;
+            p.color = '#3a3020';
+            break;
+            
+          case 'gib':
+            p.vx = Math.cos(a) * (3 + Math.random() * 6) * spd;
+            p.vy = Math.sin(a) * (3 + Math.random() * 6) * spd - 4;
+            p.decay = 0.004;
+            p.size = 5 + Math.random() * 6;
+            p.color = `rgb(${70 + Math.random() * 40}, ${Math.random() * 20}, ${Math.random() * 15})`;
+            p.gravity = 0.35;
+            p.rotSpeed = (Math.random() - 0.5) * 0.3;
+            break;
+        }
+        particles.push(p);
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt * 60;
+        p.y += p.vy * dt * 60;
+        if (p.gravity) p.vy += p.gravity;
+        if (p.rotSpeed) p.rotation += p.rotSpeed;
+        p.life -= p.decay * dt * 60;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function drawParticles() {
+      particles.forEach(p => {
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        
+        if (p.type === 'shell') {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.fillRect(-p.size/2, -p.size/3, p.size, p.size/1.5);
+          ctx.restore();
+        } else if (p.type === 'gib') {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, p.size, p.size * 0.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Math.max(0.5, p.size * p.life), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+      ctx.globalAlpha = 1;
+
+      bloodStains.forEach(b => {
+        ctx.globalAlpha = b.alpha * 0.5;
+        ctx.fillStyle = '#2a0505';
+        ctx.beginPath();
+        ctx.ellipse(b.x, b.y, b.size, b.size * 0.3, b.rot, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = b.alpha * 0.25;
+        ctx.beginPath();
+        ctx.ellipse(b.x + b.size * 0.3, b.y + 2, b.size * 0.5, b.size * 0.15, b.rot + 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    // Badass yellow stick figure colors
+    const charColors = {
+      body: '#f4d03f',
+      bodyDark: '#d4ac0d',
+      bodyLight: '#f7dc6f',
+      eye: '#e63946',
+      eyeGlow: '#ff6b6b',
+      outline: '#1a1a1a'
+    };
+
+    // Player
+    const player = {
+      x: 0,
+      y: 0,
+      speed: 3.5,
+      health: 100,
+      maxHealth: 100,
+      ammo: 12,
+      reloading: false,
+      reloadTime: 0,
+      fireTimer: 0,
+      angle: 0,
+      scale: 2.0,
+      legPhase: 0,
+      moving: false,
+      eyePulse: 0,
+
+      init() {
+        this.x = canvasSize.width / 2;
+        this.y = canvasSize.height * 0.68;
+      },
+
+      update(dt) {
+        const w = weapons[game.currentWeapon];
+        this.eyePulse += dt * 5;
+        
+        let dx = 0, dy = 0;
+        if (keys['w'] || keys['arrowup']) dy = -1;
+        if (keys['s'] || keys['arrowdown']) dy = 1;
+        if (keys['a'] || keys['arrowleft']) dx = -1;
+        if (keys['d'] || keys['arrowright']) dx = 1;
+
+        this.moving = dx !== 0 || dy !== 0;
+        
+        if (dx !== 0 && dy !== 0) {
+          dx *= 0.707;
+          dy *= 0.707;
+        }
+
+        if (keys['a'] || keys['d']) {
+          this.legPhase += dt * 16;
+        } else if (this.moving) {
+          this.legPhase += dt * 12;
+        }
+
+        this.x += dx * this.speed * dt * 60;
+        this.y += dy * this.speed * dt * 60;
+
+        this.x = Math.max(50, Math.min(canvasSize.width - 50, this.x));
+        this.y = Math.max(canvasSize.height * 0.4, Math.min(canvasSize.height * 0.78, this.y));
+
+        this.angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+
+        this.fireTimer -= dt;
+        if (mouse.down && !this.reloading && this.ammo > 0 && this.fireTimer <= 0) {
+          this.shoot();
+          this.fireTimer = w.fireRate;
+        }
+
+        if ((keys['r'] || (this.ammo === 0 && mouse.down)) && !this.reloading && this.ammo < w.maxAmmo) {
+          this.reloading = true;
+          this.reloadTime = w.reloadTime;
+        }
+        if (this.reloading) {
+          this.reloadTime -= dt;
+          document.getElementById('reloadText').textContent = 'RELOADING';
+          if (this.reloadTime <= 0) {
+            this.ammo = w.maxAmmo;
+            this.reloading = false;
+            document.getElementById('reloadText').textContent = '';
+          }
+        }
+
+        document.getElementById('ammoCount').textContent = this.reloading ? '...' : this.ammo;
+        document.getElementById('maxAmmo').textContent = w.maxAmmo;
+      },
+
+      shoot() {
+        const w = weapons[game.currentWeapon];
+        this.ammo--;
+        
+        const gunLen = 38;
+        const gunX = this.x + Math.cos(this.angle) * gunLen;
+        const gunY = this.y - 65 + Math.sin(this.angle) * gunLen;
+
+        createParticle(gunX, gunY, 'muzzle', this.angle, w.muzzleParticles, 1, {
+          size: w.muzzleSize,
+          color: w.muzzleColor
+        });
+        
+        if (w.name === 'Shotgun' || w.name === 'Rifle') {
+          createParticle(gunX, gunY, 'muzzleSmoke', this.angle, 2);
+        }
+        
+        createParticle(gunX, gunY, 'spark', this.angle, 3);
+        
+        if (w.shellEject) {
+          createParticle(this.x + 10, this.y - 55, 'shell', this.angle, 1, 1, { speed: w.shellSpeed });
+        }
+
+        for (let i = 0; i < w.bulletCount; i++) {
+          const spread = (Math.random() - 0.5) * w.spread;
+          const angle = this.angle + spread;
+          bullets.push({
+            x: gunX,
+            y: gunY,
+            vx: Math.cos(angle) * w.bulletSpeed,
+            vy: Math.sin(angle) * w.bulletSpeed,
+            damage: w.damage,
+            life: 1,
+            size: w.bulletSize,
+            color: w.bulletColor,
+            trailColor: w.trailColor,
+            weapon: w.name
+          });
+        }
+
+        game.screenShake = w.screenShake;
+      },
+
+      takeDamage(amount) {
+        this.health -= amount;
+        document.getElementById('healthBar').style.width = Math.max(0, this.health) + '%';
+        game.screenShake = 14;
+        createParticle(this.x, this.y - 45, 'blood', Math.PI + Math.random() * Math.PI, 5, 0.5);
+        if (this.health <= 0) this.die();
+      },
+
+      die() {
+        game.running = false;
+        document.getElementById('finalKills').textContent = game.kills;
+        document.getElementById('finalWave').textContent = game.wave;
+        document.getElementById('gameOver').classList.add('show');
+      },
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+
+        const eyeGlow = 0.7 + Math.sin(this.eyePulse) * 0.3;
+
+        // Character glow
+        const glow = ctx.createRadialGradient(0, -40, 0, 0, -40, 70);
+        glow.addColorStop(0, `rgba(244, 208, 63, ${0.25 * eyeGlow})`);
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, -40, 70, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = charColors.outline;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // === LEGS ===
+        const legSwing = Math.sin(this.legPhase) * 14;
+        const legSwing2 = Math.sin(this.legPhase + Math.PI) * 14;
+        
+        let leftLegX = -5;
+        let rightLegX = 5;
+        
+        if (keys['a'] || keys['d']) {
+          leftLegX = -5 + legSwing;
+          rightLegX = 5 + legSwing2;
+        } else if (this.moving) {
+          leftLegX = -5 + legSwing * 0.6;
+          rightLegX = 5 + legSwing2 * 0.6;
+        }
+
+        ctx.strokeStyle = charColors.body;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-3, -12);
+        ctx.lineTo(leftLegX * 0.3, -5);
+        ctx.lineTo(leftLegX, 0);
+        ctx.stroke();
+        
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(leftLegX, 0);
+        ctx.lineTo(leftLegX + 4, 2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(3, -12);
+        ctx.lineTo(rightLegX * 0.3, -5);
+        ctx.lineTo(rightLegX, 0);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(rightLegX, 0);
+        ctx.lineTo(rightLegX + 4, 2);
+        ctx.stroke();
+
+        // === BODY ===
+        ctx.strokeStyle = charColors.body;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, -50);
+        ctx.lineTo(0, -12);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-10, -48);
+        ctx.lineTo(10, -48);
+        ctx.stroke();
+
+        // === HEAD ===
+        ctx.fillStyle = charColors.body;
+        ctx.strokeStyle = charColors.outline;
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.moveTo(-8, -50);
+        ctx.lineTo(-10, -62);
+        ctx.lineTo(-5, -70);
+        ctx.lineTo(5, -70);
+        ctx.lineTo(10, -62);
+        ctx.lineTo(8, -50);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        const eyeIntensity = eyeGlow;
+        ctx.fillStyle = charColors.eye;
+        ctx.shadowColor = charColors.eyeGlow;
+        ctx.shadowBlur = 8 * eyeIntensity;
+        
+        ctx.beginPath();
+        ctx.moveTo(-6, -62);
+        ctx.lineTo(-2, -60);
+        ctx.lineTo(-6, -58);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(6, -62);
+        ctx.lineTo(2, -60);
+        ctx.lineTo(6, -58);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = charColors.outline;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-8, -64);
+        ctx.lineTo(-1, -63);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(8, -64);
+        ctx.lineTo(1, -63);
+        ctx.stroke();
+
+        // === ARMS ===
+        const shoulderY = -48;
+        const gunLen = 25;
+        
+        const armEndX = Math.cos(this.angle) * gunLen;
+        const armEndY = shoulderY + Math.sin(this.angle) * gunLen;
+        
+        const elbowX = armEndX * 0.45;
+        const elbowY = shoulderY + (armEndY - shoulderY) * 0.35;
+
+        ctx.strokeStyle = charColors.body;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(8, shoulderY);
+        ctx.lineTo(12, shoulderY + 12);
+        ctx.stroke();
+        
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(12, shoulderY + 12);
+        ctx.lineTo(10, shoulderY + 18);
+        ctx.moveTo(12, shoulderY + 12);
+        ctx.lineTo(14, shoulderY + 18);
+        ctx.stroke();
+
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-8, shoulderY);
+        ctx.quadraticCurveTo(elbowX - 3, elbowY + 5, armEndX, armEndY);
+        ctx.stroke();
+
+        // === GUN ===
+        ctx.strokeStyle = '#2a2a2a';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(armEndX - Math.cos(this.angle) * 5, armEndY - Math.sin(this.angle) * 5);
+        ctx.lineTo(armEndX + Math.cos(this.angle) * 25, armEndY + Math.sin(this.angle) * 25);
+        ctx.stroke();
+        
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(armEndX + Math.cos(this.angle) * 15, armEndY + Math.sin(this.angle) * 15);
+        ctx.lineTo(armEndX + Math.cos(this.angle) * 30, armEndY + Math.sin(this.angle) * 30);
+        ctx.stroke();
+        
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(armEndX + Math.cos(this.angle) * 22, armEndY + Math.sin(this.angle) * 22);
+        ctx.lineTo(armEndX + Math.cos(this.angle) * 28, armEndY + Math.sin(this.angle) * 28);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    };
+
+    // Bullets
+    const bullets = [];
+
+    function updateBullets(dt) {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx * dt * 60;
+        b.y += b.vy * dt * 60;
+        b.life -= dt * 0.4;
+
+        for (let j = zombies.length - 1; j >= 0; j--) {
+          const z = zombies[j];
+          const dist = Math.hypot(b.x - z.x, b.y - (z.y - 30));
+          if (dist < 25) {
+            z.health -= b.damage;
+            z.hit = true;
+            
+            const angle = Math.atan2(b.vy, b.vx);
+            
+            if (b.weapon === 'Shotgun') {
+              createParticle(z.x, z.y - 30, 'bloodspray', angle, 15, 1.5);
+              createParticle(z.x, z.y - 30, 'gib', angle, 4, 1.3);
+            } else if (b.weapon === 'Rifle') {
+              createParticle(z.x, z.y - 30, 'bloodspray', angle, 12, 1.8);
+              createParticle(z.x, z.y - 30, 'spark', angle, 4);
+              createParticle(z.x - Math.cos(angle) * 20, z.y - 30, 'bloodspray', angle + Math.PI, 6, 1.2);
+            } else if (b.weapon === 'SMG') {
+              createParticle(z.x, z.y - 30, 'blood', angle, 6, 1);
+            } else {
+              createParticle(z.x, z.y - 30, 'bloodspray', angle, 8, 1.2);
+            }
+            
+            bullets.splice(i, 1);
+            
+            if (z.health <= 0) z.die(b.weapon);
+            break;
+          }
+        }
+
+        if (b.x < -50 || b.x > canvasSize.width + 50 || b.y < -50 || b.y > canvasSize.height + 50) {
+          bullets.splice(i, 1);
+        }
+      }
+    }
+
+    function drawBullets() {
+      bullets.forEach(b => {
+        ctx.strokeStyle = b.trailColor;
+        ctx.lineWidth = b.size * 0.8;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(b.x - b.vx * 0.5, b.y - b.vy * 0.5);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = b.weapon === 'Rifle' ? 15 : 8;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+    }
+
+    // Zombies
+    const zombies = [];
+
+    class Zombie {
+      constructor() {
+        const side = Math.random() > 0.5 ? 0 : 1;
+        this.x = side === 0 ? -50 : canvasSize.width + 50;
+        this.y = canvasSize.height * (0.52 + Math.random() * 0.26);
+        this.speed = 0.5 + Math.random() * 0.35 + game.wave * 0.06;
+        this.health = 100;
+        this.maxHealth = 100;
+        this.scale = 1.5 + Math.random() * 0.3;
+        this.angle = 0;
+        this.walkPhase = Math.random() * Math.PI * 2;
+        this.hit = false;
+        this.attackCooldown = 0;
+        this.style = Math.floor(Math.random() * 3);
+      }
+
+      update(dt) {
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        
+        this.angle = Math.atan2(dy, dx);
+        
+        if (dist > 35) {
+          this.x += (dx / dist) * this.speed * dt * 60;
+          this.y += (dy / dist) * this.speed * dt * 60;
+        }
+
+        this.walkPhase += dt * 6;
+
+        this.attackCooldown -= dt;
+        if (dist < 40 && this.attackCooldown <= 0) {
+          player.takeDamage(15);
+          this.attackCooldown = 1.0;
+        }
+
+        if (this.hit) setTimeout(() => this.hit = false, 80);
+      }
+
+      die(weapon) {
+        game.kills++;
+        document.getElementById('killCount').textContent = game.kills;
+        
+        bloodStains.push({ 
+          x: this.x, 
+          y: this.y + 8, 
+          size: 20 + Math.random() * 15, 
+          alpha: 1,
+          rot: Math.random() * Math.PI
+        });
+        if (bloodStains.length > 80) bloodStains.shift();
+        
+        const gibCount = weapon === 'Shotgun' ? 10 : weapon === 'Rifle' ? 8 : 5;
+        const bloodCount = weapon === 'Shotgun' ? 25 : weapon === 'Rifle' ? 20 : 15;
+        
+        createParticle(this.x, this.y - 30, 'bloodspray', Math.random() * Math.PI * 2, bloodCount, 1.5);
+        createParticle(this.x, this.y - 30, 'gib', Math.random() * Math.PI * 2, gibCount, 1.3);
+        createParticle(this.x, this.y, 'dust', 0, 6);
+        
+        game.screenShake = weapon === 'Shotgun' ? 10 : weapon === 'Rifle' ? 8 : 5;
+        
+        zombies.splice(zombies.indexOf(this), 1);
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+
+        const bodyColors = [
+          { body: '#5a7247', dark: '#3a4a2f', eyes: '#aaff44' },
+          { body: '#6a5544', dark: '#4a3a2f', eyes: '#ffaa44' },
+          { body: '#4a6a57', dark: '#2a4a3f', eyes: '#44ffaa' }
+        ];
+        const colors = bodyColors[this.style];
+
+        const glow = ctx.createRadialGradient(0, -25, 0, 0, -25, 45);
+        glow.addColorStop(0, 'rgba(90, 114, 71, 0.2)');
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, -25, 45, 0, Math.PI * 2);
+        ctx.fill();
+
+        const bodyColor = this.hit ? '#cc8888' : colors.body;
+        ctx.strokeStyle = bodyColor;
+        ctx.fillStyle = bodyColor;
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(0, -48);
+        ctx.lineTo(0, -10);
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(0, -56);
+        ctx.rotate(0.25);
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = this.hit ? '#cc8888' : colors.dark;
+        ctx.fill();
+        
+        ctx.fillStyle = colors.eyes;
+        ctx.shadowColor = colors.eyes;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(3, -2, 2.5, 0, Math.PI * 2);
+        ctx.arc(-3, -1, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        const reach = Math.sin(this.walkPhase) * 5;
+        ctx.strokeStyle = bodyColor;
+        ctx.beginPath();
+        ctx.moveTo(0, -42);
+        ctx.lineTo(-12 - reach, -28);
+        ctx.lineTo(-14 - reach, -24);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, -42);
+        ctx.lineTo(12 + reach, -28);
+        ctx.lineTo(14 + reach, -24);
+        ctx.stroke();
+
+        const legMove = Math.sin(this.walkPhase) * 10;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(-5 + legMove, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(5 - legMove, 0);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // Background
+    const bgElements = {
+      buildings: [],
+      debris: [],
+      fires: [],
+      tanks: [],
+      wires: [],
+      clouds: [],
+      init() {
+        this.buildings = [];
+        for (let i = 0; i < 20; i++) {
+          this.buildings.push({
+            x: (i / 20) * canvasSize.width + Math.random() * 30 - 15,
+            width: 35 + Math.random() * 70,
+            height: 100 + Math.random() * 180,
+            windows: Math.floor(Math.random() * 10) + 3,
+            damaged: Math.random() > 0.3
+          });
+        }
+        
+        this.tanks = [];
+        for (let i = 0; i < 4; i++) {
+          this.tanks.push({
+            x: 100 + i * 300 + Math.random() * 100,
+            y: canvasSize.height * 0.7,
+            size: 40 + Math.random() * 20,
+            flipped: Math.random() > 0.5,
+            burning: Math.random() > 0.6
+          });
+        }
+
+        this.debris = [];
+        for (let i = 0; i < 80; i++) {
+          this.debris.push({
+            x: Math.random() * canvasSize.width,
+            y: canvasSize.height * 0.68 + Math.random() * canvasSize.height * 0.2,
+            size: 3 + Math.random() * 10,
+            type: Math.floor(Math.random() * 5)
+          });
+        }
+
+        this.wires = [];
+        for (let i = 0; i < 5; i++) {
+          const x = 150 + i * 250;
+          this.wires.push({
+            x1: x,
+            x2: x + 120,
+            y: canvasSize.height * 0.35 + Math.random() * 50,
+            sag: 20 + Math.random() * 30
+          });
+        }
+
+        this.clouds = [];
+        for (let i = 0; i < 8; i++) {
+          this.clouds.push({
+            x: Math.random() * canvasSize.width,
+            y: canvasSize.height * 0.15 + Math.random() * canvasSize.height * 0.2,
+            size: 80 + Math.random() * 120,
+            speed: 0.2 + Math.random() * 0.3,
+            opacity: 0.1 + Math.random() * 0.15
+          });
+        }
+
+        this.fires = [];
+        for (let i = 0; i < 6; i++) {
+          this.fires.push({
+            x: Math.random() * canvasSize.width,
+            y: canvasSize.height * 0.55 + Math.random() * 80,
+            size: 20 + Math.random() * 35
+          });
+        }
+      }
+    };
+
+    function drawBackground() {
+      const t = game.time;
+      
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, canvasSize.height);
+      skyGrad.addColorStop(0, '#0d0b09');
+      skyGrad.addColorStop(0.15, '#1a1310');
+      skyGrad.addColorStop(0.35, '#2a1a12');
+      skyGrad.addColorStop(0.55, '#3a2015');
+      skyGrad.addColorStop(0.75, '#1f1510');
+      skyGrad.addColorStop(1, '#0d0a08');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+      bgElements.clouds.forEach(c => {
+        c.x += c.speed;
+        if (c.x > canvasSize.width + c.size) c.x = -c.size;
+        ctx.fillStyle = `rgba(30, 25, 20, ${c.opacity})`;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = '#0a0806';
+      bgElements.buildings.forEach(b => {
+        const x = b.x;
+        const h = b.height * (canvasSize.height / 675);
+        const y = canvasSize.height * 0.7 - h;
+        ctx.fillRect(x, y, b.width, h + 100);
+      });
+
+      ctx.strokeStyle = '#1a1512';
+      ctx.lineWidth = 1;
+      bgElements.wires.forEach(w => {
+        ctx.beginPath();
+        ctx.moveTo(w.x1, w.y);
+        ctx.quadraticCurveTo((w.x1 + w.x2) / 2, w.y + w.sag, w.x2, w.y);
+        ctx.stroke();
+      });
+
+      const groundGrad = ctx.createLinearGradient(0, canvasSize.height * 0.7, 0, canvasSize.height);
+      groundGrad.addColorStop(0, '#1a1510');
+      groundGrad.addColorStop(1, '#080706');
+      ctx.fillStyle = groundGrad;
+      ctx.fillRect(0, canvasSize.height * 0.7, canvasSize.width, canvasSize.height * 0.3);
+
+      bgElements.debris.forEach(d => {
+        ctx.fillStyle = ['#1a1510', '#221a12', '#0d0a08', '#181410', '#0f0c08'][d.type];
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      bgElements.fires.forEach(f => {
+        const fireGlow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size * 4);
+        fireGlow.addColorStop(0, 'rgba(255, 80, 20, 0.2)');
+        fireGlow.addColorStop(1, 'transparent');
+        ctx.fillStyle = fireGlow;
+        ctx.fillRect(f.x - f.size * 4, f.y - f.size * 4, f.size * 8, f.size * 8);
+      });
+    }
+
+    function updateWaves(dt) {
+      if (game.waveDelay > 0) {
+        game.waveDelay -= dt;
+        return;
+      }
+
+      if (game.zombiesToSpawn > 0) {
+        game.spawnTimer -= dt;
+        if (game.spawnTimer <= 0) {
+          zombies.push(new Zombie());
+          game.zombiesToSpawn--;
+          game.spawnTimer = Math.max(0.25, game.spawnDelay - game.wave * 0.04);
+        }
+      } else if (zombies.length === 0) {
+        game.wave++;
+        game.zombiesToSpawn = 5 + game.wave * 5;
+        game.spawnDelay = Math.max(0.35, 2 - game.wave * 0.08);
+        game.waveDelay = 2.5;
+        
+        document.getElementById('waveNum').textContent = game.wave;
+        
+        const announce = document.getElementById('waveAnnounce');
+        announce.innerHTML = 'WAVE ' + game.wave;
+        announce.classList.add('show');
+        setTimeout(() => announce.classList.remove('show'), 2500);
+
+        checkWeaponUnlocks();
+      }
+    }
+
+    let lastTime = 0;
+
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      game.time = time * 0.001;
+
+      if (game.screenShake > 0) {
+        ctx.save();
+        ctx.translate((Math.random() - 0.5) * game.screenShake, (Math.random() - 0.5) * game.screenShake);
+        game.screenShake *= 0.88;
+      }
+
+      drawBackground();
+      drawParticles();
+      drawBullets();
+
+      if (game.running) {
+        player.update(dt);
+        updateBullets(dt);
+        zombies.forEach(z => z.update(dt));
+        updateWaves(dt);
+      }
+
+      player.draw();
+      zombies.forEach(z => z.draw());
+      updateParticles(dt);
+
+      if (game.screenShake > 0) ctx.restore();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    bgElements.init();
+    player.init();
+    updateWeaponUI();
+
+    document.getElementById('waveAnnounce').innerHTML = 'LOCK AND LOAD';
+    document.getElementById('waveAnnounce').classList.add('show');
+    setTimeout(() => document.getElementById('waveAnnounce').classList.remove('show'), 2500);
+
+    requestAnimationFrame(gameLoop);
+
+    document.getElementById('restartBtn').addEventListener('click', () => {
+      location.reload();
+    });
+  </script>
+</body>
+</html>

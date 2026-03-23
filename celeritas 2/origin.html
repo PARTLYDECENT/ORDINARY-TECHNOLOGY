@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural SDF Vehicle - Subcompact Uniform</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #020203;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            color: rgba(255, 255, 255, 0.9);
+            pointer-events: none;
+            text-shadow: 0px 2px 10px rgba(100,100,100,0.6);
+        }
+        h1 { margin: 0 0 8px 0; font-size: 1.5rem; color: #ffffff; letter-spacing: 1px; text-transform: uppercase;}
+        p { margin: 4px 0; font-size: 0.95rem; opacity: 0.8; }
+        .badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glcanvas"></canvas>
+    <div id="overlay">
+        <div class="badge">V6.5 ADVANCED ANGULAR AERO</div>
+        <h1>SDF Precision Multi-Angular Wedge</h1>
+        <p><b>Geometry:</b> 3-Box Wedge, Multi-Angular Front-End</p>
+        <p><b>Styling:</b> Chevy Sonic Style Dual Dot LEDs & Sharp Intakes</p>
+        <p><b>Paint:</b> Obsidian Black Metallic</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl2');
+
+        if (!gl) { alert('WebGL 2.0 is not supported by your browser.'); }
+
+        const vsSource = `#version 300 es
+            in vec4 aVertexPosition;
+            void main() { gl_Position = aVertexPosition; }
+        `;
+
+        const shaderFiles = [
+            'shaders/primitives.glsl',
+            'shaders/body_core.glsl',
+            'shaders/body_wedges.glsl',
+            'shaders/fenders.glsl',
+            'shaders/front_headlights.glsl',
+            'shaders/rear_taillights.glsl',
+            'shaders/intakes_vents.glsl',
+            'shaders/panel_gaps.glsl',
+            'shaders/wheels_tires.glsl',
+            'shaders/main_fragment.glsl'
+        ];
+
+        async function loadShaders() {
+            const shaderTexts = await Promise.all(shaderFiles.map(file => fetch(file).then(res => res.text())));
+            
+            // Clean up version/precision from files to avoid duplicates
+            const cleanShaders = shaderTexts.map(text => 
+                text.replace(/#version 300 es/g, '').replace(/precision highp float;/g, '')
+            );
+
+            return `#version 300 es\nprecision highp float;\n` + cleanShaders.join('\n');
+        }
+
+        function compileShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader error: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        async function init() {
+            const fsSource = await loadShaders();
+            
+            const shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, compileShader(gl, gl.VERTEX_SHADER, vsSource));
+            gl.attachShader(shaderProgram, compileShader(gl, gl.FRAGMENT_SHADER, fsSource));
+            gl.linkProgram(shaderProgram);
+
+            const positions = new Float32Array([-1, 1, 1, 1, -1, -1, 1, -1]);
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            const posAttr = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+            gl.enableVertexAttribArray(posAttr);
+            gl.vertexAttribPointer(posAttr, 2, gl.FLOAT, false, 0, 0);
+
+            gl.useProgram(shaderProgram);
+            const resLoc = gl.getUniformLocation(shaderProgram, "iResolution");
+            const timeLoc = gl.getUniformLocation(shaderProgram, "iTime");
+
+            function resize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.uniform2f(resLoc, canvas.width, canvas.height);
+            }
+            window.addEventListener('resize', resize); resize();
+
+            let startTime = performance.now();
+            function render() {
+                gl.uniform1f(timeLoc, (performance.now() - startTime) / 1000.0);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                requestAnimationFrame(render);
+            }
+            requestAnimationFrame(render);
+        }
+
+        init();
+    </script>
+</body>
+</html>
