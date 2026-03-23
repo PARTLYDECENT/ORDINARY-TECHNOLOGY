@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Micro Ascension</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #050508;
+      --fg: #a8d8e8;
+      --accent: #00ff88;
+      --danger: #ff2255;
+      --warning: #ffaa00;
+      --muted: #2a2a35;
+      --card: rgba(10, 10, 20, 0.9);
+      --border: rgba(0, 255, 136, 0.2);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .game-container {
+      position: relative;
+      width: 100%;
+      max-width: 1200px;
+      aspect-ratio: 16/9;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      box-shadow: 0 0 60px rgba(0, 255, 136, 0.1), 0 0 120px rgba(255, 34, 85, 0.05);
+    }
+
+    .ui-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+    }
+
+    .stats-panel {
+      display: flex;
+      gap: 20px;
+    }
+
+    .stat-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 10px 18px;
+      border-radius: 6px;
+      backdrop-filter: blur(8px);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .stat-value {
+      font-family: 'Orbitron', cursive;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .dna-bar {
+      position: absolute;
+      top: 70px;
+      left: 24px;
+      right: 24px;
+      height: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .dna-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--warning));
+      transition: width 0.3s ease;
+      box-shadow: 0 0 15px var(--accent);
+    }
+
+    .evolution-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      pointer-events: auto;
+    }
+
+    .evo-btn {
+      background: var(--card);
+      border: 2px solid var(--border);
+      color: var(--fg);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-family: 'Orbitron', cursive;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      backdrop-filter: blur(8px);
+    }
+
+    .evo-btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .evo-btn.available {
+      border-color: var(--accent);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 136, 0.3); }
+      50% { box-shadow: 0 0 25px rgba(0, 255, 136, 0.6); }
+    }
+
+    .stage-display {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', cursive;
+      font-size: 72px;
+      font-weight: 900;
+      color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      text-shadow: 0 0 40px var(--accent), 0 0 80px rgba(0, 255, 136, 0.5);
+      text-align: center;
+    }
+
+    .stage-display.show {
+      animation: stageReveal 3s ease-out forwards;
+    }
+
+    .stage-display .subtitle {
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--fg);
+      margin-top: 10px;
+      letter-spacing: 4px;
+    }
+
+    @keyframes stageReveal {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); letter-spacing: 30px; }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      40% { transform: translate(-50%, -50%) scale(1); letter-spacing: 8px; }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1); letter-spacing: 8px; }
+    }
+
+    .controls-hint {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #444;
+      pointer-events: none;
+      text-align: center;
+    }
+
+    .controls-hint kbd {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin: 0 2px;
+    }
+
+    .game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 5, 8, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      border-radius: 8px;
+    }
+
+    .game-over.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .game-over h2 {
+      font-family: 'Orbitron', cursive;
+      font-size: 48px;
+      font-weight: 900;
+      color: var(--danger);
+      margin-bottom: 8px;
+    }
+
+    .game-over .stats {
+      display: flex;
+      gap: 40px;
+      margin: 20px 0 30px;
+    }
+
+    .game-over .stat {
+      text-align: center;
+    }
+
+    .game-over .stat-value {
+      font-family: 'Orbitron', cursive;
+      font-size: 32px;
+      color: var(--accent);
+    }
+
+    .game-over .stat-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    .btn {
+      font-family: 'Orbitron', cursive;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 14px 40px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      background: var(--accent);
+      color: var(--bg);
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 25px rgba(0, 255, 136, 0.5);
+    }
+
+    @media (max-width: 768px) {
+      .stat-value { font-size: 18px; }
+      .stage-display { font-size: 40px; }
+      .evo-btn { padding: 10px 14px; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="ui-top">
+      <div class="stats-panel">
+        <div class="stat-box">
+          <div class="stat-label">DNA</div>
+          <div class="stat-value" id="dnaCount">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Wave</div>
+          <div class="stat-value" id="waveNum">1</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Kills</div>
+          <div class="stat-value" id="killCount">0</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Form</div>
+        <div class="stat-value" id="formName">Microbe</div>
+      </div>
+    </div>
+
+    <div class="dna-bar">
+      <div class="dna-fill" id="dnaBar" style="width: 0%"></div>
+    </div>
+
+    <div class="evolution-panel" id="evoPanel">
+      <button class="evo-btn" id="evoSpeed" data-evo="speed">Speed +</button>
+      <button class="evo-btn" id="evoSize" data-evo="size">Size +</button>
+      <button class="evo-btn" id="evoArmor" data-evo="armor">Armor +</button>
+      <button class="evo-btn" id="evoSense" data-evo="sense">Sense +</button>
+      <button class="evo-btn" id="evoAscend" data-evo="ascend">Ascend</button>
+    </div>
+
+    <div class="controls-hint">
+      <kbd>Mouse</kbd> Move | <kbd>Click</kbd> Attack | <kbd>Space</kbd> Dash | Evolve to survive
+    </div>
+
+    <div class="stage-display" id="stageDisplay"></div>
+
+    <div class="game-over" id="gameOver">
+      <h2>EXTINCT</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value" id="finalKills">0</div>
+          <div class="stat-label">Kills</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="finalWave">1</div>
+          <div class="stat-label">Wave</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="finalForm">Microbe</div>
+          <div class="stat-label">Final Form</div>
+        </div>
+      </div>
+      <button class="btn" id="restartBtn">Evolve Again</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Setup
+    function setupCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      return { width: rect.width, height: rect.height };
+    }
+
+    let canvasSize = setupCanvas();
+    window.addEventListener('resize', () => canvasSize = setupCanvas());
+
+    // Game State
+    const game = {
+      running: true,
+      paused: false,
+      time: 0,
+      wave: 1,
+      waveTimer: 0,
+      waveLength: 20,
+      dna: 0,
+      kills: 0,
+      screenShake: 0,
+      evolutionStage: 0,
+      formNames: ['Microbe', 'Organism', 'Predator', 'Apex', 'Titan', 'Leviathan', 'Ascended']
+    };
+
+    // Input
+    const mouse = { x: 0, y: 0, down: false };
+    const keys = {};
+
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    });
+    canvas.addEventListener('mousedown', () => mouse.down = true);
+    canvas.addEventListener('mouseup', () => mouse.down = false);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => keys[e.code] = true);
+    document.addEventListener('keyup', e => keys[e.code] = false);
+
+    // Colors
+    const colors = {
+      player: '#00ff88',
+      playerGlow: 'rgba(0, 255, 136, 0.3)',
+      enemy: '#ff2255',
+      enemyGlow: 'rgba(255, 34, 85, 0.3)',
+      food: '#44aaff',
+      foodGlow: 'rgba(68, 170, 255, 0.3)',
+      particle: '#00ff88',
+      bg1: '#050508',
+      bg2: '#0a0a12',
+      bg3: '#0f0f1a'
+    };
+
+    // Player
+    const player = {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      size: 15,
+      baseSize: 15,
+      speed: 4,
+      baseSpeed: 4,
+      armor: 0,
+      sense: 100,
+      health: 100,
+      maxHealth: 100,
+      attackCooldown: 0,
+      dashCooldown: 0,
+      invincible: 0,
+      segments: [],
+      tentacles: [],
+      evolutionPoints: 0,
+      dnaToNext: 50,
+      
+      // Evolution stats
+      speedLevel: 0,
+      sizeLevel: 0,
+      armorLevel: 0,
+      senseLevel: 0,
+
+      init() {
+        this.x = canvasSize.width / 2;
+        this.y = canvasSize.height / 2;
+        this.segments = [];
+        this.tentacles = [];
+        this.updateBody();
+      },
+
+      updateBody() {
+        // Generate body segments based on size
+        this.segments = [];
+        const segmentCount = Math.floor(this.size / 5) + 2;
+        for (let i = 0; i < segmentCount; i++) {
+          this.segments.push({
+            x: this.x,
+            y: this.y + i * (this.size / segmentCount),
+            size: this.size * (1 - i * 0.1)
+          });
+        }
+        
+        // Generate tentacles based on evolution
+        this.tentacles = [];
+        const tentacleCount = Math.min(6, this.evolutionStage + 1);
+        for (let i = 0; i < tentacleCount; i++) {
+          const angle = (i / tentacleCount) * Math.PI * 2;
+          this.tentacles.push({
+            angle: angle,
+            length: this.size * 1.5,
+            segments: []
+          });
+          for (let j = 0; j < 5; j++) {
+            this.tentacles[i].segments.push({ x: 0, y: 0 });
+          }
+        }
+      },
+
+      update(dt) {
+        // Movement toward mouse
+        const dx = mouse.x - this.x;
+        const dy = mouse.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        
+        if (dist > 5) {
+          this.vx += (dx / dist) * this.speed * 0.3;
+          this.vy += (dy / dist) * this.speed * 0.3;
+        }
+        
+        // Friction
+        this.vx *= 0.92;
+        this.vy *= 0.92;
+        
+        // Apply velocity
+        this.x += this.vx * dt * 60;
+        this.y += this.vy * dt * 60;
+        
+        // Bounds
+        this.x = Math.max(this.size, Math.min(canvasSize.width - this.size, this.x));
+        this.y = Math.max(this.size, Math.min(canvasSize.height - this.size, this.y));
+        
+        // Cooldowns
+        if (this.attackCooldown > 0) this.attackCooldown -= dt;
+        if (this.dashCooldown > 0) this.dashCooldown -= dt;
+        if (this.invincible > 0) this.invincible -= dt;
+        
+        // Dash
+        if (keys['Space'] && this.dashCooldown <= 0) {
+          const dashDist = 100;
+          this.x += (dx / dist) * dashDist;
+          this.y += (dy / dist) * dashDist;
+          this.dashCooldown = 1.5;
+          this.invincible = 0.3;
+          game.screenShake = 8;
+          createParticles(this.x, this.y, 'dash', 10);
+        }
+        
+        // Attack on click
+        if (mouse.down && this.attackCooldown <= 0) {
+          this.attack();
+          this.attackCooldown = 0.3;
+        }
+        
+        // Update body segments
+        for (let i = 0; i < this.segments.length; i++) {
+          const seg = this.segments[i];
+          const targetX = i === 0 ? this.x : this.segments[i - 1].x;
+          const targetY = i === 0 ? this.y : this.segments[i - 1].y + this.size / this.segments.length;
+          
+          seg.x += (targetX - seg.x) * 0.3;
+          seg.y += (targetY - seg.y) * 0.3;
+        }
+        
+        // Update tentacles
+        this.tentacles.forEach(t => {
+          t.angle += Math.sin(game.time * 3 + t.angle) * 0.02;
+          
+          const baseX = this.x + Math.cos(t.angle) * this.size * 0.8;
+          const baseY = this.y + Math.sin(t.angle) * this.size * 0.8;
+          
+          for (let i = 0; i < t.segments.length; i++) {
+            const seg = t.segments[i];
+            const wave = Math.sin(game.time * 5 + i * 0.5) * (i + 1) * 2;
+            const targetX = baseX + Math.cos(t.angle) * (i + 1) * (t.length / t.segments.length) + wave;
+            const targetY = baseY + Math.sin(t.angle) * (i + 1) * (t.length / t.segments.length);
+            
+            seg.x += (targetX - seg.x) * 0.4;
+            seg.y += (targetY - seg.y) * 0.4;
+          }
+        });
+      },
+
+      attack() {
+        const attackRange = this.size * 3;
+        const attackAngle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+        
+        // Visual effect
+        createParticles(
+          this.x + Math.cos(attackAngle) * this.size * 1.5,
+          this.y + Math.sin(attackAngle) * this.size * 1.5,
+          'attack',
+          5,
+          attackAngle
+        );
+        
+        // Damage enemies in range
+        enemies.forEach(e => {
+          const dist = Math.hypot(e.x - this.x, e.y - this.y);
+          if (dist < attackRange) {
+            const enemyAngle = Math.atan2(e.y - this.y, e.x - this.x);
+            const angleDiff = Math.abs(attackAngle - enemyAngle);
+            
+            if (angleDiff < Math.PI / 2 || angleDiff > Math.PI * 1.5) {
+              e.takeDamage(20 + this.sizeLevel * 5);
+              createParticles(e.x, e.y, 'hit', 5);
+            }
+          }
+        });
+        
+        game.screenShake = 3;
+      },
+
+      takeDamage(amount) {
+        if (this.invincible > 0) return;
+        
+        const actualDamage = Math.max(1, amount - this.armor);
+        this.health -= actualDamage;
+        this.invincible = 0.5;
+        game.screenShake = 10;
+        
+        createParticles(this.x, this.y, 'blood', 8);
+        
+        if (this.health <= 0) {
+          this.die();
+        }
+      },
+
+      die() {
+        game.running = false;
+        document.getElementById('finalKills').textContent = game.kills;
+        document.getElementById('finalWave').textContent = game.wave;
+        document.getElementById('finalForm').textContent = game.formNames[Math.min(game.evolutionStage, game.formNames.length - 1)];
+        document.getElementById('gameOver').classList.add('show');
+      },
+
+      evolve(type) {
+        const costs = {
+          speed: 30 + this.speedLevel * 20,
+          size: 40 + this.sizeLevel * 25,
+          armor: 35 + this.armorLevel * 25,
+          sense: 25 + this.senseLevel * 15,
+          ascend: 100 + game.evolutionStage * 100
+        };
+        
+        const cost = costs[type];
+        if (game.dna < cost) return;
+        
+        game.dna -= cost;
+        
+        switch(type) {
+          case 'speed':
+            this.speedLevel++;
+            this.speed = this.baseSpeed + this.speedLevel * 0.8;
+            break;
+          case 'size':
+            this.sizeLevel++;
+            this.size = this.baseSize + this.sizeLevel * 4;
+            this.maxHealth = 100 + this.sizeLevel * 20;
+            this.health = Math.min(this.health + 20, this.maxHealth);
+            this.updateBody();
+            break;
+          case 'armor':
+            this.armorLevel++;
+            this.armor = this.armorLevel * 3;
+            break;
+          case 'sense':
+            this.senseLevel++;
+            this.sense = 100 + this.senseLevel * 50;
+            break;
+          case 'ascend':
+            game.evolutionStage++;
+            announceStage(game.formNames[Math.min(game.evolutionStage, game.formNames.length - 1)]);
+            // Big stat boost on ascend
+            this.baseSize += 10;
+            this.baseSpeed += 1;
+            this.size = this.baseSize + this.sizeLevel * 4;
+            this.speed = this.baseSpeed + this.speedLevel * 0.8;
+            this.maxHealth += 50;
+            this.health = this.maxHealth;
+            this.updateBody();
+            break;
+        }
+        
+        updateUI();
+        updateEvolutionButtons();
+      },
+
+      draw() {
+        ctx.save();
+        
+        // Glow
+        const glow = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 3);
+        glow.addColorStop(0, colors.playerGlow);
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Tentacles
+        ctx.strokeStyle = colors.player;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        
+        this.tentacles.forEach(t => {
+          ctx.beginPath();
+          ctx.moveTo(this.x + Math.cos(t.angle) * this.size * 0.8, this.y + Math.sin(t.angle) * this.size * 0.8);
+          t.segments.forEach((seg, i) => {
+            ctx.lineTo(seg.x, seg.y);
+          });
+          ctx.stroke();
+        });
+        
+        // Body segments
+        this.segments.forEach((seg, i) => {
+          const alpha = 1 - i * 0.15;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = colors.player;
+          ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
+          ctx.lineWidth = 2;
+          
+          ctx.beginPath();
+          ctx.arc(seg.x, seg.y, seg.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+        
+        ctx.globalAlpha = 1;
+        
+        // Core (eye)
+        const eyePulse = 0.8 + Math.sin(game.time * 5) * 0.2;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 10 * eyePulse;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - this.size * 0.2, this.size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        // Invincibility flash
+        if (this.invincible > 0 && Math.floor(this.invincible * 10) % 2 === 0) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        
+        ctx.restore();
+      }
+    };
+
+    // Enemies
+    const enemies = [];
+
+    class Enemy {
+      constructor(x, y, type = 'basic') {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.vx = 0;
+        this.vy = 0;
+        this.angle = Math.random() * Math.PI * 2;
+        this.walkPhase = Math.random() * Math.PI * 2;
+        
+        // Type-specific stats
+        switch(type) {
+          case 'basic':
+            this.size = 12;
+            this.speed = 1.5;
+            this.health = 30;
+            this.maxHealth = 30;
+            this.damage = 10;
+            this.color = colors.enemy;
+            this.dnaValue = 10;
+            break;
+          case 'fast':
+            this.size = 8;
+            this.speed = 3;
+            this.health = 20;
+            this.maxHealth = 20;
+            this.damage = 8;
+            this.color = '#ff8844';
+            this.dnaValue = 15;
+            break;
+          case 'tank':
+            this.size = 25;
+            this.speed = 0.8;
+            this.health = 100;
+            this.maxHealth = 100;
+            this.damage = 25;
+            this.color = '#aa2255';
+            this.dnaValue = 30;
+            break;
+          case 'swarm':
+            this.size = 6;
+            this.speed = 2;
+            this.health = 10;
+            this.maxHealth = 10;
+            this.damage = 5;
+            this.color = '#ffaa00';
+            this.dnaValue = 5;
+            break;
+          case 'boss':
+            this.size = 50;
+            this.speed = 1;
+            this.health = 500;
+            this.maxHealth = 500;
+            this.damage = 40;
+            this.color = '#ff0066';
+            this.dnaValue = 200;
+            break;
+        }
+      }
+
+      update(dt) {
+        // Move toward player
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        
+        this.angle = Math.atan2(dy, dx);
+        this.walkPhase += dt * 5;
+        
+        // Boids-like separation
+        let sepX = 0, sepY = 0;
+        enemies.forEach(e => {
+          if (e === this) return;
+          const d = Math.hypot(e.x - this.x, e.y - this.y);
+          if (d < this.size * 3 && d > 0) {
+            sepX -= (e.x - this.x) / d;
+            sepY -= (e.y - this.y) / d;
+          }
+        });
+        
+        this.vx += (dx / dist + sepX * 0.5) * this.speed * 0.1;
+        this.vy += (dy / dist + sepY * 0.5) * this.speed * 0.1;
+        
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        
+        this.x += this.vx * dt * 60;
+        this.y += this.vy * dt * 60;
+        
+        // Bounds
+        this.x = Math.max(this.size, Math.min(canvasSize.width - this.size, this.x));
+        this.y = Math.max(this.size, Math.min(canvasSize.height - this.size, this.y));
+        
+        // Collision with player
+        const playerDist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (playerDist < this.size + player.size) {
+          player.takeDamage(this.damage);
+          // Knockback
+          this.vx -= (player.x - this.x) / playerDist * 5;
+          this.vy -= (player.y - this.y) / playerDist * 5;
+        }
+      }
+
+      takeDamage(amount) {
+        this.health -= amount;
+        if (this.health <= 0) {
+          this.die();
+        }
+      }
+
+      die() {
+        game.dna += this.dnaValue;
+        game.kills++;
+        createParticles(this.x, this.y, 'death', 15);
+        
+        const idx = enemies.indexOf(this);
+        if (idx > -1) enemies.splice(idx, 1);
+        
+        updateUI();
+        updateEvolutionButtons();
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        
+        // Glow
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 2);
+        glow.addColorStop(0, this.color + '40');
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size * 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Body
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        
+        if (this.type === 'boss') {
+          // Boss has spikes
+          ctx.beginPath();
+          for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const r = this.size + Math.sin(game.time * 3 + i) * 5;
+            if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+            else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        
+        // Eye
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(this.size * 0.3, 0, this.size * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+      }
+    }
+
+    // Food particles
+    const foods = [];
+
+    class Food {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 5;
+        this.pulse = Math.random() * Math.PI * 2;
+      }
+
+      update(dt) {
+        this.pulse += dt * 3;
+      }
+
+      draw() {
+        const pulseSize = this.size + Math.sin(this.pulse) * 2;
+        
+        // Glow
+        const glow = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, pulseSize * 3);
+        glow.addColorStop(0, colors.foodGlow);
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, pulseSize * 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = colors.food;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, pulseSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Particles
+    const particles = [];
+
+    function createParticles(x, y, type, count, angle = 0) {
+      for (let i = 0; i < count; i++) {
+        const p = {
+          x: x + (Math.random() - 0.5) * 10,
+          y: y + (Math.random() - 0.5) * 10,
+          vx: 0,
+          vy: 0,
+          life: 1,
+          decay: 0.02,
+          size: 3,
+          color: colors.particle,
+          type
+        };
+        
+        const a = angle + (Math.random() - 0.5) * 1;
+        const speed = 2 + Math.random() * 4;
+        
+        switch(type) {
+          case 'dash':
+            p.vx = Math.cos(a + Math.PI) * speed;
+            p.vy = Math.sin(a + Math.PI) * speed;
+            p.color = colors.player;
+            p.size = 4 + Math.random() * 3;
+            break;
+          case 'attack':
+            p.vx = Math.cos(a) * speed * 2;
+            p.vy = Math.sin(a) * speed * 2;
+            p.color = '#ffffff';
+            p.decay = 0.04;
+            break;
+          case 'hit':
+            p.vx = (Math.random() - 0.5) * speed * 2;
+            p.vy = (Math.random() - 0.5) * speed * 2;
+            p.color = colors.enemy;
+            break;
+          case 'death':
+            p.vx = Math.cos(a) * speed * 3;
+            p.vy = Math.sin(a) * speed * 3;
+            p.color = colors.enemy;
+            p.size = 5 + Math.random() * 5;
+            break;
+          case 'blood':
+            p.vx = (Math.random() - 0.5) * speed * 2;
+            p.vy = (Math.random() - 0.5) * speed * 2;
+            p.color = colors.player;
+            p.gravity = 0.1;
+            break;
+          case 'dna':
+            p.vx = Math.cos(a) * speed;
+            p.vy = Math.sin(a) * speed;
+            p.color = '#00ffaa';
+            p.size = 6;
+            p.decay = 0.01;
+            break;
+        }
+        
+        particles.push(p);
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt * 60;
+        p.y += p.vy * dt * 60;
+        if (p.gravity) p.vy += p.gravity;
+        p.life -= p.decay * dt * 60;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function drawParticles() {
+      particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+
+    // Background
+    const bgParticles = [];
+
+    function initBackground() {
+      bgParticles.length = 0;
+      for (let i = 0; i < 100; i++) {
+        bgParticles.push({
+          x: Math.random() * canvasSize.width,
+          y: Math.random() * canvasSize.height,
+          size: 1 + Math.random() * 2,
+          speed: 0.2 + Math.random() * 0.5,
+          opacity: 0.1 + Math.random() * 0.3
+        });
+      }
+    }
+
+    function drawBackground() {
+      // Gradient
+      const grad = ctx.createRadialGradient(
+        canvasSize.width / 2, canvasSize.height / 2, 0,
+        canvasSize.width / 2, canvasSize.height / 2, canvasSize.width
+      );
+      grad.addColorStop(0, colors.bg3);
+      grad.addColorStop(0.5, colors.bg2);
+      grad.addColorStop(1, colors.bg1);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+      
+      // Background particles (ambient)
+      bgParticles.forEach(p => {
+        p.y -= p.speed;
+        if (p.y < 0) {
+          p.y = canvasSize.height;
+          p.x = Math.random() * canvasSize.width;
+        }
+        
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      
+      // Sense range indicator
+      if (player.sense > 100) {
+        ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.sense, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // Spawning
+    function spawnWave() {
+      const baseCount = 3 + game.wave * 2;
+      const types = ['basic'];
+      
+      if (game.wave >= 2) types.push('fast');
+      if (game.wave >= 3) types.push('swarm');
+      if (game.wave >= 4) types.push('tank');
+      if (game.wave % 5 === 0) types.push('boss');
+      
+      for (let i = 0; i < baseCount; i++) {
+        const type = types[Math.floor(Math.random() * types.length)];
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        
+        switch(side) {
+          case 0: x = -50; y = Math.random() * canvasSize.height; break;
+          case 1: x = canvasSize.width + 50; y = Math.random() * canvasSize.height; break;
+          case 2: x = Math.random() * canvasSize.width; y = -50; break;
+          case 3: x = Math.random() * canvasSize.width; y = canvasSize.height + 50; break;
+        }
+        
+        enemies.push(new Enemy(x, y, type));
+      }
+    }
+
+    function spawnFood() {
+      if (foods.length < 10) {
+        foods.push(new Food(
+          50 + Math.random() * (canvasSize.width - 100),
+          50 + Math.random() * (canvasSize.height - 100)
+        ));
+      }
+    }
+
+    // UI
+    function updateUI() {
+      document.getElementById('dnaCount').textContent = game.dna;
+      document.getElementById('waveNum').textContent = game.wave;
+      document.getElementById('killCount').textContent = game.kills;
+      document.getElementById('formName').textContent = game.formNames[Math.min(game.evolutionStage, game.formNames.length - 1)];
+      
+      const dnaPercent = Math.min(100, (game.dna / player.dnaToNext) * 100);
+      document.getElementById('dnaBar').style.width = dnaPercent + '%';
+    }
+
+    function updateEvolutionButtons() {
+      const costs = {
+        speed: 30 + player.speedLevel * 20,
+        size: 40 + player.sizeLevel * 25,
+        armor: 35 + player.armorLevel * 25,
+        sense: 25 + player.senseLevel * 15,
+        ascend: 100 + game.evolutionStage * 100
+      };
+      
+      Object.keys(costs).forEach(key => {
+        const btn = document.querySelector(`[data-evo="${key}"]`);
+        if (btn) {
+          const canAfford = game.dna >= costs[key];
+          btn.classList.toggle('available', canAfford);
+          btn.textContent = key === 'ascend' 
+            ? `Ascend (${costs[key]} DNA)`
+            : `${key.charAt(0).toUpperCase() + key.slice(1)} + (${costs[key]} DNA)`;
+        }
+      });
+    }
+
+    function announceStage(name) {
+      const display = document.getElementById('stageDisplay');
+      display.innerHTML = `${name}<div class="subtitle">EVOLUTION COMPLETE</div>`;
+      display.classList.add('show');
+      setTimeout(() => display.classList.remove('show'), 3000);
+    }
+
+    // Evolution buttons
+    document.querySelectorAll('.evo-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.evo;
+        player.evolve(type);
+      });
+    });
+
+    document.getElementById('restartBtn').addEventListener('click', () => {
+      // Reset game
+      game.running = true;
+      game.paused = false;
+      game.wave = 1;
+      game.waveTimer = 0;
+      game.dna = 0;
+      game.kills = 0;
+      game.evolutionStage = 0;
+      
+      player.x = canvasSize.width / 2;
+      player.y = canvasSize.height / 2;
+      player.vx = 0;
+      player.vy = 0;
+      player.size = player.baseSize = 15;
+      player.speed = player.baseSpeed = 4;
+      player.armor = 0;
+      player.sense = 100;
+      player.health = player.maxHealth = 100;
+      player.speedLevel = player.sizeLevel = player.armorLevel = player.senseLevel = 0;
+      player.init();
+      
+      enemies.length = 0;
+      foods.length = 0;
+      particles.length = 0;
+      
+      document.getElementById('gameOver').classList.remove('show');
+      announceStage('MICROBE');
+      updateUI();
+      updateEvolutionButtons();
+    });
+
+    // Main loop
+    let lastTime = 0;
+
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      game.time = time * 0.001;
+
+      // Screen shake
+      if (game.screenShake > 0) {
+        ctx.save();
+        ctx.translate(
+          (Math.random() - 0.5) * game.screenShake,
+          (Math.random() - 0.5) * game.screenShake
+        );
+        game.screenShake *= 0.9;
+      }
+
+      // Draw
+      drawBackground();
+      
+      if (game.running && !game.paused) {
+        // Wave system
+        game.waveTimer += dt;
+        if (game.waveTimer >= game.waveLength) {
+          game.waveTimer = 0;
+          game.wave++;
+          spawnWave();
+          updateUI();
+        }
+        
+        // Spawn food
+        if (Math.random() < 0.02) spawnFood();
+        
+        // Update
+        player.update(dt);
+        enemies.forEach(e => e.update(dt));
+        foods.forEach(f => f.update(dt));
+        updateParticles(dt);
+        
+        // Check food collision
+        for (let i = foods.length - 1; i >= 0; i--) {
+          const f = foods[i];
+          const dist = Math.hypot(f.x - player.x, f.y - player.y);
+          if (dist < player.size + f.size) {
+            foods.splice(i, 1);
+            game.dna += 5;
+            createParticles(f.x, f.y, 'dna', 3);
+            updateUI();
+            updateEvolutionButtons();
+          }
+        }
+      }
+      
+      // Draw entities
+      foods.forEach(f => f.draw());
+      enemies.forEach(e => e.draw());
+      player.draw();
+      drawParticles();
+      
+      // Health bar
+      const healthPercent = player.health / player.maxHealth;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(20, canvasSize.height - 30, 200, 15);
+      ctx.fillStyle = healthPercent > 0.3 ? colors.player : colors.enemy;
+      ctx.fillRect(20, canvasSize.height - 30, 200 * healthPercent, 15);
+      
+      if (game.screenShake > 0) ctx.restore();
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Initialize
+    initBackground();
+    player.init();
+    announceStage('MICROBE');
+    updateUI();
+    updateEvolutionButtons();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

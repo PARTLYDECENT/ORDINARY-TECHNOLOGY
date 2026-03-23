@@ -146,6 +146,13 @@ function handleConsoleInput(event) {
     const parts = input.split(' ');
     const command = parts[0];
     const args = parts.slice(1).join(' ');
+    
+    if (command === '/ohayou') {
+      showNotification('ACCESSING RESTRICTED DATA ARCHIVE: OHAYOU...');
+      showEasterEggImage('assets/textures/digits.png', 10000);
+      return;
+    }
+
     const action = commands[command];
 
     if (action) {
@@ -239,6 +246,39 @@ function showNotification(message) {
       document.body.removeChild(notification);
     }
   }, 3900);
+}
+
+// --- Easter Egg Helper ---
+function showEasterEggImage(imgSrc, durationMs) {
+  const existing = document.getElementById('ohayouEasterEgg');
+  if (existing) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ohayouEasterEgg';
+  overlay.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85); z-index: 9999;
+    display: flex; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.5s ease;
+  `;
+  
+  const img = document.createElement('img');
+  img.src = imgSrc;
+  img.style.cssText = 'max-width: 90%; max-height: 90%; object-fit: contain; box-shadow: 0 0 50px rgba(255,107,63,0.5); border-radius: 8px;';
+  
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
+
+  // Trigger fade in
+  setTimeout(() => { overlay.style.opacity = '1'; }, 50);
+
+  // Remove after duration
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+    setTimeout(() => {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }, 500);
+  }, durationMs);
 }
 
 // --- Button Animation and Navigation Helper ---

@@ -1,806 +1,436 @@
-	<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smooth Biome Planet Generator</title>
+    <title>3D Procedural Terrain Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls is needed for camera movement -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0a0a2e, #16213e, #0f3460);
-            color: #e0e0e0;
             margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #050505;
+            color: #eee;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 300px;
+            background: rgba(20, 20, 25, 0.85);
+            backdrop-filter: blur(10px);
             padding: 20px;
-            min-height: 100vh;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            user-select: none;
+            z-index: 100;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: rgba(20, 20, 40, 0.8);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 0 30px rgba(0, 100, 200, 0.3);
-        }
+
         h1 {
-            text-align: center;
-            color: #4fc3f7;
-            margin-bottom: 30px;
-            text-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
+            font-size: 1.2rem;
+            margin: 0 0 15px 0;
+            color: #4facfe;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+
         .control-group {
-            background: rgba(30, 30, 50, 0.7);
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid rgba(79, 195, 247, 0.3);
+            margin-bottom: 15px;
         }
-        .control-group h3 {
-            margin-top: 0;
-            color: #81c784;
-            border-bottom: 1px solid rgba(129, 199, 132, 0.3);
-            padding-bottom: 8px;
-        }
+
         label {
             display: block;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        input, select {
-            width: 100%;
-            padding: 8px;
-            background: rgba(10, 10, 30, 0.7);
-            border: 1px solid rgba(79, 195, 247, 0.5);
-            border-radius: 5px;
-            color: #e0e0e0;
-            margin-bottom: 10px;
-        }
-        input[type="range"] {
+            font-size: 0.8rem;
             margin-bottom: 5px;
+            color: #bbb;
         }
-        .range-value {
-            text-align: right;
-            font-size: 12px;
-            color: #4fc3f7;
-            margin-bottom: 10px;
-        }
-        button {
-            background: linear-gradient(45deg, #4fc3f7, #29b6f6);
-            color: #0a0a2e;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
+
+        input[type="range"] {
+            width: 100%;
             cursor: pointer;
-            font-weight: bold;
-            font-size: 16px;
-            transition: all 0.3s;
-            margin-top: 10px;
-            width: 100%;
+            accent-color: #4facfe;
         }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(79, 195, 247, 0.4);
-        }
-        button:disabled {
-            background: #555;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        .preview-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .preview {
-            flex: 1;
-            min-width: 300px;
-            background: rgba(30, 30, 50, 0.7);
-            border-radius: 10px;
-            padding: 15px;
-            border: 1px solid rgba(79, 195, 247, 0.3);
-        }
-        .preview h3 {
-            margin-top: 0;
-            color: #81c784;
-            text-align: center;
-        }
-        canvas {
-            width: 100%;
-            height: 300px;
-            background: #000;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-        .biome-legend {
-            display: flex;
-            flex-wrap: wrap;
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
-            justify-content: center;
-        }
-        .biome-item {
-            display: flex;
-            align-items: center;
-            margin: 5px;
-        }
-        .biome-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            margin-right: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .info {
-            background: rgba(30, 30, 50, 0.7);
-            border-radius: 10px;
-            padding: 15px;
-            border: 1px solid rgba(79, 195, 247, 0.3);
             margin-top: 20px;
         }
-        .info h3 {
-            margin-top: 0;
-            color: #81c784;
-        }
-        .download-section {
-            text-align: center;
-            margin-top: 30px;
-        }
-        .download-btn {
-            background: linear-gradient(45deg, #81c784, #66bb6a);
-            color: #0a0a2e;
-            font-size: 18px;
-            padding: 15px 30px;
-            max-width: 300px;
-            margin: 0 auto;
-        }
-        .status {
-            text-align: center;
-            margin: 20px 0;
+
+        button {
+            background: #4facfe;
+            border: none;
+            color: white;
             padding: 10px;
-            border-radius: 8px;
-            background: rgba(79, 195, 247, 0.1);
-            border: 1px solid rgba(79, 195, 247, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #00f2fe;
+            transform: translateY(-1px);
+        }
+
+        button.secondary {
+            background: #444;
+        }
+
+        button.secondary:hover {
+            background: #555;
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #050505;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🌍 Smooth Biome Planet Generator</h1>
+
+    <div id="loading" class="loading-overlay">
+        <div>Generating World...</div>
+    </div>
+
+    <div id="ui-panel">
+        <h1>Terrain Forge</h1>
         
-        <div class="status" id="status">Ready to generate unique planets with multiple biomes</div>
-        
-        <div class="controls">
-            <div class="control-group">
-                <h3>Planet Properties</h3>
-                <label for="planetSize">Planet Resolution</label>
-                <select id="planetSize">
-                    <option value="2">Low (Fast)</option>
-                    <option value="3" selected>Medium</option>
-                    <option value="4">High (Detailed)</option>
-                    <option value="5">Ultra (Slow)</option>
-                </select>
-                
-                <label for="planetRadius">Base Radius</label>
-                <input type="range" id="planetRadius" min="0.8" max="1.2" step="0.05" value="1.0">
-                <div class="range-value" id="radiusValue">1.0</div>
-                
-                <label for="randomSeed">Random Seed</label>
-                <input type="text" id="randomSeed" value="exoplanet123">
-            </div>
-            
-            <div class="control-group">
-                <h3>Terrain Generation</h3>
-                <label for="noiseScale">Noise Scale</label>
-                <input type="range" id="noiseScale" min="0.5" max="5" step="0.1" value="2.0">
-                <div class="range-value" id="noiseScaleValue">2.0</div>
-                
-                <label for="octaves">Noise Octaves</label>
-                <input type="range" id="octaves" min="1" max="8" step="1" value="4">
-                <div class="range-value" id="octavesValue">4</div>
-                
-                <label for="persistence">Noise Persistence</label>
-                <input type="range" id="persistence" min="0.1" max="0.8" step="0.05" value="0.5">
-                <div class="range-value" id="persistenceValue">0.5</div>
-            </div>
-            
-            <div class="control-group">
-                <h3>Wave Features</h3>
-                <label for="waveAmplitude">Wave Amplitude</label>
-                <input type="range" id="waveAmplitude" min="0" max="0.3" step="0.01" value="0.1">
-                <div class="range-value" id="waveAmplitudeValue">0.1</div>
-                
-                <label for="waveFrequency">Wave Frequency</label>
-                <input type="range" id="waveFrequency" min="1" max="10" step="0.5" value="3">
-                <div class="range-value" id="waveFrequencyValue">3</div>
-                
-                <label for="terrainHeight">Terrain Height</label>
-                <input type="range" id="terrainHeight" min="0.05" max="0.4" step="0.01" value="0.2">
-                <div class="range-value" id="terrainHeightValue">0.2</div>
-            </div>
-            
-            <div class="control-group">
-                <h3>Biome Settings</h3>
-                <label for="oceanLevel">Ocean Level</label>
-                <input type="range" id="oceanLevel" min="0.3" max="0.7" step="0.01" value="0.45">
-                <div class="range-value" id="oceanLevelValue">0.45</div>
-                
-                <label for="biomeDiversity">Biome Diversity</label>
-                <input type="range" id="biomeDiversity" min="0.5" max="2" step="0.1" value="1.0">
-                <div class="range-value" id="biomeDiversityValue">1.0</div>
-                
-                <label for="poleIce">Pole Ice Coverage</label>
-                <input type="range" id="poleIce" min="0" max="1" step="0.05" value="0.7">
-                <div class="range-value" id="poleIceValue">0.7</div>
-            </div>
+        <div class="control-group">
+            <label>Noise Scale: <span id="val-scale">40</span></label>
+            <input type="range" id="scale" min="10" max="100" value="45">
         </div>
-        
-        <div class="preview-container">
-            <div class="preview">
-                <h3>Planet Preview</h3>
-                <canvas id="planetCanvas"></canvas>
-                <div class="biome-legend" id="biomeLegend"></div>
-            </div>
-            <div class="preview">
-                <h3>Height Map</h3>
-                <canvas id="heightMapCanvas"></canvas>
-            </div>
+
+        <div class="control-group">
+            <label>Elevation: <span id="val-height">20</span></label>
+            <input type="range" id="height" min="1" max="50" value="25">
         </div>
-        
-        <div class="download-section">
-            <button id="generateBtn">Generate Planet</button>
-            <button id="downloadBtn" disabled>Download PLY File</button>
+
+        <div class="control-group">
+            <label>Detail (Octaves): <span id="val-octaves">5</span></label>
+            <input type="range" id="octaves" min="1" max="8" value="5">
         </div>
-        
-        <div class="info">
-            <h3>About This Generator</h3>
-            <p>This generator creates unique planets with smooth terrain and multiple biomes using Perlin noise and sine waves. The planets have:</p>
-            <ul>
-                <li>Smooth, continuous terrain without voxelization or rough edges</li>
-                <li>Multiple biomes: oceans, beaches, forests, grasslands, mountains, deserts, tundra, and ice caps</li>
-                <li>Realistic elevation changes based on latitude and noise patterns</li>
-                <li>Wave-like features for more natural terrain formations</li>
-                <li>Customizable parameters for endless variety</li>
-            </ul>
-            <p>The generated PLY files can be imported into 3D software like Blender, MeshLab, or game engines.</p>
+
+        <div class="control-group">
+            <label>Roughness: <span id="val-pers">0.5</span></label>
+            <input type="range" id="persistence" min="0.1" max="0.9" step="0.05" value="0.5">
+        </div>
+
+        <div class="control-group">
+            <label>Sea Level: <span id="val-sea">0.2</span></label>
+            <input type="range" id="sealevel" min="0" max="0.8" step="0.05" value="0.2">
+        </div>
+
+        <div class="button-group">
+            <button id="regen">New Seed</button>
+            <button id="download" class="secondary">Export OBJ</button>
         </div>
     </div>
- 
+
+    <div class="stats">WASD/Mouse to Orbit • Space to Toggle Auto-Rotate</div>
+
     <script>
-        // Biome definitions with colors
-        const biomes = [
-            { name: 'Deep Ocean', color: [0.05, 0.1, 0.3], minHeight: 0, maxHeight: 0.4 },
-            { name: 'Ocean', color: [0.1, 0.3, 0.6], minHeight: 0.3, maxHeight: 0.45 },
-            { name: 'Beach', color: [0.8, 0.7, 0.5], minHeight: 0.4, maxHeight: 0.47 },
-            { name: 'Grassland', color: [0.3, 0.6, 0.2], minHeight: 0.45, maxHeight: 0.6 },
-            { name: 'Forest', color: [0.1, 0.4, 0.1], minHeight: 0.5, maxHeight: 0.7 },
-            { name: 'Mountain', color: [0.5, 0.4, 0.3], minHeight: 0.6, maxHeight: 0.85 },
-            { name: 'Snow', color: [0.95, 0.95, 0.95], minHeight: 0.75, maxHeight: 1.0 },
-            { name: 'Desert', color: [0.8, 0.6, 0.3], minHeight: 0.45, maxHeight: 0.65 },
-            { name: 'Tundra', color: [0.6, 0.7, 0.8], minHeight: 0.4, maxHeight: 0.6 }
-        ];
-        
-        // Initialize range value displays
-        document.getElementById('radiusValue').textContent = document.getElementById('planetRadius').value;
-        document.getElementById('noiseScaleValue').textContent = document.getElementById('noiseScale').value;
-        document.getElementById('octavesValue').textContent = document.getElementById('octaves').value;
-        document.getElementById('persistenceValue').textContent = document.getElementById('persistence').value;
-        document.getElementById('waveAmplitudeValue').textContent = document.getElementById('waveAmplitude').value;
-        document.getElementById('waveFrequencyValue').textContent = document.getElementById('waveFrequency').value;
-        document.getElementById('terrainHeightValue').textContent = document.getElementById('terrainHeight').value;
-        document.getElementById('oceanLevelValue').textContent = document.getElementById('oceanLevel').value;
-        document.getElementById('biomeDiversityValue').textContent = document.getElementById('biomeDiversity').value;
-        document.getElementById('poleIceValue').textContent = document.getElementById('poleIce').value;
-        
-        // Update range values when sliders change
-        document.querySelectorAll('input[type="range"]').forEach(input => {
-            input.addEventListener('input', function() {
-                document.getElementById(this.id + 'Value').textContent = this.value;
-            });
-        });
-        
-        // Create biome legend
-        function createBiomeLegend() {
-            const legend = document.getElementById('biomeLegend');
-            legend.innerHTML = '';
-            
-            biomes.forEach(biome => {
-                const item = document.createElement('div');
-                item.className = 'biome-item';
-                
-                const color = document.createElement('div');
-                color.className = 'biome-color';
-                color.style.backgroundColor = `rgb(${biome.color[0]*255}, ${biome.color[1]*255}, ${biome.color[2]*255})`;
-                
-                const name = document.createElement('span');
-                name.textContent = biome.name;
-                
-                item.appendChild(color);
-                item.appendChild(name);
-                legend.appendChild(item);
-            });
-        }
-        
-        createBiomeLegend();
-        
-        // Noise functions
-        function noise(x, y, z, seed) {
-            const X = Math.floor(x) & 255;
-            const Y = Math.floor(y) & 255;
-            const Z = Math.floor(z) & 255;
-            
-            x -= Math.floor(x);
-            y -= Math.floor(y);
-            z -= Math.floor(z);
-            
-            const u = fade(x);
-            const v = fade(y);
-            const w = fade(z);
-            
-            const A = p[X] + Y;
-            const AA = p[A] + Z;
-            const AB = p[A + 1] + Z;
-            const B = p[X + 1] + Y;
-            const BA = p[B] + Z;
-            const BB = p[B + 1] + Z;
-            
-            return lerp(w, lerp(v, lerp(u, grad(p[AA], x, y, z), 
-                                         grad(p[BA], x - 1, y, z)), 
-                                 lerp(u, grad(p[AB], x, y - 1, z), 
-                                         grad(p[BB], x - 1, y - 1, z))), 
-                         lerp(v, lerp(u, grad(p[AA + 1], x, y, z - 1), 
-                                         grad(p[BA + 1], x - 1, y, z - 1)), 
-                                 lerp(u, grad(p[AB + 1], x, y - 1, z - 1), 
-                                         grad(p[BB + 1], x - 1, y - 1, z - 1))));
-        }
-        
-        function fade(t) {
-            return t * t * t * (t * (t * 6 - 15) + 10);
-        }
-        
-        function lerp(t, a, b) {
-            return a + t * (b - a);
-        }
-        
-        function grad(hash, x, y, z) {
-            const h = hash & 15;
-            const u = h < 8 ? x : y;
-            const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
-            return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
-        }
-        
-        // Permutation table for Perlin noise
-        const p = [];
-        for (let i = 0; i < 256; i++) {
-            p[i] = Math.floor(Math.random() * 256);
-        }
-        
-        // Duplicate the permutation table
-        for (let i = 0; i < 256; i++) {
-            p[256 + i] = p[i];
-        }
-        
-        // Fractal noise function
-        function fractalNoise(x, y, z, octaves, persistence, scale, seed) {
-            let total = 0;
-            let frequency = 1;
-            let amplitude = 1;
-            let maxValue = 0;
-            
-            for (let i = 0; i < octaves; i++) {
-                total += noise(x * frequency * scale, y * frequency * scale, z * frequency * scale, seed) * amplitude;
-                maxValue += amplitude;
-                amplitude *= persistence;
-                frequency *= 2;
+        /** * SIMPLEX NOISE IMPLEMENTATION 
+         * Compact version for procedural generation
+         */
+        const SimplexNoise = function(seed = Math.random()) {
+            const p = new Uint8Array(256);
+            for (let i = 0; i < 256; i++) p[i] = i;
+            let m = 256, n, k;
+            while (m) {
+                n = Math.floor(seed * m--);
+                k = p[m]; p[m] = p[n]; p[n] = k;
+                seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+                seed /= 0x7fffffff;
             }
-            
-            return total / maxValue;
-        }
-        
-        // Create icosahedron
-        function createIcosahedron() {
-            const t = (1.0 + Math.sqrt(5.0)) / 2.0;
-            
-            const vertices = [
-                [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
-                [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
-                [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
-            ];
-            
-            const faces = [
-                [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-                [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-                [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-                [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
-            ];
-            
-            return { vertices, faces };
-        }
-        
-        // Subdivide icosahedron
-        function subdivide(vertices, faces, detail) {
-            let newVertices = [...vertices];
-            let newFaces = [...faces];
-            
-            const midpointCache = {};
-            
-            function getMidpoint(v1, v2) {
-                const key = `${Math.min(v1, v2)}_${Math.max(v1, v2)}`;
-                if (midpointCache[key] !== undefined) {
-                    return midpointCache[key];
-                }
-                
-                const p1 = newVertices[v1];
-                const p2 = newVertices[v2];
-                
-                const mid = [
-                    (p1[0] + p2[0]) / 2,
-                    (p1[1] + p2[1]) / 2,
-                    (p1[2] + p2[2]) / 2
-                ];
-                
-                // Normalize to unit sphere
-                const length = Math.sqrt(mid[0]*mid[0] + mid[1]*mid[1] + mid[2]*mid[2]);
-                mid[0] /= length;
-                mid[1] /= length;
-                mid[2] /= length;
-                
-                const index = newVertices.length;
-                newVertices.push(mid);
-                midpointCache[key] = index;
-                
-                return index;
+            const perm = new Uint8Array(512);
+            const gradP = new Float32Array(512 * 3);
+            const grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+            for (let i = 0; i < 512; i++) {
+                perm[i] = p[i & 255];
+                let g = grad3[perm[i] % 12];
+                gradP[i*3] = g[0]; gradP[i*3+1] = g[1]; gradP[i*3+2] = g[2];
             }
-            
-            for (let i = 0; i < detail; i++) {
-                const tempFaces = [];
-                
-                for (const face of newFaces) {
-                    const a = face[0];
-                    const b = face[1];
-                    const c = face[2];
-                    
-                    const ab = getMidpoint(a, b);
-                    const bc = getMidpoint(b, c);
-                    const ca = getMidpoint(c, a);
-                    
-                    tempFaces.push([a, ab, ca]);
-                    tempFaces.push([b, bc, ab]);
-                    tempFaces.push([c, ca, bc]);
-                    tempFaces.push([ab, bc, ca]);
-                }
-                
-                newFaces = tempFaces;
-            }
-            
-            return { vertices: newVertices, faces: newFaces };
-        }
-        
-        // Get biome based on height and latitude
-        function getBiome(height, latitude, oceanLevel, poleIce, biomeDiversity) {
-            // Adjust height based on latitude for poles
-            const poleFactor = Math.abs(latitude);
-            const adjustedHeight = height + (poleFactor > 0.8 ? (poleFactor - 0.8) * 5 * poleIce : 0);
-            
-            // Special case for ocean
-            if (adjustedHeight < oceanLevel) {
-                return adjustedHeight < oceanLevel * 0.8 ? biomes[0] : biomes[1]; // Deep ocean or ocean
-            }
-            
-            // Calculate biome diversity factor
-            const diversityFactor = (Math.sin(latitude * Math.PI * biomeDiversity) + 1) / 2;
-            
-            // Determine potential biomes based on height
-            const potentialBiomes = biomes.filter(biome => 
-                adjustedHeight >= biome.minHeight && adjustedHeight <= biome.maxHeight
-            );
-            
-            // If no biome matches, use the closest one
-            if (potentialBiomes.length === 0) {
-                let closestBiome = biomes[0];
-                let minDistance = Math.abs(adjustedHeight - closestBiome.minHeight);
-                
-                for (const biome of biomes) {
-                    const distance = Math.min(
-                        Math.abs(adjustedHeight - biome.minHeight),
-                        Math.abs(adjustedHeight - biome.maxHeight)
-                    );
-                    
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestBiome = biome;
-                    }
-                }
-                
-                return closestBiome;
-            }
-            
-            // Apply diversity factor to select between potential biomes
-            if (potentialBiomes.length > 1) {
-                const index = Math.floor(diversityFactor * (potentialBiomes.length - 1));
-                return potentialBiomes[index];
-            }
-            
-            return potentialBiomes[0];
-        }
-        
-        // Generate planet
-        function generatePlanet() {
-            const status = document.getElementById('status');
-            status.textContent = 'Generating planet...';
-            
-            // Get parameters
-            const size = parseInt(document.getElementById('planetSize').value);
-            const radius = parseFloat(document.getElementById('planetRadius').value);
-            const seed = document.getElementById('randomSeed').value;
-            const noiseScale = parseFloat(document.getElementById('noiseScale').value);
-            const octaves = parseInt(document.getElementById('octaves').value);
-            const persistence = parseFloat(document.getElementById('persistence').value);
-            const waveAmplitude = parseFloat(document.getElementById('waveAmplitude').value);
-            const waveFrequency = parseFloat(document.getElementById('waveFrequency').value);
-            const terrainHeight = parseFloat(document.getElementById('terrainHeight').value);
-            const oceanLevel = parseFloat(document.getElementById('oceanLevel').value);
-            const biomeDiversity = parseFloat(document.getElementById('biomeDiversity').value);
-            const poleIce = parseFloat(document.getElementById('poleIce').value);
-            
-            // Convert seed to number
-            const seedNum = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            
-            // Create base icosahedron
-            let { vertices, faces } = createIcosahedron();
-            
-            // Subdivide based on size
-            ({ vertices, faces } = subdivide(vertices, faces, size));
-            
-            // Apply terrain
-            const newVertices = [];
-            const colors = [];
-            const heightMap = [];
-            
-            for (const vertex of vertices) {
-                // Calculate normalized position
-                const x = vertex[0];
-                const y = vertex[1];
-                const z = vertex[2];
-                
-                // Calculate latitude (-1 to 1)
-                const latitude = y;
-                
-                // Calculate noise value
-                const noiseValue = fractalNoise(x, y, z, octaves, persistence, noiseScale, seedNum);
-                
-                // Calculate wave effect
-                const waveValue = Math.sin(x * waveFrequency) * Math.cos(z * waveFrequency) * waveAmplitude;
-                
-                // Calculate height (0 to 1)
-                const height = (noiseValue + waveValue + 1) / 2;
-                heightMap.push(height);
-                
-                // Apply height to vertex
-                const heightFactor = radius + height * terrainHeight;
-                newVertices.push([
-                    x * heightFactor,
-                    y * heightFactor,
-                    z * heightFactor
-                ]);
-                
-                // Get biome and color
-                const biome = getBiome(height, latitude, oceanLevel, poleIce, biomeDiversity);
-                colors.push(biome.color[0], biome.color[1], biome.color[2]);
-            }
-            
-            // Draw planet preview
-            drawPlanetPreview(newVertices, faces, colors);
-            
-            // Draw height map
-            drawHeightMap(vertices, heightMap);
-            
-            // Generate PLY data
-            const plyData = generatePLYData(newVertices, faces, colors);
-            
-            // Enable download button
-            const downloadBtn = document.getElementById('downloadBtn');
-            downloadBtn.disabled = false;
-            downloadBtn.onclick = () => {
-                const blob = new Blob([plyData], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'biome_planet.ply';
-                document.body.appendChild(a);
-                a.click();
-                
-                // Clean up
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 0);
+            const F2 = 0.5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6;
+            this.noise2D = function(xin, yin) {
+                let s = (xin + yin) * F2, i = Math.floor(xin + s), j = Math.floor(yin + s);
+                let t = (i + j) * G2, x0 = xin - (i - t), y0 = yin - (j - t);
+                let i1, j1; if (x0 > y0) { i1 = 1; j1 = 0; } else { i1 = 0; j1 = 1; }
+                let x1 = x0 - i1 + G2, y1 = y0 - j1 + G2, x2 = x0 - 1 + 2 * G2, y2 = y0 - 1 + 2 * G2;
+                i &= 255; j &= 255;
+                let n0, n1, n2;
+                let t0 = 0.5 - x0 * x0 - y0 * y0;
+                if (t0 < 0) n0 = 0; else { t0 *= t0; n0 = t0 * t0 * (gradP[(i + perm[j]) * 3] * x0 + gradP[(i + perm[j]) * 3 + 1] * y0); }
+                let t1 = 0.5 - x1 * x1 - y1 * y1;
+                if (t1 < 0) n1 = 0; else { t1 *= t1; n1 = t1 * t1 * (gradP[(i + i1 + perm[j + j1]) * 3] * x1 + gradP[(i + i1 + perm[j + j1]) * 3 + 1] * y1); }
+                let t2 = 0.5 - x2 * x2 - y2 * y2;
+                if (t2 < 0) n2 = 0; else { t2 *= t2; n2 = t2 * t2 * (gradP[(i + 1 + perm[j + 1]) * 3] * x2 + gradP[(i + 1 + perm[j + 1]) * 3 + 1] * y2); }
+                return 70 * (n0 + n1 + n2);
             };
-            
-            status.textContent = 'Planet generated successfully!';
-        }
+        };
+
+        // --- APP LOGIC ---
+        let scene, camera, renderer, terrain, water, controls;
+        let simplex = new SimplexNoise();
+        const GRID_SIZE = 128;
+        const WORLD_WIDTH = 100;
         
-        // Generate PLY data
-        function generatePLYData(vertices, faces, colors) {
-            let ply = "ply\n";
-            ply += "format ascii 1.0\n";
-            ply += `element vertex ${vertices.length}\n`;
-            ply += "property float x\n";
-            ply += "property float y\n";
-            ply += "property float z\n";
-            ply += "property float red\n";
-            ply += "property float green\n";
-            ply += "property float blue\n";
-            ply += `element face ${faces.length}\n`;
-            ply += "property list uchar int vertex_indices\n";
-            ply += "end_header\n";
-            
-            // Add vertices with colors
-            for (let i = 0; i < vertices.length; i++) {
-                ply += `${vertices[i][0]} ${vertices[i][1]} ${vertices[i][2]} `;
-                ply += `${colors[i*3]} ${colors[i*3+1]} ${colors[i*3+2]}\n`;
-            }
-            
-            // Add faces
-            for (const face of faces) {
-                ply += `3 ${face[0]} ${face[1]} ${face[2]}\n`;
-            }
-            
-            return ply;
-        }
-        
-        // Draw planet preview
-        function drawPlanetPreview(vertices, faces, colors) {
-            const canvas = document.getElementById('planetCanvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Set canvas size
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Center and scale
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const scale = Math.min(canvas.width, canvas.height) * 0.4;
-            
-            // Sort faces by average z coordinate for proper rendering
-            const facesWithZ = faces.map(face => {
-                const avgZ = (vertices[face[0]][2] + vertices[face[1]][2] + vertices[face[2]][2]) / 3;
-                return { face, avgZ };
+        let params = {
+            scale: 45,
+            height: 25,
+            octaves: 5,
+            persistence: 0.5,
+            seaLevel: 0.2,
+            autoRotate: true
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a12);
+            scene.fog = new THREE.FogExp2(0x0a0a12, 0.005);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(80, 60, 80);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = params.autoRotate;
+
+            // Lights
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambient);
+
+            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(100, 100, 50);
+            sun.castShadow = true;
+            scene.add(sun);
+
+            createTerrain();
+            createWater();
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', (e) => {
+                if(e.code === 'Space') {
+                    params.autoRotate = !params.autoRotate;
+                    controls.autoRotate = params.autoRotate;
+                }
             });
+
+            // UI Events
+            setupUI();
             
-            facesWithZ.sort((a, b) => a.avgZ - b.avgZ);
-            
-            // Draw each face
-            for (const { face } of facesWithZ) {
-                // Get vertices for this face
-                const v1 = vertices[face[0]];
-                const v2 = vertices[face[1]];
-                const v3 = vertices[face[2]];
-                
-                // Project to 2D
-                const x1 = centerX + v1[0] * scale;
-                const y1 = centerY - v1[1] * scale;
-                const x2 = centerX + v2[0] * scale;
-                const y2 = centerY - v2[1] * scale;
-                const x3 = centerX + v3[0] * scale;
-                const y3 = centerY - v3[1] * scale;
-                
-                // Get color for this face (average of vertex colors)
-                const r = (colors[face[0]*3] + colors[face[1]*3] + colors[face[2]*3]) / 3;
-                const g = (colors[face[0]*3+1] + colors[face[1]*3+1] + colors[face[2]*3+1]) / 3;
-                const b = (colors[face[0]*3+2] + colors[face[1]*3+2] + colors[face[2]*3+2]) / 3;
-                
-                // Calculate face normal for lighting
-                const nx = (v2[1] - v1[1]) * (v3[2] - v1[2]) - (v2[2] - v1[2]) * (v3[1] - v1[1]);
-                const ny = (v2[2] - v1[2]) * (v3[0] - v1[0]) - (v2[0] - v1[0]) * (v3[2] - v1[2]);
-                const nz = (v2[0] - v1[0]) * (v3[1] - v1[1]) - (v2[1] - v1[1]) * (v3[0] - v1[0]);
-                
-                const length = Math.sqrt(nx*nx + ny*ny + nz*nz);
-                const lightIntensity = Math.max(0.3, Math.min(1, (nz / length) * 0.7 + 0.3));
-                
-                // Draw face
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.lineTo(x3, y3);
-                ctx.closePath();
-                
-                ctx.fillStyle = `rgb(${Math.floor(r * 255 * lightIntensity)}, ${Math.floor(g * 255 * lightIntensity)}, ${Math.floor(b * 255 * lightIntensity)})`;
-                ctx.fill();
-            }
+            animate();
+            document.getElementById('loading').classList.add('hidden');
         }
-        
-        // Draw height map
-        function drawHeightMap(vertices, heightMap) {
-            const canvas = document.getElementById('heightMapCanvas');
-            const ctx = canvas.getContext('2d');
+
+        function createTerrain() {
+            if (terrain) scene.remove(terrain);
+
+            const geometry = new THREE.PlaneBufferGeometry(WORLD_WIDTH, WORLD_WIDTH, GRID_SIZE, GRID_SIZE);
+            geometry.rotateX(-Math.PI / 2);
+
+            const vertices = geometry.attributes.position.array;
+            const colors = new Float32Array(vertices.length);
             
-            // Set canvas size
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Create a simple equirectangular projection
-            const width = canvas.width;
-            const height = canvas.height;
-            const imageData = ctx.createImageData(width, height);
-            const data = imageData.data;
-            
-            // Create a map from spherical coordinates to vertices
-            const vertexMap = new Map();
-            
-            for (let i = 0; i < vertices.length; i++) {
-                const v = vertices[i];
+            const color = new THREE.Color();
+
+            for (let i = 0; i < vertices.length; i += 3) {
+                const x = vertices[i];
+                const z = vertices[i + 2];
                 
-                // Convert to spherical coordinates
-                const r = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-                const theta = Math.atan2(v[2], v[0]); // Longitude (-π to π)
-                const phi = Math.acos(v[1] / r); // Latitude (0 to π)
+                // Octave Noise
+                let h = 0;
+                let amp = 1;
+                let freq = 1 / params.scale;
+                let maxH = 0;
+
+                for (let o = 0; o < params.octaves; o++) {
+                    h += simplex.noise2D(x * freq, z * freq) * amp;
+                    maxH += amp;
+                    amp *= params.persistence;
+                    freq *= 2;
+                }
                 
-                // Convert to pixel coordinates
-                const x = Math.floor((theta + Math.PI) / (2 * Math.PI) * width);
-                const y = Math.floor(phi / Math.PI * height);
+                // Normalize and apply exponent for realistic valleys
+                h /= maxH;
+                h = Math.pow((h + 1) / 2, 1.5); 
                 
-                // Store vertex height at this pixel
-                const key = `${x},${y}`;
-                if (!vertexMap.has(key) || heightMap[i] > vertexMap.get(key)) {
-                    vertexMap.set(key, heightMap[i]);
+                const finalY = h * params.height;
+                vertices[i + 1] = finalY;
+
+                // Coloring based on height
+                if (h < params.seaLevel + 0.02) {
+                    color.setHex(0xd2b48c); // Sand
+                } else if (h < 0.5) {
+                    color.setHex(0x3a5f0b); // Grass
+                } else if (h < 0.75) {
+                    color.setHex(0x555555); // Rock
+                } else {
+                    color.setHex(0xffffff); // Snow
+                }
+
+                colors[i] = color.r;
+                colors[i + 1] = color.g;
+                colors[i + 2] = color.b;
+            }
+
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshStandardMaterial({ 
+                vertexColors: true, 
+                roughness: 0.8,
+                metalness: 0.1,
+                flatShading: false
+            });
+
+            terrain = new THREE.Mesh(geometry, material);
+            terrain.receiveShadow = true;
+            terrain.castShadow = true;
+            scene.add(terrain);
+        }
+
+        function createWater() {
+            if (water) scene.remove(water);
+            const geometry = new THREE.PlaneBufferGeometry(WORLD_WIDTH, WORLD_WIDTH);
+            geometry.rotateX(-Math.PI / 2);
+            
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x006994,
+                transparent: true,
+                opacity: 0.6,
+                roughness: 0.1,
+                metalness: 0.5
+            });
+
+            water = new THREE.Mesh(geometry, material);
+            water.position.y = params.seaLevel * params.height;
+            scene.add(water);
+        }
+
+        function setupUI() {
+            const inputs = ['scale', 'height', 'octaves', 'persistence', 'sealevel'];
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                el.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    if(id === 'sealevel') params.seaLevel = val;
+                    else params[id] = val;
+                    
+                    document.getElementById('val-' + id).innerText = val;
+                    updateScene();
+                });
+            });
+
+            document.getElementById('regen').addEventListener('click', () => {
+                simplex = new SimplexNoise();
+                updateScene();
+            });
+
+            document.getElementById('download').addEventListener('click', exportToOBJ);
+        }
+
+        function updateScene() {
+            createTerrain();
+            water.position.y = params.seaLevel * params.height;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            
+            // Subtle water movement
+            if(water) {
+                water.position.y = (params.seaLevel * params.height) + Math.sin(Date.now() * 0.001) * 0.1;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * Simple OBJ Exporter
+         */
+        function exportToOBJ() {
+            const geo = terrain.geometry;
+            const vertices = geo.attributes.position.array;
+            const normals = geo.attributes.normal.array;
+            const indices = geo.index ? geo.index.array : null;
+
+            let objData = "# Terrain Forge Export\no Terrain\n";
+
+            // Vertices
+            for (let i = 0; i < vertices.length; i += 3) {
+                objData += `v ${vertices[i].toFixed(4)} ${vertices[i+1].toFixed(4)} ${vertices[i+2].toFixed(4)}\n`;
+            }
+
+            // Faces (based on PlaneBufferGeometry order)
+            // For a regular grid PlaneBufferGeometry
+            const segments = GRID_SIZE;
+            for (let j = 0; j < segments; j++) {
+                for (let i = 0; i < segments; i++) {
+                    const a = i + j * (segments + 1) + 1;
+                    const b = i + (j + 1) * (segments + 1) + 1;
+                    const c = (i + 1) + (j + 1) * (segments + 1) + 1;
+                    const d = (i + 1) + j * (segments + 1) + 1;
+                    objData += `f ${a} ${b} ${c}\n`;
+                    objData += `f ${a} ${c} ${d}\n`;
                 }
             }
-            
-            // Fill the image data
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const key = `${x},${y}`;
-                    const height = vertexMap.get(key) || 0;
-                    
-                    // Calculate color based on height
-                    const idx = (y * width + x) * 4;
-                    
-                    if (height < 0.45) {
-                        // Ocean - deep blue to light blue
-                        const depth = height / 0.45;
-                        data[idx] = Math.floor(10 + depth * 40);     // R
-                        data[idx + 1] = Math.floor(30 + depth * 80); // G
-                        data[idx + 2] = Math.floor(80 + depth * 100); // B
-                    } else if (height < 0.6) {
-                        // Land - green to brown
-                        const landHeight = (height - 0.45) / 0.15;
-                        data[idx] = Math.floor(100 + landHeight * 80);   // R
-                        data[idx + 1] = Math.floor(150 - landHeight * 50); // G
-                        data[idx + 2] = Math.floor(50 - landHeight * 30);  // B
-                    } else {
-                        // Mountains - brown to white
-                        const mountainHeight = (height - 0.6) / 0.4;
-                        data[idx] = Math.floor(180 + mountainHeight * 75);  // R
-                        data[idx + 1] = Math.floor(100 + mountainHeight * 155); // G
-                        data[idx + 2] = Math.floor(50 + mountainHeight * 205); // B
-                    }
-                    
-                    data[idx + 3] = 255; // Alpha
-                }
-            }
-            
-            // Put the image data to the canvas
-            ctx.putImageData(imageData, 0, 0);
+
+            const blob = new Blob([objData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'terrain.obj';
+            a.click();
+            URL.revokeObjectURL(url);
         }
-        
-        // Event listeners
-        document.getElementById('generateBtn').addEventListener('click', generatePlanet);
-        
-        // Generate initial planet
-        generatePlanet();
+
+        window.onload = init;
     </script>
 </body>
 </html>
