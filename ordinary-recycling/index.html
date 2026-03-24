@@ -1,1705 +1,489 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ORDINARY RECYCLING // NEO-SORT PROTOCOL v2.0</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"
-        rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Eco-Sorter | NEO-SORT PROTOCOL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        @property --glow-hue {
-            syntax: '<number>';
-            initial-value: 0;
-            inherits: false;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        :root {
-            --neon-cyan: #00f0ff;
-            --neon-pink: #ff2d95;
-            --neon-green: #39ff14;
-            --neon-gold: #ffd700;
-            --neon-red: #ff3b3b;
-            --glass-bg: rgba(10, 15, 30, 0.65);
-            --glass-border: rgba(255, 255, 255, 0.08);
-        }
-
         body {
-            font-family: 'Inter', sans-serif;
-            background: #050510;
-            color: #e0e8ff;
+            margin: 0;
             overflow: hidden;
+            background-color: #87CEEB;
             user-select: none;
-            touch-action: manipulation;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            touch-action: none;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
         }
-
-        /* Holographic Grid Background */
-        .holo-grid {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background:
-                linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(rgba(0, 240, 255, 0.015) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 240, 255, 0.015) 1px, transparent 1px);
-            background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
-            animation: gridScroll 20s linear infinite;
-            pointer-events: none;
-            z-index: 0;
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
         }
-
-        @keyframes gridScroll {
-            0% {
-                transform: perspective(500px) rotateX(60deg) translateY(0);
-            }
-
-            100% {
-                transform: perspective(500px) rotateX(60deg) translateY(100px);
-            }
+        .text-shadow {
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
-
-        /* Nebula Glow */
-        .nebula {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background:
-                radial-gradient(ellipse at 20% 50%, rgba(0, 100, 255, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 20%, rgba(255, 0, 150, 0.06) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 80%, rgba(0, 255, 200, 0.05) 0%, transparent 50%);
-            pointer-events: none;
-            z-index: 0;
+        .instruction-fade {
+            animation: fadeOut 3s forwards;
+            animation-delay: 4s;
         }
-
-        /* CRT Overlay */
-        .crt-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.03) 0px, rgba(0, 0, 0, 0.03) 1px, transparent 1px, transparent 3px);
-            pointer-events: none;
-            z-index: 999;
+        @keyframes fadeOut {
+            to { opacity: 0; visibility: hidden; }
         }
-
-        /* Game Container */
-        .game-container {
-            position: relative;
-            width: 100%;
-            max-width: 850px;
-            height: 620px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow:
-                0 0 60px rgba(0, 240, 255, 0.08),
-                0 0 120px rgba(0, 240, 255, 0.04),
-                inset 0 0 60px rgba(0, 240, 255, 0.02);
-            z-index: 1;
-        }
-
-        .game-container.shake {
-            animation: screenShake 0.4s ease-out;
-        }
-
-        @keyframes screenShake {
-
-            0%,
-            100% {
-                transform: translate(0);
-            }
-
-            20% {
-                transform: translate(-8px, 4px);
-            }
-
-            40% {
-                transform: translate(6px, -4px);
-            }
-
-            60% {
-                transform: translate(-4px, 2px);
-            }
-
-            80% {
-                transform: translate(4px, -2px);
-            }
-        }
-
-        /* Top HUD Bar */
-        .hud-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 56px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 16px;
-            background: linear-gradient(180deg, rgba(0, 10, 30, 0.9) 0%, rgba(0, 10, 30, 0.4) 100%);
-            border-bottom: 1px solid rgba(0, 240, 255, 0.15);
-            z-index: 50;
-        }
-
-        .hud-title {
+        .bin-indicator {
+            transition: transform 0.2s;
             font-family: 'Orbitron', sans-serif;
-            font-weight: 900;
-            font-size: 0.85em;
-            letter-spacing: 3px;
-            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
-
-        .hud-pills {
-            display: flex;
-            gap: 10px;
+        .bin-indicator.active {
+            transform: scale(1.1) translateY(-5px);
+            border: 2px solid white;
+            box-shadow: 0 0 15px rgba(255,255,255,0.5);
         }
-
-        .hud-pill {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 14px;
-            border-radius: 20px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.72em;
-            font-weight: 700;
-            letter-spacing: 1px;
-            backdrop-filter: blur(10px);
-        }
-
-        .hud-pill .label {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .hud-pill .value {
-            transition: all 0.3s ease;
-        }
-
-        .hud-pill.score .value {
-            color: var(--neon-green);
-        }
-
-        .hud-pill.lives .value {
-            color: var(--neon-pink);
-        }
-
-        .hud-pill.time .value {
-            color: var(--neon-gold);
-        }
-
-        .hud-pill.level .value {
-            color: var(--neon-cyan);
-        }
-
-        .hud-pill.combo .value {
-            color: #ff6b35;
-        }
-
-        .value-pulse {
-            animation: valuePulse 0.3s ease-out;
-        }
-
-        @keyframes valuePulse {
-            0% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.4);
-                filter: brightness(2);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        .time-critical .value {
-            animation: timeCritical 0.5s infinite alternate;
-        }
-
-        @keyframes timeCritical {
-            0% {
-                color: var(--neon-gold);
-            }
-
-            100% {
-                color: var(--neon-red);
-                text-shadow: 0 0 10px var(--neon-red);
-            }
-        }
-
-        /* Conveyor Belt — Smooth Roller Design */
-        .conveyor {
+        .floating-score {
             position: absolute;
-            top: 110px;
-            left: 0;
-            width: 100%;
-            height: 55px;
-            background:
-                repeating-linear-gradient(90deg,
-                    rgba(0, 240, 255, 0.04) 0px,
-                    rgba(0, 150, 200, 0.08) 4px,
-                    rgba(0, 60, 100, 0.12) 8px,
-                    rgba(0, 150, 200, 0.08) 12px,
-                    rgba(0, 240, 255, 0.04) 16px,
-                    transparent 16px,
-                    transparent 40px),
-                linear-gradient(180deg, rgba(0, 25, 50, 0.95) 0%, rgba(0, 15, 35, 0.98) 100%);
-            border-top: 1px solid rgba(0, 240, 255, 0.25);
-            border-bottom: 1px solid rgba(0, 240, 255, 0.25);
-            animation: conveyorMove 0.8s linear infinite;
-            box-shadow:
-                inset 0 2px 8px rgba(0, 240, 255, 0.06),
-                inset 0 -2px 8px rgba(0, 0, 0, 0.3),
-                0 0 20px rgba(0, 240, 255, 0.03);
-        }
-
-        @keyframes conveyorMove {
-            0% {
-                background-position: 0 0;
-            }
-
-            100% {
-                background-position: 40px 0;
-            }
-        }
-
-        .conveyor::after {
-            content: '';
-            position: absolute;
-            bottom: -3px;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
-            animation: scanPulse 2s ease-in-out infinite;
-        }
-
-        @keyframes scanPulse {
-
-            0%,
-            100% {
-                opacity: 0.3;
-            }
-
-            50% {
-                opacity: 1;
-            }
-        }
-
-        /* Combo Display */
-        .combo-display {
-            position: absolute;
-            top: 64px;
             left: 50%;
-            transform: translateX(-50%);
+            top: 50%;
+            transform: translate(-50%, -50%);
             font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
             font-weight: 900;
-            font-size: 1.3em;
-            color: transparent;
-            text-align: center;
-            z-index: 40;
-            opacity: 0;
-            transition: opacity 0.3s ease;
             pointer-events: none;
-        }
-
-        .combo-display.active {
-            opacity: 1;
-            animation: comboFire 0.5s ease-out;
-        }
-
-        .combo-display.x2 {
-            color: #ff9500;
-            text-shadow: 0 0 20px rgba(255, 149, 0, 0.6);
-        }
-
-        .combo-display.x3 {
-            color: #ff4500;
-            text-shadow: 0 0 25px rgba(255, 69, 0, 0.8);
-        }
-
-        .combo-display.x4 {
-            color: #ff0055;
-            text-shadow: 0 0 30px rgba(255, 0, 85, 1);
-        }
-
-        @keyframes comboFire {
-            0% {
-                transform: translateX(-50%) scale(0.5);
-            }
-
-            50% {
-                transform: translateX(-50%) scale(1.3);
-            }
-
-            100% {
-                transform: translateX(-50%) scale(1);
-            }
-        }
-
-        /* Items */
-        .item {
-            position: absolute;
-            width: 70px;
-            height: 70px;
-            cursor: grab;
-            z-index: 10;
-            border-radius: 14px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            transition: transform 0.1s ease, box-shadow 0.2s ease;
-            animation: itemSpawn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-        }
-
-        .item .item-label {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.32em;
-            font-weight: 700;
-            letter-spacing: 1.5px;
-            margin-top: 2px;
-            text-transform: uppercase;
-            opacity: 0.8;
-        }
-
-        @keyframes itemSpawn {
-            0% {
-                transform: scale(0) rotate(-180deg);
-                opacity: 0;
-            }
-
-            100% {
-                transform: scale(1) rotate(0deg);
-                opacity: 1;
-            }
-        }
-
-        .item:active {
-            transform: scale(1.15);
-            cursor: grabbing;
-        }
-
-        .item.correct-drop {
-            animation: correctPop 0.5s ease-out forwards;
-        }
-
-        .item.incorrect-drop {
-            animation: wrongShake 0.5s ease-out;
-        }
-
-        .item.hazard-pass {
-            animation: hazardFade 0.6s ease-out forwards;
-        }
-
-        @keyframes correctPop {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(1.4);
-                opacity: 0.8;
-            }
-
-            100% {
-                transform: scale(0);
-                opacity: 0;
-            }
-        }
-
-        @keyframes wrongShake {
-
-            0%,
-            100% {
-                transform: translateX(0) rotate(0);
-            }
-
-            20% {
-                transform: translateX(-12px) rotate(-8deg);
-            }
-
-            40% {
-                transform: translateX(10px) rotate(6deg);
-            }
-
-            60% {
-                transform: translateX(-6px) rotate(-4deg);
-            }
-
-            80% {
-                transform: translateX(4px) rotate(2deg);
-            }
-        }
-
-        @keyframes hazardFade {
-            0% {
-                opacity: 1;
-                filter: brightness(1);
-            }
-
-            50% {
-                filter: brightness(3) hue-rotate(90deg);
-            }
-
-            100% {
-                opacity: 0;
-                transform: scale(0.5);
-            }
-        }
-
-        /* Bins */
-        .bins-container {
-            position: absolute;
-            bottom: 15px;
-            left: 0;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            padding: 0 15px;
-        }
-
-        .bin {
-            width: 110px;
-            height: 140px;
-            background: rgba(10, 15, 30, 0.5);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-radius: 16px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            border: 1.5px solid rgba(255, 255, 255, 0.06);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .bin::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: conic-gradient(from var(--glow-hue, 0deg), transparent, rgba(0, 240, 255, 0.1), transparent);
-            animation: binRotate 4s linear infinite;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .bin:hover::before {
-            opacity: 1;
-        }
-
-        @keyframes binRotate {
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .bin::after {
-            content: '';
-            position: absolute;
-            inset: 1px;
-            background: rgba(10, 15, 30, 0.8);
-            border-radius: 15px;
-            z-index: 0;
-        }
-
-        .bin:hover {
-            transform: translateY(-6px) scale(1.03);
-            box-shadow: 0 10px 40px rgba(0, 240, 255, 0.15);
-        }
-
-        .bin-icon {
-            font-size: 32px;
-            margin-top: 20px;
-            z-index: 1;
-            filter: drop-shadow(0 0 6px currentColor);
-        }
-
-        .bin-label {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
-            font-size: 0.6em;
-            letter-spacing: 2px;
-            padding: 6px 0;
-            z-index: 1;
-            margin-top: 8px;
-        }
-
-        .bin-glow {
-            position: absolute;
-            bottom: 0;
-            left: 10%;
-            width: 80%;
-            height: 3px;
-            border-radius: 3px;
-            z-index: 1;
-            box-shadow: 0 0 15px currentColor;
-        }
-
-        .bin.correct-flash {
-            animation: binCorrect 0.5s ease-out;
-        }
-
-        .bin.wrong-flash {
-            animation: binWrong 0.5s ease-out;
-        }
-
-        @keyframes binCorrect {
-            0% {
-                box-shadow: 0 0 0 rgba(57, 255, 20, 0);
-            }
-
-            50% {
-                box-shadow: 0 0 40px rgba(57, 255, 20, 0.6), inset 0 0 30px rgba(57, 255, 20, 0.2);
-            }
-
-            100% {
-                box-shadow: 0 0 0 rgba(57, 255, 20, 0);
-            }
-        }
-
-        @keyframes binWrong {
-            0% {
-                box-shadow: 0 0 0 rgba(255, 59, 59, 0);
-            }
-
-            50% {
-                box-shadow: 0 0 40px rgba(255, 59, 59, 0.6), inset 0 0 30px rgba(255, 59, 59, 0.2);
-            }
-
-            100% {
-                box-shadow: 0 0 0 rgba(255, 59, 59, 0);
-            }
-        }
-
-        /* Bin Type Colors */
-        .bin[data-type="plastic"] {
-            --bin-color: #00aaff;
-        }
-
-        .bin[data-type="plastic"] .bin-label,
-        .bin[data-type="plastic"] .bin-glow {
-            color: #00aaff;
-        }
-
-        .bin[data-type="metal"] {
-            --bin-color: #c0c0d0;
-        }
-
-        .bin[data-type="metal"] .bin-label,
-        .bin[data-type="metal"] .bin-glow {
-            color: #c0c0d0;
-        }
-
-        .bin[data-type="garbage"] {
-            --bin-color: #39ff14;
-        }
-
-        .bin[data-type="garbage"] .bin-label,
-        .bin[data-type="garbage"] .bin-glow {
-            color: #39ff14;
-        }
-
-        .bin[data-type="paper"] {
-            --bin-color: #d2691e;
-        }
-
-        .bin[data-type="paper"] .bin-label,
-        .bin[data-type="paper"] .bin-glow {
-            color: #d2691e;
-        }
-
-        .bin[data-type="glass"] {
-            --bin-color: #00ff88;
-        }
-
-        .bin[data-type="glass"] .bin-label,
-        .bin[data-type="glass"] .bin-glow {
-            color: #00ff88;
-        }
-
-        .bin[data-type="electronic"] {
-            --bin-color: #bf00ff;
-        }
-
-        .bin[data-type="electronic"] .bin-label,
-        .bin[data-type="electronic"] .bin-glow {
-            color: #bf00ff;
-        }
-
-        /* Overlays */
-        .overlay-screen {
-            position: absolute;
-            inset: 0;
-            background: rgba(5, 5, 16, 0.92);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 200;
-            text-align: center;
-            padding: 30px;
-        }
-
-        .overlay-screen.active {
-            display: flex;
-        }
-
-        .overlay-title {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 900;
-            font-size: 2.2em;
-            letter-spacing: 4px;
-            margin-bottom: 20px;
-        }
-
-        .overlay-screen.game-over .overlay-title {
-            background: linear-gradient(90deg, var(--neon-red), var(--neon-pink));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .overlay-screen.level-complete .overlay-title {
-            background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin: 20px 0;
-            width: 100%;
-            max-width: 350px;
-        }
-
-        .stat-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            padding: 14px 10px;
-        }
-
-        .stat-card .stat-label {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.65em;
-            color: rgba(255, 255, 255, 0.4);
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        .stat-card .stat-value {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.5em;
-            font-weight: 900;
-            margin-top: 4px;
-        }
-
-        .btn-neon {
-            margin-top: 20px;
-            padding: 14px 32px;
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
-            font-size: 0.85em;
-            letter-spacing: 3px;
-            color: #fff;
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(255, 0, 150, 0.15));
-            border: 1px solid rgba(0, 240, 255, 0.3);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn-neon:hover {
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(255, 0, 150, 0.3));
-            box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
-            transform: scale(1.05);
-        }
-
-        /* Notification Toast */
-        .toast {
-            position: absolute;
-            top: 65px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 24px;
-            border-radius: 12px;
-            font-family: 'Inter', sans-serif;
-            font-size: 0.85em;
-            font-weight: 600;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(0, 240, 255, 0.2);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
-            z-index: 150;
-            animation: toastIn 0.4s ease-out, toastOut 0.4s ease-in 2.6s forwards;
-            white-space: nowrap;
-        }
-
-        @keyframes toastIn {
-            0% {
-                transform: translateX(-50%) translateY(-20px);
-                opacity: 0;
-            }
-
-            100% {
-                transform: translateX(-50%) translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes toastOut {
-            0% {
-                opacity: 1;
-            }
-
-            100% {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-10px);
-            }
-        }
-
-        /* Particle System */
-        .particle {
-            position: absolute;
-            border-radius: 50%;
-            pointer-events: none;
+            animation: floatUp 1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            text-shadow: 0px 4px 10px rgba(0,0,0,0.6);
             z-index: 100;
         }
-
-        /* Power-up */
-        .power-up {
-            position: absolute;
-            width: 55px;
-            height: 55px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            cursor: pointer;
-            z-index: 15;
-            background: radial-gradient(circle, rgba(255, 215, 0, 0.3), rgba(255, 100, 0, 0.2));
-            border: 2px solid var(--neon-gold);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
-            animation: powerFloat 2s ease-in-out infinite;
-            backdrop-filter: blur(8px);
+        @keyframes floatUp {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            20% { transform: translate(-50%, -70%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -150px) scale(1); opacity: 0; }
         }
 
-        @keyframes powerFloat {
-
-            0%,
-            100% {
-                transform: translateY(0) rotate(0deg);
-            }
-
-            50% {
-                transform: translateY(-8px) rotate(5deg);
-            }
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .game-container {
-                width: 96vw;
-                height: 85vh;
-                max-height: 600px;
-                border-radius: 14px;
-            }
-
-            .hud-title {
-                font-size: 0.65em;
-                letter-spacing: 1px;
-            }
-
-            .hud-pill {
-                padding: 3px 8px;
-                font-size: 0.6em;
-            }
-
-            .bin {
-                width: 80px;
-                height: 110px;
-                border-radius: 12px;
-            }
-
-            .bin-icon {
-                font-size: 24px;
-            }
-
-            .bin-label {
-                font-size: 0.5em;
-            }
-
-            .item {
-                width: 55px;
-                height: 55px;
-                font-size: 22px;
-                border-radius: 10px;
-            }
-
-            .item .item-label {
-                font-size: 0.28em;
-            }
-
-            .overlay-title {
-                font-size: 1.5em;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .game-container {
-                width: 99vw;
-                height: 90vh;
-            }
-
-            .hud-bar {
-                padding: 6px 8px;
-                height: 48px;
-            }
-
-            .hud-pill {
-                padding: 2px 6px;
-                font-size: 0.55em;
-                gap: 3px;
-            }
-
-            .bin {
-                width: 60px;
-                height: 90px;
-            }
-
-            .bin-icon {
-                font-size: 20px;
-                margin-top: 14px;
-            }
-
-            .item {
-                width: 48px;
-                height: 48px;
-                font-size: 18px;
-            }
-
-            .bins-container {
-                gap: 5px;
-                padding: 0 8px;
-            }
-        }
-
-        /* Aria Subtitle Bar */
+        /* Aria Subtitle */
         .aria-subtitle {
             position: absolute;
-            bottom: 165px;
+            bottom: 120px;
             left: 50%;
             transform: translateX(-50%);
-            max-width: 80%;
-            padding: 8px 20px;
-            border-radius: 10px;
-            background: rgba(0, 20, 40, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 240, 255, 0.15);
-            font-family: 'Inter', sans-serif;
-            font-size: 0.78em;
-            font-weight: 500;
-            color: rgba(0, 240, 255, 0.9);
-            text-align: center;
-            z-index: 60;
-            opacity: 0;
-            transition: opacity 0.4s ease;
+            background: rgba(0, 0, 0, 0.85);
+            color: #00f0ff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border: 1px solid #00f0ff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
             pointer-events: none;
-            text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+            text-align: center;
+            width: 85%;
+            max-width: 650px;
+            backdrop-filter: blur(5px);
         }
 
         .aria-subtitle.visible {
             opacity: 1;
         }
-
-        .aria-subtitle::before {
-            content: 'ARIA // ';
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
-            font-size: 0.85em;
-            color: var(--neon-pink);
-            letter-spacing: 2px;
-        }
     </style>
 </head>
-
 <body>
-    <div class="holo-grid"></div>
-    <div class="nebula"></div>
-    <div class="crt-overlay"></div>
 
-    <div class="game-container" id="game-container">
-        <!-- HUD Bar -->
-        <div class="hud-bar">
-            <div class="hud-title">NEO-SORT v2.0</div>
-            <div class="hud-pills">
-                <div class="hud-pill level"><span class="label">LVL</span><span class="value" id="level">1</span></div>
-                <div class="hud-pill score"><span class="label">PTS</span><span class="value" id="score">0</span></div>
-                <div class="hud-pill combo"><span class="label">CMB</span><span class="value" id="combo">0x</span></div>
-                <div class="hud-pill lives"><span class="label">HP</span><span class="value" id="lives">❤❤❤</span></div>
-                <div class="hud-pill time"><span class="label">T</span><span class="value" id="time">60</span></div>
+    <!-- 3D Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Aria Subtitle -->
+    <div class="aria-subtitle" id="aria-subtitle"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between hidden">
+        <!-- Top Bar -->
+        <div class="p-6 flex justify-between items-start">
+            <div class="text-white font-black text-3xl text-shadow flex flex-col font-['Orbitron']">
+                <span>SCORE <span id="score-display" class="text-yellow-300">0</span></span>
+                <span id="combo-display" class="text-sm text-green-300 opacity-0 transition-opacity">Combo x1!</span>
+            </div>
+            <div class="text-white font-black text-2xl text-shadow flex gap-1" id="lives-display">
+                ❤️❤️❤️
             </div>
         </div>
 
-        <!-- Combo Streak Display -->
-        <div class="combo-display" id="combo-display"></div>
-
-        <!-- Conveyor -->
-        <div class="conveyor"></div>
-
-        <!-- Bins -->
-        <div class="bins-container" id="bins-container"></div>
-
-        <!-- Aria Subtitle -->
-        <div class="aria-subtitle" id="aria-subtitle"></div>
-
-        <!-- Game Over -->
-        <div class="overlay-screen game-over" id="game-over">
-            <div class="overlay-title">SIMULATION TERMINATED</div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">FINAL SCORE</div>
-                    <div class="stat-value" id="final-score" style="color: var(--neon-green)">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">LEVEL</div>
-                    <div class="stat-value" id="final-level" style="color: var(--neon-cyan)">1</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">ACCURACY</div>
-                    <div class="stat-value" id="final-accuracy" style="color: var(--neon-gold)">0%</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">BEST COMBO</div>
-                    <div class="stat-value" id="final-combo" style="color: var(--neon-pink)">0x</div>
-                </div>
+        <!-- Center Instructions -->
+        <div class="absolute inset-0 flex items-center justify-center instruction-fade">
+            <div class="bg-black/60 text-white px-6 py-3 rounded-full backdrop-blur-md text-lg font-bold tracking-wider font-['Orbitron'] border border-white/20">
+                Tap Left / Right or use A & D to Rotate
             </div>
-            <button class="btn-neon" id="restart-button">REBOOT SIMULATION</button>
         </div>
 
-        <!-- Level Complete -->
-        <div class="overlay-screen level-complete" id="level-complete">
-            <div class="overlay-title">PROTOCOL CLEARED</div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">LEVEL SCORE</div>
-                    <div class="stat-value" id="level-score" style="color: var(--neon-green)">0</div>
+        <!-- Bottom Legend -->
+        <div class="p-6 w-full flex justify-center gap-2 sm:gap-6 mb-4">
+            <div id="ind-0" class="bin-indicator bg-blue-500 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2 active">
+                <div class="w-3 h-3 bg-white rounded-sm"></div> Paper
+            </div>
+            <div id="ind-1" class="bin-indicator bg-yellow-500 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2">
+                <div class="w-3 h-4 bg-white rounded-sm"></div> Plastic
+            </div>
+            <div id="ind-2" class="bin-indicator bg-green-500 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2">
+                <div class="w-4 h-4 bg-white rounded-full" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div> Glass
+            </div>
+            <div id="ind-3" class="bin-indicator bg-amber-700 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2">
+                <div class="w-4 h-4 bg-white rounded-full"></div> Organic
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-md">
+        <div class="bg-gray-900/90 text-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border border-white/10">
+            <h1 class="text-4xl font-black text-green-400 mb-2 font-['Orbitron']">ECO-SORTER</h1>
+            <p class="text-gray-400 mb-6 font-medium font-['Orbitron'] text-xs tracking-widest">NEO-SORT PROTOCOL v4.0</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8 text-xs font-bold font-['Orbitron']">
+                <div class="bg-blue-500/20 p-3 rounded-xl border border-blue-500/30">
+                    <div class="text-blue-400 mb-1">BLUE BIN</div>
+                    <div class="text-gray-300">Paper (Cubes)</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-label">ACCURACY</div>
-                    <div class="stat-value" id="level-accuracy" style="color: var(--neon-gold)">0%</div>
+                <div class="bg-yellow-500/20 p-3 rounded-xl border border-yellow-500/30">
+                    <div class="text-yellow-400 mb-1">YELLOW BIN</div>
+                    <div class="text-gray-300">Plastic (Cylinders)</div>
+                </div>
+                <div class="bg-green-500/20 p-3 rounded-xl border border-green-500/30">
+                    <div class="text-green-400 mb-1">GREEN BIN</div>
+                    <div class="text-gray-300">Glass (Gems)</div>
+                </div>
+                <div class="bg-amber-700/20 p-3 rounded-xl border border-amber-700/30">
+                    <div class="text-amber-500 mb-1">BROWN BIN</div>
+                    <div class="text-gray-300">Organic (Spheres)</div>
                 </div>
             </div>
-            <button class="btn-neon" id="next-level-button">NEXT PROTOCOL →</button>
+
+            <button id="start-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-black text-xl py-4 rounded-2xl shadow-lg shadow-green-500/30 transition-all active:scale-95 font-['Orbitron']">
+                INITIATE
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-gray-900 border border-red-500/30 p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center">
+            <h2 class="text-4xl font-black text-red-500 mb-2 font-['Orbitron']">FAILED</h2>
+            <p class="text-gray-400 mb-6 font-medium">SIMULATION TERMINATED</p>
+            
+            <div class="text-6xl font-black text-white mb-2 font-['Orbitron']" id="final-score">0</div>
+            <p class="text-gray-500 text-xs mb-8 uppercase tracking-widest">Final Data Recovered</p>
+            
+            <button id="restart-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-xl py-4 rounded-2xl shadow-lg shadow-blue-500/30 transition-all active:scale-95 font-['Orbitron']">
+                REBOOT
+            </button>
         </div>
     </div>
 
     <script src="../narrator.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const gc = document.getElementById('game-container');
-            const binsContainer = document.getElementById('bins-container');
-            const scoreEl = document.getElementById('score');
-            const livesEl = document.getElementById('lives');
-            const timeEl = document.getElementById('time');
-            const levelEl = document.getElementById('level');
-            const comboEl = document.getElementById('combo');
-            const comboDisplay = document.getElementById('combo-display');
-            const gameOverScreen = document.getElementById('game-over');
-            const levelCompleteScreen = document.getElementById('level-complete');
-            const ariaSubtitle = document.getElementById('aria-subtitle');
+        // --- ARIA DIALOGUE & AUDIO ---
+        const ariaSubtitle = document.getElementById('aria-subtitle');
+        const ariaDialogue = {
+            gameStart: ["NEO-SORT PROTOCOL INITIATED. COMMENCE RECYCLING.", "SIMULATION ONLINE. PROCEED WITH CAUTION.", "ENTERING RECYCLING SECTOR. OPTIMIZE THROUGHPUT."],
+            correct: ["DATA POINT ACQUIRED.", "EFFICIENCY IMPROVING.", "OPTIMAL SORT.", "RECOVERY COMPLETE."],
+            wrong: ["ERROR: INCORRECT CLASSIFICATION.", "CONTAMINATION DETECTED.", "SORTING FAILURE.", "INEFFICIENT PERFORMANCE."],
+            powerup: ["QUANTUM ANOMALY HARNESSED.", "SYSTEM OVERCLOCK DETECTED.", "VITALITY RESTORED."],
+            combo2: ["SYNERGY DETECTED.", "DOUBLE SORT PROTOCOL ACTIVE."],
+            combo3: ["TRIPLE SYNERGY ENGAGED.", "QUANTUM THROUGHPUT OPTIMIZED."],
+            combo4: ["HYPER-SORT ACTIVE.", "UNSTOPPABLE LOGISTICS DETECTED."],
+            gameOver: ["SIMULATION TERMINATED. SYSTEM OFFLINE.", "FINAL ANALYSIS: REBOOT REQUIRED."]
+        };
 
-            // --- ARIA Dialogue System ---
-            const ariaDialogue = {
-                gameStart: [
-                    "NEO-SORT PROTOCOL INITIATED. COMMENCE RECYCLING.",
-                    "SIMULATION ONLINE. PROCEED WITH CAUTION, USER.",
-                    "ENTERING RECYCLING SECTOR. OPTIMIZE YOUR THROUGHPUT."
-                ],
-                correct: [
-                    "DATA POINT ACQUIRED.",
-                    "EFFICIENCY IMPROVING.",
-                    "OPTIMAL SORT.",
-                    "RECOVERY COMPLETE.",
-                    "CORRECT PROTOCOL FOLLOWED."
-                ],
-                wrong: [
-                    "ERROR: INCORRECT CLASSIFICATION.",
-                    "CONTAMINATION DETECTED.",
-                    "SORTING FAILURE. ANALYZE YOUR ERROR.",
-                    "INEFFICIENT PERFORMANCE.",
-                    "DEVIATION FROM PROTOCOL."
-                ],
-                itemMissed: [
-                    "RESOURCES LOST TO OBLIVION.",
-                    "MISSED DATA FRAGMENT.",
-                    "PROTOCOL LEAK DETECTED.",
-                    "FAILURE TO CAPTURE RESOURCE."
-                ],
-                hazardSort: [
-                    "CRITICAL ERROR: HAZARD CONTAINMENT BREACHED.",
-                    "WARNING: SYSTEM DAMAGE DETECTED.",
-                    "YOU HAVE SORTED FORBIDDEN MATERIAL.",
-                    "PROTOCOL VIOLATION: HAZARD MISMANAGEMENT."
-                ],
-                hazardPass: [
-                    "HAZARD AVOIDED. STABILITY MAINTAINED.",
-                    "THREAT NEUTRALIZED.",
-                    "DANGEROUS MATERIAL DETOURED.",
-                    "WISE DECISION, USER."
-                ],
-                combo2: [
-                    "SYNERGY DETECTED.",
-                    "DOUBLE SORT PROTOCOL ACTIVE.",
-                    "MOMENTUM INCREASING."
-                ],
-                combo3: [
-                    "TRIPLE SYNERGY ENGAGED.",
-                    "QUANTUM THROUGHPUT OPTIMIZED.",
-                    "YOU ARE PERFORMING ADMIRABLY."
-                ],
-                combo4: [
-                    "HYPER-SORT ACTIVE. DIMENSIONAL STABILITY PEAKING.",
-                    "YOU ARE THE RECYCLING SINGULARITY.",
-                    "UNSTOPPABLE LOGISTICS DETECTED."
-                ],
-                powerup: [
-                    "QUANTUM ANOMALY HARNESSED.",
-                    "SYSTEM OVERCLOCK DETECTED.",
-                    "TEMPORARY ENHANCEMENT ACTIVE."
-                ],
-                timeWarning: [
-                    "WARNING: CHRONO-RESOURCES DEPLETING.",
-                    "TEMPORAL STABILITY COMPROMISED.",
-                    "ACCELERATE SORTING. TIME IS VANISHING."
-                ],
-                levelComplete: [
-                    "PROTOCOL CLEARED. SECTOR STABILIZED.",
-                    "EVALUATION: SATISFACTORY PERFORMANCE.",
-                    "PHASE COMPLETE. PREPARING NEXT SEQUENCE."
-                ],
-                levelStart: [
-                    "ENTERING HIGHER COMPLEXITY PROTOCOL.",
-                    "ENVIRONMENTAL VARIABLES UPDATED.",
-                    "DIFFICULTY MODULATED. COMMENCE PHASE."
-                ],
-                gameOver: [
-                    "SIMULATION TERMINATED. SYSTEM OFFLINE.",
-                    "COGNITIVE LOAD REACHED CRITICAL MASS.",
-                    "FINAL ANALYSIS: REBOOT REQUIRED."
-                ]
-            };
-
-            window.ariaRandom = function(type, delay = 0) {
-                if (!ariaDialogue[type]) return;
-                
-                const quotes = ariaDialogue[type];
-                const quote = quotes[Math.floor(Math.random() * quotes.length)];
-                
-                setTimeout(() => {
-                    // Visual Subtitle
-                    ariaSubtitle.textContent = quote;
-                    ariaSubtitle.classList.add('visible');
-                    
-                    // Voice Synthesis
-                    if (window.AriaNarrator) {
-                        window.AriaNarrator.speak(quote, null, () => {
-                            setTimeout(() => {
-                                // Only fade out if the content hasn't changed (a new quote might have started)
-                                if (ariaSubtitle.textContent === quote) {
-                                    ariaSubtitle.classList.remove('visible');
-                                }
-                            }, 1000);
-                        });
-                    } else {
-                        // Fallback if narrator fails or is missing
-                        setTimeout(() => {
-                            ariaSubtitle.classList.remove('visible');
-                        }, 3000);
-                    }
-                }, delay);
-            };
-
-            // Web Audio SFX
-            let audioCtx;
-            function initAudio() {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            function playSFX(type) {
-                initAudio();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                gain.gain.value = 0.08;
-
-                if (type === 'correct') {
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-                    osc.frequency.linearRampToValueAtTime(900, audioCtx.currentTime + 0.1);
-                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
-                    osc.start(); osc.stop(audioCtx.currentTime + 0.15);
-                } else if (type === 'wrong') {
-                    osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
-                    osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.2);
-                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.25);
-                    osc.start(); osc.stop(audioCtx.currentTime + 0.25);
-                } else if (type === 'combo') {
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                    osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.08);
-                    osc.frequency.linearRampToValueAtTime(1600, audioCtx.currentTime + 0.16);
-                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
-                    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
-                } else if (type === 'powerup') {
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-                    osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
-                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
-                    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-                } else if (type === 'hazard') {
-                    osc.type = 'square';
-                    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-                    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
-                    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-                }
-            }
-
-            // State
-            let score = 0, lives = 3, timeLeft = 60, level = 1;
-            let gameRunning = true, levelScore = 0;
-            let combo = 0, bestCombo = 0, totalDrops = 0, correctDrops = 0;
-            let powerUpActive = false, powerUpType = '';
-
-            // Item definitions with emoji + color
-            const itemDefs = {
-                plastic: { emoji: '🧴', color: 'rgba(0,170,255,0.2)', border: 'rgba(0,170,255,0.5)', glow: '0,170,255' },
-                metal: { emoji: '🔩', color: 'rgba(180,180,210,0.2)', border: 'rgba(180,180,210,0.5)', glow: '180,180,210' },
-                garbage: { emoji: '🍌', color: 'rgba(57,255,20,0.15)', border: 'rgba(57,255,20,0.4)', glow: '57,255,20' },
-                paper: { emoji: '📰', color: 'rgba(210,105,30,0.2)', border: 'rgba(210,105,30,0.5)', glow: '210,105,30' },
-                glass: { emoji: '🍶', color: 'rgba(0,255,136,0.15)', border: 'rgba(0,255,136,0.4)', glow: '0,255,136' },
-                electronic: { emoji: '📱', color: 'rgba(191,0,255,0.2)', border: 'rgba(191,0,255,0.5)', glow: '191,0,255' },
-                hazard: { emoji: '☢️', color: 'rgba(255,59,59,0.25)', border: 'rgba(255,59,59,0.6)', glow: '255,59,59' },
-            };
-            const binIcons = {
-                plastic: '♻️', metal: '⚙️', garbage: '🗑️',
-                paper: '📄', glass: '🫙', electronic: '💾'
-            };
-
-            const levelConfigs = {
-                1: { time: 60, target: 100, speed: [1.5, 3.0], spawn: [1200, 2500], bins: ['plastic', 'metal', 'garbage'], hazardChance: 0 },
-                2: { time: 55, target: 200, speed: [2, 3.8], spawn: [900, 2000], bins: ['plastic', 'metal', 'garbage', 'paper'], hazardChance: 0.08 },
-                3: { time: 50, target: 350, speed: [2.5, 4.2], spawn: [700, 1700], bins: ['plastic', 'metal', 'garbage', 'paper', 'glass'], hazardChance: 0.12 },
-                4: { time: 45, target: 500, speed: [3, 5], spawn: [500, 1400], bins: ['plastic', 'metal', 'garbage', 'paper', 'glass', 'electronic'], hazardChance: 0.15 },
-            };
-
-            function getConfig() { return levelConfigs[level] || levelConfigs[4]; }
-
-            function updateLivesDisplay() {
-                livesEl.textContent = '❤'.repeat(Math.max(0, lives));
-            }
-
-            function setupLevel(lv) {
-                const cfg = getConfig();
-                timeLeft = cfg.time;
-                timeEl.textContent = timeLeft;
-                timeEl.parentElement.classList.remove('time-critical');
-                binsContainer.innerHTML = '';
-                cfg.bins.forEach(type => {
-                    const bin = document.createElement('div');
-                    bin.className = 'bin';
-                    bin.dataset.type = type;
-                    bin.innerHTML = `
-                    <div class="bin-icon">${binIcons[type]}</div>
-                    <div class="bin-label">${type === 'garbage' ? 'WASTE' : type === 'electronic' ? 'E-WASTE' : type.toUpperCase()}</div>
-                    <div class="bin-glow"></div>
-                `;
-                    binsContainer.appendChild(bin);
-                });
-            }
-
-            function createItem() {
-                if (!gameRunning) return;
-                const cfg = getConfig();
-
-                let type;
-                if (cfg.hazardChance > 0 && Math.random() < cfg.hazardChance) {
-                    type = 'hazard';
-                } else {
-                    type = cfg.bins[Math.floor(Math.random() * cfg.bins.length)];
-                }
-
-                const def = itemDefs[type];
-                const item = document.createElement('div');
-                item.className = 'item';
-                item.dataset.type = type;
-                item.style.background = def.color;
-                item.style.border = `1.5px solid ${def.border}`;
-                item.style.boxShadow = `0 0 16px rgba(${def.glow}, 0.4)`;
-                item.innerHTML = `<span>${def.emoji}</span><span class="item-label">${type === 'hazard' ? 'HAZARD' : type.toUpperCase()}</span>`;
-                item.style.left = '-75px';
-                item.style.top = '100px';
-                gc.appendChild(item);
-
-                item.addEventListener('mousedown', startDrag);
-                item.addEventListener('touchstart', startDragTouch, { passive: false });
-
-                const speed = cfg.speed[0] + Math.random() * (cfg.speed[1] - cfg.speed[0]);
-                const moveInterval = setInterval(() => {
-                    if (!gameRunning) { clearInterval(moveInterval); return; }
-                    const left = parseFloat(item.style.left);
-                    if (left > gc.clientWidth) {
-                        clearInterval(moveInterval);
-                        if (gc.contains(item)) {
-                            if (type === 'hazard') {
-                                // Hazard passed safely — bonus points!
-                                score += 5;
-                                levelScore += 5;
-                                scoreEl.textContent = score;
-                                item.classList.add('hazard-pass');
-                                playSFX('hazard');
-                                ariaRandom('hazardPass', 5000);
-                                setTimeout(() => { if (gc.contains(item)) gc.removeChild(item); }, 600);
-                            } else {
-                                gc.removeChild(item);
-                                decrementLives();
-                                ariaRandom('itemMissed', 6000);
-                            }
-                        }
-                    } else {
-                        item.style.left = (left + speed) + 'px';
-                    }
-                }, 30);
-            }
-
-            function createPowerUp() {
-                if (!gameRunning || powerUpActive) return;
-                const pu = document.createElement('div');
-                pu.className = 'power-up';
-                pu.innerHTML = '⚡';
-                pu.style.left = '-60px';
-                pu.style.top = '100px';
-                gc.appendChild(pu);
-
-                pu.addEventListener('click', e => activatePowerUp(e, pu));
-                pu.addEventListener('touchstart', e => activatePowerUp(e, pu));
-
-                const moveInterval = setInterval(() => {
-                    if (!gameRunning) { clearInterval(moveInterval); return; }
-                    const left = parseFloat(pu.style.left);
-                    if (left > gc.clientWidth) {
-                        clearInterval(moveInterval);
-                        if (gc.contains(pu)) gc.removeChild(pu);
-                    } else {
-                        pu.style.left = (left + 2) + 'px';
-                    }
-                }, 30);
-            }
-
-            function activatePowerUp(e, pu) {
-                e.preventDefault();
-                if (gc.contains(pu)) gc.removeChild(pu);
-                playSFX('powerup');
-                ariaRandom('powerup', 5000);
-
-                const types = ['slowMotion', 'doublePoints', 'extraLife'];
-                powerUpType = types[Math.floor(Math.random() * types.length)];
-                powerUpActive = true;
-
-                if (powerUpType === 'extraLife') {
-                    lives = Math.min(lives + 1, 5);
-                    updateLivesDisplay();
-                    showToast('⚡ EXTRA LIFE RESTORED', 'var(--neon-gold)');
-                    powerUpActive = false; return;
-                }
-
-                const msg = powerUpType === 'slowMotion' ? '⚡ SLOW MOTION — 10s' : '⚡ DOUBLE POINTS — 15s';
-                showToast(msg, 'var(--neon-gold)');
-                const dur = powerUpType === 'slowMotion' ? 10000 : 15000;
-                setTimeout(() => { powerUpActive = false; powerUpType = ''; }, dur);
-            }
-
-            // Drag Handling
-            let touchOffset = { x: 0, y: 0 };
-            function startDrag(e) {
-                const item = e.target.closest('.item');
-                if (!item) return;
-                const sx = e.clientX - item.getBoundingClientRect().left;
-                const sy = e.clientY - item.getBoundingClientRect().top;
-                item.style.zIndex = '100';
-                item.style.transform = 'scale(1.12)';
-
-                function move(e) {
-                    const r = gc.getBoundingClientRect();
-                    item.style.left = Math.max(0, Math.min(r.width - item.clientWidth, e.clientX - r.left - sx)) + 'px';
-                    item.style.top = Math.max(0, Math.min(r.height - item.clientHeight, e.clientY - r.top - sy)) + 'px';
-                }
-                function stop() {
-                    document.removeEventListener('mousemove', move);
-                    document.removeEventListener('mouseup', stop);
-                    checkBinDrop(item);
-                    item.style.zIndex = '10';
-                    item.style.transform = 'scale(1)';
-                }
-                document.addEventListener('mousemove', move);
-                document.addEventListener('mouseup', stop);
-            }
-            function startDragTouch(e) {
-                e.preventDefault();
-                const item = e.target.closest('.item');
-                if (!item) return;
-                const touch = e.touches[0];
-                const ir = item.getBoundingClientRect();
-                touchOffset.x = touch.clientX - ir.left;
-                touchOffset.y = touch.clientY - ir.top;
-                item.style.zIndex = '100';
-                item.style.transform = 'scale(1.12)';
-
-                function move(e) {
-                    const t = e.touches[0];
-                    const r = gc.getBoundingClientRect();
-                    item.style.left = Math.max(0, Math.min(r.width - item.clientWidth, t.clientX - r.left - touchOffset.x)) + 'px';
-                    item.style.top = Math.max(0, Math.min(r.height - item.clientHeight, t.clientY - r.top - touchOffset.y)) + 'px';
-                }
-                function stop() {
-                    document.removeEventListener('touchmove', move);
-                    document.removeEventListener('touchend', stop);
-                    checkBinDrop(item);
-                    item.style.zIndex = '10';
-                    item.style.transform = 'scale(1)';
-                }
-                document.addEventListener('touchmove', move, { passive: false });
-                document.addEventListener('touchend', stop);
-            }
-
-            function checkBinDrop(item) {
-                const ir = item.getBoundingClientRect();
-                const type = item.dataset.type;
-                let dropped = false;
-                totalDrops++;
-
-                // Hazard items should NOT be sorted
-                if (type === 'hazard') {
-                    document.querySelectorAll('.bin').forEach(bin => {
-                        const br = bin.getBoundingClientRect();
-                        const cx = ir.left + ir.width / 2;
-                        const cy = ir.top + ir.height / 2;
-                        if (cx >= br.left && cx <= br.right && cy >= br.top && cy <= br.bottom) {
-                            dropped = true;
-                            decrementLives();
-                            gc.classList.add('shake');
-                            setTimeout(() => gc.classList.remove('shake'), 400);
-                            bin.classList.add('wrong-flash');
-                            setTimeout(() => bin.classList.remove('wrong-flash'), 500);
-                            playSFX('wrong');
-                            showToast('☢️ HAZARD — DON\'T SORT IT!', 'var(--neon-red)');
-                            ariaRandom('hazardSort', 4000);
-                            resetCombo();
-                            item.classList.add('incorrect-drop');
-                            setTimeout(() => {
-                                item.classList.remove('incorrect-drop');
-                                item.style.top = '100px';
-                                item.style.left = '0px';
-                            }, 500);
-                        }
+        window.ariaRandom = function (type, delay = 0) {
+            if (!ariaDialogue[type]) return;
+            const quotes = ariaDialogue[type];
+            const quote = quotes[Math.floor(Math.random() * quotes.length)];
+            setTimeout(() => {
+                ariaSubtitle.textContent = quote;
+                ariaSubtitle.classList.add('visible');
+                if (window.AriaNarrator) {
+                    window.AriaNarrator.speak(quote, null, () => {
+                        setTimeout(() => { if (ariaSubtitle.textContent === quote) ariaSubtitle.classList.remove('visible'); }, 1000);
                     });
-                    if (!dropped) {
-                        item.style.top = '100px'; item.style.left = '0px';
-                    }
-                    return;
+                } else {
+                    setTimeout(() => ariaSubtitle.classList.remove('visible'), 3000);
                 }
+            }, delay);
+        };
 
-                document.querySelectorAll('.bin').forEach(bin => {
-                    const br = bin.getBoundingClientRect();
-                    const cx = ir.left + ir.width / 2;
-                    const cy = ir.top + ir.height / 2;
-
-                    if (cx >= br.left && cx <= br.right && cy >= br.top && cy <= br.bottom) {
-                        dropped = true;
-                        if (type === bin.dataset.type) {
-                            // Correct!
-                            correctDrops++;
-                            incrementScore();
-                            bin.classList.add('correct-flash');
-                            setTimeout(() => bin.classList.remove('correct-flash'), 500);
-                            item.classList.add('correct-drop');
-                            spawnParticles(ir.left + ir.width / 2, ir.top + ir.height / 2, `rgba(57,255,20,0.8)`);
-                            playSFX(combo >= 3 ? 'combo' : 'correct');
-                            // Aria commentary on correct + combos
-                            if (combo >= 4) ariaRandom('combo4', 5000);
-                            else if (combo >= 3) ariaRandom('combo3', 5000);
-                            else if (combo >= 2) ariaRandom('combo2', 5000);
-                            else ariaRandom('correct', 8000);
-                            setTimeout(() => { if (gc.contains(item)) gc.removeChild(item); }, 500);
-                        } else {
-                            // Wrong bin
-                            decrementLives();
-                            gc.classList.add('shake');
-                            setTimeout(() => gc.classList.remove('shake'), 400);
-                            bin.classList.add('wrong-flash');
-                            setTimeout(() => bin.classList.remove('wrong-flash'), 500);
-                            spawnParticles(ir.left + ir.width / 2, ir.top + ir.height / 2, `rgba(255,59,59,0.8)`);
-                            playSFX('wrong');
-                            ariaRandom('wrong', 5000);
-                            resetCombo();
-                            item.classList.add('incorrect-drop');
-                            setTimeout(() => {
-                                item.classList.remove('incorrect-drop');
-                                item.style.top = '100px';
-                                item.style.left = '0px';
-                            }, 500);
-                        }
-                    }
-                });
-
-                if (!dropped) {
-                    item.style.top = '100px'; item.style.left = '0px';
-                }
+        let audioCtx;
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        function playSFX(type) {
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination); gain.gain.value = 0.08;
+            if (type === 'correct') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(900, audioCtx.currentTime + 0.1);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.2);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.25);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+            } else if (type === 'combo') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'powerup') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
             }
+        }
 
-            // Combo System
-            function incrementCombo() {
-                combo++;
-                if (combo > bestCombo) bestCombo = combo;
-                comboEl.textContent = combo + 'x';
-                comboEl.classList.add('value-pulse');
-                setTimeout(() => comboEl.classList.remove('value-pulse'), 300);
+        // --- GAME STATE ---
+        let score = 0;
+        let lives = 3;
+        let combo = 0;
+        let gameActive = false;
+        let baseSpeed = 0.08;
+        let currentSpeed = baseSpeed;
+        let spawnRate = 120; 
+        let frameCount = 0;
+        
+        // --- THREE.JS SETUP ---
+        const canvas = document.getElementById('game-canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 15, 30);
 
-                if (combo >= 2) {
-                    comboDisplay.textContent = combo + 'x COMBO!';
-                    comboDisplay.className = 'combo-display active';
-                    if (combo >= 4) comboDisplay.classList.add('x4');
-                    else if (combo >= 3) comboDisplay.classList.add('x3');
-                    else comboDisplay.classList.add('x2');
-                }
-            }
-            function resetCombo() {
-                combo = 0;
-                comboEl.textContent = '0x';
-                comboDisplay.className = 'combo-display';
-            }
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 6, 12);
+        camera.lookAt(0, -2, 0);
 
-            function incrementScore() {
-                incrementCombo();
-                let pts = 10;
-                if (powerUpType === 'doublePoints') pts *= 2;
-                if (combo >= 4) pts *= 4;
-                else if (combo >= 3) pts *= 3;
-                else if (combo >= 2) pts *= 2;
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
 
-                score += pts;
-                levelScore += pts;
-                scoreEl.textContent = score;
-                scoreEl.classList.add('value-pulse');
-                setTimeout(() => scoreEl.classList.remove('value-pulse'), 300);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
 
-                const cfg = getConfig();
-                if (levelScore >= cfg.target) completeLevel();
-            }
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 15, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
 
-            function decrementLives() {
-                lives--;
-                updateLivesDisplay();
-                livesEl.classList.add('value-pulse');
-                setTimeout(() => livesEl.classList.remove('value-pulse'), 300);
-                resetCombo();
-                if (lives <= 0) endGame();
-            }
+        const floorGeo = new THREE.CylinderGeometry(15, 15, 1, 32);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x24292e, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.y = -4.5;
+        floor.receiveShadow = true;
+        scene.add(floor);
 
-            function spawnParticles(x, y, color) {
-                const gcr = gc.getBoundingClientRect();
-                for (let i = 0; i < 12; i++) {
-                    const p = document.createElement('div');
-                    p.className = 'particle';
-                    const size = 3 + Math.random() * 5;
-                    p.style.width = size + 'px';
-                    p.style.height = size + 'px';
-                    p.style.background = color;
-                    p.style.left = (x - gcr.left) + 'px';
-                    p.style.top = (y - gcr.top) + 'px';
-                    p.style.boxShadow = `0 0 6px ${color}`;
+        const carousel = new THREE.Group();
+        carousel.position.y = -2;
+        scene.add(carousel);
 
-                    const angle = Math.random() * Math.PI * 2;
-                    const dist = 30 + Math.random() * 60;
-                    const dx = Math.cos(angle) * dist;
-                    const dy = Math.sin(angle) * dist;
+        let targetRotation = 0;
+        let currentRotation = 0;
 
-                    gc.appendChild(p);
-                    p.animate([
-                        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-                        { transform: `translate(${dx}px, ${dy}px) scale(0)`, opacity: 0 }
-                    ], { duration: 600 + Math.random() * 400, easing: 'ease-out', fill: 'forwards' });
-                    setTimeout(() => { if (gc.contains(p)) gc.removeChild(p); }, 1100);
-                }
-            }
+        const binTypes = [
+            { id: 0, name: 'Paper', color: 0x3b82f6, hex: '#3b82f6' },
+            { id: 1, name: 'Plastic', color: 0xeab308, hex: '#eab308' },
+            { id: 2, name: 'Glass', color: 0x22c55e, hex: '#22c55e' },
+            { id: 3, name: 'Organic', color: 0xb45309, hex: '#b45309' }
+        ];
 
-            function showToast(msg, color) {
-                const t = document.createElement('div');
-                t.className = 'toast';
-                t.innerHTML = msg;
-                if (color) t.style.borderColor = color;
-                gc.appendChild(t);
-                setTimeout(() => { if (gc.contains(t)) gc.removeChild(t); }, 3000);
-            }
+        function createBin(colorHex, x, z) {
+            const group = new THREE.Group();
+            const bodyGeo = new THREE.CylinderGeometry(1.4, 1.2, 2.5, 16, 1, true);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, side: THREE.DoubleSide });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            group.add(body);
+            const bottomGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16);
+            const bottom = new THREE.Mesh(bottomGeo, new THREE.MeshStandardMaterial({ color: colorHex }));
+            bottom.position.y = -1.15;
+            group.add(bottom);
+            group.position.set(x, 0, z);
+            return group;
+        }
 
-            function completeLevel() {
-                gameRunning = false;
-                gc.querySelectorAll('.item, .power-up').forEach(el => { if (gc.contains(el)) gc.removeChild(el); });
-                document.getElementById('level-score').textContent = levelScore;
-                document.getElementById('level-accuracy').textContent = totalDrops > 0 ? Math.round((correctDrops / totalDrops) * 100) + '%' : '—';
-                levelCompleteScreen.classList.add('active');
-                ariaRandom('levelComplete', 1000);
-            }
+        const binDistance = 4;
+        const bins = [];
+        bins.push(createBin(binTypes[0].color, 0, binDistance));
+        bins.push(createBin(binTypes[1].color, binDistance, 0));
+        bins.push(createBin(binTypes[2].color, 0, -binDistance));
+        bins.push(createBin(binTypes[3].color, -binDistance, 0));
+        bins.forEach(bin => carousel.add(bin));
 
-            function endGame() {
-                gameRunning = false;
-                gc.querySelectorAll('.item, .power-up').forEach(el => { if (gc.contains(el)) gc.removeChild(el); });
-                document.getElementById('final-score').textContent = score;
-                document.getElementById('final-level').textContent = level;
-                document.getElementById('final-accuracy').textContent = totalDrops > 0 ? Math.round((correctDrops / totalDrops) * 100) + '%' : '—';
-                document.getElementById('final-combo').textContent = bestCombo + 'x';
-                gameOverScreen.classList.add('active');
-                ariaRandom('gameOver', 1000);
-            }
+        const activeTrash = [];
+        const trashGeometries = [
+            new THREE.BoxGeometry(1.2, 1.2, 1.2),
+            new THREE.CylinderGeometry(0.6, 0.6, 1.5, 16),
+            new THREE.DodecahedronGeometry(0.8),
+            new THREE.SphereGeometry(0.8, 16, 16),
+            new THREE.TorusKnotGeometry(0.6, 0.2, 64, 8)
+        ];
 
-            function nextLevel() {
-                level++;
-                levelScore = 0;
-                lives = Math.min(lives + 1, 5);
-                updateLivesDisplay();
-                levelEl.textContent = level;
-                setupLevel(level);
-                levelCompleteScreen.classList.remove('active');
-                showToast(`⚡ PROTOCOL ${level} INITIATED`, 'var(--neon-cyan)');
-                gameRunning = true;
-                ariaRandom('levelStart', 1000);
-                startGameLoop();
-            }
-
-            function startGame() {
-                score = 0; lives = 3; level = 1; levelScore = 0;
-                combo = 0; bestCombo = 0; totalDrops = 0; correctDrops = 0;
-                powerUpActive = false; powerUpType = '';
-                gameRunning = true;
-                scoreEl.textContent = 0;
-                updateLivesDisplay();
-                levelEl.textContent = 1;
-                comboEl.textContent = '0x';
-                comboDisplay.className = 'combo-display';
-                timeEl.parentElement.classList.remove('time-critical');
-                setupLevel(1);
-                gameOverScreen.classList.remove('active');
-                levelCompleteScreen.classList.remove('active');
-                startGameLoop();
-                setTimeout(() => ariaRandom('gameStart', 500), 1000);
-            }
-
-            function startGameLoop() {
-                const cfg = getConfig();
-
-                const spawnLoop = () => {
-                    if (!gameRunning) return;
-                    createItem();
-                    let delay = cfg.spawn[0] + Math.random() * (cfg.spawn[1] - cfg.spawn[0]);
-                    if (powerUpType === 'slowMotion') delay *= 1.5;
-                    setTimeout(spawnLoop, delay);
-                };
-                spawnLoop();
-
-                const puLoop = () => {
-                    if (!gameRunning) return;
-                    if (Math.random() < 0.3) createPowerUp();
-                    setTimeout(puLoop, 15000 + Math.random() * 15000);
-                };
-                setTimeout(puLoop, 10000);
-
-                const timer = setInterval(() => {
-                    if (!gameRunning) { clearInterval(timer); return; }
-                    timeLeft--;
-                    timeEl.textContent = timeLeft;
-                    if (timeLeft <= 10) {
-                        timeEl.parentElement.classList.add('time-critical');
-                        if (timeLeft === 10) ariaRandom('timeWarning', 8000);
-                    }
-                    if (timeLeft <= 0) endGame();
-                }, 1000);
-            }
-
-            // Hidden Hyper Mode
-            let clickCount = 0, lastClick = 0;
-            scoreEl.addEventListener('click', () => {
-                const now = Date.now();
-                if (now - lastClick < 500) {
-                    clickCount++;
-                    if (clickCount >= 5) {
-                        clickCount = 0;
-                        showToast('🔥 HYPER MODE — BRACE YOURSELF', 'var(--neon-pink)');
-                        const rapid = () => { if (!gameRunning) return; createItem(); setTimeout(rapid, 400); };
-                        rapid();
-                    }
-                } else { clickCount = 1; }
-                lastClick = now;
+        function spawnTrashItem() {
+            let typeId = Math.floor(Math.random() * 4);
+            const isBonus = Math.random() < 0.08;
+            if (isBonus) typeId = 4;
+            let material = new THREE.MeshStandardMaterial({ 
+                color: typeId === 4 ? 0xffd700 : binTypes[typeId].color,
+                emissive: typeId === 4 ? 0xaa8800 : 0x000000,
+                emissiveIntensity: 0.4
             });
+            const mesh = new THREE.Mesh(trashGeometries[typeId], material);
+            mesh.position.set(0, 10, binDistance);
+            mesh.castShadow = true;
+            mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            activeTrash.push({ mesh, typeId, rotSpeed: { x: Math.random()*0.1, y: Math.random()*0.1, z: Math.random()*0.1 }, caught: false });
+            scene.add(mesh);
+        }
 
-            document.getElementById('restart-button').addEventListener('click', startGame);
-            document.getElementById('next-level-button').addEventListener('click', nextLevel);
+        const particles = [];
+        const particleGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        function createExplosion(position, colorHex) {
+            const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+            for(let i=0; i<15; i++) {
+                const mesh = new THREE.Mesh(particleGeo, mat);
+                mesh.position.copy(position);
+                const velocity = new THREE.Vector3((Math.random()-0.5)*0.3, Math.random()*0.2, (Math.random()-0.5)*0.3);
+                scene.add(mesh);
+                particles.push({ mesh, velocity, life: 1.0 });
+            }
+        }
 
-            startGame();
+        function updateUI() {
+            document.getElementById('score-display').innerText = score;
+            let hearts = "";
+            for(let i=0; i<Math.max(3, lives); i++) hearts += i < lives ? "❤️" : "🖤";
+            document.getElementById('lives-display').innerText = hearts;
+            const currentFront = getCurrentFrontBinIndex();
+            for(let i=0; i<4; i++) {
+                const el = document.getElementById(`ind-${i}`);
+                if(i === currentFront) el.classList.add('active'); else el.classList.remove('active');
+            }
+        }
+
+        function getCurrentFrontBinIndex() {
+            let shifts = Math.round(targetRotation / (Math.PI / 2));
+            return ((-shifts % 4) + 4) % 4; 
+        }
+
+        function triggerCombo(isHit) {
+            const comboEl = document.getElementById('combo-display');
+            if(isHit) {
+                combo++;
+                if(combo > 1) {
+                    comboEl.innerText = `Combo x${combo}!`;
+                    comboEl.style.opacity = '1';
+                    ariaRandom('combo' + Math.min(4, combo));
+                }
+                playSFX(combo >= 3 ? 'combo' : 'correct');
+            } else {
+                combo = 0;
+                comboEl.style.opacity = '0';
+                playSFX('wrong');
+                ariaRandom('wrong');
+            }
+        }
+
+        function checkCollision(trashObj, index) {
+            if (trashObj.mesh.position.y <= 0 && !trashObj.caught) {
+                trashObj.caught = true;
+                const frontBinType = getCurrentFrontBinIndex();
+                if (trashObj.typeId === frontBinType || trashObj.typeId === 4) {
+                    const isGold = trashObj.typeId === 4;
+                    score += isGold ? 50 : 10;
+                    triggerCombo(true);
+                    createExplosion(trashObj.mesh.position, isGold ? 0xffd700 : binTypes[frontBinType].color);
+                    if (isGold) { lives++; playSFX('powerup'); ariaRandom('powerup'); }
+                    currentSpeed = Math.min(baseSpeed + (score * 0.0005), 0.3);
+                    spawnRate = Math.max(120 - Math.floor(score / 50), 40);
+                } else {
+                    lives--;
+                    triggerCombo(false);
+                    if (lives <= 0) endGame();
+                }
+                scene.remove(trashObj.mesh);
+                activeTrash.splice(index, 1);
+                updateUI();
+            }
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('ui-layer').classList.remove('hidden');
+            score = 0; lives = 3; combo = 0; currentSpeed = baseSpeed; spawnRate = 120;
+            activeTrash.forEach(t => scene.remove(t.mesh)); activeTrash.length = 0;
+            gameActive = true;
+            updateUI();
+            ariaRandom('gameStart');
+        }
+
+        function endGame() {
+            gameActive = false;
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = score;
+            ariaRandom('gameOver');
+        }
+
+        function rotateLeft() { if(!gameActive) return; targetRotation += Math.PI / 2; updateUI(); }
+        function rotateRight() { if(!gameActive) return; targetRotation -= Math.PI / 2; updateUI(); }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') rotateLeft();
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') rotateRight();
         });
+
+        window.addEventListener('mousedown', (e) => {
+            if(e.target.tagName === 'BUTTON') return;
+            if (e.clientX < window.innerWidth / 2) rotateLeft(); else rotateRight();
+        });
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            currentRotation += (targetRotation - currentRotation) * 0.15;
+            carousel.rotation.y = currentRotation;
+            if (gameActive) {
+                frameCount++;
+                if (frameCount >= spawnRate) { spawnTrashItem(); frameCount = 0; }
+                for (let i = activeTrash.length - 1; i >= 0; i--) {
+                    const t = activeTrash[i];
+                    t.mesh.position.y -= currentSpeed;
+                    t.mesh.rotation.x += t.rotSpeed.x;
+                    t.mesh.rotation.y += t.rotSpeed.y;
+                    t.mesh.rotation.z += t.rotSpeed.z;
+                    checkCollision(t, i);
+                    if (t.mesh.position.y < -10) { scene.remove(t.mesh); activeTrash.splice(i, 1); }
+                }
+            }
+            for(let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.mesh.position.add(p.velocity);
+                p.velocity.y -= 0.01; p.life -= 0.02; p.mesh.scale.setScalar(p.life);
+                if(p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = animate;
     </script>
 </body>
-
 </html>

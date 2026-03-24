@@ -1,664 +1,316 @@
+egg5.html:497 Uncaught (in promise) ReferenceError: SimplexNoise is not defined
+    at createNoiseFunction (egg5.html:497:29)
+    at generateHyperTerrain (egg5.html:667:31)
+    at HTMLButtonElement.onclick (egg5.html:434:96)
+    at egg5.html:919:56
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PLY Alien Generator</title>
+    <title>System Dashboard // Override</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Base styling */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
-            color: #e0e0e0;
-            margin: 0;
-            padding: 20px;
+            background-color: #040814; /* Darkened slightly to let the grid pop */
+            color: #e2e8f0;
+            overflow-x: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            transition: background-color 2s ease;
+        }
+
+        /* --- THE CYBER 3D GRID --- */
+        #cyber-grid {
+            position: fixed;
+            bottom: -50%;
+            left: -50%;
+            width: 200vw;
+            height: 200vh;
+            background-image: 
+                linear-gradient(rgba(16, 185, 129, 0.25) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(16, 185, 129, 0.25) 1px, transparent 1px);
+            background-size: 60px 60px;
+            background-position: center bottom;
+            transform: perspective(700px) rotateX(65deg) translateZ(-150px);
+            animation: grid-scroll 3s linear infinite;
+            z-index: 0;
+            pointer-events: none;
+            transition: all 1s ease;
+            /* Smoothly fades out the grid towards the "horizon" */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 30%, black 80%);
+            mask-image: linear-gradient(to bottom, transparent 30%, black 80%);
+        }
+
+        @keyframes grid-scroll {
+            0% { transform: perspective(700px) rotateX(65deg) translateY(0) translateZ(-150px); }
+            /* Matches the 60px background size for a seamless infinite loop */
+            100% { transform: perspective(700px) rotateX(65deg) translateY(60px) translateZ(-150px); }
+        }
+
+        /* Intense Grid During Meltdown */
+        .voodoo-active #cyber-grid {
+            background-image: 
+                linear-gradient(rgba(220, 38, 38, 0.5) 2px, transparent 2px),
+                linear-gradient(90deg, rgba(220, 38, 38, 0.5) 2px, transparent 2px);
+            animation: grid-scroll-fast 0.5s linear infinite;
+        }
+
+        @keyframes grid-scroll-fast {
+            0% { transform: perspective(700px) rotateX(65deg) translateY(0) translateZ(-150px); }
+            100% { transform: perspective(700px) rotateX(65deg) translateY(60px) translateZ(-150px); }
+        }
+
+        /* Grid Loses Power in Phase 4 */
+        .phase-4-crash #cyber-grid {
+            opacity: 0.05;
+            transition: opacity 2s ease;
+        }
+
+        /* The 3D Environment Setup */
+        #scene {
+            position: relative;
+            z-index: 10; /* Ensures the dashboard sits above the background grid */
+            perspective: 1200px;
             min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #00ff88, #00ccff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .control-group {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 20px;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .control-group h3 {
-            color: #00ff88;
-            margin-top: 0;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
-
-        .slider-container {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: #ccc;
-            font-size: 0.9em;
-        }
-
-        input[type="range"] {
             width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: #333;
-            outline: none;
-            -webkit-appearance: none;
+            overflow-x: hidden;
         }
 
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, #00ff88, #00ccff);
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, #00ff88, #00ccff);
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-        }
-
-        .value-display {
-            display: inline-block;
-            float: right;
-            color: #00ff88;
-            font-weight: bold;
-        }
-
-        .button-container {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 30px;
-        }
-
-        button {
-            background: linear-gradient(45deg, #00ff88, #00ccff);
-            color: #000;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.3);
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(0, 255, 136, 0.4);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        .preview-container {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .preview-container h3 {
-            color: #00ccff;
-            margin-top: 0;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .stat-item {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            border: 1px solid rgba(0, 255, 136, 0.2);
-        }
-
-        .stat-value {
-            font-size: 1.5em;
-            color: #00ff88;
-            font-weight: bold;
-        }
-
-        .stat-label {
-            color: #888;
-            font-size: 0.9em;
-        }
-
-        #plyOutput {
+        #ui-layer {
+            transition: transform 2.5s cubic-bezier(0.25, 1, 0.5, 1), filter 2s;
+            transform-style: preserve-3d;
+            min-height: 100vh;
             width: 100%;
-            height: 300px;
-            background: #000;
-            color: #00ff88;
-            border: 1px solid #333;
-            border-radius: 10px;
-            padding: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.8em;
-            resize: vertical;
-            overflow-y: auto;
+            padding: 2rem;
         }
 
-        .feature-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 15px;
+        /* ---------------------------------------------------
+           THE VOODOO CLASSES (Triggered by JS)
+           --------------------------------------------------- */
+        body.voodoo-active {
+            background-color: #000;
+            overflow: hidden; /* Locks scrolling during the effect */
         }
 
-        .tag {
-            background: rgba(0, 255, 136, 0.2);
-            color: #00ff88;
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 0.8em;
-            border: 1px solid rgba(0, 255, 136, 0.3);
+        /* --- NEW INTENSITY PHASES --- */
+        
+        /* Phase 1: Intense Hardware Glitch */
+        @keyframes intense-shake {
+            0%, 100% { transform: translate(0, 0) rotate(0); filter: invert(0); }
+            10% { transform: translate(-5px, 5px) rotate(-1deg); filter: invert(0.8) hue-rotate(90deg); }
+            20% { transform: translate(5px, -5px) rotate(1deg); background-color: #450a0a; }
+            30% { transform: translate(-5px, -5px) rotate(0); filter: invert(0); }
+            40% { transform: translate(5px, 5px) rotate(2deg); filter: invert(1) sepia(1); }
+            50% { transform: translate(-2px, 2px) rotate(-2deg); background-color: #000; }
+            60% { transform: translate(5px, -2px) rotate(0); filter: invert(0.5); }
+            70% { transform: translate(-5px, -5px) rotate(1deg); }
+            80% { transform: translate(2px, 5px) rotate(-1deg); filter: invert(1); }
+            90% { transform: translate(-5px, 5px) rotate(0); }
+        }
+        .phase-1-glitch {
+            animation: intense-shake 0.25s infinite;
+            overflow: hidden;
         }
 
-        .alien-type {
-            text-align: center;
-            font-size: 1.3em;
-            color: #00ccff;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+        /* Phase 4: Gravity Collapse (Structural Failure) */
+        .phase-4-crash #ui-layer {
+            filter: brightness(0.2) drop-shadow(0 0 0 rgba(0,0,0,0));
+        }
+        /* Elements plummet off screen and spin */
+        .phase-4-crash .layer-1 { transform: translateZ(40px) translateY(150vh) rotate(25deg); opacity: 0; }
+        .phase-4-crash .layer-2 { transform: translateZ(80px) translateY(150vh) rotate(-15deg); opacity: 0; transition-delay: 0.2s; }
+        .phase-4-crash .layer-3 { transform: translateZ(120px) translateY(150vh) rotate(45deg); opacity: 0; transition-delay: 0.4s; }
+        
+        /* Phase 5: Terminal Cursor */
+        .terminal-cursor {
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* 1. The 3D Collapse */
+        .voodoo-active #ui-layer {
+            /* Tilt the entire website back and rotate it */
+            transform: rotateX(60deg) rotateZ(-35deg) scale(0.7) translateY(-20%);
+            filter: drop-shadow(0 0 10px rgba(0, 255, 0, 0.2));
+        }
+
+        /* 2. The Z-Index Pop (Making elements float) */
+        .voodoo-active .layer-1 { transform: translateZ(40px); border: 1px solid rgba(0,255,0,0.4); background: rgba(0,20,0,0.8); box-shadow: 0 10px 30px rgba(0,255,0,0.1); }
+        .voodoo-active .layer-2 { transform: translateZ(80px); border: 1px solid rgba(0,255,0,0.6); background: rgba(0,30,0,0.8); }
+        .voodoo-active .layer-3 { transform: translateZ(120px); border: 1px solid #0f0; box-shadow: 0 0 20px rgba(0,255,0,0.5); color: #0f0; }
+
+        /* Smooth transitions for the layers */
+        .layer-1, .layer-2, .layer-3 {
+            transition: transform 2.5s cubic-bezier(0.25, 1, 0.5, 1), border 2s, background 2s, box-shadow 2s, color 2s;
+        }
+
+        /* 3. The Source Code Crawl Overlay */
+        #code-crawl {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none; /* Let clicks pass through */
+            color: #0f0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow: hidden;
+            z-index: 9999;
+            opacity: 0;
+            padding: 2rem;
+            box-sizing: border-box;
+            text-shadow: 0 0 5px #0f0;
+            font-size: 0.85rem;
+            line-height: 1.2;
+            transition: opacity 2s ease;
+        }
+
+        .voodoo-active #code-crawl {
+            opacity: 0.75;
+        }
+
+        /* Glitch Button Animation */
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+        .glitch-btn:hover {
+            animation: glitch 0.2s infinite;
+            background-color: #dc2626 !important;
+            color: white !important;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>👽 PLY Alien Generator</h1>
-        <p class="subtitle">Generate unique 3D alien models in PLY format</p>
-        
-        <div class="controls">
-            <div class="control-group">
-                <h3>🗿 Body Structure</h3>
-                <div class="slider-container">
-                    <label>Head Size <span class="value-display" id="headSizeValue">1.2</span></label>
-                    <input type="range" id="headSize" min="0.8" max="2.5" step="0.1" value="1.2">
-                </div>
-                <div class="slider-container">
-                    <label>Body Height <span class="value-display" id="bodyHeightValue">2.0</span></label>
-                    <input type="range" id="bodyHeight" min="1.5" max="3.0" step="0.1" value="2.0">
-                </div>
-                <div class="slider-container">
-                    <label>Limb Length <span class="value-display" id="limbLengthValue">1.0</span></label>
-                    <input type="range" id="limbLength" min="0.5" max="2.0" step="0.1" value="1.0">
-                </div>
-            </div>
 
-            <div class="control-group">
-                <h3>👁️ Features</h3>
-                <div class="slider-container">
-                    <label>Eye Size <span class="value-display" id="eyeSizeValue">0.3</span></label>
-                    <input type="range" id="eyeSize" min="0.1" max="0.8" step="0.05" value="0.3">
-                </div>
-                <div class="slider-container">
-                    <label>Eye Separation <span class="value-display" id="eyeSeparationValue">0.4</span></label>
-                    <input type="range" id="eyeSeparation" min="0.2" max="0.8" step="0.05" value="0.4">
-                </div>
-                <div class="slider-container">
-                    <label>Antenna Count <span class="value-display" id="antennaCountValue">2</span></label>
-                    <input type="range" id="antennaCount" min="0" max="6" step="1" value="2">
-                </div>
-            </div>
+    <!-- The 3D Cyber Grid Background -->
+    <div id="cyber-grid"></div>
 
-            <div class="control-group">
-                <h3>🎨 Appearance</h3>
-                <div class="slider-container">
-                    <label>Skin Roughness <span class="value-display" id="skinRoughnessValue">0.5</span></label>
-                    <input type="range" id="skinRoughness" min="0" max="1" step="0.1" value="0.5">
-                </div>
-                <div class="slider-container">
-                    <label>Color Hue <span class="value-display" id="colorHueValue">120</span></label>
-                    <input type="range" id="colorHue" min="0" max="360" step="10" value="120">
-                </div>
-                <div class="slider-container">
-                    <label>Symmetry <span class="value-display" id="symmetryValue">0.8</span></label>
-                    <input type="range" id="symmetry" min="0" max="1" step="0.1" value="0.8">
-                </div>
-            </div>
-        </div>
+    <!-- This overlay holds the typing text -->
+    <div id="code-crawl"></div>
 
-        <div class="button-container">
-            <button onclick="randomizeAlien()">🎲 Randomize Alien</button>
-            <button onclick="generatePLY()">🚀 Generate PLY</button>
-            <button onclick="downloadPLY()">💾 Download PLY File</button>
-        </div>
-
-        <div class="preview-container">
-            <h3>Alien Specifications</h3>
-            <div class="alien-type" id="alienType">HUMANOID XENOMORPH</div>
+    <!-- The main 3D perspective wrapper -->
+    <div id="scene">
+        <div id="ui-layer" class="max-w-5xl mx-auto">
             
-            <div class="stats">
-                <div class="stat-item">
-                    <div class="stat-value" id="vertexCount">0</div>
-                    <div class="stat-label">Vertices</div>
+            <!-- Standard UI Elements mapped to 3D layers -->
+            <header class="mb-8 layer-1 rounded-lg p-6 bg-slate-800">
+                <h1 class="text-3xl font-bold text-white mb-2">Global Defense Network</h1>
+                <p class="text-slate-400">Node cluster: Alpha-7 is currently stable.</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="layer-2 p-6 bg-slate-800 rounded-lg">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Server Status</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between"><span>CPU Load</span> <span class="text-green-400">24%</span></div>
+                        <div class="flex justify-between"><span>Memory</span> <span class="text-green-400">16TB</span></div>
+                        <div class="flex justify-between"><span>Network</span> <span class="text-green-400">Secure</span></div>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="faceCount">0</div>
-                    <div class="stat-label">Faces</div>
+
+                <div class="layer-2 p-6 bg-slate-800 rounded-lg">
+                    <h3 class="text-xl font-bold mb-4 text-purple-400">Active Connections</h3>
+                    <div class="text-4xl font-black text-white">1,402</div>
+                    <p class="text-sm text-slate-400 mt-2">+12 in the last hour</p>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="complexity">Medium</div>
-                    <div class="stat-label">Complexity</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="alienSpecies">Type-A</div>
-                    <div class="stat-label">Species</div>
+
+                <div class="layer-2 p-6 bg-slate-800 rounded-lg">
+                    <h3 class="text-xl font-bold mb-4 text-yellow-400">Security Alerts</h3>
+                    <div class="text-4xl font-black text-white">0</div>
+                    <p class="text-sm text-slate-400 mt-2">Firewall integrity at 100%</p>
                 </div>
             </div>
 
-            <div class="feature-tags" id="featureTags"></div>
+            <!-- The Trigger Button -->
+            <div class="mt-12 text-center layer-3 p-8 bg-slate-900 rounded-lg border border-slate-700">
+                <h2 class="text-2xl mb-4">Manual Override</h2>
+                <p class="text-slate-500 mb-6">Warning: Initiating protocol 7 will detach the UI from the DOM.</p>
+                <button id="trigger-btn" class="glitch-btn px-8 py-3 bg-red-900/50 text-red-400 border border-red-500 rounded font-bold uppercase tracking-widest transition-colors cursor-pointer">
+                    Initiate Protocol 7
+                </button>
+            </div>
 
-            <h3>PLY File Content</h3>
-            <textarea id="plyOutput" readonly placeholder="Click 'Generate PLY' to create your alien model..."></textarea>
         </div>
     </div>
 
     <script>
-        let currentPLYContent = '';
-        let alienConfig = {};
+        const btn = document.getElementById('trigger-btn');
+        const codeOverlay = document.getElementById('code-crawl');
+        let voodooActive = false;
 
-        // Initialize sliders
-        const sliders = ['headSize', 'bodyHeight', 'limbLength', 'eyeSize', 'eyeSeparation', 'antennaCount', 'skinRoughness', 'colorHue', 'symmetry'];
-        
-        sliders.forEach(id => {
-            const slider = document.getElementById(id);
-            const valueDisplay = document.getElementById(id + 'Value');
-            
-            slider.addEventListener('input', () => {
-                valueDisplay.textContent = slider.value;
-                updateAlienType();
-            });
-        });
+        btn.addEventListener('click', () => {
+            if (voodooActive) return; // Prevent double clicks
+            voodooActive = true;
 
-        function randomizeAlien() {
-            document.getElementById('headSize').value = (Math.random() * 1.7 + 0.8).toFixed(1);
-            document.getElementById('bodyHeight').value = (Math.random() * 1.5 + 1.5).toFixed(1);
-            document.getElementById('limbLength').value = (Math.random() * 1.5 + 0.5).toFixed(1);
-            document.getElementById('eyeSize').value = (Math.random() * 0.7 + 0.1).toFixed(2);
-            document.getElementById('eyeSeparation').value = (Math.random() * 0.6 + 0.2).toFixed(2);
-            document.getElementById('antennaCount').value = Math.floor(Math.random() * 7);
-            document.getElementById('skinRoughness').value = (Math.random()).toFixed(1);
-            document.getElementById('colorHue').value = Math.floor(Math.random() * 360);
-            document.getElementById('symmetry').value = (Math.random() * 0.8 + 0.2).toFixed(1);
+            // Snap to top to frame the 3D effect perfectly
+            window.scrollTo({ top: 0, behavior: 'smooth' });
 
-            // Update displays
-            sliders.forEach(id => {
-                const slider = document.getElementById(id);
-                const valueDisplay = document.getElementById(id + 'Value');
-                valueDisplay.textContent = slider.value;
-            });
+            // PHASE 1: The Build-Up Glitch (2 seconds)
+            document.body.classList.add('phase-1-glitch');
+            btn.textContent = "CRITICAL FAILURE // ABORT";
+            btn.classList.remove('bg-red-900/50', 'text-red-400');
+            btn.classList.add('bg-white', 'text-black', 'border-white');
 
-            updateAlienType();
-        }
-
-        function updateAlienType() {
-            const headSize = parseFloat(document.getElementById('headSize').value);
-            const eyeSize = parseFloat(document.getElementById('eyeSize').value);
-            const antennaCount = parseInt(document.getElementById('antennaCount').value);
-            const bodyHeight = parseFloat(document.getElementById('bodyHeight').value);
-
-            let type = '';
-            let species = '';
-
-            if (headSize > 2.0 && eyeSize > 0.5) {
-                type = 'CEREBRAL OVERLORD';
-                species = 'Type-Ω';
-            } else if (antennaCount >= 4) {
-                type = 'INSECTOID HYBRID';
-                species = 'Type-X';
-            } else if (bodyHeight > 2.5) {
-                type = 'TOWERING GIANT';
-                species = 'Type-T';
-            } else if (eyeSize > 0.6) {
-                type = 'GREY OBSERVER';
-                species = 'Type-G';
-            } else if (headSize < 1.0) {
-                type = 'REPTILIAN SCOUT';
-                species = 'Type-R';
-            } else {
-                type = 'HUMANOID XENOMORPH';
-                species = 'Type-A';
-            }
-
-            document.getElementById('alienType').textContent = type;
-            document.getElementById('alienSpecies').textContent = species;
-
-            updateFeatureTags();
-        }
-
-        function updateFeatureTags() {
-            const tags = [];
-            const headSize = parseFloat(document.getElementById('headSize').value);
-            const eyeSize = parseFloat(document.getElementById('eyeSize').value);
-            const antennaCount = parseInt(document.getElementById('antennaCount').value);
-            const limbLength = parseFloat(document.getElementById('limbLength').value);
-            const skinRoughness = parseFloat(document.getElementById('skinRoughness').value);
-
-            if (headSize > 1.8) tags.push('Large Brain');
-            if (eyeSize > 0.5) tags.push('Hypnotic Gaze');
-            if (antennaCount > 0) tags.push('Telepathic');
-            if (limbLength > 1.5) tags.push('Long Reach');
-            if (skinRoughness > 0.7) tags.push('Armored Hide');
-            if (skinRoughness < 0.3) tags.push('Smooth Skin');
-
-            const tagsContainer = document.getElementById('featureTags');
-            tagsContainer.innerHTML = tags.map(tag => `<span class="tag">${tag}</span>`).join('');
-        }
-
-        function generatePLY() {
-            alienConfig = {
-                headSize: parseFloat(document.getElementById('headSize').value),
-                bodyHeight: parseFloat(document.getElementById('bodyHeight').value),
-                limbLength: parseFloat(document.getElementById('limbLength').value),
-                eyeSize: parseFloat(document.getElementById('eyeSize').value),
-                eyeSeparation: parseFloat(document.getElementById('eyeSeparation').value),
-                antennaCount: parseInt(document.getElementById('antennaCount').value),
-                skinRoughness: parseFloat(document.getElementById('skinRoughness').value),
-                colorHue: parseInt(document.getElementById('colorHue').value),
-                symmetry: parseFloat(document.getElementById('symmetry').value)
-            };
-
-            const plyData = createAlienMesh(alienConfig);
-            currentPLYContent = plyData.content;
-            
-            document.getElementById('plyOutput').value = currentPLYContent;
-            document.getElementById('vertexCount').textContent = plyData.vertexCount;
-            document.getElementById('faceCount').textContent = plyData.faceCount;
-            
-            // Update complexity
-            const totalElements = plyData.vertexCount + plyData.faceCount;
-            let complexity = 'Low';
-            if (totalElements > 300) complexity = 'Medium';
-            if (totalElements > 600) complexity = 'High';
-            if (totalElements > 1000) complexity = 'Extreme';
-            
-            document.getElementById('complexity').textContent = complexity;
-        }
-
-        function createAlienMesh(config) {
-            const vertices = [];
-            const faces = [];
-            const colors = [];
-
-            // Generate color from hue
-            const hsl2rgb = (h, s, l) => {
-                h /= 360;
-                s /= 100;
-                l /= 100;
-                const a = s * Math.min(l, 1 - l);
-                const f = n => {
-                    const k = (n + h * 12) % 12;
-                    return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-                };
-                return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-            };
-
-            const baseColor = hsl2rgb(config.colorHue, 70, 50);
-
-            // Helper function to add vertex with noise
-            const addVertex = (x, y, z, colorVariation = 0) => {
-                const noise = config.skinRoughness * 0.1;
-                const asymmetry = 1 - config.symmetry;
+            setTimeout(() => {
+                // PHASE 2: Trigger the CSS 3D Collapse
+                document.body.classList.remove('phase-1-glitch');
+                document.body.classList.add('voodoo-active');
                 
-                const finalX = x + (Math.random() - 0.5) * noise + (x > 0 ? asymmetry * 0.1 : -asymmetry * 0.1);
-                const finalY = y + (Math.random() - 0.5) * noise;
-                const finalZ = z + (Math.random() - 0.5) * noise;
+                // Change button text
+                btn.textContent = "SYSTEM COMPROMISED";
+                btn.classList.remove('bg-white', 'text-black', 'border-white');
+                btn.classList.add('bg-green-900', 'text-green-400', 'border-green-500');
+
+                // PHASE 3: Prepare the Source Crawl
+                const rawHTML = document.documentElement.outerHTML;
+                let charIndex = 0;
                 
-                vertices.push([finalX, finalY, finalZ]);
-                
-                const colorMod = 1 + (Math.random() - 0.5) * colorVariation;
-                colors.push([
-                    Math.max(0, Math.min(255, Math.round(baseColor[0] * colorMod))),
-                    Math.max(0, Math.min(255, Math.round(baseColor[1] * colorMod))),
-                    Math.max(0, Math.min(255, Math.round(baseColor[2] * colorMod)))
-                ]);
-                
-                return vertices.length - 1;
-            };
-
-            // Create head (ellipsoid)
-            const headVertices = [];
-            const headSegs = 12;
-            for (let i = 0; i <= headSegs; i++) {
-                for (let j = 0; j <= headSegs; j++) {
-                    const theta = (i / headSegs) * Math.PI;
-                    const phi = (j / headSegs) * 2 * Math.PI;
-                    
-                    const x = config.headSize * 0.4 * Math.sin(theta) * Math.cos(phi);
-                    const y = config.bodyHeight + config.headSize * 0.5 * Math.cos(theta);
-                    const z = config.headSize * 0.4 * Math.sin(theta) * Math.sin(phi);
-                    
-                    headVertices.push(addVertex(x, y, z, 0.2));
-                }
-            }
-
-            // Create head faces
-            for (let i = 0; i < headSegs; i++) {
-                for (let j = 0; j < headSegs; j++) {
-                    const a = i * (headSegs + 1) + j;
-                    const b = a + headSegs + 1;
-                    const c = a + 1;
-                    const d = b + 1;
-                    
-                    faces.push([a, b, c]);
-                    faces.push([b, d, c]);
-                }
-            }
-
-            // Create eyes
-            const eyeY = config.bodyHeight + config.headSize * 0.3;
-            const eyeZ = config.headSize * 0.35;
-            
-            for (let eye = 0; eye < 2; eye++) {
-                const eyeX = (eye === 0 ? -1 : 1) * config.eyeSeparation;
-                const eyeCenter = addVertex(eyeX, eyeY, eyeZ, 0.1);
-                
-                // Create eye sphere
-                for (let i = 0; i < 8; i++) {
-                    const angle = (i / 8) * 2 * Math.PI;
-                    const x = eyeX + config.eyeSize * Math.cos(angle);
-                    const y = eyeY + config.eyeSize * 0.3 * Math.sin(angle);
-                    const z = eyeZ + config.eyeSize * 0.5;
-                    
-                    const eyeVertex = addVertex(x, y, z, 0.3);
-                    
-                    if (i > 0) {
-                        faces.push([eyeCenter, eyeVertex - 1, eyeVertex]);
-                    }
-                }
-            }
-
-            // Create body (cylinder)
-            const bodySegs = 10;
-            const bodyRadius = 0.3;
-            
-            for (let i = 0; i <= bodySegs; i++) {
-                for (let level = 0; level <= 4; level++) {
-                    const angle = (i / bodySegs) * 2 * Math.PI;
-                    const y = (level / 4) * config.bodyHeight;
-                    const radius = bodyRadius * (1 - level * 0.1);
-                    
-                    const x = radius * Math.cos(angle);
-                    const z = radius * Math.sin(angle);
-                    
-                    addVertex(x, y, z, 0.15);
-                }
-            }
-
-            // Create body faces
-            const bodyStart = headVertices.length + 16; // After head and eyes
-            for (let i = 0; i < bodySegs; i++) {
-                for (let level = 0; level < 4; level++) {
-                    const a = bodyStart + i * 5 + level;
-                    const b = bodyStart + ((i + 1) % bodySegs) * 5 + level;
-                    const c = a + 1;
-                    const d = b + 1;
-                    
-                    faces.push([a, b, c]);
-                    faces.push([b, d, c]);
-                }
-            }
-
-            // Create limbs (arms and legs)
-            const limbSegs = 6;
-            for (let limb = 0; limb < 4; limb++) {
-                const isArm = limb < 2;
-                const isLeft = limb % 2 === 0;
-                const baseX = (isLeft ? -0.4 : 0.4);
-                const baseY = isArm ? config.bodyHeight * 0.7 : 0;
-                const length = config.limbLength * (isArm ? 0.8 : 1.2);
-                
-                for (let i = 0; i <= limbSegs; i++) {
-                    const t = i / limbSegs;
-                    const x = baseX + (isArm ? (isLeft ? -1 : 1) * t * length * 0.5 : 0);
-                    const y = baseY - (isArm ? t * length * 0.3 : t * length);
-                    const z = isArm ? t * length * 0.2 : 0;
-                    const radius = 0.1 * (1 - t * 0.3);
-                    
-                    // Create ring of vertices around limb
-                    for (let j = 0; j < 6; j++) {
-                        const angle = (j / 6) * 2 * Math.PI;
-                        const limbX = x + radius * Math.cos(angle);
-                        const limbZ = z + radius * Math.sin(angle);
-                        
-                        addVertex(limbX, y, limbZ, 0.1);
-                    }
-                }
-            }
-
-            // Create antennae
-            if (config.antennaCount > 0) {
-                for (let ant = 0; ant < config.antennaCount; ant++) {
-                    const angle = (ant / config.antennaCount) * 2 * Math.PI;
-                    const baseX = 0.2 * Math.cos(angle);
-                    const baseZ = 0.2 * Math.sin(angle);
-                    const baseY = config.bodyHeight + config.headSize * 0.8;
-                    
-                    for (let i = 0; i <= 5; i++) {
-                        const t = i / 5;
-                        const x = baseX * (1 + t * 0.5);
-                        const y = baseY + t * 0.4;
-                        const z = baseZ * (1 + t * 0.5);
-                        
-                        addVertex(x, y, z, 0.2);
-                        
-                        if (i > 0) {
-                            faces.push([vertices.length - 2, vertices.length - 1, vertices.length - 1]);
+                // Wait for 3D animation to finish rotating 
+                setTimeout(() => {
+                    function typeCode() {
+                        if (charIndex < rawHTML.length) {
+                            // Type significantly faster for aggression (40 chars per frame)
+                            codeOverlay.textContent += rawHTML.substring(charIndex, charIndex + 40);
+                            charIndex += 40;
+                            codeOverlay.scrollTop = codeOverlay.scrollHeight;
+                            requestAnimationFrame(typeCode);
+                        } else {
+                            // PHASE 4: Structural Collapse (Gravity kicks in)
+                            setTimeout(() => {
+                                document.body.classList.add('phase-4-crash');
+                                codeOverlay.style.color = "#dc2626"; // Code turns error red
+                                codeOverlay.style.opacity = "0.2"; // Fade out the code
+                                
+                                // PHASE 5: The Final Terminal Reboot Screen
+                                setTimeout(() => {
+                                    codeOverlay.style.opacity = "1";
+                                    codeOverlay.innerHTML = `
+<div style="font-size: 1.5rem; text-shadow: none; color: #fff; font-family: monospace;">
+FATAL EXCEPTION AT 0x00000000<br>
+MEMORY DUMP COMPLETE.<br><br>
+CONNECTION LOST...<br>
+REBOOTING SYSTEM... <span class="terminal-cursor">_</span>
+</div>`;
+                                    document.body.style.cursor = "pointer";
+                                    
+                                    // Click anywhere to reload/fix the page
+                                    window.addEventListener('click', () => location.reload(), {once: true});
+                                }, 2500); // Wait for the 3D pieces to fall off screen
+                            }, 500); // Pause briefly after code finishes typing
                         }
                     }
-                }
-            }
-
-            // Generate PLY content
-            let plyContent = `ply
-format ascii 1.0
-element vertex ${vertices.length}
-property float x
-property float y
-property float z
-property uchar red
-property uchar green
-property uchar blue
-element face ${faces.length}
-property list uchar int vertex_indices
-end_header
-`;
-
-            // Add vertices
-            for (let i = 0; i < vertices.length; i++) {
-                const v = vertices[i];
-                const c = colors[i];
-                plyContent += `${v[0].toFixed(6)} ${v[1].toFixed(6)} ${v[2].toFixed(6)} ${c[0]} ${c[1]} ${c[2]}\n`;
-            }
-
-            // Add faces
-            for (const face of faces) {
-                plyContent += `3 ${face[0]} ${face[1]} ${face[2]}\n`;
-            }
-
-            return {
-                content: plyContent,
-                vertexCount: vertices.length,
-                faceCount: faces.length
-            };
-        }
-
-        function downloadPLY() {
-            if (!currentPLYContent) {
-                alert('Please generate a PLY file first!');
-                return;
-            }
-
-            const blob = new Blob([currentPLYContent], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `alien_${Date.now()}.ply`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        // Initialize
-        updateAlienType();
+                    requestAnimationFrame(typeCode);
+                }, 1500); // Wait for 3D tilt
+            }, 2000); // Phase 1 lasts 2 seconds
+        });
     </script>
 </body>
 </html>
