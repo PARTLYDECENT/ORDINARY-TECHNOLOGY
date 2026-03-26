@@ -16,7 +16,6 @@
 
     // Fragment Shader - 3D Infinite Grid World (Synthwave Style)
     const fsSource = `
-        #extension GL_OES_standard_derivatives : enable
         precision highp float;
         
         varying highp vec2 vTextureCoord;
@@ -25,108 +24,163 @@
         uniform float uTime;
         uniform vec2 uMouse;
 
-        /*
-        * 3D GRID WORLD SHADER
-        * Simple infinite moving grid with retro synthwave aesthetic.
-        * User Request: "SEMI GOOD 3D WORLD SIMPLE NOTHING INSANE LIKE A GRIDWORLD"
-        */
+        // Hash
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
-        // --- Hash Function ---
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+        // Rotation matrix
+        mat2 rot(float a) {
+            float s = sin(a), c = cos(a);
+            return mat2(c, -s, s, c);
         }
 
-        // --- 3D Camera / Ray Functions ---
-        vec3 getRayDir(vec2 uv, vec3 p, vec3 l, float z) {
-            vec3 f = normalize(l - p),
-                 r = normalize(cross(vec3(0, 1, 0), f)),
-                 u = cross(f, r),
-                 c = f * z,
-                 i = c + uv.x * r + uv.y * u;
-            return normalize(i);
+        // Box SDF edge (wireframe)
+        float sdBoxEdge(vec3 p, vec3 b, float e) {
+            p = abs(p) - b;
+            vec3 q = abs(p + e) - e;
+            return min(min(
+                length(max(vec3(p.x, q.y, q.z), 0.0)) + min(max(p.x, max(q.y, q.z)), 0.0),
+                length(max(vec3(q.x, p.y, q.z), 0.0)) + min(max(q.x, max(p.y, q.z)), 0.0)),
+                length(max(vec3(q.x, q.y, p.z), 0.0)) + min(max(q.x, max(q.y, p.z)), 0.0));
+        }
+
+        // Terrain with advanced geometry (displacement on plane)
+        float terrain(vec3 p) {
+            // Adds shifting hills and geometric ridges
+            float h = sin(p.x * 0.5) * cos(p.z * 0.5) * 0.8;
+            h += sin(p.x * 1.5 + uTime) * cos(p.z * 1.5) * 0.2;
+            return p.y + 1.0 - h;
+        }
+
+        vec2 map(vec3 p) {
+            // 1. Terrain
+            float dG = terrain(p);
+            
+            // 2. Wireframe cubes emitting upwards
+            vec3 op = p;
+            
+            // Grid space for objects
+            float cellSize = 6.0;
+            // Scroll Z
+            op.z += uTime * 4.0;
+            
+            vec2 id = floor(op.xz / cellSize);
+            op.xz = mod(op.xz, cellSize) - cellSize * 0.5;
+            
+            float h1 = hash(id + vec2(1.0, 2.0));
+            float h2 = hash(id + vec2(3.0, 4.0));
+            
+            // Emitting: objects float up and disappear
+            float cycle = fract(uTime * 0.2 * (0.5 + h1));
+            op.y -= -2.0 + cycle * 10.0; // move up
+            
+            // Rotate
+            op.xz *= rot(uTime * h1 * 2.0);
+            op.xy *= rot(uTime * h2 * 2.0);
+            
+            // Box shape
+            float size = 0.4 + h1 * 0.4;
+            // Scale down at the start and end of cycle
+            float scale = smoothstep(0.0, 0.1, cycle) * smoothstep(1.0, 0.8, cycle);
+            size *= scale;
+            
+            float dBox = sdBoxEdge(op, vec3(size), 0.05);
+            
+            // Avoid issues when objects are too small
+            if(scale < 0.01) dBox = 999.0;
+            
+            if (dG < dBox) return vec2(dG, 0.0);
+            return vec2(dBox, 1.0 + h1); // return ID for coloring
+        }
+
+        vec3 calcNormal(vec3 p) {
+            vec2 e = vec2(0.02, 0);
+            return normalize(vec3(map(p+e.xyy).x - map(p-e.xyy).x,
+                                  map(p+e.yxy).x - map(p-e.yxy).x,
+                                  map(p+e.yyx).x - map(p-e.yyx).x));
         }
 
         void main() {
-            // Correct Aspect Ratio
-            // uResolution is set in JS: this.gl.uniform2f(..., canvas.width, canvas.height)
             vec2 uv = vTextureCoord;
             float aspect = uResolution.x / uResolution.y;
             uv.x *= aspect;
-            
-            // Center UVs for 3D camera (0,0 is center)
             uv = (uv - vec2(aspect * 0.5, 0.5)) * 2.0;
 
-            // --- Camera Setup ---
-            float speed = 2.0;
-            float forwardTime = uTime * speed;
+            vec3 ro = vec3(0.0, 1.5, -uTime * 4.0);
+            vec3 rd = normalize(vec3(uv.x, uv.y - 0.2, -1.0)); // look forward slightly down
             
-            // Camera Position: Fly at y=1.0
-            vec3 ro = vec3(0.0, 1.0, forwardTime); 
+            // Raymarch
+            float t = 0.0;
+            float d = 0.0;
+            float m = -1.0;
+            float glow = 0.0;
             
-            // Look At Point: Look ahead
-            vec3 lookAt = ro + vec3(0.0, -0.2, 10.0);
-            
-            // Get Ray Direction
-            vec3 rd = getRayDir(uv, ro, lookAt, 1.0);
-
-            // --- Render ---
-            vec3 col = vec3(0.0); // Background color
-
-            // --- Sky ---
-            // Gradient: Dark blue to black
-            // Use rd.y for sky gradient based on look angle
-            float sky = max(0.0, rd.y);
-            col = mix(vec3(0.05, 0.0, 0.1), vec3(0.0), pow(sky, 0.5));
-            
-            // Stars in the sky
-            if (rd.y > 0.0) {
-                float stars = pow(hash(uv * 50.0), 50.0);
-                col += vec3(stars);
+            for(int i = 0; i < 70; i++) {
+                vec3 p = ro + rd * t;
+                vec2 res = map(p);
+                d = res.x;
+                m = res.y;
+                if(d < 0.01) break;
+                if(t > 60.0) { t = 60.0; m = -1.0; break; }
+                if(m > 0.0) glow += 0.01 / (0.01 + d*d); // Accumulate wireframe glow
+                t += d * 0.6; // step size moderation for displaced terrain
             }
 
-            // --- Ground Intersection (Plane y=0) ---
-            if (rd.y < 0.0) {
-                float t = -ro.y / rd.y;
-                if (t > 0.0) {
-                    vec3 p = ro + t * rd;
+            vec3 col = vec3(0.0);
+
+            // Sky
+            if(m < 0.0) {
+                float sky = max(0.0, rd.y);
+                col = mix(vec3(0.05, 0.0, 0.15), vec3(0.0), pow(sky, 0.5));
+                if (rd.y > 0.0) col += pow(hash(uv * 50.0), 50.0); // Stars
+                
+                // Horizon Glow
+                float horizon = smoothstep(0.1, 0.0, rd.y);
+                col += vec3(0.0, 0.3, 0.5) * horizon * 0.5;
+            } else {
+                vec3 p = ro + rd * t;
+                vec3 n = calcNormal(p);
+                
+                if (m == 0.0) {
+                    // Terrain shading
+                    vec2 coord = p.xz;
                     
-                    // --- Grid Pattern ---
-                    float scale = 1.0;
-                    vec2 coord = p.xz * scale;
-                    
-                    // Anti-aliased grid lines
-                    vec2 grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
+                    // Analytical anti-aliased grid
+                    vec2 grid = abs(fract(coord) - 0.5);
                     float line = min(grid.x, grid.y);
-                    float gridIntensity = 1.0 - min(line, 1.0);
+                    float dw = t * 0.005; // distance-based width for anti-aliasing
+                    float gridIntensity = smoothstep(0.02 + dw, 0.01, line);
                     
-                    // Base Colors
-                    vec3 floorColor = vec3(0.0, 0.0, 0.05 + 0.05 * sin(p.z * 0.1)); // Subtle scrolling variation
-                    vec3 gridColor = vec3(0.0, 1.0, 0.8); // Cyan Grid
+                    // Contour lines based on height (advanced geometry detail)
+                    float contour = abs(fract(p.y * 4.0) - 0.5) * 2.0;
+                    contour = smoothstep(0.05, 0.1, contour);
                     
-                    // Fade grid lines in distance slightly less than fog to make them pop
-                    gridColor *= 1.5; 
+                    vec3 baseColor = vec3(0.05, 0.02, 0.05); // dark synthwave purple/blue
+                    vec3 gridColor = vec3(0.0, 1.0, 0.8) * 1.5; // cyan
+                    vec3 contourColor = vec3(0.8, 0.2, 0.5); // pinkish height lines
 
-                    vec3 finalGround = mix(floorColor, gridColor, gridIntensity);
-
-                    // --- Fog ---
-                    // Exponential fog fading to black/sky color
-                    float dist = distance(ro, p);
-                    float fogFactor = 1.0 - exp(-dist * 0.08);
+                    col = mix(baseColor, contourColor, 1.0 - contour);
+                    col = mix(col, gridColor, gridIntensity);
                     
-                    col = mix(finalGround, vec3(0.0, 0.05, 0.1), fogFactor);
-                    
-                    // Horizon Glow
-                    float horizon = smoothstep(20.0, 40.0, dist);
-                    col += vec3(0.0, 0.3, 0.5) * horizon * 0.5;
+                    // Lighting
+                    vec3 ld = normalize(vec3(0.5, 0.8, -0.5));
+                    float diff = max(0.0, dot(n, ld));
+                    col *= 0.3 + 0.7 * diff; // Ambient + Diffuse
+                } else {
+                    // Wireframe boxes
+                    col = vec3(1.0, 0.4, 0.1) * 2.5; // Orange/Red glow
                 }
             }
+            
+            // Add volumetric glow from wireframes
+            col += vec3(1.0, 0.5, 0.2) * glow * 0.12;
 
-            // --- Retro Post-Processing ---
-            // Vignette
-            float vignette = smoothstep(1.5, 0.5, length(uv * 0.5)); // We scaled UV up, so scale down for vignette
+            // Fog
+            float fogFactor = 1.0 - exp(-t * 0.05);
+            col = mix(col, vec3(0.02, 0.0, 0.05), fogFactor);
+            
+            // Vignette & Gamma
+            float vignette = smoothstep(1.5, 0.5, length(uv * 0.5));
             col *= vignette;
-
-            // Gamma
             col = pow(col, vec3(0.4545));
 
             gl_FragColor = vec4(col, 1.0);
