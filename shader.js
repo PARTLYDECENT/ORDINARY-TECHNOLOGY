@@ -27,12 +27,6 @@
         // Hash
         float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
-        // Rotation matrix
-        mat2 rot(float a) {
-            float s = sin(a), c = cos(a);
-            return mat2(c, -s, s, c);
-        }
-
         // Box SDF edge (wireframe)
         float sdBoxEdge(vec3 p, vec3 b, float e) {
             p = abs(p) - b;
@@ -43,57 +37,80 @@
                 length(max(vec3(q.x, q.y, p.z), 0.0)) + min(max(q.x, max(q.y, p.z)), 0.0));
         }
 
-        // Terrain with advanced geometry (displacement on plane)
-        float terrain(vec3 p) {
-            // Adds shifting hills and geometric ridges
-            float h = sin(p.x * 0.5) * cos(p.z * 0.5) * 0.8;
-            h += sin(p.x * 1.5 + uTime) * cos(p.z * 1.5) * 0.2;
-            return p.y + 1.0 - h;
-        }
-
         vec2 map(vec3 p) {
-            // 1. Terrain
-            float dG = terrain(p);
+            // 1. Terrain Plane
+            float dG = p.y + 1.0;
             
-            // 2. Wireframe cubes emitting upwards
+            // 2. Objects forming out of the grid
             vec3 op = p;
             
             // Grid space for objects
-            float cellSize = 6.0;
-            // Scroll Z
-            op.z += uTime * 4.0;
+            float cellSize = 4.0; 
+            // We DO NOT scroll objects locally, so they stay anchored to the world grid coordinates!
             
             vec2 id = floor(op.xz / cellSize);
+            // Center local space within the cell
             op.xz = mod(op.xz, cellSize) - cellSize * 0.5;
             
             float h1 = hash(id + vec2(1.0, 2.0));
             float h2 = hash(id + vec2(3.0, 4.0));
+            float shapeType = hash(id + vec2(5.0, 6.0));
             
-            // Emitting: objects float up and disappear
-            float cycle = fract(uTime * 0.2 * (0.5 + h1));
-            op.y -= -2.0 + cycle * 10.0; // move up
+            // Sparsity check: emitting slowly in random order
+            // Only ~10% of cells have an active extrusion
+            if (h1 > 0.1) {
+                return vec2(dG, 0.0); // ID 0 is terrain/floor
+            }
+
+            // Object "lattice up" cycle
+            // Slower cycle, randomized phase
+            float cycleSpeed = 0.2 + h2 * 0.3;
+            float cycle = fract(uTime * cycleSpeed + h1);
             
-            // Rotate
-            op.xz *= rot(uTime * h1 * 2.0);
-            op.xy *= rot(uTime * h2 * 2.0);
+            // Growth factor from 0.0 to 1.0 back to 0.0 smoothly
+            float growth = smoothstep(0.0, 0.15, cycle) * smoothstep(1.0, 0.7, cycle);
             
-            // Box shape
-            float size = 0.4 + h1 * 0.4;
-            // Scale down at the start and end of cycle
-            float scale = smoothstep(0.0, 0.1, cycle) * smoothstep(1.0, 0.8, cycle);
-            size *= scale;
+            // Object sizes must be multiples of 0.5 to align edges perfectly with the 1x1 grid lines.
+            // bSize = 0.5 (width=1), 1.0 (width=2)
+            float bSize = 0.5 + floor(h1 * 3.0) * 0.5; 
+            if (bSize > 1.0) bSize = 1.0;
             
-            float dBox = sdBoxEdge(op, vec3(size), 0.05);
+            // Up to height 2.0
+            float maxH = 0.5 + floor(h2 * 4.0) * 0.5; 
+            float currentH = maxH * growth;
+            if (currentH < 0.01) return vec2(dG, 0.0); // Don't render tiny artifacts
             
-            // Avoid issues when objects are too small
-            if(scale < 0.01) dBox = 999.0;
+            // To rest exactly on y = -1.0, center is at y = -1.0 + currentH
+            float objYCenter = -1.0 + currentH;
+            vec3 localP = vec3(op.x, p.y - objYCenter, op.z); 
             
-            if (dG < dBox) return vec2(dG, 0.0);
-            return vec2(dBox, 1.0 + h1); // return ID for coloring
+            float e = 0.015; // directly corresponds to grid line thickness bounds!
+            
+            // Base wireframe contour matches grid
+            float dObj = sdBoxEdge(localP, vec3(bSize, currentH, bSize), e);
+            
+            // Multiple parts latticing up
+            if (shapeType > 0.4 && currentH > 0.25) {
+                // Add a tiered wider base section
+                float bSize2 = bSize + 0.5; 
+                float h2Val = currentH * 0.5;
+                float dObj2 = sdBoxEdge(vec3(op.x, p.y - (-1.0 + h2Val), op.z), vec3(bSize2, h2Val, bSize2), e);
+                dObj = min(dObj, dObj2);
+            }
+            if (shapeType > 0.8 && currentH > 0.5) {
+                // Add an inner pillar
+                float bSize3 = max(0.25, bSize - 0.5); 
+                float h3Val = currentH * 1.5;
+                float dObj3 = sdBoxEdge(vec3(op.x, p.y - (-1.0 + h3Val), op.z), vec3(bSize3, h3Val, bSize3), e);
+                dObj = min(dObj, dObj3);
+            }
+            
+            if (dG < dObj) return vec2(dG, 0.0); 
+            return vec2(dObj, 1.0); // return object ID
         }
 
         vec3 calcNormal(vec3 p) {
-            vec2 e = vec2(0.02, 0);
+            vec2 e = vec2(0.01, 0);
             return normalize(vec3(map(p+e.xyy).x - map(p-e.xyy).x,
                                   map(p+e.yxy).x - map(p-e.yxy).x,
                                   map(p+e.yyx).x - map(p-e.yyx).x));
@@ -105,24 +122,23 @@
             uv.x *= aspect;
             uv = (uv - vec2(aspect * 0.5, 0.5)) * 2.0;
 
-            vec3 ro = vec3(0.0, 1.5, -uTime * 4.0);
-            vec3 rd = normalize(vec3(uv.x, uv.y - 0.2, -1.0)); // look forward slightly down
+            // Roll slow like it used to
+            vec3 ro = vec3(0.0, 1.5, -uTime * 1.5);
+            vec3 rd = normalize(vec3(uv.x, uv.y - 0.2, -1.0)); 
             
             // Raymarch
             float t = 0.0;
             float d = 0.0;
             float m = -1.0;
-            float glow = 0.0;
             
-            for(int i = 0; i < 70; i++) {
+            for(int i = 0; i < 90; i++) {
                 vec3 p = ro + rd * t;
                 vec2 res = map(p);
                 d = res.x;
                 m = res.y;
-                if(d < 0.01) break;
+                if(d < 0.005) break;
                 if(t > 60.0) { t = 60.0; m = -1.0; break; }
-                if(m > 0.0) glow += 0.01 / (0.01 + d*d); // Accumulate wireframe glow
-                t += d * 0.6; // step size moderation for displaced terrain
+                t += d * 0.8; // conservative stepping for detailed wireframes
             }
 
             vec3 col = vec3(0.0);
@@ -134,48 +150,46 @@
                 if (rd.y > 0.0) col += pow(hash(uv * 50.0), 50.0); // Stars
                 
                 // Horizon Glow
-                float horizon = smoothstep(0.1, 0.0, rd.y);
+                float horizon = smoothstep(0.1, 0.0, abs(rd.y));
                 col += vec3(0.0, 0.3, 0.5) * horizon * 0.5;
             } else {
                 vec3 p = ro + rd * t;
                 vec3 n = calcNormal(p);
                 
-                if (m == 0.0) {
-                    // Terrain shading
-                    vec2 coord = p.xz;
-                    
-                    // Analytical anti-aliased grid
-                    vec2 grid = abs(fract(coord) - 0.5);
-                    float line = min(grid.x, grid.y);
-                    float dw = t * 0.005; // distance-based width for anti-aliasing
-                    float gridIntensity = smoothstep(0.02 + dw, 0.01, line);
-                    
-                    // Contour lines based on height (advanced geometry detail)
-                    float contour = abs(fract(p.y * 4.0) - 0.5) * 2.0;
-                    contour = smoothstep(0.05, 0.1, contour);
-                    
-                    vec3 baseColor = vec3(0.05, 0.02, 0.05); // dark synthwave purple/blue
-                    vec3 gridColor = vec3(0.0, 1.0, 0.8) * 1.5; // cyan
-                    vec3 contourColor = vec3(0.8, 0.2, 0.5); // pinkish height lines
+                vec3 baseColor = vec3(0.02, 0.0, 0.04);
+                vec3 gridColor = vec3(0.0, 1.0, 0.8) * 1.5; // Cyan glow
 
-                    col = mix(baseColor, contourColor, 1.0 - contour);
-                    col = mix(col, gridColor, gridIntensity);
+                if (m == 0.0) {
+                    // Floor grid lines
+                    vec2 grid = abs(fract(p.xz) - 0.5);
+                    float dw = t * 0.005; // Distance-based anti-aliasing
+                    float line = min(grid.x, grid.y);
                     
-                    // Lighting
+                    float gridIntensity = smoothstep(0.015 + dw, 0.005, line);
+                    col = mix(baseColor, gridColor, gridIntensity);
+
+                    // Floor Shading
+                    float ambient = 0.5;
+                    col *= ambient + 0.5 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0)));
+                } else {
+                    // Wireframe Objects
+                    // Literally wireframes of the same grid!
+                    // We shade the whole wireframe pure grid color
+                    col = gridColor;
+
+                    // Volumetric depth cue / glow variation from the base
+                    float glow = smoothstep(-1.0, 2.0, p.y);
+                    col += vec3(0.0, 0.5, 0.4) * glow;
+                    
+                    // Subtle 3D lighting so we see its structure
                     vec3 ld = normalize(vec3(0.5, 0.8, -0.5));
                     float diff = max(0.0, dot(n, ld));
-                    col *= 0.3 + 0.7 * diff; // Ambient + Diffuse
-                } else {
-                    // Wireframe boxes
-                    col = vec3(1.0, 0.4, 0.1) * 2.5; // Orange/Red glow
+                    col *= 0.8 + 0.4 * diff;
                 }
             }
             
-            // Add volumetric glow from wireframes
-            col += vec3(1.0, 0.5, 0.2) * glow * 0.12;
-
             // Fog
-            float fogFactor = 1.0 - exp(-t * 0.05);
+            float fogFactor = 1.0 - exp(-t * 0.04);
             col = mix(col, vec3(0.02, 0.0, 0.05), fogFactor);
             
             // Vignette & Gamma

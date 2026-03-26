@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stickman's Odyssey: Void Awakening</title>
+    <style>
+        :root {
+            --bg-color: #05050a;
+            --accent-color: #00f2ff;
+            --danger-color: #ff0055;
+            --text-color: #ffffff;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            padding: 25px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            color: white;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 900;
+            font-size: 1.4rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-style: italic;
+        }
+
+        #score-container {
+            color: var(--accent-color);
+            text-shadow: 0 0 15px rgba(0, 242, 255, 0.6);
+        }
+
+        .overlay-screen {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 10vw, 5rem);
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #00f2ff, #ff0055, #7000ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 900;
+            filter: drop-shadow(0 0 10px rgba(112, 0, 255, 0.5));
+            letter-spacing: -2px;
+        }
+
+        .btn-primary {
+            padding: 20px 50px;
+            font-size: 1.2rem;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 900;
+            transition: all 0.2s;
+            margin-top: 25px;
+            text-transform: uppercase;
+            pointer-events: auto;
+            clip-path: polygon(10% 0, 100% 0, 90% 100%, 0 100%);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-color);
+            transform: scale(1.1) skewX(-5deg);
+        }
+
+        #mobile-controls {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            display: none;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        .m-btn {
+            width: 75px;
+            height: 75px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 30px;
+        }
+
+        #m-fire {
+            background: rgba(255, 0, 85, 0.2);
+            border-color: var(--danger-color);
+            width: 95px;
+            height: 95px;
+        }
+
+        @media (max-width: 768px) {
+            #mobile-controls { display: flex; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="stats-row">
+            <div id="dist-container">SYNC: <span id="dist-val">0</span>%</div>
+            <div id="score-container">KILL_COUNT: <span id="score-val">0</span></div>
+        </div>
+        <div id="biome-name" style="margin-top: 5px; color: var(--danger-color); font-weight: bold; letter-spacing: 3px;">SYSTEM_STATUS: STABLE</div>
+    </div>
+
+    <div id="start-screen" class="overlay-screen">
+        <h1>VOID AWAKENING</h1>
+        <p style="opacity: 0.6; letter-spacing: 2px; text-transform: uppercase;">The Sentinels have evolved. Exterminate them.</p>
+        <button id="start-btn" class="btn-primary">BEGIN_HUNT</button>
+        <div style="margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.7rem; opacity: 0.4;">
+            <div>[W/A/S/D] MOVEMENT</div>
+            <div>[SPACE] THRUSTERS</div>
+            <div>[MOUSE] TARGETING</div>
+            <div>[CLICK] FIRE_ARM</div>
+        </div>
+    </div>
+
+    <div id="game-over-screen" class="overlay-screen" style="display: none;">
+        <h1 style="background: var(--danger-color); -webkit-background-clip: text; background-clip: text;">SYSTEM_FAILURE</h1>
+        <div id="final-stats" style="margin: 20px 0; font-size: 1.5rem; font-weight: 900; color: #fff;">
+            DISTANCE: <span id="final-dist">0</span>M<br>
+            ELIMINATIONS: <span id="final-score">0</span>
+        </div>
+        <button id="retry-btn" class="btn-primary">REBOOT_CORE</button>
+    </div>
+
+    <div id="mobile-controls">
+        <div style="display: flex; gap: 15px;">
+            <div class="m-btn" id="m-left">←</div>
+            <div class="m-btn" id="m-right">→</div>
+        </div>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <div class="m-btn" id="m-fire">🎯</div>
+            <div class="m-btn" id="m-jump">🚀</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const distVal = document.getElementById('dist-val');
+    const scoreVal = document.getElementById('score-val');
+    const biomeName = document.getElementById('biome-name');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    
+    // Physics
+    const GRAVITY = 0.58;
+    const FRICTION = 0.82;
+    const JUMP_FORCE = -13;
+    const ACCEL = 1.1;
+
+    let width, height;
+    let cameraX = 0;
+    let distance = 0;
+    let score = 0;
+    let gameActive = false;
+    let currentBiomeIdx = 0;
+    let mouse = { x: 0, y: 0 };
+    let shake = 0;
+    let frameCount = 0;
+
+    const keys = {};
+    const touch = { left: false, right: false, jump: false, fire: false };
+
+    const biomes = [
+        { name: "THE_VOID", sky: ["#020205", "#050510"], ground: "#0a0a1a", accent: "#00f2ff", enemy: "#ff0055" },
+        { name: "NEON_HELL", sky: ["#050005", "#150015"], ground: "#200020", accent: "#ff00ff", enemy: "#00f2ff" },
+        { name: "CHROME_CITY", sky: ["#050505", "#101010"], ground: "#1a1a1a", accent: "#39ff14", enemy: "#ff9900" }
+    ];
+
+    class Particle {
+        constructor(x, y, color, vx, vy, size = 3) {
+            this.x = x; this.y = y; this.color = color;
+            this.vx = vx; this.vy = vy;
+            this.life = 1.0; this.decay = 0.015 + Math.random() * 0.03;
+            this.size = size;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy;
+            this.life -= this.decay;
+        }
+        draw() {
+            ctx.globalAlpha = this.life;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x - cameraX, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    class Projectile {
+        constructor(x, y, angle, speed = 15) {
+            this.x = x; this.y = y;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.active = true;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy;
+            if (Math.abs(this.x - (cameraX + width/2)) > width) this.active = false;
+        }
+        draw() {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "#00f2ff";
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(this.x - cameraX, this.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    class Enemy {
+        constructor(x, y, type = 'reaper') {
+            this.x = x; this.y = y;
+            this.type = type;
+            this.vx = (Math.random() > 0.5 ? 1 : -1) * (1.5 + Math.random() * 1.5);
+            this.alive = true;
+            this.bob = Math.random() * Math.PI * 2;
+            this.startX = x;
+            this.patrolRange = 100 + Math.random() * 150;
+            this.state = 'patrol';
+            this.timer = 0;
+            this.glitch = 0;
+        }
+        update(playerX, playerY) {
+            this.timer++;
+            this.glitch = Math.random() > 0.95 ? 10 : 0;
+            
+            const distToPlayer = Math.hypot(this.x - playerX, this.y - playerY);
+
+            if (this.type === 'reaper') {
+                // AI Logic for Reaper
+                if (this.state === 'patrol') {
+                    this.x += this.vx;
+                    if (Math.abs(this.x - this.startX) > this.patrolRange) this.vx *= -1;
+                    if (distToPlayer < 300 && Math.abs(this.y - playerY) < 50) {
+                        this.state = 'alert';
+                        this.timer = 0;
+                    }
+                } else if (this.state === 'alert') {
+                    // Wind up for lunge
+                    this.vx *= 0.8;
+                    if (this.timer > 30) {
+                        this.state = 'lunge';
+                        this.vx = (playerX > this.x ? 1 : -1) * 12;
+                    }
+                } else if (this.state === 'lunge') {
+                    this.x += this.vx;
+                    this.vx *= 0.95;
+                    if (Math.abs(this.vx) < 2) {
+                        this.state = 'patrol';
+                        this.startX = this.x;
+                    }
+                }
+            } else {
+                // AI Logic for Gazer (Flying)
+                this.bob += 0.08;
+                this.y += Math.sin(this.bob) * 1.2;
+                this.x += this.vx * 0.5;
+                if (Math.abs(this.x - this.startX) > this.patrolRange) this.vx *= -1;
+                
+                // Drift slightly toward player
+                if (distToPlayer < 500) {
+                    this.x += (playerX - this.x) * 0.005;
+                    this.y += (playerY - 40 - this.y) * 0.005;
+                }
+            }
+        }
+        draw() {
+            const b = biomes[currentBiomeIdx];
+            ctx.save();
+            ctx.translate(this.x - cameraX + (this.glitch ? (Math.random()-0.5)*10 : 0), this.y);
+            
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = b.enemy;
+
+            if (this.type === 'reaper') {
+                // Draw Reaper: Hooded figure with scythe arms
+                ctx.fillStyle = "#111";
+                ctx.beginPath();
+                ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.lineTo(10, -35); ctx.lineTo(-10, -35);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Scythe Arms
+                ctx.strokeStyle = b.enemy;
+                ctx.lineWidth = 3;
+                const swing = this.state === 'lunge' ? Math.sin(this.timer * 0.5) * 30 : 0;
+                ctx.beginPath();
+                ctx.moveTo(10, -20); ctx.lineTo(25 + swing, -30 - swing);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-10, -20); ctx.lineTo(-25 - swing, -30 - swing);
+                ctx.stroke();
+
+                // Eyes
+                ctx.fillStyle = b.enemy;
+                ctx.beginPath();
+                ctx.arc(-4, -28, 2, 0, Math.PI*2);
+                ctx.arc(4, -28, 2, 0, Math.PI*2);
+                ctx.fill();
+
+            } else {
+                // Draw Gazer: Floating Eye with orbiting shards
+                ctx.fillStyle = "#000";
+                ctx.beginPath();
+                ctx.arc(0, 0, 18, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = b.enemy;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Pupil
+                ctx.fillStyle = b.enemy;
+                ctx.beginPath();
+                ctx.arc(0, 0, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#fff";
+                ctx.beginPath();
+                ctx.arc(3, -3, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Orbiting Shards
+                for(let i=0; i<3; i++) {
+                    const ang = (this.bob * 2) + (i * Math.PI * 2 / 3);
+                    ctx.fillStyle = b.enemy;
+                    ctx.fillRect(Math.cos(ang)*30 - 3, Math.sin(ang)*30 - 3, 6, 6);
+                }
+            }
+            
+            ctx.restore();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    class Stickman {
+        constructor() {
+            this.x = 150; this.y = 300;
+            this.vx = 0; this.vy = 0;
+            this.grounded = false;
+            this.doubleJumped = false;
+            this.animFrame = 0;
+            this.dir = 1;
+            this.squish = 1;
+            this.targetSquish = 1;
+            this.coyoteTime = 0;
+            this.shootCooldown = 0;
+            this.trail = [];
+        }
+
+        update() {
+            if (keys['ArrowRight'] || keys['KeyD'] || touch.right) {
+                this.vx += ACCEL;
+                this.dir = 1;
+            } else if (keys['ArrowLeft'] || keys['KeyA'] || touch.left) {
+                this.vx -= ACCEL;
+                this.dir = -1;
+            }
+            this.vx *= FRICTION;
+
+            if (keys['Space'] || keys['ArrowUp'] || keys['KeyW'] || touch.jump) {
+                if (this.grounded || this.coyoteTime > 0) {
+                    this.jump();
+                    this.coyoteTime = 0;
+                } else if (!this.doubleJumped && this.vy > -4) {
+                    this.jump(true);
+                }
+                keys['Space'] = keys['ArrowUp'] = keys['KeyW'] = touch.jump = false;
+            }
+
+            this.vy += GRAVITY;
+            this.x += this.vx;
+            this.y += this.vy;
+
+            if (touch.fire && this.shootCooldown <= 0) this.shoot();
+
+            if (this.grounded) this.coyoteTime = 8;
+            else this.coyoteTime--;
+
+            if (this.shootCooldown > 0) this.shootCooldown--;
+
+            this.squish += (this.targetSquish - this.squish) * 0.22;
+            this.targetSquish = 1;
+
+            if (Math.abs(this.vx) > 0.5) this.animFrame += Math.abs(this.vx) * 0.12;
+            else this.animFrame *= 0.8;
+
+            // Trail for "Coolness"
+            if (Math.abs(this.vx) > 5 || !this.grounded) {
+                this.trail.push({x: this.x, y: this.y, life: 1});
+                if (this.trail.length > 10) this.trail.shift();
+            } else {
+                if (this.trail.length > 0) this.trail.shift();
+            }
+
+            if (this.x < 50) this.x = 50;
+            if (this.x > distance + 100) {
+                distance = Math.floor(this.x - 100);
+                distVal.innerText = Math.floor(distance / 50);
+                let b = Math.floor(distance / 3000) % biomes.length;
+                if(b !== currentBiomeIdx) {
+                    currentBiomeIdx = b;
+                    biomeName.innerText = "SYSTEM_STATUS: " + biomes[currentBiomeIdx].name;
+                }
+            }
+        }
+
+        jump(isDouble = false) {
+            this.vy = JUMP_FORCE;
+            this.grounded = false;
+            this.targetSquish = 1.5;
+            if (isDouble) {
+                this.doubleJumped = true;
+                shake = 10;
+                spawnExplosion(this.x, this.y, '#fff', 12);
+            }
+            spawnExplosion(this.x, this.y + 20, biomes[currentBiomeIdx].accent, 5);
+        }
+
+        shoot() {
+            const bodyLen = 22 * this.squish;
+            const originX = this.x;
+            const originY = this.y - bodyLen + 5;
+            const angle = Math.atan2(mouse.y - (originY), (mouse.x + cameraX) - originX);
+            
+            projectiles.push(new Projectile(originX, originY, angle));
+            this.shootCooldown = 12;
+            this.vx -= Math.cos(angle) * 3; // Recoil
+            this.vy -= Math.sin(angle) * 2;
+            shake = 5;
+            spawnExplosion(originX + Math.cos(angle) * 25, originY + Math.sin(angle) * 25, '#00f2ff', 4);
+        }
+
+        draw() {
+            const b = biomes[currentBiomeIdx];
+            
+            // Draw Trail
+            this.trail.forEach((t, i) => {
+                ctx.globalAlpha = i / 10 * 0.3;
+                ctx.strokeStyle = b.accent;
+                ctx.lineWidth = 2;
+                this.drawBody(t.x - cameraX, t.y, false);
+            });
+            ctx.globalAlpha = 1.0;
+
+            this.drawBody(this.x - cameraX, this.y, true);
+        }
+
+        drawBody(drawX, drawY, isMain) {
+            const bodyLen = 22 * this.squish;
+            const headSize = 8;
+            const limbLen = 18;
+
+            ctx.save();
+            ctx.translate(drawX, drawY);
+            ctx.strokeStyle = isMain ? '#fff' : biomes[currentBiomeIdx].accent;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+
+            const walkCycle = Math.sin(this.animFrame);
+            const walkCycleOpp = Math.sin(this.animFrame + Math.PI);
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(0, -bodyLen - headSize, headSize, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(0, -bodyLen);
+            ctx.lineTo(0, 0);
+            ctx.stroke();
+
+            // Legs
+            let legExt = (this.grounded || this.coyoteTime > 0) ? 1 : 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, 0); ctx.lineTo(walkCycle * 15, limbLen * legExt);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, 0); ctx.lineTo(walkCycleOpp * 15, limbLen * legExt);
+            ctx.stroke();
+
+            if (isMain) {
+                // Aiming Arm with Glowing Blaster
+                const armOriginY = -bodyLen + 5;
+                const aimAngle = Math.atan2(mouse.y - (this.y + armOriginY), (mouse.x + cameraX) - this.x);
+                ctx.beginPath();
+                ctx.moveTo(0, armOriginY);
+                ctx.lineTo(Math.cos(aimAngle) * 22, armOriginY + Math.sin(aimAngle) * 22);
+                ctx.stroke();
+                
+                ctx.fillStyle = "#00f2ff";
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "#00f2ff";
+                ctx.beginPath();
+                ctx.arc(Math.cos(aimAngle) * 24, armOriginY + Math.sin(aimAngle) * 24, 4, 0, Math.PI*2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.restore();
+        }
+    }
+
+    class Platform {
+        constructor(x, y, w, h) {
+            this.x = x; this.y = y; this.w = w; this.h = h;
+        }
+        draw() {
+            const b = biomes[currentBiomeIdx];
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(this.x - cameraX + 15, this.y + 15, this.w, this.h);
+            
+            ctx.fillStyle = b.ground;
+            ctx.beginPath();
+            ctx.roundRect(this.x - cameraX, this.y, this.w, this.h, 4);
+            ctx.fill();
+            
+            ctx.strokeStyle = b.accent;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(this.x - cameraX, this.y);
+            ctx.lineTo(this.x - cameraX + this.w, this.y);
+            ctx.stroke();
+
+            // Tech detailing
+            ctx.globalAlpha = 0.1;
+            ctx.strokeStyle = "#fff";
+            for(let i=0; i<this.w; i+=40) {
+                ctx.strokeRect(this.x - cameraX + i, this.y + 10, 20, 20);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    let player = new Stickman();
+    let platforms = [];
+    let enemies = [];
+    let projectiles = [];
+    let particles = [];
+    let hitStop = 0;
+
+    function spawnExplosion(x, y, color, count) {
+        for(let i = 0; i < count; i++) {
+            particles.push(new Particle(x, y, color, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, 2 + Math.random() * 4));
+        }
+    }
+
+    function initWorld() {
+        platforms = []; enemies = []; projectiles = []; particles = [];
+        platforms.push(new Platform(0, height - 120, 1200, 400));
+        for(let i = 0; i < 15; i++) spawnSegment();
+    }
+
+    function spawnSegment() {
+        const last = platforms[platforms.length - 1];
+        const gap = 130 + Math.random() * 140;
+        const width = 300 + Math.random() * 400;
+        let y = Math.max(300, Math.min(height - 120, last.y + (Math.random() - 0.5) * 200));
+        const plat = new Platform(last.x + last.w + gap, y, width, 500);
+        platforms.push(plat);
+        
+        // Spawn Enemies
+        const count = distance > 2000 ? 2 : 1;
+        for(let j=0; j<count; j++) {
+            if (Math.random() > 0.4) {
+                const type = Math.random() > 0.5 ? 'reaper' : 'gazer';
+                enemies.push(new Enemy(plat.x + (Math.random()*plat.w), type === 'reaper' ? plat.y : plat.y - 150, type));
+            }
+        }
+    }
+
+    function checkCollisions() {
+        let wasGrounded = player.grounded;
+        player.grounded = false;
+
+        platforms.forEach(p => {
+            if (player.x + 15 > p.x && player.x - 15 < p.x + p.w) {
+                if (player.vy >= 0 && player.y <= p.y + 12 && player.y + player.vy >= p.y - 5) {
+                    player.y = p.y; player.vy = 0; player.grounded = true; player.doubleJumped = false;
+                    if (!wasGrounded) player.targetSquish = 0.5;
+                }
+            }
+        });
+
+        projectiles.forEach(pr => {
+            enemies.forEach(en => {
+                if (en.alive && Math.hypot(pr.x - en.x, pr.y - (en.type === 'reaper' ? en.y - 20 : en.y)) < 35) {
+                    en.alive = false; pr.active = false;
+                    score++; scoreVal.innerText = score;
+                    shake = 15; hitStop = 3;
+                    spawnExplosion(en.x, en.y - 20, biomes[currentBiomeIdx].enemy, 25);
+                }
+            });
+        });
+
+        enemies.forEach(en => {
+            if (en.alive && Math.hypot(player.x - en.x, (player.y-20) - (en.type === 'reaper' ? en.y-20 : en.y)) < 40) {
+                endGame();
+            }
+        });
+
+        if (player.y > height + 200) endGame();
+    }
+
+    function endGame() {
+        if (!gameActive) return;
+        gameActive = false;
+        shake = 30;
+        gameOverScreen.style.display = 'flex';
+        document.getElementById('final-dist').innerText = Math.floor(distance / 50);
+        document.getElementById('final-score').innerText = score;
+        spawnExplosion(player.x, player.y - 20, '#ff0055', 40);
+    }
+
+    function resetGame() {
+        player = new Stickman(); distance = 0; score = 0; cameraX = 0; currentBiomeIdx = 0;
+        distVal.innerText = "0"; scoreVal.innerText = "0";
+        biomeName.innerText = "SYSTEM_STATUS: " + biomes[0].name;
+        initWorld(); gameActive = true;
+    }
+
+    function updateLoop() {
+        if (hitStop > 0) {
+            hitStop--;
+            requestAnimationFrame(updateLoop);
+            return;
+        }
+
+        if (gameActive) {
+            player.update();
+            checkCollisions();
+            cameraX += (player.x - width * 0.35 - cameraX) * 0.1;
+
+            enemies.forEach(en => en.update(player.x, player.y));
+            projectiles.forEach((pr, i) => { 
+                pr.update(); if (!pr.active) projectiles.splice(i, 1);
+            });
+            particles.forEach((p, i) => { 
+                p.update(); if (p.life <= 0) particles.splice(i, 1);
+            });
+
+            if (platforms.length > 0 && platforms[0].x - cameraX + platforms[0].w < -600) {
+                platforms.shift(); spawnSegment();
+            }
+            enemies = enemies.filter(en => en.alive && en.x - cameraX > -600);
+            
+            if (shake > 0) shake *= 0.9;
+        }
+        draw();
+        requestAnimationFrame(updateLoop);
+    }
+
+    function draw() {
+        ctx.save();
+        if (shake > 1) {
+            ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+        }
+
+        const b = biomes[currentBiomeIdx];
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
+        skyGrad.addColorStop(0, b.sky[0]); skyGrad.addColorStop(1, b.sky[1]);
+        ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, width, height);
+
+        // Grid Background
+        ctx.strokeStyle = b.accent;
+        ctx.globalAlpha = 0.05;
+        ctx.lineWidth = 1;
+        for(let i = -cameraX % 100; i < width; i += 100) {
+            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke();
+        }
+
+        ctx.globalAlpha = 1.0;
+        platforms.forEach(p => p.draw());
+        enemies.forEach(en => en.draw());
+        projectiles.forEach(pr => pr.draw());
+        particles.forEach(p => p.draw());
+        player.draw();
+
+        ctx.restore();
+    }
+
+    window.addEventListener('resize', () => {
+        width = window.innerWidth; height = window.innerHeight;
+        canvas.width = width; canvas.height = height;
+    });
+
+    window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    window.addEventListener('mousedown', () => { if (gameActive && player.shootCooldown <= 0) player.shoot(); });
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    const bindTouch = (id, key) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); touch[key] = true; if(key==='fire' && gameActive && player.shootCooldown <=0) player.shoot(); });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); touch[key] = false; });
+    };
+    bindTouch('m-left', 'left'); bindTouch('m-right', 'right');
+    bindTouch('m-jump', 'jump'); bindTouch('m-fire', 'fire');
+
+    document.getElementById('start-btn').onclick = () => { startScreen.style.display = 'none'; resetGame(); };
+    document.getElementById('retry-btn').onclick = () => { gameOverScreen.style.display = 'none'; resetGame(); };
+
+    window.dispatchEvent(new Event('resize'));
+    updateLoop();
+</script>
+</body>
+</html>
