@@ -149,7 +149,7 @@ function handleConsoleInput(event) {
     
     if (command === '/ohayou') {
       showNotification('ACCESSING RESTRICTED DATA ARCHIVE: OHAYOU...');
-      showEasterEggImage('assets/textures/digits.png', 10000);
+      showEasterEggImage('textures/DIGITS.PNG', 10000);
       return;
     }
 
