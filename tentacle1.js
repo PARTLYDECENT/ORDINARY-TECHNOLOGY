@@ -94,6 +94,7 @@ export class TentacleOS {
                             'anomaly_report.log': { type: 'file', size: '67 KB' },
                         }
                     },
+                    'hgt109.html': { type: 'file', size: '15 KB' },
                     'README.txt': { type: 'file', size: '2 KB' },
                     '.secret': { type: 'file', size: '?? B' },
                 }
@@ -277,7 +278,7 @@ export class TentacleOS {
         // Custom implementations for specific commands
         switch (baseCmd) {
             case 'help':
-                response = "AVAILABLE COMMANDS:<br>- status / clear / ls / neofetch / whoami / date<br>- clock / notepad / color / dice [N] / timer [N]<br>- encode [text] / decode [text]<br>- narration [on/off] / chat / weather / calc / files / tasks / uptime";
+                response = "AVAILABLE COMMANDS:<br>- status / clear / ls / neofetch / whoami / date<br>- clock / notepad / color / dice [N] / timer [N]<br>- encode [text] / decode [text]<br>- hgt [id] / narration [on/off] / chat / weather / calc / files / tasks / uptime";
                 break;
             case 'status':
                 response = "SYMBIOSIS: ACTIVE<br>NEURAL LOAD: 42%<br>VOID RESONANCE: STABLE";
@@ -386,6 +387,26 @@ Memory: Intrinsic Capacity Realized`;
                     response = "NARRATION: OFF";
                 } else {
                     response = "USAGE: narration [on/off]";
+                }
+                break;
+            case 'hgt':
+                if (args[1] === '109') {
+                    response = "⚡ HGT-109: SIGNAL DETECTED. ACCESSING ARCHIVE NODE... ⚡";
+                    this.narrate("H G T 109 signal detected. Accessing archive node.");
+                    setTimeout(() => {
+                        window.location.href = 'hgt109.html';
+                    }, 1200);
+                } else if (args[1] === '25') {
+                    this.toggleOSTool('hgt25-habitat'); // If habitat is a tool
+                    const habitat = document.getElementById('hgt25-habitat');
+                    if (habitat && window.VoidSymbiote) {
+                        new window.VoidSymbiote({ container: habitat });
+                        response = "HGT-25: VOID SYMBIOTE EVOKED.";
+                    } else {
+                        response = "ERR: HGT-25 CORE NOT FOUND.";
+                    }
+                } else {
+                    response = "USAGE: hgt [id] (try 109)";
                 }
                 break;
             default:
