@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] Flight Sim</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            color: rgba(50, 255, 150, 0.9);
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            z-index: 0;
+        }
+        
+        /* --- TACTICAL HUD OVERLAY --- */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+            background: radial-gradient(circle at center, transparent 40%, rgba(0, 10, 15, 0.5) 100%);
+        }
+
+        .hud-top, .hud-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .hud-panel {
+            background: rgba(0, 15, 20, 0.6);
+            border: 1px solid rgba(50, 255, 150, 0.3);
+            padding: 15px 20px;
+            backdrop-filter: blur(4px);
+            min-width: 280px;
+            position: relative;
+        }
+
+        /* Tech corners for panels */
+        .hud-panel::before, .hud-panel::after {
+            content: ''; position: absolute; width: 10px; height: 10px; border: 2px solid rgba(50, 255, 150, 0.8);
+        }
+        .hud-panel::before { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        .hud-panel::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        .hud-title {
+            font-weight: bold;
+            font-size: 16px;
+            border-bottom: 2px solid rgba(50, 255, 150, 0.5);
+            padding-bottom: 5px;
+            margin-bottom: 12px;
+            letter-spacing: 3px;
+        }
+
+        .hud-data-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin: 6px 0;
+            font-weight: 600;
+        }
+
+        .hud-value {
+            color: #fff;
+            text-shadow: 0 0 8px rgba(50, 255, 150, 0.4);
+        }
+
+        .warning {
+            color: #ff3333 !important;
+            border-color: #ff3333 !important;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.2) inset !important;
+        }
+        
+        .warning-text {
+            color: #ff3333 !important;
+            text-shadow: 0 0 8px rgba(255, 51, 51, 0.6) !important;
+        }
+
+        /* Advanced Center Reticle */
+        .reticle-container {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px; height: 500px;
+        }
+        .reticle-center {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 20px; height: 20px;
+            border: 2px solid rgba(50, 255, 150, 0.6);
+            border-radius: 50%;
+        }
+        .reticle-center::after { content: ''; position: absolute; top: 9px; left: -10px; right: -10px; height: 2px; background: rgba(50, 255, 150, 0.6); }
+        .reticle-center::before { content: ''; position: absolute; left: 9px; top: -10px; bottom: -10px; width: 2px; background: rgba(50, 255, 150, 0.6); }
+        
+        /* Pitch Ladder */
+        .pitch-ladder {
+            position: absolute; top: 20%; bottom: 20%; left: 50%; transform: translateX(-50%);
+            width: 240px;
+            border-left: 1px solid rgba(50, 255, 150, 0.15);
+            border-right: 1px solid rgba(50, 255, 150, 0.15);
+        }
+        .ladder-rung {
+            position: absolute; left: 10%; right: 10%; height: 2px; background: rgba(50, 255, 150, 0.3);
+        }
+        .ladder-rung::after {
+            content: '+00'; position: absolute; right: -30px; top: -6px; font-size: 10px;
+        }
+        
+        /* Locking Brackets */
+        .bracket { position: absolute; width: 60px; height: 60px; border: 3px solid rgba(50, 255, 150, 0.6); transition: all 0.3s cubic-bezier(0.1, 0.8, 0.1, 1); }
+        .bracket.tl { top: 20%; left: 20%; border-right: none; border-bottom: none; }
+        .bracket.tr { top: 20%; right: 20%; border-left: none; border-bottom: none; }
+        .bracket.bl { bottom: 20%; left: 20%; border-right: none; border-top: none; }
+        .bracket.br { bottom: 20%; right: 20%; border-left: none; border-top: none; }
+
+        /* Camera Feed Info */
+        #cam-info {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            background: rgba(0, 15, 20, 0.8);
+            padding: 8px 30px;
+            border-radius: 2px;
+            border: 1px solid rgba(50, 255, 150, 0.4);
+        }
+
+        /* Screen flash on impact */
+        #flash {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: white; opacity: 0; pointer-events: none; z-index: 100;
+        }
+
+        /* Init Screen */
+        #init-screen {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 10, 15, 0.98);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: opacity 0.8s;
+        }
+        #init-btn {
+            border: 1px solid rgba(50, 255, 150, 0.5);
+            padding: 25px 50px;
+            font-size: 20px;
+            font-weight: normal;
+            letter-spacing: 6px;
+            background: rgba(0, 30, 40, 0.3);
+            transition: all 0.3s;
+            text-align: center;
+        }
+        #init-btn:hover {
+            background: rgba(50, 255, 150, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Init Screen -->
+    <div id="init-screen" onclick="startSim()">
+        <div id="init-btn">ESTABLISH SECURE LINK<br><br><span style="font-size: 12px; opacity: 0.6;">[ ENGAGE AUDIO & TELEMETRY ]</span></div>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="flash"></div>
+    <div id="hud">
+        <div class="reticle-container">
+            <div class="pitch-ladder">
+                <div class="ladder-rung" style="top: 20%;"></div>
+                <div class="ladder-rung" style="top: 40%;"></div>
+                <div class="ladder-rung" style="top: 60%; width: 30%; left: 35%;"></div>
+                <div class="ladder-rung" style="top: 80%; width: 30%; left: 35%;"></div>
+            </div>
+            <div class="bracket tl" id="b-tl"></div>
+            <div class="bracket tr" id="b-tr"></div>
+            <div class="bracket bl" id="b-bl"></div>
+            <div class="bracket br" id="b-br"></div>
+            <div class="reticle-center"></div>
+        </div>
+        <div id="cam-info">SYS: [REDACTED] // CAM: 01-WIDE</div>
+
+        <div class="hud-top">
+            <div class="hud-panel" id="panel-telemetry">
+                <div class="hud-title">FLIGHT DYNAMICS</div>
+                <div class="hud-data-row"><span>VELOCITY:</span> <span class="hud-value" id="val-mach">MACH ██.█</span></div>
+                <div class="hud-data-row"><span>ALTITUDE:</span> <span class="hud-value" id="val-alt">████ FT</span></div>
+                <div class="hud-data-row"><span>G-FORCE:</span> <span class="hud-value" id="val-g">█.█ G</span></div>
+                <div class="hud-data-row"><span>DYNAMIC PRESS:</span> <span class="hud-value" id="val-q">███.█ kPa</span></div>
+            </div>
+
+            <div class="hud-panel" id="panel-system">
+                <div class="hud-title">WEAPON STATUS</div>
+                <div class="hud-data-row"><span>PAYLOAD:</span> <span class="hud-value" id="val-payload">[CLASSIFIED]</span></div>
+                <div class="hud-data-row"><span>SIM_TIME:</span> <span class="hud-value" id="val-time">0.00</span></div>
+                <div class="hud-data-row"><span>STATE:</span> <span class="hud-value" id="val-status">PROFILE ██</span></div>
+            </div>
+        </div>
+
+        <div class="hud-bottom">
+            <div class="hud-panel">
+                <div class="hud-title">SEA-SKIM ALTIMETER</div>
+                <div class="hud-data-row"><span>SEA STATE:</span> <span class="hud-value">LEVEL ██</span></div>
+                <div class="hud-data-row"><span>CLOSURE RT:</span> <span class="hud-value">████ M/S</span></div>
+            </div>
+            
+            <div class="hud-panel">
+                <div class="hud-title">SURFACE TARGET LOCK</div>
+                <div class="hud-data-row"><span>TGT RANGE:</span> <span class="hud-value" id="val-dist">███.█ NM</span></div>
+                <div class="hud-data-row"><span>INTERCEPT IN:</span> <span class="hud-value" id="val-prob">T-MINUS</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WebGL Canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform float uRealTime;
+        uniform float uSimTime;
+        uniform vec2 uResolution;
+        uniform float uCamCut;
+
+        varying vec2 vUv;
+
+        // --- MATH & NOISE UTILS ---
+        #define PI 3.14159265359
+        
+        // Expanded Timing Constants for Realism
+        #define T_ARM 12.0
+        #define T_DEPLOY 20.0
+
+        mat2 rot(float a) {
+            float s = sin(a), c = cos(a);
+            return mat2(c, -s, s, c);
+        }
+
+        float hash(float n) { return fract(sin(n) * 1e4); }
+        float hash(vec2 p) { return fract(1e4 * sin(17.0 * p.x + p.y * 0.1) * (0.1 + abs(sin(p.y * 13.0 + p.x)))); }
+        
+        float noise(vec3 x) {
+            const vec3 step = vec3(110, 241, 171);
+            vec3 i = floor(x);
+            vec3 f = fract(x);
+            float n = dot(i, step);
+            vec3 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(mix( hash(n + dot(step, vec3(0, 0, 0))), hash(n + dot(step, vec3(1, 0, 0))), u.x),
+                           mix( hash(n + dot(step, vec3(0, 1, 0))), hash(n + dot(step, vec3(1, 1, 0))), u.x), u.y),
+                       mix(mix( hash(n + dot(step, vec3(0, 0, 1))), hash(n + dot(step, vec3(1, 0, 1))), u.x),
+                           mix( hash(n + dot(step, vec3(0, 1, 1))), hash(n + dot(step, vec3(1, 1, 1))), u.x), u.y), u.z);
+        }
+
+        float fbm(vec3 p) {
+            float f = 0.0, w = 0.5;
+            for (int i = 0; i < 4; i++) {
+                f += w * noise(p);
+                p *= 2.02;
+                w *= 0.5;
+            }
+            return f;
+        }
+
+        // --- SDF PRIMITIVES & OPERATORS ---
+        float smin(float a, float b, float k) {
+            float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+            return mix(b, a, h) - k * h * (1.0 - h);
+        }
+
+        float sdBox(vec3 p, vec3 b) {
+            vec3 q = abs(p) - b;
+            return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+        }
+
+        float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+            vec3 pa = p - a, ba = b - a;
+            float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+            return length(pa - ba * h) - r;
+        }
+
+        // --- SCENE SDFs ---
+
+        // 1. AAA Solid Stealth Missile
+        float dMissile(vec3 p) {
+            if (uSimTime > T_DEPLOY + 0.2) return 1e10; 
+            
+            float disintegration = 0.0;
+            if (uSimTime > T_DEPLOY) {
+                disintegration = (uSimTime - T_DEPLOY) * 15.0;
+            }
+
+            // DARPA-style Hypersonic Waverider / Stealth lifting body
+            vec3 bp = p;
+            float core = sdCapsule(bp, vec3(0.0, 0.0, -2.0), vec3(0.0, 0.0, 1.2), 0.15);
+            
+            vec3 np = p;
+            np.z -= 1.2;
+            float nose = sdBox(np, vec3(0.15, 0.15, 1.5));
+            nose = max(nose, abs(np.x) + np.z*0.1 - 0.15); // Taper X
+            nose = max(nose, abs(np.y) + np.z*0.1 - 0.15); // Taper Y
+            nose = max(nose, -np.z); // Cut back
+            
+            float body = smin(core, nose, 0.2);
+
+            // Stealth Chines (blended side edges)
+            vec3 cp = p;
+            cp.z += 0.5; // Offset to match body
+            float chines = sdBox(cp, vec3(0.4, 0.02, 2.2));
+            chines = max(chines, abs(cp.x) + cp.z*0.15 - 0.4); // Swept taper towards nose
+            body = smin(body, chines, 0.1);
+
+            // Swept Delta Wings
+            vec3 wp = p;
+            wp.z += 1.0; // Moved towards rear
+            wp.x = abs(wp.x); 
+            wp.x -= 0.35;
+            wp.xy *= rot(0.05); // Slight dihedral
+            wp.xz *= rot(-0.8); // Aggressive backward sweep
+            float wings = sdBox(wp, vec3(0.9, 0.015, 0.4));
+            wings = max(wings, -(p.z + 1.2)); // Cut trailing edge flat
+
+            // Stealth V-Tail (Pelican Tail)
+            vec3 fp = p;
+            fp.z += 1.8;
+            fp.y -= 0.05;
+            fp.x = abs(fp.x);
+            fp.x -= 0.1;
+            fp.xy *= rot(0.6); // V-angle
+            fp.xz *= rot(-0.5); // Sweep
+            float fins = sdBox(fp, vec3(0.35, 0.015, 0.25));
+            fins = max(fins, -(p.z + 2.0)); // Flat trailing edge cut
+
+            // Flush stealth intake (underbelly)
+            vec3 ip = p;
+            ip.y += 0.16;
+            ip.z += 1.2;
+            float intake = sdBox(ip, vec3(0.15, 0.06, 0.6));
+            intake = max(intake, ip.y + ip.z*0.2); // Slanted inlet
+
+            float missile = smin(body, wings, 0.15);
+            missile = smin(missile, fins, 0.1);
+            missile = smin(missile, intake, 0.08);
+
+            if (disintegration > 0.0) {
+                missile += fbm(p * 8.0) * disintegration;
+            }
+            return missile;
+        }
+
+        // 2. Centrifugal Kinetic Payload
+        float dPayload(vec3 p) {
+            if (uSimTime < T_DEPLOY - 0.2) return 1e10;
+            
+            float t = max(0.0, uSimTime - T_DEPLOY);
+            vec3 cp = p;
+
+            cp.xy *= rot(uSimTime * 40.0); 
+            float distXY = length(cp.xy);
+            cp.z += sin(distXY * 3.0 - uSimTime * 30.0) * 0.2;
+
+            float cableModX = abs(sin(cp.x * 15.0)) * 0.02;
+            float chainX = length(cp.yz) - 0.03 + cableModX;
+            float cableModY = abs(sin(cp.y * 15.0)) * 0.02;
+            float chainY = length(cp.xz) - 0.03 + cableModY;
+            float chains = min(chainX, chainY);
+
+            float tipDist = t * 18.0; 
+            chains = max(chains, distXY - tipDist);
+            chains = max(chains, -(distXY - max(0.0, tipDist - 8.0))); 
+
+            vec3 wpX = vec3(abs(cp.x) - tipDist, cp.y, cp.z);
+            float weightX = sdBox(wpX, vec3(0.2, 0.15, 0.15)) - 0.05;
+            
+            vec3 wpY = vec3(cp.x, abs(cp.y) - tipDist, cp.z);
+            float weightY = sdBox(wpY, vec3(0.15, 0.2, 0.15)) - 0.05;
+            
+            float weights = min(weightX, weightY);
+            return min(chains, weights);
+        }
+
+        // 3. Shaped Charge Detonation
+        float dExplosion(vec3 p) {
+            if (uSimTime < T_DEPLOY) return 1e10;
+            float t = uSimTime - T_DEPLOY;
+            
+            float radius = pow(t, 0.4) * 4.0; 
+            float n = fbm(p * 1.5 - uSimTime * 2.0);
+            float blast = length(p) - radius + n * 2.0 * (1.0 + t);
+            
+            blast = max(blast, -(length(p) - radius * 0.7));
+            return blast;
+        }
+
+        // 4. Engine Exhaust Plume
+        float dExhaust(vec3 p) {
+            if (uSimTime > T_DEPLOY) return 1e10;
+            vec3 ep = p;
+            ep.z += 2.2; 
+            
+            float flare = 1.0;
+            if (uSimTime > T_ARM && uSimTime <= T_DEPLOY) {
+                flare = 1.0 + pow((uSimTime - T_ARM), 2.0) * 0.5; // Smoother build up
+            }
+
+            float d = length(ep.xy) - 0.06 + ep.z * 0.08;
+            float diamonds = sin(ep.z * 25.0 - uRealTime * 200.0) * 0.02 * flare;
+            d += diamonds;
+            d = max(d, abs(ep.z + 0.8 * flare) - 0.8 * flare); 
+            d += sin(ep.z * 40.0 - uRealTime * 100.0) * 0.01;
+            
+            return d;
+        }
+
+        // 5. Realistic Ocean Surface (Replacing FBM Terrain)
+        float dOcean(vec3 p) {
+            vec3 tp = p;
+            tp.y += 4.0; // Distance below the sea-skimming missile
+            
+            float speed = uSimTime < T_DEPLOY ? uRealTime * 150.0 : T_DEPLOY * 150.0 + (uRealTime - T_DEPLOY) * 10.0;
+            tp.z += speed;
+            
+            // Rolling ocean waves (Math-based waves for smooth fluid look)
+            float wave1 = sin(tp.x * 0.15 + uRealTime * 2.0) * cos(tp.z * 0.15 + uRealTime * 1.5) * 1.2;
+            float wave2 = sin(tp.x * 0.3 - uRealTime * 1.0) * cos(tp.z * 0.25 + uRealTime * 2.5) * 0.6;
+            
+            // High frequency surface ripples
+            float detail = fbm(tp * 0.4 - vec3(0.0, 0.0, uRealTime * 5.0)) * 0.4;
+            
+            return tp.y - (wave1 + wave2 + detail);
+        }
+
+        // 6. Offshore Sea Fort Target
+        float dTarget(vec3 p) {
+            vec3 tp = p;
+            tp.y += 4.0; // Align with ocean surface level
+            
+            float speedOffset = uSimTime < T_DEPLOY ? uSimTime * 150.0 : T_DEPLOY * 150.0 + (uSimTime - T_DEPLOY) * 10.0;
+            tp.z += speedOffset - (T_DEPLOY * 150.0); 
+            
+            // Deep sea pillars
+            vec3 lp = tp;
+            lp.x = abs(lp.x);
+            lp.z = abs(lp.z);
+            float legs = sdBox(lp - vec3(8.0, -10.0, 8.0), vec3(1.5, 20.0, 1.5));
+            
+            // Brutalist structure top
+            float base = sdBox(tp - vec3(0.0, -6.0, 0.0), vec3(14.0, 3.0, 14.0));
+            float deck = sdBox(tp - vec3(0.0, -10.0, 0.0), vec3(8.0, 1.0, 8.0));
+            float dome = length(tp - vec3(0.0, -12.0, 0.0)) - 5.0;
+            
+            float fort = min(legs, min(min(base, deck), dome));
+            return fort;
+        }
+
+        // 7. Kinetic Debris / Shrapnel
+        float dDebris(vec3 p) {
+            if (uSimTime < T_DEPLOY) return 1e10;
+            float t = uSimTime - T_DEPLOY;
+            
+            vec3 dp = p;
+            float expansion = t * 35.0; 
+            
+            float spacing = 2.5;
+            vec3 id = floor(dp / spacing);
+            dp = mod(dp, spacing) - spacing * 0.5;
+            
+            vec3 randOffset = vec3(hash(id.xy), hash(id.yz), hash(id.zx));
+            dp += (randOffset - 0.5) * 1.8;
+            
+            float shard = sdBox(dp, vec3(0.05, 0.15, 0.05));
+            float shell = abs(length(p) - expansion) - 4.0;
+            
+            return max(shard, shell);
+        }
+
+        // --- MASTER MAP ---
+        vec2 map(vec3 p) {
+            vec3 flightP = p;
+            if (uSimTime < T_DEPLOY) {
+                 float shakeT = uSimTime > T_ARM ? (uSimTime - T_ARM) * 0.2 : 0.0;
+                 // Smooth aerodynamic sway
+                 flightP.x += sin(flightP.z * 0.5 - uRealTime * 10.0) * (0.05 + shakeT * 0.05);
+                 flightP.y += cos(flightP.z * 0.5 - uRealTime * 12.0) * (0.02 + shakeT * 0.02);
+            }
+
+            float dm = dMissile(flightP);
+            float dp = dPayload(p);
+            float de = dExplosion(p);
+            float dOc = dOcean(p);
+            float dTgt = dTarget(p);
+            float dDeb = dDebris(p);
+            
+            vec2 res = vec2(dOc, 5.0); // Default to Ocean (Mat 5)
+            
+            if (dTgt < res.x) res = vec2(dTgt, 6.0); // Target (Mat 6)
+            if (dm < res.x) res = vec2(dm, 1.0); // Missile (Mat 1)
+            if (dp < res.x) res = vec2(dp, 3.0); // Payload (Mat 3)
+            if (dDeb < res.x) res = vec2(dDeb, 7.0); // Debris (Mat 7)
+            if (de < res.x) res = vec2(de, 2.0); // Explosion (Mat 2)
+            
+            return res;
+        }
+
+        vec3 calcNormal(vec3 p) {
+            const vec2 e = vec2(1.0, -1.0) * 0.005;
+            return normalize(
+                e.xyy * map(p + e.xyy).x + 
+                e.yyx * map(p + e.yyx).x + 
+                e.yxy * map(p + e.yxy).x + 
+                e.xxx * map(p + e.xxx).x
+            );
+        }
+
+        // Soft Shadows calculation
+        float calcSoftShadow(vec3 ro, vec3 rd, float mint, float tmax, float k) {
+            float res = 1.0;
+            float t = mint;
+            for(int i = 0; i < 25; i++) {
+                float h = map(ro + rd * t).x;
+                res = min(res, k * h / t);
+                t += clamp(h, 0.05, 0.3); // Optimized shadow step for smooth ocean
+                if(res < 0.005 || t > tmax) break;
+            }
+            return clamp(res, 0.0, 1.0);
+        }
+
+        // Tonemapping
+        vec3 ACESFilm(vec3 x) {
+            float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+            return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+        }
+
+        void main() {
+            vec2 uv = vUv;
+            
+            // Clean Lens Barrel Distortion (No extreme chromatic aberration for realism)
+            vec2 centeredUV = uv - 0.5;
+            float r2 = dot(centeredUV, centeredUV);
+            uv = uv + centeredUV * (r2 * 0.10); 
+            
+            vec2 p = (uv - 0.5) * 2.0;
+            p.x *= uResolution.x / uResolution.y;
+
+            // Sharp camera cut glitch (only on the exact frame of cut)
+            if (uCamCut > 0.0) {
+                float glitchLine = step(0.98, sin(uv.y * 100.0 + uRealTime * 50.0)) * 0.02;
+                p.x += glitchLine * uCamCut;
+            }
+
+            // --- CINEMATIC LONG-FORM CAMERA DIRECTOR ---
+            vec3 ro, ta;
+            vec3 up = vec3(0.0, 1.0, 0.0);
+
+            if (uSimTime < 5.0) {
+                // Cut 1: Wide Ocean Skim
+                ro = vec3(15.0 + sin(uRealTime*0.5)*5.0, 5.0 + cos(uRealTime*0.8)*2.0, -15.0);
+                ta = vec3(0.0, 0.0, 5.0);
+                float roll = sin(uRealTime * 0.3) * 0.05;
+                up = vec3(sin(roll), cos(roll), 0.0);
+            } 
+            else if (uSimTime < 10.0) {
+                // Cut 2: Close Aft Chase
+                ro = vec3(3.0 + sin(uRealTime*1.5)*0.8, 1.0 + cos(uRealTime*2.0)*0.3, -6.0);
+                ta = vec3(0.0, 0.0, 2.0);
+                float roll = sin(uRealTime * 1.5) * 0.08;
+                up = vec3(sin(roll), cos(roll), 0.0);
+            } 
+            else if (uSimTime < 15.0) {
+                // Cut 3: Wing-Mount Cam (Smooth)
+                ro = vec3(1.2, 0.2, 0.5);
+                ta = vec3(0.0, -0.2, 10.0);
+            } 
+            else if (uSimTime < T_DEPLOY) {
+                // Cut 4: Target Lock Approach
+                float t = (uSimTime - 15.0);
+                ro = vec3(10.0 - t*0.8, 2.0, 8.0 - t*0.5);
+                ta = vec3(0.0, 0.0, 0.0);
+                // Slight turbulence building
+                float shakeStr = t * 0.01;
+                ro += vec3(hash(uRealTime*10.0)-0.5, hash(uRealTime*11.0)-0.5, 0.0) * shakeStr;
+            } 
+            else {
+                // Cut 5: Kinetic Kill Slow-Mo
+                float camT = (uSimTime - T_DEPLOY) * 0.6;
+                ro.x = sin(camT + 1.0) * 16.0;
+                ro.z = cos(camT + 1.0) * -16.0;
+                ro.y = 4.0 + sin(camT * 2.0) * 2.0;
+                ta = vec3(0.0, -2.0, 0.0);
+            }
+
+            vec3 cw = normalize(ta - ro);
+            vec3 cu = normalize(cross(cw, up));
+            vec3 cv = normalize(cross(cu, cw));
+            
+            vec3 col = vec3(0.0);
+            vec3 rd = normalize(p.x * cu + p.y * cv + 1.5 * cw);
+
+            // Shockwave Refraction Lens
+            if (uSimTime > T_DEPLOY && uSimTime < T_DEPLOY + 3.0) {
+                float swRadius = (uSimTime - T_DEPLOY) * 20.0;
+                float b = dot(ro, rd);
+                float c = dot(ro, ro) - swRadius * swRadius;
+                float h = b * b - c;
+                if (h > 0.0) {
+                    float tHit = -b - sqrt(h);
+                    if (tHit > 0.0) {
+                        vec3 hitP = ro + rd * tHit;
+                        vec3 n = normalize(hitP);
+                        rd = refract(rd, -n, 0.85);
+                    }
+                }
+            }
+
+            // --- RAYMARCHING ---
+            float t = 0.0;
+            float maxD = 100.0;
+            vec2 res;
+            
+            vec3 accGlowExp = vec3(0.0);
+            vec3 accGlowWeights = vec3(0.0);
+            vec3 accGlowExhaust = vec3(0.0);
+
+            for (int i = 0; i < 100; i++) {
+                vec3 rp = ro + rd * t;
+                res = map(rp);
+                float d = res.x;
+
+                float dExp = dExplosion(rp);
+                float dExh = dExhaust(rp);
+                
+                float tipDist = max(0.0, (uSimTime - T_DEPLOY) * 18.0);
+                float dW_X = length(vec3(abs(rp.x)-tipDist, rp.y*4.0, rp.z*4.0)) - 0.5;
+                float dW_Y = length(vec3(rp.x*4.0, abs(rp.y)-tipDist, rp.z*4.0)) - 0.5;
+                float dW = min(dW_X, dW_Y); 
+                float dDeb = dDebris(rp);
+
+                accGlowExp += vec3(1.0, 0.3, 0.05) * 0.01 / (0.01 + dExp * dExp);
+                accGlowExhaust += vec3(0.2, 0.6, 1.0) * 0.005 / (0.01 + dExh * dExh);
+                if(uSimTime > T_DEPLOY) {
+                    accGlowWeights += vec3(1.0, 0.4, 0.1) * 0.008 / (0.02 + dW * dW);
+                    accGlowWeights += vec3(1.0, 0.6, 0.2) * 0.002 / (0.005 + dDeb * dDeb); 
+                }
+
+                if (d < 0.005 || t > maxD) break;
+                t += d * 0.7; // Smooth optimization
+            }
+
+            // --- SHADING ---
+            vec3 matCol = vec3(0.0);
+            
+            vec3 sunDir = normalize(vec3(0.8, 0.15, -0.8)); // Low sunset angle
+
+            if (t < maxD) {
+                vec3 rp = ro + rd * t;
+                vec3 n = calcNormal(rp);
+                vec3 v = -rd;
+                
+                float diff = max(dot(n, sunDir), 0.0);
+                vec3 h = normalize(sunDir + v);
+                float spec = pow(max(dot(n, h), 0.0), 64.0);
+                
+                float ao = clamp(map(rp + n * 0.5).x / 0.5, 0.0, 1.0);
+                float amb = 0.2 + 0.1 * n.y; // brighter ambient over ocean
+
+                float shadow = calcSoftShadow(rp, sunDir, 0.05, 20.0, 8.0);
+
+                if (res.y == 1.0) {
+                    // Missile (Dark Radar-Absorbent Material)
+                    vec3 base = vec3(0.08, 0.09, 0.08);
+                    matCol = base * (diff * shadow * 0.8 * ao + amb) + vec3(0.8, 0.7, 0.6) * spec * shadow * 0.6;
+                    float rim = 1.0 - max(dot(v, n), 0.0);
+                    matCol += vec3(0.4, 0.2, 0.1) * smoothstep(0.5, 1.0, rim) * shadow; // Sunset rim light
+                } 
+                else if (res.y == 2.0) matCol = vec3(1.0, 0.8, 0.4) * 3.0; // Explosion Core
+                else if (res.y == 3.0) {
+                    // Payload
+                    matCol = vec3(0.15) * (diff * shadow * ao + amb) + spec * shadow * 0.8;
+                    float tipDist = (uSimTime - T_DEPLOY) * 18.0;
+                    if (abs(abs(rp.x) - tipDist) < 0.5 || abs(abs(rp.y) - tipDist) < 0.5) matCol += vec3(1.0, 0.3, 0.0) * 2.0; 
+                }
+                else if (res.y == 5.0) {
+                    // Ocean Water
+                    vec3 base = vec3(0.01, 0.02, 0.03); // Deep sunset marine
+                    matCol = base * (diff * shadow * 0.6 * ao + amb);
+                    
+                    // High specularity for sunset reflection on water
+                    float waterSpec = pow(max(dot(n, h), 0.0), 128.0);
+                    matCol += vec3(1.0, 0.6, 0.2) * waterSpec * shadow * 1.5; // Orange sun reflection
+                    
+                    // Subtle fake reflection of the sky
+                    matCol += vec3(0.4, 0.2, 0.1) * max(0.0, n.y) * 0.4;
+                }
+                else if (res.y == 6.0) {
+                    // Offshore Fort Target
+                    vec3 base = vec3(0.08, 0.08, 0.08);
+                    matCol = base * (diff * shadow * 0.8 * ao + amb);
+                    float lights = step(0.98, fract(rp.x * 0.5 + rp.y * 1.0));
+                    matCol += vec3(1.0, 0.2, 0.0) * lights * step(rp.y, -4.0) * (0.5 + 0.5 * sin(uRealTime * 5.0));
+                }
+                else if (res.y == 7.0) matCol = vec3(2.0, 1.0, 0.5); // Debris
+
+                // Atmospheric Marine Layer (Fog matched to sunset)
+                float fogAmount = 1.0 - exp(-t * 0.012);
+                vec3 fogColor = mix(vec3(0.6, 0.3, 0.1), vec3(0.1, 0.1, 0.15), clamp(rp.y * 0.1, 0.0, 1.0)); // Horizon gradient
+                matCol = mix(matCol, fogColor, fogAmount);
+            } else {
+                // --- SHADER DRIVEN SKY BOX ---
+                vec3 skyCol = vec3(0.02, 0.05, 0.12); // Zenith dark blue
+                vec3 horizonCol = vec3(0.7, 0.3, 0.1); // Horizon orange/red
+                float sunsetMix = pow(max(1.0 - abs(rd.y + 0.05), 0.0), 4.0);
+                matCol = mix(skyCol, horizonCol, sunsetMix);
+
+                // Sun Disc & Glow
+                float sunVal = max(dot(rd, sunDir), 0.0);
+                matCol += vec3(1.0, 0.4, 0.1) * pow(sunVal, 16.0) * 0.8; // Broad corona
+                matCol += vec3(1.0, 0.9, 0.6) * pow(sunVal, 512.0) * 2.0; // Hard sun disc
+                
+                // Procedural Cirrus Clouds
+                if (rd.y > 0.0) {
+                    vec2 cloudUV = rd.xz / max(rd.y, 0.001);
+                    float cloudNoise = fbm(vec3(cloudUV * 0.4 + uRealTime * 0.015, 0.0));
+                    float cloudMask = smoothstep(0.4, 0.7, cloudNoise);
+                    vec3 cCol = mix(vec3(0.05, 0.05, 0.1), vec3(1.0, 0.5, 0.2), pow(sunVal, 3.0));
+                    matCol = mix(matCol, cCol, cloudMask * sunsetMix * 0.9);
+                }
+            }
+
+            matCol += accGlowExp;
+            matCol += accGlowExhaust;
+            matCol += accGlowWeights;
+
+            col = matCol;
+
+            // --- FINAL POST PROCESSING ---
+            col *= 1.0 - 0.4 * dot(centeredUV, centeredUV); // Clean Vignette (No static/grain)
+
+            col = ACESFilm(col);
+            col = pow(col, vec3(1.0 / 2.2));
+
+            gl_FragColor = vec4(col, 1.0);
+        }
+    </script>
+
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const uniforms = {
+            uRealTime: { value: 0.0 },
+            uSimTime: { value: 0.0 },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uCamCut: { value: 0.0 }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: uniforms
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        // --- SIMULATION & UI LOGIC ---
+        let realTime = 0.0;
+        let simTime = 0.0;
+        let lastTime = performance.now();
+        let lastCamCutState = 0;
+        
+        // Expanded timelines
+        const SEQUENCE_DURATION = 35.0; 
+        const T_ARM = 12.0;
+        const T_DEPLOY = 20.0;
+
+        // UI Elements
+        const uiStatus = document.getElementById('val-status');
+        const uiTime = document.getElementById('val-time');
+        const uiMach = document.getElementById('val-mach');
+        const uiAlt = document.getElementById('val-alt');
+        const uiQ = document.getElementById('val-q');
+        const uiDist = document.getElementById('val-dist');
+        const uiCamInfo = document.getElementById('cam-info');
+        const panelSys = document.getElementById('panel-system');
+        const panelTel = document.getElementById('panel-telemetry');
+        const brackets = document.querySelectorAll('.bracket');
+        const flash = document.getElementById('flash');
+        const initScreen = document.getElementById('init-screen');
+
+        let isRunning = false;
+        let audioSystem = null;
+
+        function initAudio() {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const masterGain = ctx.createGain();
+            masterGain.connect(ctx.destination);
+            masterGain.gain.value = 0.6;
+
+            const engineNode = ctx.createOscillator();
+            engineNode.type = 'sawtooth';
+            engineNode.frequency.value = 40;
+            const engineFilter = ctx.createBiquadFilter();
+            engineFilter.type = 'lowpass';
+            engineFilter.frequency.value = 150;
+            const engineGain = ctx.createGain();
+            engineGain.gain.value = 1.0;
+            engineNode.connect(engineFilter).connect(engineGain).connect(masterGain);
+            engineNode.start();
+
+            const whineNode = ctx.createOscillator();
+            whineNode.type = 'sine';
+            whineNode.frequency.value = 0;
+            const whineGain = ctx.createGain();
+            whineGain.gain.value = 0.0;
+            whineNode.connect(whineGain).connect(masterGain);
+            whineNode.start();
+
+            return { ctx, masterGain, engineFilter, whineNode, whineGain, boomPlayed: false };
+        }
+
+        function startSim() {
+            if (isRunning) return;
+            initScreen.style.opacity = '0';
+            setTimeout(() => initScreen.style.display = 'none', 800);
+            
+            audioSystem = initAudio();
+            isRunning = true;
+            lastTime = performance.now();
+            realTime = 0.0;
+            simTime = 0.0;
+            
+            animate();
+        }
+
+        function animate() {
+            if (!isRunning) return;
+            requestAnimationFrame(animate);
+
+            let now = performance.now();
+            let dt = (now - lastTime) / 1000.0;
+            if (dt > 0.1) dt = 0.1; 
+            lastTime = now;
+
+            realTime += dt;
+
+            // Loop sequence
+            if (realTime > SEQUENCE_DURATION) {
+                realTime = 0.0;
+                simTime = 0.0;
+                lastCamCutState = 0;
+                panelSys.classList.remove('warning');
+                panelTel.classList.remove('warning');
+                uiStatus.classList.remove('warning-text');
+                flash.style.opacity = 0;
+                brackets.forEach(b => {
+                    b.style.borderColor = 'rgba(50, 255, 150, 0.6)';
+                    b.style.transform = 'scale(1)';
+                });
+                if (audioSystem) audioSystem.boomPlayed = false; 
+            }
+
+            let timeScale = 1.0;
+            let currentCamState = 0;
+
+            // Cinematic Director logic
+            if (simTime < 5.0) { currentCamState = 1; uiCamInfo.innerText = "SYS: [REDACTED] // CAM: 01-WIDE_SKIM"; }
+            else if (simTime < 10.0) { currentCamState = 2; uiCamInfo.innerText = "SYS: [REDACTED] // CAM: 02-AFT_CHASE"; }
+            else if (simTime < 15.0) { currentCamState = 3; uiCamInfo.innerText = "SYS: [REDACTED] // CAM: 03-WING"; }
+            else if (simTime < T_DEPLOY) { currentCamState = 4; uiCamInfo.innerText = "SYS: [REDACTED] // CAM: 04-TGT_APPROACH"; }
+            else { currentCamState = 5; uiCamInfo.innerText = "SYS: [REDACTED] // CAM: 05-KILL_CAM (DILATION)"; }
+
+            // Trigger shader glitch exactly when camera cuts
+            if (currentCamState !== lastCamCutState) {
+                uniforms.uCamCut.value = 1.0; 
+                lastCamCutState = currentCamState;
+            } else {
+                uniforms.uCamCut.value = Math.max(0.0, uniforms.uCamCut.value - dt * 15.0); // Faster glitch fade
+            }
+
+            // Phase Logic & HUD Data Calculation
+            if (simTime < T_ARM) {
+                uiStatus.innerText = "PROFILE ██";
+                uiMach.innerText = "MACH ██.█";
+                uiAlt.innerText = "████ FT"; // Skimming altitude
+                uiQ.innerText = "███.█ kPa"; // Sea level pressure
+                uiDist.innerText = "███.█ NM";
+                
+                let pulse = 1.0 + Math.sin(realTime * 3.0) * 0.02;
+                brackets.forEach(b => b.style.transform = `scale(${pulse})`);
+
+                if (audioSystem) {
+                    audioSystem.engineFilter.frequency.value = 150 + Math.random() * 20; // Smooth rumble
+                    audioSystem.whineGain.gain.value = 0.0;
+                }
+
+            } else if (simTime >= T_ARM && simTime < T_DEPLOY) {
+                let surgeT = simTime - T_ARM;
+                uiStatus.innerText = "[CLASSIFIED] ARMING";
+                uiStatus.classList.add('warning-text');
+                panelSys.classList.add('warning');
+                
+                uiMach.innerText = "MACH ██.█";
+                uiAlt.innerText = "████ FT"; // Drops to terminal impact altitude
+                uiQ.innerText = "███.█ kPa";
+                uiDist.innerText = "███.█ NM";
+                
+                brackets.forEach(b => {
+                    b.style.borderColor = '#ff3333';
+                    b.style.transform = 'scale(0.8) translate(-10px, -10px)';
+                });
+
+                if (audioSystem) {
+                    let surgeRatio = surgeT / (T_DEPLOY - T_ARM);
+                    audioSystem.engineFilter.frequency.value = 170 + surgeRatio * 400;
+                    audioSystem.whineGain.gain.value = surgeRatio * 0.4;
+                    audioSystem.whineNode.frequency.value = 400 + surgeRatio * 2000;
+                }
+
+            } else if (simTime >= T_DEPLOY) {
+                if (simTime < T_DEPLOY + 0.1) {
+                    flash.style.opacity = 0.8; // Softer flash
+                } else {
+                    flash.style.opacity = Math.max(0.0, flash.style.opacity - dt * 2.0);
+                }
+
+                uiStatus.innerText = "██████ IMPACT";
+                panelTel.classList.add('warning');
+                
+                uiMach.innerText = "IMPACT";
+                uiAlt.innerText = "0 FT";
+                uiDist.innerText = "0.0 NM";
+                
+                let distFromCenter = Math.abs(simTime - (T_DEPLOY + 2.0)); 
+                timeScale = 0.02 + Math.min(1.0, Math.pow(distFromCenter, 1.5) * 0.15); // Longer slow-mo
+                timeScale = Math.min(timeScale, 1.0);
+                
+                if (audioSystem) {
+                    audioSystem.whineGain.gain.value = 0;
+                    audioSystem.engineFilter.frequency.value = 50; 
+                    
+                    if (!audioSystem.boomPlayed) {
+                        audioSystem.boomPlayed = true;
+                        let boomOsc = audioSystem.ctx.createOscillator();
+                        let boomGain = audioSystem.ctx.createGain();
+                        boomOsc.type = 'square';
+                        boomOsc.frequency.setValueAtTime(80, audioSystem.ctx.currentTime);
+                        boomOsc.frequency.exponentialRampToValueAtTime(5, audioSystem.ctx.currentTime + 4.0);
+                        
+                        boomGain.gain.setValueAtTime(1.0, audioSystem.ctx.currentTime);
+                        boomGain.gain.exponentialRampToValueAtTime(0.01, audioSystem.ctx.currentTime + 4.0);
+                        
+                        let boomFilter = audioSystem.ctx.createBiquadFilter();
+                        boomFilter.type = 'lowpass';
+                        boomFilter.frequency.value = 300;
+                        
+                        boomOsc.connect(boomFilter).connect(boomGain).connect(audioSystem.masterGain);
+                        boomOsc.start();
+                        boomOsc.stop(audioSystem.ctx.currentTime + 4.0);
+                    }
+                }
+            }
+
+            simTime += dt * timeScale;
+            uiTime.innerText = simTime.toFixed(3) + "s (Scale: " + timeScale.toFixed(3) + "x)";
+
+            uniforms.uRealTime.value = realTime;
+            uniforms.uSimTime.value = simTime;
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

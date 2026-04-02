@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDF Hazmat FPS Hand</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050508;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+        }
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+        h1 { margin: 0; font-size: 1.2rem; color: #f0d020; text-transform: uppercase; letter-spacing: 2px;}
+        p { margin: 5px 0 0 0; font-size: 0.9rem; color: #88aadd; }
+        
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.8);
+            pointer-events: none;
+        }
+        .crosshair::before, .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 255, 255, 0.3);
+        }
+        .crosshair::before { top: -10px; left: 1px; width: 2px; height: 24px; }
+        .crosshair::after { left: -10px; top: 1px; height: 2px; width: 24px; }
+
+        /* Motor Control Grid UI */
+        #motor-controls {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            bottom: 20px;
+            width: 320px;
+            background: rgba(10, 15, 25, 0.85);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+        
+        #motor-controls::-webkit-scrollbar { width: 6px; }
+        #motor-controls::-webkit-scrollbar-thumb { background: rgba(0, 255, 255, 0.5); border-radius: 3px; }
+
+        .control-group {
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.85rem;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .slider-row {
+            display: grid;
+            grid-template-columns: 60px 1fr 30px;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .slider-row label {
+            font-size: 0.75rem;
+            color: #aaa;
+        }
+        .slider-row input[type=range] {
+            width: 100%;
+            accent-color: #f0d020;
+            cursor: pointer;
+        }
+        .slider-row .val-display {
+            font-size: 0.7rem;
+            color: #f0d020;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <h1>Hazmat Sector C</h1>
+        <p>Advanced Motor Calibration</p>
+    </div>
+    
+    <div id="motor-controls">
+        <!-- Controls injected via JS -->
+    </div>
+    
+    <div class="crosshair"></div>
+
+    <canvas id="glcanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl2');
+
+        if (!gl) {
+            alert('WebGL 2 is required but not supported by your browser.');
+        }
+
+        // Configuration for the UI Grid and Shader State
+        const jointConfig = {
+            wrist: [
+                {id: 'w_yaw', name: 'Yaw', min: -1.0, max: 1.0, val: 0.4},
+                {id: 'w_pitch', name: 'Pitch', min: -1.0, max: 1.0, val: -0.25},
+                {id: 'w_roll', name: 'Roll', min: -1.0, max: 1.0, val: 0.25}
+            ],
+            thumb: [
+                {id: 't_spread', name: 'Spread', min: -0.5, max: 1.5, val: 0.0},
+                {id: 't_c1', name: 'Base', min: -0.5, max: 1.5, val: 0.4},
+                {id: 't_c2', name: 'Mid', min: -0.5, max: 1.5, val: 0.3},
+                {id: 't_c3', name: 'Twist', min: -0.5, max: 1.5, val: -0.1}
+            ],
+            index: [
+                {id: 'i_spread', name: 'Spread', min: -0.5, max: 0.5, val: 0.03},
+                {id: 'i_c1', name: 'Base', min: -0.2, max: 1.5, val: 0.2},
+                {id: 'i_c2', name: 'Mid', min: -0.2, max: 1.5, val: 0.4},
+                {id: 'i_c3', name: 'Tip', min: -0.2, max: 1.5, val: 0.4}
+            ],
+            middle: [
+                {id: 'm_spread', name: 'Spread', min: -0.5, max: 0.5, val: 0.0},
+                {id: 'm_c1', name: 'Base', min: -0.2, max: 1.5, val: 0.15},
+                {id: 'm_c2', name: 'Mid', min: -0.2, max: 1.5, val: 0.5},
+                {id: 'm_c3', name: 'Tip', min: -0.2, max: 1.5, val: 0.45}
+            ],
+            ring: [
+                {id: 'r_spread', name: 'Spread', min: -0.5, max: 0.5, val: -0.03},
+                {id: 'r_c1', name: 'Base', min: -0.2, max: 1.5, val: 0.2},
+                {id: 'r_c2', name: 'Mid', min: -0.2, max: 1.5, val: 0.55},
+                {id: 'r_c3', name: 'Tip', min: -0.2, max: 1.5, val: 0.5}
+            ],
+            pinky: [
+                {id: 'p_spread', name: 'Spread', min: -0.5, max: 0.5, val: -0.1},
+                {id: 'p_c1', name: 'Base', min: -0.2, max: 1.5, val: 0.25},
+                {id: 'p_c2', name: 'Mid', min: -0.2, max: 1.5, val: 0.6},
+                {id: 'p_c3', name: 'Tip', min: -0.2, max: 1.5, val: 0.5}
+            ]
+        };
+
+        const state = {};
+
+        // Generate UI dynamically
+        const guiContainer = document.getElementById('motor-controls');
+        for (const [groupName, controls] of Object.entries(jointConfig)) {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'control-group';
+            groupDiv.innerHTML = `<h3>${groupName}</h3>`;
+            
+            controls.forEach(ctrl => {
+                state[ctrl.id] = ctrl.val; // Init state
+                
+                const row = document.createElement('div');
+                row.className = 'slider-row';
+                
+                row.innerHTML = `
+                    <label>${ctrl.name}</label>
+                    <input type="range" id="${ctrl.id}" min="${ctrl.min}" max="${ctrl.max}" step="0.01" value="${ctrl.val}">
+                    <span class="val-display" id="val_${ctrl.id}">${ctrl.val.toFixed(2)}</span>
+                `;
+                
+                const slider = row.querySelector('input');
+                const display = row.querySelector('.val-display');
+                
+                slider.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    state[ctrl.id] = val;
+                    display.innerText = val.toFixed(2);
+                });
+                
+                // Prevent mouse tracking when using sliders
+                slider.addEventListener('mousedown', (e) => e.stopPropagation());
+                
+                groupDiv.appendChild(row);
+            });
+            guiContainer.appendChild(groupDiv);
+        }
+
+        // Shader Sources
+        const vsSource = `#version 300 es
+            in vec4 aPosition;
+            void main() { gl_Position = aPosition; }
+        `;
+
+        const fsSource = `#version 300 es
+            precision highp float;
+
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform vec2 u_mouse;
+            
+            // Motor Control Uniforms (mapped from UI)
+            uniform vec3 u_wrist;
+            uniform vec4 u_thumb;
+            uniform vec4 u_index;
+            uniform vec4 u_middle;
+            uniform vec4 u_ring;
+            uniform vec4 u_pinky;
+
+            out vec4 fragColor;
+
+            mat2 rot(float a) {
+                float s = sin(a), c = cos(a);
+                return mat2(c, -s, s, c);
+            }
+
+            float smin( float a, float b, float k ) {
+                float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
+                return mix( b, a, h ) - k*h*(1.0-h);
+            }
+
+            float sdCapsule( vec3 p, vec3 a, vec3 b, float r ) {
+                vec3 pa = p - a, ba = b - a;
+                float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+                return length( pa - ba*h ) - r;
+            }
+
+            float sdRoundBox( vec3 p, vec3 b, float r ) {
+                vec3 q = abs(p) - b;
+                return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+            }
+
+            // Parametric Finger Generator
+            float getFinger(vec3 p, vec3 root, float spread, float c1, float c2, float c3, float r, float len1, float len2, float len3) {
+                vec3 d1 = vec3(0.0, 0.0, -1.0);
+                d1.xz *= rot(spread);
+                d1.yz *= rot(-c1); // Base curl
+                vec3 p1 = root + d1 * len1;
+
+                vec3 d2 = d1;
+                d2.yz *= rot(-c2); // Mid curl
+                vec3 p2 = p1 + d2 * len2;
+
+                vec3 d3 = d2;
+                d3.yz *= rot(-c3); // Tip curl
+                vec3 p3 = p2 + d3 * len3;
+
+                float r1 = r, r2 = r * 0.9, r3 = r * 0.8;
+
+                // 3 segments
+                float f = sdCapsule(p, root, p1, r1);
+                f = smin(f, sdCapsule(p, p1, p2, r2), 0.015);
+                f = smin(f, sdCapsule(p, p2, p3, r3), 0.015);
+
+                // Mechanical joints
+                float j1 = max(length(p - p1) - r1 * 1.15, abs(dot(p - p1, d1)) - 0.015);
+                float j2 = max(length(p - p2) - r2 * 1.15, abs(dot(p - p2, d2)) - 0.015);
+                
+                f = min(f, j1);
+                f = min(f, j2);
+
+                return f;
+            }
+
+            vec2 map(vec3 pos) {
+                vec2 res = vec2(1000.0, 0.0);
+                float t = u_time * 1.5;
+
+                vec3 p = pos;
+                
+                // Weapon/Base Sway (Call of Duty feel)
+                vec2 m = (u_mouse / u_resolution.xy) - 0.5;
+                p.x += m.x * 0.15; 
+                p.y -= m.y * 0.15;
+                
+                // Subtle ambient breathing
+                p.y += cos(t * 0.4) * 0.02;
+                p.x += sin(t * 0.3) * 0.01;
+                
+                // Position in bottom right FPS View
+                p -= vec3(1.2, -0.8, -3.5); 
+                
+                // --- WRIST ROTATION (Driven by UI) ---
+                p.xz *= rot(u_wrist.x + 0.785); // Yaw + 45 deg fix
+                p.yz *= rot(u_wrist.y); // Pitch
+                p.xy *= rot(u_wrist.z); // Roll
+
+                float dHand = 1000.0;
+
+                // --- PALM ---
+                float palm = sdRoundBox(p - vec3(0.0, 0.0, -0.05), vec3(0.18, 0.03, 0.20), 0.05);
+                float knucklesBase = sdCapsule(p, vec3(-0.25, 0.0, -0.32), vec3(0.25, -0.02, -0.28), 0.06);
+                palm = smin(palm, knucklesBase, 0.05);
+                float hypoPad = sdCapsule(p, vec3(0.18, -0.02, 0.1), vec3(0.22, -0.01, -0.15), 0.06);
+                palm = smin(palm, hypoPad, 0.05);
+                
+                dHand = palm;
+
+                // --- FOREARM ---
+                vec3 armStart = vec3(0.0, 0.0, 0.2);
+                vec3 armEnd = vec3(0.0, 0.0, 5.0);
+                float arm = sdCapsule(p, armStart, armEnd, 0.18); 
+
+                // Folds
+                vec3 ap = p - armStart;
+                vec3 ab = armEnd - armStart;
+                float h = clamp(dot(ap, ab)/dot(ab,ab), 0.0, 1.0);
+                arm += sin(h * 40.0 + p.x * 8.0) * 0.01 * smoothstep(0.0, 0.3, h);
+
+                dHand = smin(dHand, arm, 0.1);
+
+                // --- CUFF ---
+                float cuff = sdCapsule(p, vec3(0.01, -0.01, 0.2), vec3(0.06, -0.06, 0.35), 0.2);
+
+                // --- FINGERS (Driven entirely by UI mapping) ---
+                float index = getFinger(p, vec3(-0.22, 0.0, -0.32), u_index.x, u_index.y + 0.4, u_index.z + 0.3, u_index.w + 0.2, 0.065, 0.32, 0.22, 0.18);
+                dHand = smin(dHand, index, 0.025);
+                
+                float middle = getFinger(p, vec3(-0.06, 0.0, -0.35), u_middle.x, u_middle.y + 0.45, u_middle.z + 0.35, u_middle.w + 0.25, 0.07, 0.36, 0.25, 0.2);
+                dHand = smin(dHand, middle, 0.025);
+
+                float ring = getFinger(p, vec3(0.10, -0.01, -0.32), u_ring.x, u_ring.y + 0.5, u_ring.z + 0.4, u_ring.w + 0.3, 0.065, 0.32, 0.22, 0.18);
+                dHand = smin(dHand, ring, 0.025);
+
+                float pinky = getFinger(p, vec3(0.25, -0.03, -0.26), u_pinky.x, u_pinky.y + 0.55, u_pinky.z + 0.45, u_pinky.w + 0.35, 0.055, 0.24, 0.16, 0.14);
+                dHand = smin(dHand, pinky, 0.025);
+
+                // --- THUMB (Driven entirely by UI mapping) ---
+                vec3 tRoot = vec3(-0.28, -0.02, 0.08);
+                vec3 td1 = normalize(vec3(-0.8, -0.1, -0.8)); 
+                td1.xz *= rot(u_thumb.x); // Spread/Waggle
+                vec3 tp1 = tRoot + td1 * 0.25;
+
+                vec3 td2 = td1;
+                td2.xz *= rot(u_thumb.y); // Bend 1
+                td2.yz *= rot(-0.1); 
+                vec3 tp2 = tp1 + td2 * 0.22;
+
+                vec3 td3 = td2;
+                td3.xz *= rot(u_thumb.z); // Bend 2
+                td3.yz *= rot(u_thumb.w); // Twist/Pitch adjust
+                vec3 tp3 = tp2 + td3 * 0.18;
+
+                float thumb = sdCapsule(p, tRoot, tp1, 0.06);
+                thumb = smin(thumb, sdCapsule(p, tp1, tp2, 0.055), 0.015);
+                thumb = smin(thumb, sdCapsule(p, tp2, tp3, 0.05), 0.015);
+                
+                float tj1 = max(length(p - tp1) - 0.085, abs(dot(p - tp1, td1)) - 0.015);
+                float tj2 = max(length(p - tp2) - 0.08, abs(dot(p - tp2, td2)) - 0.015);
+                thumb = min(thumb, tj1);
+                thumb = min(thumb, tj2);
+                
+                float thenarPad = sdCapsule(p, vec3(-0.12, -0.03, 0.15), tRoot, 0.08);
+                thumb = smin(thumb, thenarPad, 0.06);
+
+                dHand = smin(dHand, thumb, 0.05);
+
+                // Apply Materials
+                if (dHand < res.x) res = vec2(dHand, 1.0);
+                if (cuff < res.x && cuff < dHand + 0.05 && p.z > 0.18 && p.z < 0.32) res = vec2(cuff, 2.0);
+
+                return res;
+            }
+
+            vec3 calcNormal( in vec3 p ) {
+                const float h = 0.001;
+                const vec2 k = vec2(1,-1);
+                return normalize( k.xyy*map( p + k.xyy*h ).x + k.yyx*map( p + k.yyx*h ).x + k.yxy*map( p + k.yxy*h ).x + k.xxx*map( p + k.xxx*h ).x );
+            }
+
+            float calcSoftshadow( in vec3 ro, in vec3 rd, in float mint, in float tmax) {
+                float res = 1.0;
+                float t = mint;
+                for( int i=0; i<24; i++ ) {
+                    float h = map( ro + rd*t ).x;
+                    res = min( res, 12.0*h/t );
+                    t += h;
+                    if( res<0.001 || t>tmax ) break;
+                }
+                return clamp( res, 0.0, 1.0 );
+            }
+
+            void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+                vec2 uv = (fragCoord - 0.5 * u_resolution.xy) / u_resolution.y;
+
+                vec3 ro = vec3(0.0, 0.0, 0.0);
+                vec3 rd = normalize(vec3(uv, -1.0));
+
+                float t = 0.0, d = 0.0, mID = 0.0;
+                for(int i = 0; i < 90; i++) {
+                    vec3 p = ro + rd * t;
+                    vec2 res = map(p);
+                    d = res.x; mID = res.y;
+                    if(d < 0.001 || t > 10.0) break;
+                    t += d;
+                }
+
+                vec3 col = vec3(0.02, 0.03, 0.05);
+                col += vec3(0.05, 0.1, 0.15) * (1.0 - length(uv));
+
+                if(d < 0.001) {
+                    vec3 p = ro + rd * t;
+                    vec3 n = calcNormal(p);
+                    vec3 v = -rd;
+
+                    vec3 lig = normalize(vec3(0.8, 1.0, 0.6));
+                    vec3 backLig = normalize(vec3(-0.8, -0.2, -0.8));
+
+                    float dif = clamp(dot(n, lig), 0.0, 1.0);
+                    float bac = clamp(dot(n, backLig), 0.0, 1.0);
+                    float sha = calcSoftshadow(p, lig, 0.02, 4.0);
+
+                    vec3 h = normalize(lig + v);
+                    float spe = pow(clamp(dot(n, h), 0.0, 1.0), 32.0);
+                    
+                    float rim = smoothstep(0.6, 1.0, 1.0 - max(dot(v, n), 0.0));
+
+                    vec3 baseCol = vec3(1.0);
+                    if (mID == 1.0) {
+                        baseCol = vec3(0.95, 0.75, 0.05);
+                        spe *= 1.2; rim *= 0.5;
+                    } else if (mID == 2.0) {
+                        baseCol = vec3(0.08, 0.08, 0.09);
+                        spe *= 0.2; rim *= 0.2;
+                    }
+
+                    vec3 lin = vec3(0.0);
+                    lin += 1.3 * dif * vec3(1.0, 0.95, 0.9) * sha;
+                    lin += 0.5 * bac * vec3(0.3, 0.4, 0.5);
+                    lin += 0.2 * vec3(1.0);
+                    
+                    col = baseCol * lin + spe * sha * vec3(1.0);
+                    if (mID == 1.0) col += rim * vec3(0.9, 0.8, 0.2) * dif;
+                    col = mix(col, vec3(0.02, 0.03, 0.05), 1.0 - exp(-0.05 * t * t));
+                }
+
+                col = pow(smoothstep(0.0, 1.0, col), vec3(1.0/2.2));
+                fragColor = vec4(col, 1.0);
+            }
+
+            void main() { mainImage(fragColor, gl_FragCoord.xy); }
+        `;
+
+        function compileShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        const program = gl.createProgram();
+        gl.attachShader(program, compileShader(gl, gl.VERTEX_SHADER, vsSource));
+        gl.attachShader(program, compileShader(gl, gl.FRAGMENT_SHADER, fsSource));
+        gl.linkProgram(program);
+
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        const aPosition = gl.getAttribLocation(program, "aPosition");
+        gl.enableVertexAttribArray(aPosition);
+        gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+        // Locators
+        const locRes = gl.getUniformLocation(program, "u_resolution");
+        const locTime = gl.getUniformLocation(program, "u_time");
+        const locMouse = gl.getUniformLocation(program, "u_mouse");
+        
+        // Locators for Motor Controls
+        const locWrist = gl.getUniformLocation(program, "u_wrist");
+        const locThumb = gl.getUniformLocation(program, "u_thumb");
+        const locIndex = gl.getUniformLocation(program, "u_index");
+        const locMiddle = gl.getUniformLocation(program, "u_middle");
+        const locRing = gl.getUniformLocation(program, "u_ring");
+        const locPinky = gl.getUniformLocation(program, "u_pinky");
+
+        let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+        let targetX = mouseX, targetY = mouseY;
+
+        // Mouse sway tracking (skips tracking if clicking the UI)
+        window.addEventListener('mousemove', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                targetX = e.clientX;
+                targetY = e.clientY;
+            }
+        });
+
+        function render(time) {
+            gl.canvas.width = gl.canvas.clientWidth;
+            gl.canvas.height = gl.canvas.clientHeight;
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+            gl.useProgram(program);
+
+            mouseX += (targetX - mouseX) * 0.1;
+            mouseY += (targetY - mouseY) * 0.1;
+
+            gl.uniform2f(locRes, gl.canvas.width, gl.canvas.height);
+            gl.uniform1f(locTime, time * 0.001);
+            gl.uniform2f(locMouse, mouseX, mouseY);
+            
+            // Pass UI State to Shader
+            gl.uniform3f(locWrist, state.w_yaw, state.w_pitch, state.w_roll);
+            gl.uniform4f(locThumb, state.t_spread, state.t_c1, state.t_c2, state.t_c3);
+            gl.uniform4f(locIndex, state.i_spread, state.i_c1, state.i_c2, state.i_c3);
+            gl.uniform4f(locMiddle, state.m_spread, state.m_c1, state.m_c2, state.m_c3);
+            gl.uniform4f(locRing, state.r_spread, state.r_c1, state.r_c2, state.r_c3);
+            gl.uniform4f(locPinky, state.p_spread, state.p_c1, state.p_c2, state.p_c3);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            requestAnimationFrame(render);
+        }
+
+        requestAnimationFrame(render);
+    </script>
+</body>
+</html>
