@@ -150,7 +150,7 @@ function setupWebGLRendering() {
     try {
       const newFragmentShaderSource = `
         precision highp float;
-        uniform float u_time;
+        const eggUrl = 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/' + action;
         
         void main() {
           ${newShaderCode}
@@ -218,25 +218,11 @@ function animateButtonAndNavigate(selector, url) {
 }
 
 // Navigation wrapper functions
-function navigateToGame() {
-  animateButtonAndNavigate('.play-button', 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/game.html');
-}
-
-function navigateToVideoPlayer() {
-  animateButtonAndNavigate(document.querySelectorAll('.play-button')[1], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/videoPlayer.html');
-}
-
-function navigateToLiquidMusic() {
-  animateButtonAndNavigate(document.querySelectorAll('.play-button')[2], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/liquidMusic.html');
-}
-
-function navigateToDimension88() {
-  animateButtonAndNavigate(document.querySelectorAll('.play-button')[3], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/dimension88.html');
-}
-
-function navigateToAI() {
-  animateButtonAndNavigate('.ai-button', 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/ai.html');
-}
+    function navigateToGame() { console.log("Navigate: Game"); animateButtonAndNavigate(document.querySelectorAll('.button.play-button')[0], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/game.html'); }
+    function navigateToVideoPlayer() { console.log("Navigate: Logs"); animateButtonAndNavigate(document.querySelectorAll('.button.play-button')[1], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/videoPlayer.html'); }
+    function navigateToLiquidMusic() { console.log("Navigate: Audio"); animateButtonAndNavigate(document.querySelectorAll('.button.play-button')[2], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/liquidMusic.html'); }
+    function navigateToDimension88() { console.log("Navigate: Dimension 888"); animateButtonAndNavigate(document.querySelectorAll('.button.play-button')[3], 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/dimension888.html'); }
+    function navigateToAI() { console.log("Navigate: AI Gen"); animateButtonAndNavigate(document.querySelector('.button.ai-button'), 'https://partlydecent.github.io/ORDINARY-TECHNOLOGY/ai.html'); }
 
 // Console input handling
 function handleConsoleInput(event) {
