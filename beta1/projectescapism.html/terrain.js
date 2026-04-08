@@ -128,6 +128,36 @@ const TerrainGen = {
         return base + detail;
     },
 
+    // Calculates the actual linear height on the triangle face to prevent clipping/sinking
+    getMeshHeight: function(x, z) {
+        const s = 6.25; // Grid spacing in segments
+        const x0 = Math.floor(x / s) * s;
+        const z0 = Math.floor(z / s) * s;
+        const x1 = x0 + s;
+        const z1 = z0 + s;
+        
+        const h00 = this.getHeight(x0, z0);
+        const h10 = this.getHeight(x1, z0);
+        const h01 = this.getHeight(x0, z1);
+        const h11 = this.getHeight(x1, z1);
+        
+        const u = (x - x0) / s;
+        const v = (z - z0) / s;
+        
+        // Match standard PlaneGeometry triangle layout: two triangles per quad
+        // Triangle 1: (0,0), (0,1), (1,1) or (0,0), (1,0), (1,1)?
+        // In Three.js PlaneGeometry, quad (i, j) is split into:
+        // [i, j+1, i+1] and [i+1, j+1, i+1, j] ... actually it depends on version.
+        // For our purposes, a simple diagonal split works:
+        if (u + v < 1) {
+            // Triangle 1: h00, h10, h01
+            return h00 + u * (h10 - h00) + v * (h01 - h00);
+        } else {
+            // Triangle 2: h11, h10, h01
+            return h11 + (1 - u) * (h01 - h11) + (1 - v) * (h10 - h11);
+        }
+    },
+
     getMesh: function() {
         if (this.mesh) return this.mesh;
         
@@ -178,7 +208,12 @@ float fbm(vec2 p) {
     return v;
 }
 
+uniform int uMapType;
 float getBiomeNoise(vec2 pos) {
+    if (uMapType == 1) return 0.5; // forest
+    if (uMapType == 2) return 0.0; // toxic
+    if (uMapType == 3) return 1.0; // wasteland
+    
     float n = snoise(pos * 0.0005) * 0.5 + 0.5; 
     n += snoise(pos * 0.0015) * 0.2;            
     return clamp(n, 0.0, 1.0);
@@ -209,6 +244,7 @@ float getTerrainHeight(vec2 pos) {
             shader.uniforms.texToxic = { value: texToxic };
             shader.uniforms.texForest = { value: texForest };
             shader.uniforms.texWaste = { value: texWaste };
+            shader.uniforms.uMapType = { value: 0 };
             
             shader.vertexShader = glslFBM + `
                 varying vec2 vWorldPosRaw;
@@ -254,35 +290,60 @@ float getTerrainHeight(vec2 pos) {
                 varying vec2 vWorldPosRaw;
                 varying float vDistToCam;
                 varying float vHeight;
+
+                vec4 hash4( vec2 p ) { return fract(sin(vec4( 1.0+dot(p,vec2(127.1,311.7)), 2.0+dot(p,vec2(127.1,311.7)), 3.0+dot(p,vec2(127.1,311.7)), 4.0+dot(p,vec2(127.1,311.7))))*43758.5453123); }
+
+                vec3 textureNoTile( sampler2D tex, vec2 x ) {
+                    vec2 p = floor(x);
+                    vec2 f = fract(x);
+                    vec3 va = vec3(0.0);
+                    float w1 = 0.0;
+                    for( int j=-1; j<=1; j++ )
+                    for( int i=-1; i<=1; i++ ) {
+                        vec2 g = vec2(float(i),float(j));
+                        vec4 o = hash4( p + g );
+                        vec2 ruv = x + o.zw;
+                        // Use textureGrad to avoid mipmap artifacts in loops
+                        vec3 col = textureGrad( tex, ruv, dFdx(x), dFdy(x) ).xyz;
+                        float d = length(g-f+o.xy);
+                        float w = exp2(-16.0*d*d);
+                        va += col*w;
+                        w1 += w;
+                    }
+                    return va/w1;
+                }
             ` + shader.fragmentShader;
             
             shader.fragmentShader = shader.fragmentShader.replace(
-                `#include <color_fragment>`,
-                `#include <color_fragment>
+                `#include <map_fragment>`,
+                `#include <map_fragment>
                 float biomen = getBiomeNoise(vWorldPosRaw);
-                float nMacro = snoise(vWorldPosRaw * 0.003) * 0.5 + 0.5;
-                vec2 uv1 = vWorldPosRaw * 0.025;
-                vec2 uv2 = vWorldPosRaw * 0.008;
-                float noiseMix = snoise(vWorldPosRaw * 0.01) * 0.5 + 0.5;
-                vec3 tToxic = mix(texture2D(texToxic, uv1).rgb, texture2D(texToxic, uv2).rgb, noiseMix);
-                vec3 tForest = mix(texture2D(texForest, uv1).rgb, texture2D(texForest, uv2).rgb, noiseMix);
-                vec3 tWaste = mix(texture2D(texWaste, uv1).rgb, texture2D(texWaste, uv2).rgb, noiseMix);
+                vec2 uv = vWorldPosRaw * 0.15;
+                
+                vec3 colToxic = textureNoTile(texToxic, uv);
+                vec3 colForest = textureNoTile(texForest, uv);
+                vec3 colWaste = textureNoTile(texWaste, uv);
+                
                 float slope = 1.0 - vNormal.y; 
                 float cliff = smoothstep(0.3, 0.6, slope);
-                vec3 cForest = mix(tForest, tForest * 0.5, smoothstep(0.4, 0.7, nMacro));
-                vec3 cToxic  = mix(tToxic * 0.7, tToxic * 1.3, smoothstep(0.5, 0.9, nMacro));
-                vec3 cWaste  = mix(tWaste, tWaste * 0.6, smoothstep(0.3, 0.8, nMacro));
+                
                 vec3 groundCol;
                 if (biomen < 0.35) {
-                    groundCol = mix(cToxic, cForest, smoothstep(0.25, 0.35, biomen));
+                    groundCol = mix(colToxic, colForest, smoothstep(0.2, 0.35, biomen));
                 } else if (biomen > 0.65) {
-                    groundCol = mix(cForest, cWaste, smoothstep(0.65, 0.75, biomen));
+                    groundCol = mix(colForest, colWaste, smoothstep(0.65, 0.8, biomen));
                 } else {
-                    groundCol = cForest;
+                    groundCol = colForest;
                 }
-                vec3 rockCol = tWaste * 0.4;
+                
+                // Rock/Cliff blending
+                vec3 rockCol = colWaste * 0.4;
                 groundCol = mix(groundCol, rockCol, cliff);
-                groundCol *= 0.6 + 0.4 * smoothstep(-15.0, 30.0, vHeight);
+                
+                // Ambient occlusion / cavity effect from world height
+                groundCol *= 0.7 + 0.3 * smoothstep(-15.0, 30.0, vHeight);
+                
+                // Holographic Grid Overlay
                 vec2 gridUV = fract(vWorldPosRaw * 0.4); 
                 float gridLine = (smoothstep(0.92, 1.0, gridUV.x) + smoothstep(0.08, 0.0, gridUV.x)) *
                                  (smoothstep(0.92, 1.0, gridUV.y) + smoothstep(0.08, 0.0, gridUV.y));
@@ -290,7 +351,15 @@ float getTerrainHeight(vec2 pos) {
                 float wave = sin(distToPlayer * 0.15 - uTime * 3.0) * 0.5 + 0.5;
                 float edgeGlow = smoothstep(150.0, 350.0, vDistToCam);
                 vec3 gridCol = vec3(0.0, 0.85, 1.0) * gridLine * (0.15 + wave * 0.85) * (1.0 - edgeGlow);
+                
                 groundCol += gridCol;
+                
+                // bioluminescent veins in toxic
+                if(biomen < 0.3) {
+                   float vein = snoise(vWorldPosRaw * 0.1 + uTime * 0.2);
+                   if(vein > 0.75) groundCol += vec3(0.0, 1.0, 0.4) * (vein - 0.75) * 2.0;
+                }
+
                 diffuseColor.rgb = groundCol;
                 `
             );
@@ -316,8 +385,17 @@ float getTerrainHeight(vec2 pos) {
     },
     
     update: function(delta) {
-        if (this.mat && this.mat.userData && this.mat.userData.shader && this.mat.userData.shader.uniforms.uTime) {
-            this.mat.userData.shader.uniforms.uTime.value += delta;
+        if (this.mat && this.mat.userData && this.mat.userData.shader) {
+            if (this.mat.userData.shader.uniforms.uTime) {
+                this.mat.userData.shader.uniforms.uTime.value += delta;
+            }
+            if (this.mat.userData.shader.uniforms.uMapType && window.GAME_START_CONFIG) {
+                let mt = 0;
+                if (window.GAME_START_CONFIG.mapId === 'forest') mt = 1;
+                else if (window.GAME_START_CONFIG.mapId === 'toxic') mt = 2;
+                else if (window.GAME_START_CONFIG.mapId === 'facility') mt = 3;
+                this.mat.userData.shader.uniforms.uMapType.value = mt;
+            }
         }
     }
 };

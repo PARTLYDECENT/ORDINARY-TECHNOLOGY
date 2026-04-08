@@ -2,6 +2,7 @@
  * MAP MANAGER: Chunk-based Open World System
  */
 
+const CampaignMapManager = (function() {
 // Shared harmonic noise function for biomes (mirrored in GLSL)
 function getBiomeNoise(x, z) {
     let n = Math.sin(x * 0.005) * 0.5 + 0.5;
@@ -23,7 +24,7 @@ function getBiomeAt(x, z) {
     return 'forest';                    // Green dirt/grass
 }
 
-class MapManager {
+class CampaignMapManager {
     constructor(scene, config) {
         this.scene = scene;
         this.config = config;
@@ -397,3 +398,7 @@ class BSPNode {
         return true;
     }
 }
+
+window.getBiomeAt = getBiomeAt;
+return CampaignMapManager;
+})();
