@@ -396,12 +396,12 @@ class ProceduralEntity {
     }
 
     getStageForPoints(points) {
-        if (points >= 3600) return 6; // Void Singularity
-        if (points >= 1800) return 5; // Cosmic
-        if (points >= 1200) return 4; // Transcendent
-        if (points >= 600) return 3; // Apex
-        if (points >= 300) return 2; // Creature
-        if (points >= 100) return 1; // Cell
+        if (points >= 120) return 6; // Void Singularity (2 min)
+        if (points >= 60) return 5;  // Cosmic (1 min) - THE BIG ENTITY
+        if (points >= 45) return 4;  // Transcendent
+        if (points >= 30) return 3;  // Apex
+        if (points >= 15) return 2;  // Creature
+        if (points >= 5) return 1;   // Cell
         return 0; // Microbe
     }
 
@@ -486,6 +486,11 @@ class ProceduralEntity {
 
         // Voice evolution effect
         if (this.voice) this.voice.speak('evolve');
+
+        // Cool smiley for advanced stages
+        if (newStage >= 4) {
+            this.isSmiley = true;
+        }
     }
 
     adjustColorForStage(stage) {

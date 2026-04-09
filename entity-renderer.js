@@ -125,8 +125,12 @@ class EntityRenderer {
 
         // === DETAIL LAYER ===
         if (!isDistant) {
-            // Render eyes on top
-            this.renderEyes(ctx, entity);
+            // Render eyes or smiley
+            if (entity.isSmiley) {
+                this.renderSmiley(ctx, entity);
+            } else {
+                this.renderEyes(ctx, entity);
+            }
 
             // Render patterns/textures
             if (entity.skinPattern && entity.skinPattern !== 'none') {
@@ -324,6 +328,38 @@ class EntityRenderer {
             ctx.arc(eye.x - eye.radius * 0.25, eye.y - eye.radius * 0.25, eye.radius * 0.4, 0, Math.PI * 2);
             ctx.fill();
         });
+    }
+
+    /**
+     * Render a cool procedural smiley face
+     */
+    renderSmiley(ctx, entity) {
+        const size = entity.size;
+        ctx.save();
+        
+        // White glowing strokes
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = size * 0.08;
+        ctx.lineCap = 'round';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'white';
+        
+        // Left Eye Arc
+        ctx.beginPath();
+        ctx.arc(-size * 0.25, -size * 0.15, size * 0.1, Math.PI * 1.2, Math.PI * 1.8);
+        ctx.stroke();
+        
+        // Right Eye Arc
+        ctx.beginPath();
+        ctx.arc(size * 0.25, -size * 0.15, size * 0.1, Math.PI * 1.2, Math.PI * 1.8);
+        ctx.stroke();
+        
+        // Mouth Arc
+        ctx.beginPath();
+        ctx.arc(0, size * 0.1, size * 0.3, Math.PI * 0.2, Math.PI * 0.8);
+        ctx.stroke();
+        
+        ctx.restore();
     }
 
     /**
