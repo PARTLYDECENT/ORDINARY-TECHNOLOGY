@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SDF Neon Rider</title>
+    <!-- Tailwind for UI Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GSAP for Smooth Transitions -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050510;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            touch-action: none;
+        }
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #uiLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+        .glitch-text {
+            text-shadow: 2px 2px #0ff, -2px -2px #f0f;
+            animation: glitch 1.5s infinite;
+        }
+        @keyframes glitch {
+            0% { text-shadow: 2px 2px #0ff, -2px -2px #f0f; }
+            25% { text-shadow: -2px 2px #0ff, 2px -2px #f0f; }
+            50% { text-shadow: 2px -2px #0ff, -2px 2px #f0f; }
+            75% { text-shadow: -2px -2px #0ff, 2px 2px #f0f; }
+            100% { text-shadow: 2px 2px #0ff, -2px -2px #f0f; }
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Canvas Container -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Overlay -->
+    <div id="uiLayer" class="flex flex-col justify-between p-6">
+        
+        <!-- HUD (Hidden initially) -->
+        <div id="hud" class="hidden flex justify-between items-start w-full">
+            <div class="flex flex-col">
+                <span class="text-xs tracking-[0.3em] text-cyan-500/50 font-bold mb-1">SYSTEM_TELEMETRY</span>
+                <span class="text-4xl font-black text-cyan-400 drop-shadow-[0_0_15px_rgba(0,255,255,0.7)]">SCORE: <span id="scoreText">0</span></span>
+                <span class="text-xs text-gray-400 mt-2 font-mono uppercase tracking-tighter">Engine_Warp: <span id="warpText" class="text-magenta-400">1.0x</span></span>
+            </div>
+            <div class="flex flex-col items-end">
+                <span class="text-xs tracking-[0.3em] text-magenta-500/50 font-bold mb-1">SHIELD_CAPACITY</span>
+                <div class="flex items-center gap-3">
+                    <div class="w-64 h-3 bg-gray-900 rounded-full border border-magenta-500/30 overflow-hidden shadow-[0_0_15px_rgba(255,0,255,0.2)]">
+                        <div id="healthBar" class="h-full bg-gradient-to-r from-cyan-400 via-magenta-500 to-purple-600 w-full transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Start / Main Menu -->
+        <div id="startScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto">
+            <h1 class="text-6xl md:text-8xl font-black italic tracking-tighter mb-4 glitch-text">NEON RIDER</h1>
+            <p class="text-cyan-300 mb-8 tracking-widest text-lg">RAYMARCHED SDF WORLD</p>
+            
+            <div class="bg-gray-900/80 border border-cyan-500 p-6 rounded-lg mb-8 text-center max-w-md">
+                <h3 class="text-cyan-400 font-bold mb-4 border-b border-cyan-500/50 pb-2">CONTROLS</h3>
+                <div class="grid grid-cols-2 gap-4 text-sm text-gray-300 text-left">
+                    <div><span class="font-bold text-white">WASD / ARROWS</span><br>Move Ship</div>
+                    <div><span class="font-bold text-white">SPACE</span><br>Fire Lasers</div>
+                    <div class="col-span-2 mt-2"><span class="font-bold text-white">TOUCH / MOUSE</span><br>Drag screen to move ship</div>
+                </div>
+            </div>
+
+            <button id="startBtn" onclick="startGame()" class="px-10 py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-2xl rounded shadow-[0_0_20px_rgba(0,255,255,0.5)] hover:shadow-[0_0_40px_rgba(0,255,255,0.8)] transition-all transform hover:scale-105 active:scale-95">
+                INITIALIZE
+            </button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-red-900/80 backdrop-blur-md hidden pointer-events-auto">
+            <h1 class="text-7xl font-black text-red-500 tracking-widest mb-2 drop-shadow-[0_0_20px_rgba(255,0,0,1)]">SYSTEM FAILURE</h1>
+            <p class="text-2xl text-white mb-8">FINAL SCORE: <span id="finalScoreText" class="text-cyan-400 font-bold">0</span></p>
+            <button id="restartBtn" onclick="startGame()" class="px-10 py-4 bg-red-600 hover:bg-red-500 text-white font-bold text-2xl rounded shadow-[0_0_20px_rgba(255,0,0,0.5)] hover:shadow-[0_0_40px_rgba(255,0,0,0.8)] transition-all transform hover:scale-105 active:scale-95">
+                REBOOT SYSTEM
+            </button>
+        </div>
+    </div>
+
+    <!-- Modular Game Scripts -->
+    <script src="world.js"></script>
+    <script src="ship.js"></script>
+    <script src="systems.js"></script>
+    <script src="pause.js"></script>
+
+    <script>
+        // Initialize the game systems on load
+        window.addEventListener('load', () => {
+            if (typeof initSystems === 'function') {
+                initSystems();
+                if (typeof PauseMenu !== 'undefined') PauseMenu.init();
+            } else {
+                console.error("systems.js failed to load or initSystems is missing.");
+            }
+        });
+    </script>
+</body>
+</html>

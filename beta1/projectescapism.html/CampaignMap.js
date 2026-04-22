@@ -203,9 +203,7 @@ class CampaignMapManager {
                 // Instanced Facility Floors inside the BSP Leaf Boundary
                 for(let x=leaf.x + 1; x < leaf.x + leaf.w - 1; x++) {
                     for(let z=leaf.z + 1; z < leaf.z + leaf.h - 1; z++) {
-                        const gh = (window.TerrainGen && typeof TerrainGen.getMeshHeight === 'function') 
-                            ? TerrainGen.getMeshHeight(x * this.config.cellSize + this.config.cellSize/2 + worldOffsetX, z * this.config.cellSize + this.config.cellSize/2 + worldOffsetZ)
-                            : 0;
+                        const gh = TerrainGen.getMeshHeight(x * this.config.cellSize + this.config.cellSize/2 + worldOffsetX, z * this.config.cellSize + this.config.cellSize/2 + worldOffsetZ);
                         dummy.position.set(x * this.config.cellSize + this.config.cellSize/2, gh, z * this.config.cellSize + this.config.cellSize/2);
                         dummy.scale.setScalar(1);
                         dummy.rotation.set(0, 0, 0);
@@ -224,7 +222,7 @@ class CampaignMapManager {
                 corners.forEach(c => {
                     const wx = c.x * this.config.cellSize + this.config.cellSize/2 + worldOffsetX;
                     const wz = c.z * this.config.cellSize + this.config.cellSize/2 + worldOffsetZ;
-                    const gh = (window.TerrainGen && typeof TerrainGen.getMeshHeight === 'function') ? TerrainGen.getMeshHeight(wx, wz) : 0;
+                    const gh = TerrainGen.getMeshHeight(wx, wz);
                     dummy.position.set(c.x * this.config.cellSize + this.config.cellSize/2, gh, c.z * this.config.cellSize + this.config.cellSize/2);
                     dummy.scale.set(1, 1, 1);
                     dummy.updateMatrix();
@@ -252,17 +250,17 @@ class CampaignMapManager {
                 // Sci-Fi Walls
                 const wx = lx * this.config.cellSize + this.config.cellSize/2 + worldOffsetX;
                 const wz = lz * this.config.cellSize + this.config.cellSize/2 + worldOffsetZ;
-                const gh = (window.TerrainGen && typeof TerrainGen.getMeshHeight === 'function') ? TerrainGen.getMeshHeight(wx, wz) : 0;
+                const gh = TerrainGen.getMeshHeight(wx, wz);
                 dummy.position.set(lx * this.config.cellSize + this.config.cellSize/2, gh + this.config.cellSize/2, lz * this.config.cellSize + this.config.cellSize/2);
                 dummy.scale.set(1, 1, 1);
                 dummy.updateMatrix();
                 walls.setMatrixAt(wCount++, dummy.matrix);
                 
-                // Debris logic: more debris near outposts
-                if (Math.random() < 0.15 && wCount < 500) {
+                // Debris logic disabled
+                if (false) {
                     const dx = lx * this.config.cellSize + (Math.random()-0.5)*3;
                     const dz = lz * this.config.cellSize + (Math.random()-0.5)*3;
-                    const dgh = (window.TerrainGen && typeof TerrainGen.getMeshHeight === 'function') ? TerrainGen.getMeshHeight(dx + worldOffsetX, dz + worldOffsetZ) : 0;
+                    const dgh = TerrainGen.getMeshHeight(dx + worldOffsetX, dz + worldOffsetZ);
                     dummy.position.set(dx, dgh + 0.05, dz);
                     dummy.rotation.set(Math.random()*0.4, Math.random()*6.28, Math.random()*0.4);
                     dummy.scale.setScalar(0.5 + Math.random()*0.5);
@@ -271,24 +269,18 @@ class CampaignMapManager {
                 }
             } else {
                 const rand = Math.random();
-                let pTree = 0.04, pRock = 0.07, pBarrel = 0.015, pFire = 0.003;
+                let pTree = 0.0, pRock = 0.0, pBarrel = 0.0, pFire = 0.003;
                 
                 if (chunkBiome === 'wasteland') {
-                    pTree = 0.005; // very rare dead trees
-                    pRock = 0.15;  // very dense rocks
-                    pBarrel = 0.025; 
                     pFire = 0.008;  // more fires
                 } else if (chunkBiome === 'toxic') {
-                    pTree = 0.01; 
-                    pRock = 0.05;
-                    pBarrel = 0.05; // high industrial debris
                     pFire = 0.006;
                 }
                 
                 if (rand < pTree && tCount < 300) { // Trees
                     const tx = lx * this.config.cellSize + this.config.cellSize/2 + worldOffsetX;
                     const tz = lz * this.config.cellSize + this.config.cellSize/2 + worldOffsetZ;
-                    const gh = (window.TerrainGen && typeof TerrainGen.getMeshHeight === 'function') ? TerrainGen.getMeshHeight(tx, tz) : 0;
+                    const gh = TerrainGen.getMeshHeight(tx, tz);
                     dummy.position.set(lx * this.config.cellSize + this.config.cellSize/2, gh, lz * this.config.cellSize + this.config.cellSize/2);
                     dummy.rotation.y = Math.random() * Math.PI * 2;
                     dummy.scale.setScalar(0.8 + Math.random() * 0.4);
@@ -298,7 +290,7 @@ class CampaignMapManager {
                 } else if (rand < pTree + pRock && rCount < 400) { // Rocks
                     const rx = lx * this.config.cellSize + Math.random()*2;
                     const rz = lz * this.config.cellSize + Math.random()*2;
-                    const gh = (window.TerrainGen && typeof TerrainGen.getMeshHeight === 'function') ? TerrainGen.getMeshHeight(rx + worldOffsetX, rz + worldOffsetZ) : 0;
+                    const gh = TerrainGen.getMeshHeight(rx + worldOffsetX, rz + worldOffsetZ);
                     dummy.position.set(rx, gh, rz);
                     dummy.rotation.set(Math.random()*0.2, Math.random()*6.28, Math.random()*0.2);
                     dummy.scale.setScalar(0.4 + Math.random()*(chunkBiome === 'wasteland' ? 1.5 : 0.8)); // bigger rocks in wasteland
@@ -307,7 +299,7 @@ class CampaignMapManager {
                 } else if (rand < pTree + pRock + pBarrel && brlCount < 100) { // Barrels
                     const bx = lx * this.config.cellSize + 1;
                     const bz = lz * this.config.cellSize + 1;
-                    const gh = (window.TerrainGen && typeof TerrainGen.getHeight === 'function') ? TerrainGen.getHeight(bx + worldOffsetX, bz + worldOffsetZ) : 0;
+                    const gh = TerrainGen.getHeight(bx + worldOffsetX, bz + worldOffsetZ);
                     dummy.position.set(bx, gh + 0.4, bz);
                     dummy.rotation.set(0, Math.random()*6.28, 0);
                     if (Math.random() < 0.2) dummy.rotation.x = 1.57; // Tipped over
@@ -318,7 +310,7 @@ class CampaignMapManager {
                 } else if (rand < pTree + pRock + pBarrel + pFire) {
                     const fx = lx * this.config.cellSize + 1;
                     const fz = lz * this.config.cellSize + 1;
-                    const gh = (window.TerrainGen && typeof TerrainGen.getHeight === 'function') ? TerrainGen.getHeight(fx + worldOffsetX, fz + worldOffsetZ) : 0;
+                    const gh = TerrainGen.getHeight(fx + worldOffsetX, fz + worldOffsetZ);
                     if (chunkBiome === 'toxic' && Math.random() > 0.4) {
                         const puke = new THREE.Mesh(ObjectFactory.getPukePuddleGeo(), ObjectFactory.getPukeMat());
                         puke.position.set(fx, gh + 0.05, fz);

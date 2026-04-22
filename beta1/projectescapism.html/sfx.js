@@ -20,24 +20,24 @@ const SFX = {
         ZOMBIE_ATTACK_3: 'assets/sfx/zombieattack3.mp3',
         ZOMBIE_ATTACK_4: 'assets/sfx/zombieattack4.mp3',
         
-        EXP_1: 'assets/sfx/detonating_ordinance__no_1-1775517125954.mp3',
-        EXP_2: 'assets/sfx/detonating_ordinance__no_2-1775517134304.mp3',
-        EXP_3: 'assets/sfx/detonating_ordinance__no_3-1775517134305.mp3',
-        EXP_4: 'assets/sfx/detonating_ordinance__no_4-1775517134306.mp3',
+        EXP_1: 'assets/sfx/detonating_ordinance_#1-1775517125954.mp3',
+        EXP_2: 'assets/sfx/detonating_ordinance_#2-1775517134304.mp3',
+        EXP_3: 'assets/sfx/detonating_ordinance_#3-1775517134305.mp3',
+        EXP_4: 'assets/sfx/detonating_ordinance_#4-1775517134306.mp3',
         
-        WATER_1: 'assets/sfx/insane_water__no_1-1775517281133.mp3',
-        WATER_2: 'assets/sfx/insane_water__no_2-1775517285791.mp3',
-        WATER_3: 'assets/sfx/insane_water__no_3-1775517281138.mp3',
-        WATER_4: 'assets/sfx/insane_water__no_4-1775517281140.mp3',
+        WATER_1: 'assets/sfx/insane_water_#1-1775517281133.mp3',
+        WATER_2: 'assets/sfx/insane_water_#2-1775517285791.mp3',
+        WATER_3: 'assets/sfx/insane_water_#3-1775517281138.mp3',
+        WATER_4: 'assets/sfx/insane_water_#4-1775517281140.mp3',
         
-        CYC_1: 'assets/sfx/cyclical_sound__no_1-1775516903403.mp3',
-        CYC_2: 'assets/sfx/cyclical_sound__no_2-1775516909572.mp3',
-        CYC_3: 'assets/sfx/cyclical_sound__no_3-1775516911600.mp3',
-        CYC_4: 'assets/sfx/cyclical_sound__no_4-1775516914661.mp3',
+        CYC_1: 'assets/sfx/cyclical_sound_#1-1775516903403.mp3',
+        CYC_2: 'assets/sfx/cyclical_sound_#2-1775516909572.mp3',
+        CYC_3: 'assets/sfx/cyclical_sound_#3-1775516911600.mp3',
+        CYC_4: 'assets/sfx/cyclical_sound_#4-1775516914661.mp3',
         
-        BGM_1: 'assets/sfx/dark_technology_in_2__no_1-1775517703061.mp3',
-        BGM_2: 'assets/sfx/dark_technology_in_2__no_1-1775517952984.mp3',
-        BGM_3: 'assets/sfx/dark_technology_in_2__no_1-1775517955793.mp3'
+        BGM_1: 'assets/sfx/dark_technology_in_2_#1-1775517703061.mp3',
+        BGM_2: 'assets/sfx/dark_technology_in_2_#1-1775517952984.mp3',
+        BGM_3: 'assets/sfx/dark_technology_in_2_#1-1775517955793.mp3'
     },
 
     async init() {

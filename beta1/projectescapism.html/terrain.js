@@ -1,7 +1,7 @@
 // terrain.js
 // Modularized Terrain Generation with High-Tech FBM Noise and Derivative Normals
 
-window.TerrainGen = {
+const TerrainGen = {
     mesh: null,
     mat: null,
     

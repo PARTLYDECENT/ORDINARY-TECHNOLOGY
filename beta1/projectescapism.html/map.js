@@ -255,8 +255,8 @@ class MapManager {
                 dummy.updateMatrix();
                 walls.setMatrixAt(wCount++, dummy.matrix);
                 
-                // Debris logic: more debris near outposts
-                if (Math.random() < 0.15 && wCount < 500) {
+                // Debris logic disabled
+                if (false) {
                     const dx = lx * this.config.cellSize + (Math.random()-0.5)*3;
                     const dz = lz * this.config.cellSize + (Math.random()-0.5)*3;
                     const dgh = TerrainGen.getMeshHeight(dx + worldOffsetX, dz + worldOffsetZ);
@@ -268,17 +268,11 @@ class MapManager {
                 }
             } else {
                 const rand = Math.random();
-                let pTree = 0.04, pRock = 0.07, pBarrel = 0.015, pFire = 0.003;
+                let pTree = 0.0, pRock = 0.0, pBarrel = 0.0, pFire = 0.003;
                 
                 if (chunkBiome === 'wasteland') {
-                    pTree = 0.005; // very rare dead trees
-                    pRock = 0.15;  // very dense rocks
-                    pBarrel = 0.025; 
                     pFire = 0.008;  // more fires
                 } else if (chunkBiome === 'toxic') {
-                    pTree = 0.01; 
-                    pRock = 0.05;
-                    pBarrel = 0.05; // high industrial debris
                     pFire = 0.006;
                 }
                 
