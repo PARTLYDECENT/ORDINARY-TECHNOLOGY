@@ -343,6 +343,7 @@ const MainMenu = {
 
     stop: function() {
         this.active = false;
+        if (window.MenuBG) window.MenuBG.stop();
         const menuEl = document.getElementById('main-menu');
         if (menuEl) menuEl.style.display = 'none';
     },
@@ -452,12 +453,11 @@ const MainMenu = {
         const w = this.width;
         const h = this.height;
 
-        // Background
-        ctx.fillStyle = '#030706';
-        ctx.fillRect(0, 0, w, h);
+        // Background (Clear for shader bg)
+        ctx.clearRect(0, 0, w, h);
 
-        // Hex grid
-        this.drawHexGrid(ctx, w, h);
+        // Hex grid (Disabled: Using performant shader grid in bg.js)
+        // this.drawHexGrid(ctx, w, h);
 
         // Data streams
         this.drawDataStreams(ctx, w, h);

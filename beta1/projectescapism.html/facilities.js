@@ -48,8 +48,8 @@ const FacilityGen = {
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <emissivemap_fragment>`,
                 `#include <emissivemap_fragment>
-                // Horizontal cyan neon stripes
-                float glowStrip = step(0.98, sin(vLocalPosOut.y * 3.14 + uTime));
+                // Horizontal cyan neon stripes (Static for performance)
+                float glowStrip = step(0.98, sin(vLocalPosOut.y * 3.14));
                 totalEmissiveRadiance = vec3(0.0, 1.0, 1.0) * glowStrip * 1.5;
                 `
             );
@@ -106,7 +106,7 @@ const FacilityGen = {
                 `#include <emissivemap_fragment>
                 float hp2 = hexDist( (vWorldPosOut.xz * 1.5) - (floor(vWorldPosOut.xz * 1.5) + 0.5) );
                 float hborder = smoothstep(0.45, 0.5, hp2);
-                float pulse = sin(uTime * 2.0 - vWorldPosOut.x * 0.5) * 0.5 + 0.5;
+                float pulse = 0.5; // Static for performance
                 totalEmissiveRadiance = vec3(0.0, 0.3, 0.8) * hborder * pulse * 1.2;
                 `
             );
@@ -135,7 +135,7 @@ const FacilityGen = {
              shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <emissivemap_fragment>`,
                 `#include <emissivemap_fragment>
-                float orangePulse = smoothstep(0.7, 0.9, sin(vLocalPosOut.y * 5.0 - uTime * 4.0));
+                float orangePulse = 0.0; // Static for performance
                 totalEmissiveRadiance = vec3(1.0, 0.5, 0.0) * orangePulse * 3.0;
                 `
              );

@@ -256,8 +256,9 @@ class SurvivalMapManager {
                 dummy.updateMatrix();
                 walls.setMatrixAt(wCount++, dummy.matrix);
                 
-                // Debris logic disabled
-                if (false) {
+                // Debris logic removed for performance
+/*
+                if (Math.random() < 0.15 && wCount < 500) {
                     const dx = lx * this.config.cellSize + (Math.random()-0.5)*3;
                     const dz = lz * this.config.cellSize + (Math.random()-0.5)*3;
                     const dgh = TerrainGen.getMeshHeight(dx + worldOffsetX, dz + worldOffsetZ);
@@ -267,13 +268,20 @@ class SurvivalMapManager {
                     dummy.updateMatrix();
                     debris.setMatrixAt(dCount++, dummy.matrix);
                 }
+*/
             } else {
                 const rand = Math.random();
-                let pTree = 0.0, pRock = 0.0, pBarrel = 0.0, pFire = 0.003;
+                let pTree = 0.04, pRock = 0.07, pBarrel = 0.015, pFire = 0.003;
                 
                 if (chunkBiome === 'wasteland') {
+                    pTree = 0.005; // very rare dead trees
+                    pRock = 0.15;  // very dense rocks
+                    pBarrel = 0.025; 
                     pFire = 0.008;  // more fires
                 } else if (chunkBiome === 'toxic') {
+                    pTree = 0.01; 
+                    pRock = 0.05;
+                    pBarrel = 0.05; // high industrial debris
                     pFire = 0.006;
                 }
                 
@@ -288,14 +296,8 @@ class SurvivalMapManager {
                     trees.setMatrixAt(tCount++, dummy.matrix);
                     costField[i] = 10;
                 } else if (rand < pTree + pRock && rCount < 400) { // Rocks
-                    const rx = lx * this.config.cellSize + Math.random()*2;
-                    const rz = lz * this.config.cellSize + Math.random()*2;
-                    const gh = TerrainGen.getMeshHeight(rx + worldOffsetX, rz + worldOffsetZ);
-                    dummy.position.set(rx, gh, rz);
-                    dummy.rotation.set(Math.random()*0.2, Math.random()*6.28, Math.random()*0.2);
-                    dummy.scale.setScalar(0.4 + Math.random()*(chunkBiome === 'wasteland' ? 1.5 : 0.8)); // bigger rocks in wasteland
-                    dummy.updateMatrix();
-                    rocks.setMatrixAt(rCount++, dummy.matrix);
+                    // Removed for performance
+                } else if (rand < pTree + pRock + pBarrel && brlCount < 100) { // Barrels
                 } else if (rand < pTree + pRock + pBarrel && brlCount < 100) { // Barrels
                     const bx = lx * this.config.cellSize + 1;
                     const bz = lz * this.config.cellSize + 1;

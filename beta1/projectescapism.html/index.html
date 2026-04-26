@@ -22,6 +22,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <script src="./ParticleEffects.js" type="module"></script>
+    <script src="./bg.js"></script>
     <script src="./menu.js"></script>
     <script src="./models.js"></script>
     <script src="./terrain.js"></script>
@@ -87,6 +88,30 @@
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+        }
+
+        #cinematic-border {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-sizing: border-box;
+            border-top: 12vh solid black;
+            border-bottom: 12vh solid black;
+            z-index: 100;
+        }
+        #cinematic-border::after {
+            content: '';
+            position: absolute;
+            top: -12vh;
+            left: 0;
+            width: 100%;
+            height: calc(100% + 24vh);
+            border-left: 8vw solid black;
+            border-right: 8vw solid black;
+            box-sizing: border-box;
         }
 
         #crosshair {
@@ -547,6 +572,7 @@
         <div class="scanlines"></div>
         <div class="loader-ui-text">SYS.INITIALIZATION // MAYA_ENGINE_V1.4</div>
     </div>
+    <div id="cinematic-border"></div>
     <div id="canvas-container"></div>
     <div id="crosshair"></div>
     <div id="damage-vignette"></div>
@@ -1019,25 +1045,35 @@
             },
 
             speak: function (text) {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
+                try {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
 
-                // Try to find a good "commander" voice
-                const voices = window.speechSynthesis.getVoices();
-                utterance.voice = voices.find(v => v.name.includes('Male') || v.name.includes('David')) || voices[0];
+                    // Try to find a good "commander" voice
+                    const voices = window.speechSynthesis.getVoices();
+                    if (voices.length > 0) {
+                        utterance.voice = voices.find(v => v.name.includes('Male') || v.name.includes('David')) || voices[0];
+                    }
 
-                utterance.pitch = 0.6; // Deep voice
-                utterance.rate = 0.8;  // Slow, authoritative
-                utterance.volume = 1.0;
+                    utterance.pitch = 0.6; // Deep voice
+                    utterance.rate = 0.8;  // Slow, authoritative
+                    utterance.volume = 1.0;
 
-                utterance.onstart = () => {
-                    if (this.staticGain) this.staticGain.gain.setTargetAtTime(0.1, this.audioCtx.currentTime, 0.1);
-                };
-                utterance.onend = () => {
-                    if (this.staticGain) this.staticGain.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.2);
-                };
+                    utterance.onstart = () => {
+                        if (this.staticGain && this.audioCtx) this.staticGain.gain.setTargetAtTime(0.1, this.audioCtx.currentTime, 0.1);
+                    };
+                    utterance.onend = () => {
+                        if (this.staticGain && this.audioCtx) this.staticGain.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.2);
+                    };
+                    utterance.onerror = (e) => {
+                        console.warn("Speech synthesis error:", e);
+                        if (this.staticGain && this.audioCtx) this.staticGain.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.2);
+                    };
 
-                window.speechSynthesis.speak(utterance);
+                    window.speechSynthesis.speak(utterance);
+                } catch (err) {
+                    console.error("Tutorial speak failed:", err);
+                }
             },
 
             start: function (onComplete) {
@@ -1138,7 +1174,7 @@
 
         // The loader does NOT start until the player clicks DEPLOY in the main menu.
         MainMenu.onStart = function () {
-            // TutorialManager.start(() => {
+            TutorialManager.start(() => {
                 // Show the loading screen & start the fluid loader
                 const ls = document.getElementById('loading-screen');
                 if (ls) ls.style.display = 'flex';
@@ -1177,10 +1213,11 @@
 
                 // Start the actual game pipeline
                 startGamePipeline();
-            // });
+            });
         };
 
-        // Start the main menu immediately
+        // Start the main menu immediately with shader background
+        MenuBG.init('main-menu');
         MainMenu.init();
 
         /**
@@ -1195,7 +1232,7 @@
             zombiesPerWave: 40,     // Each wave adds this many
             waveCooldown: 25,       // Seconds between waves
             numItems: 15,
-            playerSpeed: 8.0,
+            playerSpeed: 4.0,       // Slowed by half (was 8.0)
             zombieSpeed: 1.5,
             obstacleDensity: 0.15
         };
@@ -1209,12 +1246,12 @@
         scene.background = new THREE.Color(0x0f172a);
 
         const aspect = window.innerWidth / window.innerHeight;
-        const viewSize = 14;
+        const viewSize = 7; // Limited FOV by half (was 14)
         const cameraIso = new THREE.OrthographicCamera(-viewSize * aspect, viewSize * aspect, viewSize, -viewSize, -100, 1000);
         cameraIso.position.set(30, 30, 30);
         cameraIso.lookAt(0, 0, 0);
 
-        const cameraFPS = new THREE.PerspectiveCamera(65, aspect, 0.1, 1000);
+        const cameraFPS = new THREE.PerspectiveCamera(32, aspect, 0.1, 1000); // Limited FOV by half (was 65)
         // cameraFPS position will be dynamically managed in animate() to sit perfectly at 1.5m human height
         cameraFPS.rotation.order = 'YXZ';
 
@@ -1289,7 +1326,7 @@
 
         // Weapon Configs
         const weaponsCfg = {
-            pistol: { id: 'pistol', name: 'Service Pistol', damage: 20, fireRate: 0.35, spread: 0.01, pellets: 1, color: 0xffaa00, speed: 50, maxAmmo: Infinity },
+            pistol: { id: 'pistol', name: 'Service Pistol', damage: 20, fireRate: 0.35, spread: 0.01, pellets: 1, color: 0x888888, speed: 50, maxAmmo: Infinity },
             shotgun: { id: 'shotgun', name: 'Tactical Shotgun', damage: 15, fireRate: 0.8, spread: 0.15, pellets: 8, color: 0xff3333, speed: 35, maxAmmo: 24 },
             ar: { id: 'ar', name: 'Assault Rifle', damage: 14, fireRate: 0.1, spread: 0.05, pellets: 1, color: 0x00aaff, speed: 60, maxAmmo: 90 },
             railgun: { id: 'railgun', name: 'Volt Railgun', damage: 120, fireRate: 1.5, spread: 0.0, pellets: 1, color: 0x44ffff, speed: 120, maxAmmo: 10, isSpecial: true, type: 'pierce' },
@@ -1357,7 +1394,7 @@
         }
 
         const bulletGeo = new THREE.BoxGeometry(0.2, 0.2, 0.8);
-        const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+        const bulletMat = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Neutral gray instead of yellow
         const bullets = [];
         const enemyProjectiles = [];
         const weaponDrops = [];
@@ -1765,7 +1802,7 @@
                 perks.player = player;
 
                 if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'campaign') {
-                    // campaignTutorial = new CampaignTutorialManager(player, TutorialManager, spawnZombie);
+                    campaignTutorial = new CampaignTutorialManager(player, TutorialManager, spawnZombie);
                 }
 
                 // Apply Map Visuals if config exists
@@ -2125,26 +2162,180 @@
                 });
 
                 // --- CREATE SPAWN NODES (Hive Structures) ---
-                SPAWN_NODE_POSITIONS.forEach((pos, idx) => {
-                    const hiveGeo = new THREE.SphereGeometry(1.5, 8, 8);
-                    hiveGeo.scale(1, 0.8, 1);
+                const hiveVert = `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `;
 
-                    const hiveMat = new THREE.MeshStandardMaterial({
-                        color: 0x551111, emissive: 0xff0000, emissiveIntensity: 0.8,
-                        roughness: 0.3, metalness: 0.1, transparent: true, opacity: 0.9
+                const hiveFrag = `
+                    precision highp float;
+                    varying vec2 vUv;
+                    uniform float uTime;
+                    uniform float uDamage;
+
+                    const float MAX_DIST = 40.0;
+                    const float SURF_DIST = 0.001;
+                    const int MAX_STEPS = 100;
+
+                    float smin(float a, float b, float k) {
+                        float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+                        return mix(b, a, h) - k * h * (1.0 - h);
+                    }
+
+                    float hash(vec3 p) {
+                        p  = fract( p*0.3183099+.1 );
+                        p *= 17.0;
+                        return fract( p.x*p.y*p.z*(p.x+p.y+p.z) );
+                    }
+
+                    float noise(vec3 x) {
+                        vec3 i = floor(x);
+                        vec3 f = fract(x);
+                        f = f*f*(3.0-2.0*f);
+                        return mix(mix(mix( hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)),f.x),
+                                       mix( hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)),f.x),f.y),
+                                   mix(mix( hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)),f.x),
+                                       mix( hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)),f.x),f.y),f.z);
+                    }
+
+                    float fbm(vec3 p) {
+                        float v = 0.0;
+                        float a = 0.5;
+                        for (int i = 0; i < 3; i++) {
+                            v += a * noise(p);
+                            p *= 2.0;
+                            a *= 0.5;
+                        }
+                        return v;
+                    }
+
+                    float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+                        vec3 pa = p - a, ba = b - a;
+                        float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                        return length(pa - ba * h) - r;
+                    }
+
+                    float getDist(vec3 p) {
+                        float t = uTime * 0.8;
+                        float globalPulse = sin(uTime * 2.0) * 0.05;
+                        vec3 p1 = p + vec3(sin(t), cos(t * 0.5), sin(t * 0.7)) * 1.2;
+                        vec3 p2 = p + vec3(sin(t + 2.1), cos(t * 0.4 + 2.1), sin(t * 0.8 + 2.1)) * 1.2;
+                        vec3 p3 = p + vec3(sin(t + 4.2), cos(t * 0.6 + 4.2), sin(t * 0.9 + 4.2)) * 1.2;
+                        float d1 = length(p1) - (0.7 + globalPulse);
+                        float d2 = length(p2) - (0.65 + globalPulse);
+                        float d3 = length(p3) - (0.75 + globalPulse);
+                        float d = smin(d1, d2, 1.0);
+                        d = smin(d, d3, 1.0);
+                        float strings = fbm(p * 2.5 + vec3(0, uTime * 0.2, 0)) * 0.25;
+                        d -= strings;
+                        for(int i=0; i<8; i++) {
+                            float fi = float(i);
+                            float ang = fi * 0.8 + uTime * 0.3;
+                            vec3 start = vec3(sin(ang), cos(ang * 0.5), sin(ang * 1.2)) * 0.8;
+                            vec3 end = start * 2.2 + vec3(sin(uTime + fi), cos(uTime*0.7 + fi), sin(uTime*1.3 + fi)) * 0.7;
+                            float limb = sdCapsule(p, start, end, 0.12 + sin(uTime + fi)*0.04);
+                            d = smin(d, limb, 0.4);
+                        }
+                        for(int j=0; j<6; j++) {
+                            float fj = float(j);
+                            float dropY = mod(uTime * (1.2 + fj * 0.3), 5.0) - 2.5;
+                            vec3 dropPos = vec3(sin(fj*1.5)*0.8, -dropY, cos(fj*1.5)*0.8);
+                            float drop = length(p - dropPos) - (0.12 - abs(dropY)*0.03);
+                            float trail = length(p.xz - dropPos.xz) - (0.02 * (1.0 - clamp(p.y - dropPos.y, 0.0, 1.0)));
+                            float bloodColumn = max(trail, p.y - dropPos.y); 
+                            d = smin(d, drop, 0.3);
+                            d = smin(d, bloodColumn, 0.2);
+                        }
+                        return d;
+                    }
+
+                    vec3 getNormal(vec3 p) {
+                        float d = getDist(p);
+                        vec2 e = vec2(0.01, 0);
+                        vec3 n = d - vec3(
+                            getDist(p - e.xyy),
+                            getDist(p - e.yxy),
+                            getDist(p - e.yyx)
+                        );
+                        return normalize(n);
+                    }
+
+                    void main() {
+                        vec2 uv = vUv * 2.0 - 1.0;
+                        vec3 ro = vec3(0, 0, -6);
+                        vec3 rd = normalize(vec3(uv, 1.2));
+
+                        float dO = 0.0;
+                        for(int i = 0; i < MAX_STEPS; i++) {
+                            vec3 p = ro + rd * dO;
+                            float dS = getDist(p);
+                            dO += dS;
+                            if(dO > MAX_DIST || abs(dS) < SURF_DIST) break;
+                        }
+
+                        vec3 color = vec3(0.01, 0.0, 0.0);
+                        float alpha = 1.0;
+
+                        if(dO < MAX_DIST) {
+                            vec3 p = ro + rd * dO;
+                            vec3 n = getNormal(p);
+                            vec3 lightPos = vec3(4, 6, -4);
+                            vec3 l = normalize(lightPos - p);
+                            float dif = clamp(dot(n, l), 0.0, 1.0);
+                            float spec = pow(clamp(dot(reflect(-l, n), -rd), 0.0, 1.0), 20.0);
+                            float fresnel = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 4.0);
+                            float detail = fbm(p * 5.0 + uTime * 0.1);
+                            vec3 meatColor = mix(vec3(0.5, 0.02, 0.02), vec3(0.1, 0.01, 0.01), detail);
+                            vec3 highlightColor = vec3(1.0, 0.2, 0.2);
+                            color = meatColor * (dif + 0.1);
+                            color += highlightColor * spec * 0.7;
+                            color += vec3(0.8, 0.0, 0.0) * fresnel * 0.6;
+                            float veins = smoothstep(0.45, 0.5, fbm(p * 12.0));
+                            color = mix(color, vec3(0.05, 0.0, 0.0), veins * 0.7);
+                            color *= smoothstep(-0.2, 1.0, dif);
+                            color = mix(color, vec3(0.01, 0.0, 0.0), 1.0 - exp(-0.005 * dO * dO));
+                        } else {
+                            color += vec3(0.05, 0.0, 0.0) * fbm(vec3(uv * 2.0, uTime * 0.1));
+                            alpha = 0.02;
+                        }
+
+                        color = mix(color, vec3(1.0, 0.0, 0.0), uDamage);
+
+                        float vignette = 1.0 - length(uv) * 0.5;
+                        color *= vignette;
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `;
+
+                const hiveGeo = new THREE.PlaneGeometry(25, 25);
+
+                SPAWN_NODE_POSITIONS.forEach((pos, idx) => {
+                    const hiveMat = new THREE.ShaderMaterial({
+                        vertexShader: hiveVert,
+                        fragmentShader: hiveFrag,
+                        uniforms: {
+                            uTime: { value: 0 },
+                            uDamage: { value: 0.0 }
+                        },
+                        transparent: true,
+                        side: THREE.DoubleSide
                     });
+
                     const hiveMesh = new THREE.Mesh(hiveGeo, hiveMat);
                     const hiveH = TerrainGen.getHeight(pos.x, pos.z);
-                    hiveMesh.position.set(pos.x, hiveH + 0.3, pos.z);
+                    hiveMesh.position.set(pos.x, hiveH + 5, pos.z);
                     scene.add(hiveMesh);
 
-                    // Red glow light
-                    const hiveLight = new THREE.PointLight(0xff0000, 2.0, 15);
+                    // Green glow light
+                    const hiveLight = new THREE.PointLight(0x00ff44, 1.5, 12);
                     hiveLight.position.set(pos.x, hiveH + 1.5, pos.z);
                     scene.add(hiveLight);
 
                     spawnNodes.push({
-                        x: pos.x, z: pos.z, hp: 60, maxHP: 60,
+                        x: pos.x, z: pos.z, hp: 500, maxHP: 500,
                         mesh: hiveMesh, light: hiveLight, mat: hiveMat,
                         spawnTimer: Math.random() * 2, active: true,
                         respawnTimer: 0, idx: idx
@@ -2783,6 +2974,14 @@
             zombieSDFMat.uniforms.uTime.value = uTime;
             zombieSDFMat.uniforms.uDarkness.value = MainMenu.active ? 1.0 : 0.0;
 
+            // Update Hive Shader Time and Billboard
+            spawnNodes.forEach(node => {
+                if(node.active && node.mat) {
+                    node.mat.uniforms.uTime.value = uTime;
+                    node.mesh.quaternion.copy(activeCamera.quaternion);
+                }
+            });
+
             // Neural Scan Shader Integration
             if (scanPulseTimer > 0) {
                 scanPulseTimer -= delta;
@@ -3220,8 +3419,13 @@
                     if (!node.active) continue;
                     const ndx = node.x - b.mesh.position.x;
                     const ndz = node.z - b.mesh.position.z;
-                    if (ndx * ndx + ndz * ndz < 2.5) {
+                    if (ndx * ndx + ndz * ndz < 10.0) {
                         node.hp -= b.damage;
+                        
+                        // Hit Flash Shader Uniform
+                        node.mat.uniforms.uDamage.value = 1.0;
+                        setTimeout(() => { if (node.mat && node.active) node.mat.uniforms.uDamage.value = 0.0; }, 100);
+
                         // Hit sparks on node
                         emitParticle(b.mesh.position.x, b.mesh.position.y || 1, b.mesh.position.z,
                             (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4,
