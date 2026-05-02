@@ -346,6 +346,10 @@ const MainMenu = {
         if (window.MenuBG) window.MenuBG.stop();
         const menuEl = document.getElementById('main-menu');
         if (menuEl) menuEl.style.display = 'none';
+        
+        // Hide the cinematic border so it doesn't carry into the game world
+        const borderEl = document.getElementById('cinematic-border');
+        if (borderEl) borderEl.style.display = 'none';
     },
 
     // --- DRAWING ---

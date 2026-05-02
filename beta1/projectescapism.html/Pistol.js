@@ -92,6 +92,87 @@ class Pistol extends THREE.Group {
         frontSight.position.set(0, 0.55, -0.9);
         this.slideGroup.add(frontSight);
 
+        // === GRIP TEXTURE PANELS ===
+        for (let side of [-1, 1]) {
+            for (let i = 0; i < 8; i++) {
+                const ridge = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.01, 0.08, 0.04),
+                    this.polyMat
+                );
+                ridge.position.set(0.16 * side, -0.35 - i * 0.09, 0.2);
+                ridge.rotation.x = Math.PI * 0.1;
+                frameGroup.add(ridge);
+            }
+        }
+
+        // === MAGAZINE ===
+        const magBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.22, 0.6, 0.32),
+            this.polyMat
+        );
+        magBody.position.set(0, -0.9, 0.2);
+        magBody.rotation.x = Math.PI * 0.1;
+        frameGroup.add(magBody);
+
+        // Magazine floor plate
+        const magFloor = new THREE.Mesh(
+            new THREE.BoxGeometry(0.24, 0.04, 0.34),
+            this.metalMat
+        );
+        magFloor.position.set(0, -1.2, 0.2);
+        magFloor.rotation.x = Math.PI * 0.1;
+        frameGroup.add(magFloor);
+
+        // Mag release button
+        const magRelease = new THREE.Mesh(
+            new THREE.BoxGeometry(0.04, 0.06, 0.04),
+            this.metalMat
+        );
+        magRelease.position.set(0.16, -0.15, 0.05);
+        frameGroup.add(magRelease);
+
+        // === ACCESSORY RAIL (Under barrel) ===
+        const accRail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.04, 0.5),
+            this.metalMat
+        );
+        accRail.position.set(0, 0.0, -0.25);
+        frameGroup.add(accRail);
+
+        // Rail teeth
+        for (let i = 0; i < 6; i++) {
+            const tooth = new THREE.Mesh(
+                new THREE.BoxGeometry(0.13, 0.015, 0.02),
+                this.metalMat
+            );
+            tooth.position.set(0, 0.025, -0.45 + i * 0.08);
+            frameGroup.add(tooth);
+        }
+
+        // === EJECTION PORT DETAIL ===
+        const ejectPort = new THREE.Mesh(
+            new THREE.BoxGeometry(0.04, 0.08, 0.22),
+            new THREE.MeshBasicMaterial({ color: 0x050505 })
+        );
+        ejectPort.position.set(0.17, 0.4, 0.0);
+        this.slideGroup.add(ejectPort);
+
+        // Extractor
+        const extractor = new THREE.Mesh(
+            new THREE.BoxGeometry(0.03, 0.02, 0.12),
+            this.barrelMat
+        );
+        extractor.position.set(0.14, 0.45, 0.0);
+        this.slideGroup.add(extractor);
+
+        // === BEAVER TAIL ===
+        const beaverTail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.28, 0.06, 0.1),
+            this.polyMat
+        );
+        beaverTail.position.set(0, 0.08, 0.55);
+        frameGroup.add(beaverTail);
+
         // Muzzle Glow Point
         this.muzzleLight = new THREE.PointLight(0xffaa00, 0, 5);
         this.muzzleLight.position.set(0, 0.35, -1.2);

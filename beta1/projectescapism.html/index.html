@@ -38,6 +38,10 @@
     <script src="./sfx.js"></script>
     <script src="./Pistol.js"></script>
     <script src="./Shotgun.js"></script>
+    <script src="./AssaultRifle.js"></script>
+    <script src="./Railgun.js"></script>
+    <script src="./SolarFlare.js"></script>
+    <script src="./GravSingularity.js"></script>
     <script src="./navigator.js"></script>
 
     <style>
@@ -668,7 +672,7 @@
                 <div class="lbl">Nodes Destroyed</div>
             </div>
         </div>
-        <button id="retry-btn" onclick="location.reload()">RETRY</button>
+        <button id="retry-btn" onclick="respawnPlayer()">RETRY</button>
     </div>
 
     <!-- Pause / Inventory Menu -->
@@ -970,6 +974,10 @@
             stop: function () {
                 this.active = false;
                 document.getElementById('loading-screen').style.display = 'none';
+                
+                // Fail-safe: Ensure cinematic border is hidden when game starts
+                const borderEl = document.getElementById('cinematic-border');
+                if (borderEl) borderEl.style.display = 'none';
             }
         };
 
@@ -1360,6 +1368,7 @@
         let totalKills = 0;
         let nodesDestroyed = 0;
         let gameOver = false;
+        let lastDelta = 0.016;
 
         // --- Spawn Node Config ---
         const SPAWN_NODE_POSITIONS = [
@@ -1673,94 +1682,382 @@
          */
         const WeaponModelFactory = {
             getMesh(weaponId) {
-                const wpParts = [];
-                const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.2 });
-                const barrelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9, roughness: 0.1, emissive: 0x00aaff, emissiveIntensity: 0.2 });
-
-                if (weaponId === 'railgun') {
-                    // Volt Railgun: Sleek, long barrel with glowing ribs
-                    const core = new THREE.BoxGeometry(0.08, 0.1, 0.5);
-                    wpParts.push(new THREE.Mesh(core, frameMat));
-                    const barrel = new THREE.BoxGeometry(0.04, 0.04, 0.7);
-                    barrel.translate(0, 0, -0.4);
-                    wpParts.push(new THREE.Mesh(barrel, barrelMat));
-                    for (let i = 0; i < 4; i++) {
-                        const rib = new THREE.BoxGeometry(0.12, 0.12, 0.02);
-                        rib.translate(0, 0, -0.2 - i * 0.15);
-                        wpParts.push(new THREE.Mesh(rib, barrelMat));
-                    }
-                } else if (weaponId === 'flare') {
-                    // Solar Flare: Chunky, wide barrel with heat vents
-                    const core = new THREE.BoxGeometry(0.15, 0.15, 0.4);
-                    wpParts.push(new THREE.Mesh(core, frameMat));
-                    const muzzle = new THREE.CylinderGeometry(0.1, 0.12, 0.2, 8);
-                    muzzle.rotateX(Math.PI / 2); muzzle.translate(0, 0, -0.3);
-                    wpParts.push(new THREE.Mesh(muzzle, barrelMat));
-                } else if (weaponId === 'singular') {
-                    // Grav-Singularity: Futuristic disc-like emitter
-                    const core = new THREE.BoxGeometry(0.1, 0.1, 0.3);
-                    wpParts.push(new THREE.Mesh(core, frameMat));
-                    const ring = new THREE.TorusGeometry(0.12, 0.02, 16, 32);
-                    ring.rotateX(Math.PI / 2); ring.translate(0, 0, -0.15);
-                    wpParts.push(new THREE.Mesh(ring, barrelMat));
-                } else if (weaponId === 'pistol') {
-                    // High-Fidelity Procedural Pistol
+                if (weaponId === 'pistol') {
                     return new Pistol();
                 } else if (weaponId === 'shotgun') {
-                    // High-Fidelity Procedural Shotgun
                     return new Shotgun();
+                } else if (weaponId === 'ar') {
+                    return new AssaultRifle();
+                } else if (weaponId === 'railgun') {
+                    return new Railgun();
+                } else if (weaponId === 'flare') {
+                    return new SolarFlare();
+                } else if (weaponId === 'singular') {
+                    return new GravSingularity();
                 } else {
-                    // Default: Generic Service Pistol
-                    const receiver = new THREE.BoxGeometry(0.06, 0.08, 0.3);
-                    wpParts.push(new THREE.Mesh(receiver, frameMat));
-                    const barrel = new THREE.CylinderGeometry(0.015, 0.015, 0.4, 8);
-                    barrel.rotateX(Math.PI / 2); barrel.translate(0, 0.02, -0.2);
-                    wpParts.push(new THREE.Mesh(barrel, barrelMat));
+                    // Fallback: return a pistol
+                    return new Pistol();
                 }
-
-                const group = new THREE.Group();
-                wpParts.forEach(p => group.add(p));
-                return group;
             },
 
             getFPSArmAndGun(weaponId) {
                 const root = new THREE.Group();
 
-                // --- FPS Arm Mesh ---
-                // A single tactical right arm to act as the viewmodel
-                const armMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.4 });
-                const armorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.2 });
+                // =================================================================
+                // TITAN MECHANICAL ARM — Full Procedural FPS Viewmodel Appendage
+                // =================================================================
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0x0a0e14, roughness: 0.3, metalness: 0.95 });
+                const armorMat = new THREE.MeshStandardMaterial({ color: 0x1a2030, roughness: 0.25, metalness: 0.9 });
+                const innerMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.7 });
+                const pistonMat = new THREE.MeshStandardMaterial({ color: 0x556677, roughness: 0.15, metalness: 0.95 });
+                const jointMat = new THREE.MeshStandardMaterial({ color: 0x222833, roughness: 0.3, metalness: 0.85 });
+                const cableMat = new THREE.MeshStandardMaterial({ color: 0x111820, roughness: 0.6, metalness: 0.4 });
+                const energyMat = new THREE.MeshStandardMaterial({
+                    color: 0x00ccff, emissive: 0x0088cc, emissiveIntensity: 2.0, roughness: 0.1, metalness: 0.9
+                });
+                const hazmatMat = new THREE.MeshStandardMaterial({
+                    color: 0xffcc00, emissive: 0xff8800, emissiveIntensity: 0.3, roughness: 0.4, metalness: 0.6
+                });
+                const rubberMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.95, metalness: 0.0 });
 
-                // Forearm
-                const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 1.2, 16), armMat);
-                forearm.rotation.x = Math.PI / 2;
-                forearm.position.set(0.6, -0.6, -0.5); // Offset to bottom right
-                root.add(forearm);
+                const armGroup = new THREE.Group();
+                armGroup.position.set(0.35, -0.28, -0.4);
+                root.add(armGroup);
 
-                // Armor plate
-                const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.2, 0.2), armorMat);
-                plate.rotation.x = Math.PI / 2;
-                plate.position.set(0.7, -0.6, -0.5);
-                root.add(plate);
+                // === UPPER ARM (Partially visible, extends from screen edge) ===
+                const upperArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.12, 0.6, 16),
+                    innerMat
+                );
+                upperArm.rotation.x = Math.PI / 2;
+                upperArm.rotation.z = -0.15;
+                upperArm.position.set(0.2, 0.08, 0.3);
+                armGroup.add(upperArm);
 
-                // Hand
-                const hand = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), armMat);
-                hand.position.set(0.6, -0.5, -1.2);
-                root.add(hand);
+                // Upper arm armor plate (pauldron edge)
+                const upperPlate = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.28, 0.14, 0.5),
+                    armorMat
+                );
+                upperPlate.position.set(0.28, 0.12, 0.3);
+                upperPlate.rotation.z = -0.1;
+                armGroup.add(upperPlate);
 
-                // --- Weapon ---
-                const weapon = this.getMesh(weaponId);
-                // Position weapon in hand
-                if (weaponId === 'pistol') {
-                    weapon.scale.set(0.28, 0.28, 0.28);
-                } else if (weaponId === 'shotgun') {
-                    weapon.scale.set(0.22, 0.22, 0.22);
-                } else {
-                    weapon.scale.set(0.2, 0.2, 0.2);
+                // === ELBOW JOINT ===
+                const elbowJoint = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.1, 16, 16),
+                    jointMat
+                );
+                elbowJoint.position.set(0.1, 0.0, 0.05);
+                armGroup.add(elbowJoint);
+
+                // Elbow piston housing
+                const elbowPiston = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.03, 0.03, 0.25, 8),
+                    pistonMat
+                );
+                elbowPiston.rotation.x = Math.PI / 2;
+                elbowPiston.position.set(0.18, -0.02, 0.05);
+                armGroup.add(elbowPiston);
+
+                // === FOREARM — Main structural arm ===
+                // Inner frame cylinder
+                const forearmFrame = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.1, 0.9, 16),
+                    innerMat
+                );
+                forearmFrame.rotation.x = Math.PI / 2;
+                forearmFrame.position.set(0.05, -0.04, -0.4);
+                armGroup.add(forearmFrame);
+
+                // Top armor plate (main visible surface)
+                const forearmTopPlate = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.22, 0.06, 0.85),
+                    armorMat
+                );
+                forearmTopPlate.position.set(0.05, 0.07, -0.4);
+                armGroup.add(forearmTopPlate);
+
+                // Hazmat warning stripe on top plate
+                const hazmatStripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.18, 0.008, 0.35),
+                    hazmatMat
+                );
+                hazmatStripe.position.set(0.05, 0.102, -0.35);
+                armGroup.add(hazmatStripe);
+
+                // Hazmat chevrons
+                for (let ch = 0; ch < 4; ch++) {
+                    const chevron = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.04, 0.009, 0.06),
+                        new THREE.MeshStandardMaterial({ color: 0x111111 })
+                    );
+                    chevron.position.set(0.05, 0.103, -0.22 - ch * 0.08);
+                    chevron.rotation.y = 0.4;
+                    armGroup.add(chevron);
                 }
 
-                weapon.position.set(0.6, -0.3, -1.5);
-                weapon.rotation.set(0, 0, 0); // Straight ahead
+                // Side armor plates (left & right of forearm)
+                for (let side of [-1, 1]) {
+                    const sidePlate = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.04, 0.14, 0.7),
+                        armorMat
+                    );
+                    sidePlate.position.set(0.05 + 0.12 * side, -0.01, -0.38);
+                    armGroup.add(sidePlate);
+
+                    // Panel line details
+                    for (let pl = 0; pl < 4; pl++) {
+                        const panelLine = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.005, 0.1, 0.015),
+                            new THREE.MeshBasicMaterial({ color: 0x334455 })
+                        );
+                        panelLine.position.set(0.05 + 0.14 * side, -0.01, -0.15 - pl * 0.16);
+                        armGroup.add(panelLine);
+                    }
+                }
+
+                // Bottom plate
+                const forearmBottomPlate = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.16, 0.04, 0.6),
+                    frameMat
+                );
+                forearmBottomPlate.position.set(0.05, -0.12, -0.42);
+                armGroup.add(forearmBottomPlate);
+
+                // === HYDRAULIC PISTONS (2x, side-mounted) ===
+                for (let side of [-1, 1]) {
+                    // Outer cylinder
+                    const pistonOuter = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.025, 0.025, 0.45, 8),
+                        pistonMat
+                    );
+                    pistonOuter.rotation.x = Math.PI / 2;
+                    pistonOuter.position.set(0.05 + 0.09 * side, -0.08, -0.25);
+                    armGroup.add(pistonOuter);
+
+                    // Inner rod (shinier)
+                    const pistonRod = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.012, 0.012, 0.25, 8),
+                        new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.05, metalness: 1.0 })
+                    );
+                    pistonRod.rotation.x = Math.PI / 2;
+                    pistonRod.position.set(0.05 + 0.09 * side, -0.08, -0.55);
+                    armGroup.add(pistonRod);
+
+                    // Piston mount bolts
+                    for (let bz of [-0.05, -0.5]) {
+                        const bolt = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.015, 0.015, 0.03, 6),
+                            jointMat
+                        );
+                        bolt.rotation.z = Math.PI / 2;
+                        bolt.position.set(0.05 + 0.11 * side, -0.08, bz);
+                        armGroup.add(bolt);
+                    }
+                }
+
+                // === ENERGY CONDUIT (Runs along inner forearm) ===
+                const conduit = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.015, 0.015, 0.7, 8),
+                    energyMat
+                );
+                conduit.rotation.x = Math.PI / 2;
+                conduit.position.set(-0.02, -0.06, -0.4);
+                armGroup.add(conduit);
+
+                // Energy conduit nodes
+                for (let en = 0; en < 4; en++) {
+                    const node = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.02, 8, 8),
+                        energyMat
+                    );
+                    node.position.set(-0.02, -0.06, -0.1 - en * 0.2);
+                    armGroup.add(node);
+                }
+
+                // === CABLE BUNDLES (Flexible tubing) ===
+                for (let cb = 0; cb < 2; cb++) {
+                    const cable = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.01, 0.01, 0.8, 6),
+                        cableMat
+                    );
+                    cable.rotation.x = Math.PI / 2;
+                    cable.position.set(0.12, -0.1 + cb * 0.03, -0.4);
+                    armGroup.add(cable);
+                }
+
+                // === WRIST ASSEMBLY ===
+                const wristJoint = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.08, 0.08, 16),
+                    jointMat
+                );
+                wristJoint.rotation.z = Math.PI / 2;
+                wristJoint.position.set(0.05, -0.04, -0.85);
+                armGroup.add(wristJoint);
+
+                // Wrist rotation ring
+                const wristRing = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.09, 0.012, 8, 24),
+                    pistonMat
+                );
+                wristRing.rotation.y = Math.PI / 2;
+                wristRing.position.set(0.05, -0.04, -0.85);
+                armGroup.add(wristRing);
+
+                // Wrist guard plate
+                const wristGuard = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.08, 0.12),
+                    armorMat
+                );
+                wristGuard.position.set(0.05, 0.04, -0.85);
+                armGroup.add(wristGuard);
+
+                // === HAND (Mechanical, articulated) ===
+                const handGroup = new THREE.Group();
+                handGroup.position.set(0.05, -0.04, -0.95);
+                armGroup.add(handGroup);
+
+                // Palm base
+                const palm = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.16, 0.06, 0.12),
+                    innerMat
+                );
+                handGroup.add(palm);
+
+                // Palm armor plate
+                const palmPlate = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.14, 0.02, 0.1),
+                    armorMat
+                );
+                palmPlate.position.set(0, 0.04, 0);
+                handGroup.add(palmPlate);
+
+                // === FINGERS (4 mechanical digits) ===
+                const fingerPositions = [
+                    { x: -0.05, z: -0.06 },
+                    { x: -0.02, z: -0.07 },
+                    { x: 0.02, z: -0.07 },
+                    { x: 0.05, z: -0.06 }
+                ];
+
+                fingerPositions.forEach((fp, idx) => {
+                    const fingerGroup = new THREE.Group();
+                    fingerGroup.position.set(fp.x, -0.01, fp.z);
+
+                    // Proximal segment
+                    const seg1 = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.028, 0.035, 0.07),
+                        innerMat
+                    );
+                    seg1.position.set(0, 0, -0.035);
+                    seg1.rotation.x = -0.3; // Gripping angle
+                    fingerGroup.add(seg1);
+
+                    // Knuckle joint
+                    const knuckle = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.016, 6, 6),
+                        jointMat
+                    );
+                    knuckle.position.set(0, 0, -0.07);
+                    fingerGroup.add(knuckle);
+
+                    // Distal segment
+                    const seg2 = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.024, 0.03, 0.06),
+                        innerMat
+                    );
+                    seg2.position.set(0, -0.015, -0.1);
+                    seg2.rotation.x = -0.5; // More curled
+                    fingerGroup.add(seg2);
+
+                    // Fingertip armor
+                    const tipArmor = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.026, 0.015, 0.025),
+                        armorMat
+                    );
+                    tipArmor.position.set(0, -0.02, -0.12);
+                    tipArmor.rotation.x = -0.6;
+                    fingerGroup.add(tipArmor);
+
+                    handGroup.add(fingerGroup);
+                });
+
+                // === THUMB (Opposing, thicker) ===
+                const thumbGroup = new THREE.Group();
+                thumbGroup.position.set(0.08, -0.01, -0.02);
+                thumbGroup.rotation.z = -0.4;
+
+                const thumbSeg = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.035, 0.035, 0.06),
+                    innerMat
+                );
+                thumbSeg.rotation.x = -0.4;
+                thumbGroup.add(thumbSeg);
+
+                const thumbTip = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.03, 0.03, 0.04),
+                    innerMat
+                );
+                thumbTip.position.set(0, -0.015, -0.05);
+                thumbTip.rotation.x = -0.6;
+                thumbGroup.add(thumbTip);
+
+                const thumbArmor = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.032, 0.015, 0.03),
+                    armorMat
+                );
+                thumbArmor.position.set(0, 0.02, -0.01);
+                thumbGroup.add(thumbArmor);
+
+                handGroup.add(thumbGroup);
+
+                // === ARM STATUS LIGHT ===
+                const statusLight = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.015, 0.015, 0.015),
+                    new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+                );
+                statusLight.position.set(0.17, 0.03, -0.3);
+                armGroup.add(statusLight);
+
+                // === DECORATIVE RIVETS ===
+                const rivetPositions = [
+                    [0.17, 0.07, -0.15], [0.17, 0.07, -0.4], [0.17, 0.07, -0.65],
+                    [-0.07, 0.07, -0.15], [-0.07, 0.07, -0.4], [-0.07, 0.07, -0.65]
+                ];
+                rivetPositions.forEach(rp => {
+                    const rivet = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.008, 0.008, 0.01, 6),
+                        pistonMat
+                    );
+                    rivet.rotation.x = Math.PI / 2;
+                    rivet.position.set(rp[0], rp[1], rp[2]);
+                    armGroup.add(rivet);
+                });
+
+                // === FOREARM ENERGY GLOW LIGHT ===
+                const armGlow = new THREE.PointLight(0x00aaff, 0.4, 2);
+                armGlow.position.set(0.0, -0.06, -0.4);
+                armGroup.add(armGlow);
+
+                // =================================================================
+                // WEAPON ATTACHMENT
+                // =================================================================
+                const weapon = this.getMesh(weaponId);
+
+                // Per-weapon scale & position — weapons 2/3/4 scaled UP significantly
+                const wpScales = {
+                    pistol:   { s: 0.28, x: 0.42, y: -0.15, z: -1.3 },
+                    shotgun:  { s: 0.20, x: 0.38, y: -0.18, z: -1.1 },
+                    ar:       { s: 0.20, x: 0.35, y: -0.14, z: -1.0 },
+                    railgun:  { s: 0.22, x: 0.35, y: -0.12, z: -1.0 },
+                    flare:    { s: 0.22, x: 0.35, y: -0.16, z: -0.9 },
+                    singular: { s: 0.24, x: 0.35, y: -0.12, z: -1.0 },
+                };
+                const wp = wpScales[weaponId] || { s: 0.22, x: 0.4, y: -0.15, z: -1.2 };
+                weapon.scale.set(wp.s, wp.s, wp.s);
+                weapon.position.set(wp.x, wp.y, wp.z);
+                weapon.rotation.set(0, 0, 0);
                 root.add(weapon);
 
                 // Save direct reference to weapon mesh so we can update its color later
@@ -1768,13 +2065,102 @@
 
                 // Muzzle point reference for particle emission
                 const muzzlePoint = new THREE.Object3D();
-                muzzlePoint.position.set(0, 0, -1.2); // Relative to the weapon's local coords
+                muzzlePoint.position.set(0, 0, -1.2);
                 weapon.add(muzzlePoint);
                 root.muzzlePoint = muzzlePoint;
 
                 return root;
             }
         };
+
+        // Respawn / Reset Game Session
+        function respawnPlayer() {
+            gameOver = false;
+            
+            // 1. Reset Stats
+            survivalTime = 0;
+            totalKills = 0;
+            nodesDestroyed = 0;
+            document.getElementById('ui-kills').textContent = '0';
+            document.getElementById('ui-zombies').textContent = '0';
+            document.getElementById('ui-score').textContent = '0';
+            document.getElementById('ui-nodes').textContent = '6 / 6';
+            
+            // 2. Clear Horde
+            activeZombies = 0;
+            spawnedZombies = 0;
+            zState.fill(0);
+            if (zombieMeshes.normal) {
+                zombieMeshes.normal.count = 0;
+                zombieMeshes.puker.count = 0;
+                zombieMeshes.thrower.count = 0;
+                zombieMeshes.normal.instanceMatrix.needsUpdate = true;
+                zombieMeshes.puker.instanceMatrix.needsUpdate = true;
+                zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
+            }
+            
+            // 3. Clear Projectiles
+            bullets.forEach(b => scene.remove(b.mesh));
+            bullets.length = 0;
+            enemyProjectiles.forEach(ep => scene.remove(ep.mesh));
+            enemyProjectiles.length = 0;
+            
+            // 4. Reset Nodes
+            spawnNodes.forEach(node => {
+                node.active = true;
+                node.hp = node.maxHP;
+                if (node.mesh) node.mesh.visible = true;
+                node.respawnTimer = 0;
+                node.spawnTimer = 0;
+            });
+            
+            // 5. Recreate Player (to fix limbs/state)
+            if (player) scene.remove(player);
+            
+            const selectedMod = MainMenu.modData[MainMenu.selectedMod];
+            let aType = "dash";
+            if (selectedMod && selectedMod.id === "plating") aType = "shield";
+            if (selectedMod && selectedMod.id === "neural") aType = "scan";
+            
+            player = new TitanPlayer(scene, { abilityType: aType });
+            player.position.set(0, 0, 0);
+            
+            // 3X Health Boost
+            player.maxHealth = 300;
+            player.health = 300;
+            playerHealth = 300;
+            
+            // Sync References
+            if (perks) perks.player = player;
+            if (campaignTutorial) campaignTutorial.player = player;
+            
+            updateWeaponMesh(); // Re-attach guns to new player
+            
+            if (muzzleFlashLight) {
+                player.add(muzzleFlashLight);
+                muzzleFlashLight.intensity = 0;
+            }
+            
+            // 6. UI Update
+            document.getElementById('ui-health').style.width = '100%';
+            document.getElementById('gameover-overlay').classList.remove('active');
+            
+            // 7. Reset Tutorial
+            if (campaignTutorial) {
+                campaignTutorial.state = 0;
+                campaignTutorial.timer = 0;
+                campaignTutorial.isFinished = false;
+                campaignTutorial.popupActive = false;
+            }
+            
+            // 8. Reset Inventory Ammo
+            inventory.forEach(item => {
+                const cfg = weaponsCfg[item.id];
+                if (cfg) item.ammo = cfg.maxAmmo;
+            });
+            
+            if (window.SFX) SFX.startBGM();
+        }
 
         // Start App Pipeline — called by MainMenu.onStart
         function startGamePipeline() {
@@ -2515,7 +2901,7 @@
                 const nodeCount = spawnNodes.filter(n => n.active).length;
                 document.getElementById('pause-nodes').textContent = (6 - nodeCount) + ' / 6';
                 document.getElementById('pause-kills').textContent = totalKills + ' KILLS';
-                document.getElementById('pause-score').textContent = score;
+                document.getElementById('pause-score').textContent = Math.floor(survivalTime * 10 + totalKills * 5);
                 
                 const healthPerc = Math.ceil(playerHealth);
                 document.getElementById('pause-health-text').textContent = healthPerc + '%';
@@ -2814,60 +3200,164 @@
                 player.leftWeaponMesh.fire();
             }
 
-            // --- MUZZLE FLASH ---
-            muzzleFlashTimer = 0.06;
+            // --- MUZZLE FLASH (Weapon-Specific Intensity) ---
+            const flashIntensity = {
+                pistol: 8, shotgun: 14, ar: 6, railgun: 18, flare: 20, singular: 12
+            };
+            muzzleFlashTimer = weapon.id === 'shotgun' ? 0.1 : (weapon.id === 'railgun' ? 0.15 : 0.06);
             if (muzzleFlashLight) {
                 const wColor = new THREE.Color(weapon.color);
                 muzzleFlashLight.color.copy(wColor);
-                muzzleFlashLight.intensity = 8.0;
+                muzzleFlashLight.intensity = flashIntensity[weapon.id] || 8.0;
                 muzzleFlashLight.position.copy(spawnPos);
             }
 
-            // Muzzle spark particles
+            // Muzzle spark particles — weapon-specific counts and behavior
             const muzzleTip = spawnPos.clone().addScaledVector(baseDir, 0.8);
-            const sparkCount = 8 + Math.floor(Math.random() * 5);
+            const wCol = new THREE.Color(weapon.color);
+
+            // Core flash burst (bright white center)
+            emitParticle(muzzleTip.x, muzzleTip.y, muzzleTip.z, baseDir.x * 2, baseDir.y * 2, baseDir.z * 2, 1.0, 0.98, 0.9, 18, 0.05);
+
+            // Secondary flash ring
+            for (let r = 0; r < 6; r++) {
+                const angle = (r / 6) * Math.PI * 2;
+                const rx = Math.cos(angle) * 3;
+                const ry = Math.sin(angle) * 3;
+                emitParticle(
+                    muzzleTip.x, muzzleTip.y, muzzleTip.z,
+                    baseDir.x * 4 + rx, baseDir.y * 4 + ry, baseDir.z * 4,
+                    1.0, 0.9, 0.7, 6, 0.06
+                );
+            }
+
+            // Directional sparks
+            const sparkCount = weapon.id === 'shotgun' ? 18 : (weapon.id === 'ar' ? 6 : 10);
             for (let s = 0; s < sparkCount; s++) {
                 const sparkDir = baseDir.clone();
-                sparkDir.x += (Math.random() - 0.5) * 0.8;
-                sparkDir.y += (Math.random() - 0.5) * 0.5;
-                sparkDir.z += (Math.random() - 0.5) * 0.8;
-                sparkDir.normalize().multiplyScalar(6 + Math.random() * 14);
-                const wCol = new THREE.Color(weapon.color);
-                const bright = 0.5 + Math.random() * 0.5;
+                const spreadMul = weapon.id === 'shotgun' ? 1.5 : 0.8;
+                sparkDir.x += (Math.random() - 0.5) * spreadMul;
+                sparkDir.y += (Math.random() - 0.5) * 0.6;
+                sparkDir.z += (Math.random() - 0.5) * spreadMul;
+                sparkDir.normalize().multiplyScalar(8 + Math.random() * 16);
+                const bright = 0.6 + Math.random() * 0.4;
                 emitParticle(
                     muzzleTip.x, muzzleTip.y, muzzleTip.z,
                     sparkDir.x, sparkDir.y, sparkDir.z,
                     Math.min(1.0, wCol.r * bright + 0.3), Math.min(1.0, wCol.g * bright + 0.2), Math.min(1.0, wCol.b * bright),
-                    2 + Math.random() * 3, 0.08 + Math.random() * 0.15
+                    2 + Math.random() * 3, 0.1 + Math.random() * 0.2
                 );
             }
-            emitParticle(muzzleTip.x, muzzleTip.y, muzzleTip.z, baseDir.x * 2, baseDir.y * 2, baseDir.z * 2, 1.0, 0.95, 0.8, 14, 0.04);
 
-            // --- RECOIL KICK ---
-            recoilOffset = 0.08;
-            recoilRotation = -0.05;
-            if (isFPSMode) screenShakeIntensity += 0.004 * weapon.pellets;
+            // Smoke puff (dark, slow)
+            for (let sm = 0; sm < 3; sm++) {
+                emitParticle(
+                    muzzleTip.x + (Math.random() - 0.5) * 0.2,
+                    muzzleTip.y + 0.1,
+                    muzzleTip.z + (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.5, 0.8 + Math.random() * 0.5, (Math.random() - 0.5) * 0.5,
+                    0.25, 0.22, 0.2, 5 + Math.random() * 3, 0.4 + Math.random() * 0.3
+                );
+            }
 
-            // --- SHELL CASING ---
-            const rightDir = new THREE.Vector3(sideSign, 0, 0).applyQuaternion(isFPSMode ? cameraFPS.getWorldQuaternion(new THREE.Quaternion()) : player.quaternion);
-            emitParticle(
-                spawnPos.x + rightDir.x * 0.3, spawnPos.y + 0.1, spawnPos.z + rightDir.z * 0.3,
-                rightDir.x * 3 + (Math.random() - 0.5), 2.5 + Math.random() * 2, rightDir.z * 3 + (Math.random() - 0.5),
-                0.85, 0.7, 0.2, 1.5, 0.5
-            );
+            // === WEAPON-SPECIFIC MUZZLE EFFECTS ===
+            if (weapon.id === 'railgun') {
+                // Electric arc particles along the barrel line
+                for (let a = 0; a < 12; a++) {
+                    const t = a / 12;
+                    const arcPos = spawnPos.clone().addScaledVector(baseDir, t * 2.0);
+                    emitParticle(
+                        arcPos.x + (Math.random() - 0.5) * 0.3,
+                        arcPos.y + (Math.random() - 0.5) * 0.3,
+                        arcPos.z + (Math.random() - 0.5) * 0.3,
+                        (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4,
+                        0.3, 0.9, 1.0, 2.5, 0.15
+                    );
+                }
+            } else if (weapon.id === 'flare') {
+                // Heat wave distortion particles
+                for (let hw = 0; hw < 8; hw++) {
+                    const angle = (hw / 8) * Math.PI * 2;
+                    emitParticle(
+                        muzzleTip.x, muzzleTip.y, muzzleTip.z,
+                        Math.cos(angle) * 5 + baseDir.x * 6,
+                        Math.random() * 3,
+                        Math.sin(angle) * 5 + baseDir.z * 6,
+                        1.0, 0.5, 0.1, 6 + Math.random() * 4, 0.2
+                    );
+                }
+            } else if (weapon.id === 'singular') {
+                // Graviton distortion vortex
+                for (let v = 0; v < 10; v++) {
+                    const angle = (v / 10) * Math.PI * 2;
+                    const radius = 0.5 + Math.random() * 0.3;
+                    emitParticle(
+                        muzzleTip.x + Math.cos(angle) * radius,
+                        muzzleTip.y + Math.sin(angle) * radius,
+                        muzzleTip.z,
+                        baseDir.x * 8 - Math.cos(angle) * 3,
+                        baseDir.y * 8 - Math.sin(angle) * 3,
+                        baseDir.z * 8,
+                        0.6, 0.3, 1.0, 3, 0.25
+                    );
+                }
+            }
 
-            // --- bullets ---
+            // --- RECOIL KICK (Weapon-specific intensity) ---
+            const recoilMap = { pistol: 0.06, shotgun: 0.14, ar: 0.04, railgun: 0.12, flare: 0.1, singular: 0.05 };
+            recoilOffset = recoilMap[weapon.id] || 0.08;
+            recoilRotation = -recoilOffset * 0.6;
+            if (isFPSMode) screenShakeIntensity += (weapon.id === 'shotgun' ? 0.012 : weapon.id === 'railgun' ? 0.01 : 0.004) * weapon.pellets;
+
+            // --- SHELL CASING (Only for ballistic weapons) ---
+            if (weapon.id === 'pistol' || weapon.id === 'shotgun' || weapon.id === 'ar') {
+                const rightDir = new THREE.Vector3(sideSign, 0, 0).applyQuaternion(isFPSMode ? cameraFPS.getWorldQuaternion(new THREE.Quaternion()) : player.quaternion);
+                const shellCount = weapon.id === 'shotgun' ? 1 : 1;
+                for (let sc = 0; sc < shellCount; sc++) {
+                    emitParticle(
+                        spawnPos.x + rightDir.x * 0.3, spawnPos.y + 0.1, spawnPos.z + rightDir.z * 0.3,
+                        rightDir.x * 4 + (Math.random() - 0.5), 3.0 + Math.random() * 2.5, rightDir.z * 4 + (Math.random() - 0.5),
+                        0.85, 0.7, 0.2, 1.8, 0.6
+                    );
+                }
+            }
+
+            // --- TRACER BULLETS (Enhanced with glow trail) ---
             const tracerGeo = weapon.id === 'shotgun' ? tracerGeoShotgun : (weapon.id === 'ar' ? tracerGeoAR : tracerGeoPistol);
+
+            // Special tracers for exotic weapons
+            let customTracerGeo = tracerGeo;
+            if (weapon.id === 'railgun') {
+                customTracerGeo = new THREE.BoxGeometry(0.03, 0.03, 2.5); // Long piercing beam
+            } else if (weapon.id === 'flare') {
+                customTracerGeo = new THREE.SphereGeometry(0.12, 8, 8); // Energy ball
+            } else if (weapon.id === 'singular') {
+                customTracerGeo = new THREE.IcosahedronGeometry(0.08, 1); // Graviton shard
+            }
+
             for (let i = 0; i < weapon.pellets; i++) {
-                const bMesh = new THREE.Mesh(tracerGeo, new THREE.MeshBasicMaterial({ color: weapon.color, transparent: true, opacity: 0.9 }));
+                const tracerMat = new THREE.MeshBasicMaterial({
+                    color: weapon.color, transparent: true, opacity: 0.95
+                });
+                const bMesh = new THREE.Mesh(customTracerGeo, tracerMat);
                 bMesh.position.copy(spawnPos);
                 let dir = baseDir.clone();
                 if (weapon.spread > 0) {
-                    const euler = new THREE.Euler((Math.random() - 0.5) * weapon.spread, (Math.random() - 0.5) * weapon.spread, 0, 'YXZ');
+                    const euler = new THREE.Euler(
+                        (Math.random() - 0.5) * weapon.spread,
+                        (Math.random() - 0.5) * weapon.spread,
+                        0, 'YXZ'
+                    );
                     dir.applyEuler(euler);
                 }
                 bMesh.lookAt(bMesh.position.clone().add(dir));
-                bullets.push({ mesh: bMesh, dir, life: 1.5, speed: weapon.speed, damage: weapon.damage, weaponColor: weapon.color });
+
+                // Enhanced bullet data with trail timer
+                bullets.push({
+                    mesh: bMesh, dir, life: 1.5, speed: weapon.speed,
+                    damage: weapon.damage, weaponColor: weapon.color,
+                    trailTimer: 0, weaponId: weapon.id
+                });
                 scene.add(bMesh);
             }
         }
@@ -2939,7 +3429,7 @@
                 playerHealth -= data.frameDamage;
                 player.takeDamage(data.frameDamage);
                 if (Math.random() < 0.3 && window.SFX) SFX.triggerZombieAttack();
-                document.getElementById('ui-health').style.width = Math.max(0, playerHealth) + '%';
+                document.getElementById('ui-health').style.width = Math.max(0, (playerHealth / player.maxHealth) * 100) + '%';
                 damageFlashTimer = 0.3;
                 if (isFPSMode) screenShakeIntensity = Math.max(screenShakeIntensity, 0.02);
                 
@@ -2959,6 +3449,7 @@
         function animate() {
             requestAnimationFrame(animate);
             const delta = Math.min(clock.getDelta(), 0.1);
+            lastDelta = delta;
 
             if (!player || !zombieMeshes.normal) return;
 
@@ -3088,8 +3579,14 @@
                 player.aimPitch = cameraFPS.rotation.x * 0.5;
                 // Natural camera bob
                 const cBob = (moveX !== 0 || moveZ !== 0) ? Math.abs(Math.sin(player.walkTime * 2.5)) * 0.12 : 0;
-                // Sync camera position & rotation to player's world state (Perfect Human Height 1.5 units)
-                cameraFPS.position.set(player.position.x, player.position.y + 1.5 + cBob, player.position.z);
+                // Sync camera position with forward offset to avoid body clipping
+                const camForward = new THREE.Vector3(0, 0, 0.5).applyQuaternion(player.quaternion);
+                cameraFPS.position.set(
+                    player.position.x + camForward.x,
+                    player.position.y + 1.5 + cBob,
+                    player.position.z + camForward.z
+                );
+
                 // Sync yaw from player, keep local pitch from mousemove
                 cameraFPS.rotation.set(cameraFPS.rotation.x, player.rotation.y, 0, 'YXZ');
             } else {
@@ -3135,8 +3632,9 @@
                 fpsViewmodel.rotation.x *= Math.pow(0.001, delta);
 
                 // Combine Bob and Recoil
-                fpsViewmodel.position.x = bobX;
-                fpsViewmodel.position.y = bobY;
+                // Slightly further right/down to clear vision (x was 0, now 0.05; y was 0, now -0.05)
+                fpsViewmodel.position.x = bobX + 0.05;
+                fpsViewmodel.position.y = bobY - 0.05;
 
                 // Update procedural weapon internal states
                 if (fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.update === 'function') {
@@ -3355,7 +3853,7 @@
                 playerHealth -= frameDamage;
                 player.takeDamage(frameDamage); // Synergize with Titan limb destruction
                 if (Math.random() < 0.3) SFX.triggerZombieAttack(); // Play growl when damaged
-                document.getElementById('ui-health').style.width = Math.max(0, playerHealth) + '%';
+                document.getElementById('ui-health').style.width = Math.max(0, (playerHealth / player.maxHealth) * 100) + '%';
                 damageFlashTimer = 0.3;
                 if (isFPSMode) screenShakeIntensity = Math.max(screenShakeIntensity, 0.02);
                 if (playerHealth <= 0 && !gameOver) {
@@ -3383,30 +3881,89 @@
 
                 b.mesh.position.addScaledVector(b.dir, b.speed * delta);
 
-                // --- BULLET TRAIL PARTICLES ---
+                // --- BULLET TRAIL PARTICLES (Weapon-Specific) ---
                 if (b.trailTimer !== undefined) {
                     b.trailTimer -= delta;
+                    const trailRate = b.weaponId === 'railgun' ? 0.012 : (b.weaponId === 'flare' ? 0.018 : 0.022);
                     if (b.trailTimer <= 0) {
-                        b.trailTimer = 0.025;
+                        b.trailTimer = trailRate;
                         const wCol = new THREE.Color(b.weaponColor || 0xffaa00);
-                        emitParticle(
-                            b.mesh.position.x, b.mesh.position.y, b.mesh.position.z,
-                            (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4,
-                            wCol.r * 0.5, wCol.g * 0.5, wCol.b * 0.5,
-                            1.0 + Math.random(), 0.12
-                        );
+
+                        if (b.weaponId === 'railgun') {
+                            // Electric ionization trail — bright cyan with lateral sparks
+                            emitParticle(
+                                b.mesh.position.x + (Math.random() - 0.5) * 0.15,
+                                b.mesh.position.y + (Math.random() - 0.5) * 0.15,
+                                b.mesh.position.z + (Math.random() - 0.5) * 0.15,
+                                (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2,
+                                0.3, 0.85, 1.0, 2.0, 0.18
+                            );
+                            // Secondary spark
+                            if (Math.random() < 0.4) {
+                                emitParticle(
+                                    b.mesh.position.x, b.mesh.position.y, b.mesh.position.z,
+                                    (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5,
+                                    0.5, 0.95, 1.0, 1.5, 0.08
+                                );
+                            }
+                        } else if (b.weaponId === 'flare') {
+                            // Ember trail — orange/red with rising heat particles
+                            emitParticle(
+                                b.mesh.position.x, b.mesh.position.y, b.mesh.position.z,
+                                (Math.random() - 0.5) * 1.0, 0.5 + Math.random() * 1.5, (Math.random() - 0.5) * 1.0,
+                                1.0, 0.4 + Math.random() * 0.3, 0.05, 2.5 + Math.random() * 2, 0.2
+                            );
+                            // Smoke
+                            if (Math.random() < 0.3) {
+                                emitParticle(
+                                    b.mesh.position.x, b.mesh.position.y + 0.1, b.mesh.position.z,
+                                    (Math.random() - 0.5) * 0.3, 0.5 + Math.random() * 0.3, (Math.random() - 0.5) * 0.3,
+                                    0.2, 0.18, 0.15, 4, 0.35
+                                );
+                            }
+                        } else if (b.weaponId === 'singular') {
+                            // Graviton spiral — purple with orbital trail
+                            const spiralAngle = b.life * 20;
+                            const spiralR = 0.15;
+                            emitParticle(
+                                b.mesh.position.x + Math.cos(spiralAngle) * spiralR,
+                                b.mesh.position.y + Math.sin(spiralAngle) * spiralR,
+                                b.mesh.position.z,
+                                -b.dir.x * 1.5 + (Math.random() - 0.5) * 1.5,
+                                -b.dir.y * 1.5 + (Math.random() - 0.5) * 1.5,
+                                -b.dir.z * 1.5 + (Math.random() - 0.5) * 1.5,
+                                0.55, 0.25, 0.95, 2.0, 0.2
+                            );
+                        } else {
+                            // Standard ballistic trail
+                            emitParticle(
+                                b.mesh.position.x, b.mesh.position.y, b.mesh.position.z,
+                                (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5,
+                                wCol.r * 0.6, wCol.g * 0.6, wCol.b * 0.6,
+                                1.2 + Math.random(), 0.14
+                            );
+                        }
                     }
                 }
 
                 if (mapManager.getCostAt(b.mesh.position.x, b.mesh.position.z) === 255) {
-                    // Wall impact sparks
-                    for (let sp = 0; sp < 5; sp++) {
+                    // Wall impact — weapon-specific effects
+                    const impactCount = b.weaponId === 'shotgun' ? 8 : (b.weaponId === 'railgun' ? 12 : 6);
+                    const impCol = new THREE.Color(b.weaponColor || 0xffaa00);
+                    for (let sp = 0; sp < impactCount; sp++) {
                         emitParticle(
                             b.mesh.position.x, b.mesh.position.y || 1.0, b.mesh.position.z,
-                            (Math.random() - 0.5) * 6, Math.random() * 3, (Math.random() - 0.5) * 6,
-                            1.0, 0.8, 0.3, 2, 0.15
+                            (Math.random() - 0.5) * 8, Math.random() * 4, (Math.random() - 0.5) * 8,
+                            Math.min(1.0, impCol.r + 0.3), Math.min(1.0, impCol.g + 0.2), impCol.b,
+                            2.5, 0.12 + Math.random() * 0.1
                         );
                     }
+                    // Scorch mark particle (dark, long-lived)
+                    emitParticle(
+                        b.mesh.position.x, 0.05, b.mesh.position.z,
+                        0, 0.1, 0,
+                        0.1, 0.08, 0.06, 1.5, 8.0
+                    );
                     scene.remove(b.mesh);
                     bullets.splice(i, 1);
                     continue;

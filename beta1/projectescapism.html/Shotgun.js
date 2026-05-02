@@ -134,6 +134,84 @@ class Shotgun extends THREE.Group {
         this.muzzleLight = new THREE.PointLight(0xffaa00, 0, 5);
         this.muzzleLight.position.set(0, 0.2, -3.6);
         this.add(this.muzzleLight);
+
+        // === 7. SHELL HOLDER (Side-mounted, 3 visible shells) ===
+        for (let i = 0; i < 3; i++) {
+            const shellGroup = new THREE.Group();
+
+            const shellHull = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.04, 0.04, 0.18, 8),
+                this.redShellMat
+            );
+            shellGroup.add(shellHull);
+
+            const shellBrass = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.042, 0.042, 0.06, 8),
+                this.brassMat
+            );
+            shellBrass.position.set(0, -0.06, 0);
+            shellGroup.add(shellBrass);
+
+            shellGroup.rotation.x = Math.PI / 2;
+            shellGroup.rotation.z = Math.PI / 2;
+            shellGroup.position.set(-0.2, 0.15, -0.1 + i * 0.22);
+            this.receiverGroup.add(shellGroup);
+        }
+
+        // === 8. HEAT SHIELD (Barrel shroud) ===
+        for (let i = 0; i < 8; i++) {
+            const shieldRing = new THREE.Mesh(
+                new THREE.TorusGeometry(0.11, 0.01, 6, 16),
+                this.metalMat
+            );
+            shieldRing.rotation.y = Math.PI / 2;
+            shieldRing.position.set(0, 0.2, -1.2 - i * 0.22);
+            this.receiverGroup.add(shieldRing);
+        }
+
+        // Heat shield top vent strip
+        const heatVent = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.01, 1.6),
+            this.metalMat
+        );
+        heatVent.position.set(0, 0.32, -2.0);
+        this.receiverGroup.add(heatVent);
+
+        // === 9. SLING MOUNT POINTS ===
+        // Front sling swivel
+        const frontSling = new THREE.Mesh(
+            new THREE.TorusGeometry(0.03, 0.006, 6, 12),
+            this.metalMat
+        );
+        frontSling.position.set(0, -0.1, -2.6);
+        this.add(frontSling);
+
+        // Rear sling swivel
+        const rearSling = new THREE.Mesh(
+            new THREE.TorusGeometry(0.03, 0.006, 6, 12),
+            this.metalMat
+        );
+        rearSling.position.set(0, -0.1, 1.6);
+        this.add(rearSling);
+
+        // === 10. RECEIVER DETAILS ===
+        // Action bar lock
+        const actionLock = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.02, 0.02, 0.04, 6),
+            this.metalMat
+        );
+        actionLock.rotation.z = Math.PI / 2;
+        actionLock.position.set(-0.15, 0.0, 0.1);
+        this.receiverGroup.add(actionLock);
+
+        // Safety button
+        const safety = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.015, 0.015, 0.06, 6),
+            new THREE.MeshStandardMaterial({ color: 0xff2200, roughness: 0.5 })
+        );
+        safety.rotation.z = Math.PI / 2;
+        safety.position.set(0.16, 0.2, 0.4);
+        this.receiverGroup.add(safety);
     }
 
     fire() {
