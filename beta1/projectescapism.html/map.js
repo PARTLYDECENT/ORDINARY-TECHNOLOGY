@@ -169,12 +169,14 @@ class MapManager {
         const rocks = new THREE.InstancedMesh(this.rockGeo, this.rockMat, 400);
         const debris = new THREE.InstancedMesh(this.debrisGeo, this.debrisMat, 200);
         const barrels = new THREE.InstancedMesh(this.barrelGeo, this.barrelMat, 100);
+        const pipes = new THREE.InstancedMesh(FacilityGen.pipeGeo, FacilityGen.pipeMat, 800);
+        const steam = new THREE.InstancedMesh(FacilityGen.steamGeo, FacilityGen.steamMat, 150);
 
-        [walls, floors, pillars, trees, rocks, debris, barrels].forEach(m => {
+        [walls, floors, pillars, trees, rocks, debris, barrels, pipes, steam].forEach(m => {
             m.castShadow = true; m.receiveShadow = true;
         });
         
-        let wCount = 0, fCount = 0, pCount = 0, tCount = 0, rCount = 0, dCount = 0, brlCount = 0;
+        let wCount = 0, fCount = 0, pCount = 0, tCount = 0, rCount = 0, dCount = 0, brlCount = 0, pipeCount = 0, steamCount = 0;
         const dummy = new THREE.Object3D();
 
         // 1. Procedural Building Generation (BSP)
@@ -332,13 +334,69 @@ class MapManager {
             }
         }
 
+        // 2. Sprawling Industrial Pipe Network
+        for (let i = 0; i < 12; i++) {
+            const startX = Math.random() * this.chunkSize;
+            const startZ = Math.random() * this.chunkSize;
+            const dir = Math.random() > 0.5 ? 'x' : 'z';
+            const length = 12 + Math.floor(Math.random() * 20);
+            const height = 0.5 + Math.random() * 4.0;
+            const pipeSpacing = 1.0;
+
+            for (let l = 0; l < length; l++) {
+                if (pipeCount >= 800) break;
+                const px = dir === 'x' ? startX + l * pipeSpacing : startX;
+                const pz = dir === 'z' ? startZ + l * pipeSpacing : startZ;
+                
+                // Keep within chunk bounds
+                if (px < 0 || px >= this.chunkSize || pz < 0 || pz >= this.chunkSize) continue;
+
+                const terrainH = TerrainGen.getMeshHeight(px + worldOffsetX, pz + worldOffsetZ);
+                dummy.position.set(px, terrainH + height, pz);
+                
+                // Orientation
+                dummy.rotation.set(0, 0, 0);
+                if (dir === 'x') {
+                    dummy.rotation.z = Math.PI / 2;
+                } else {
+                    dummy.rotation.x = Math.PI / 2;
+                }
+                
+                dummy.scale.set(1.02, 1.02, 1.02); // slight overlap to connect
+                dummy.updateMatrix();
+                pipes.setMatrixAt(pipeCount++, dummy.matrix);
+
+                // Add Pipe Supports (Pillars) occasionally if elevated
+                if (height > 1.5 && l % 8 === 0 && pCount < 1000) {
+                    dummy.position.y = terrainH;
+                    dummy.rotation.set(0, 0, 0);
+                    dummy.scale.set(0.1, height / (this.config.cellSize * 1.8), 0.1);
+                    dummy.updateMatrix();
+                    pillars.setMatrixAt(pCount++, dummy.matrix);
+                }
+
+                // Random Steam Emission at joints/intervals
+                if (Math.random() < 0.04 && steamCount < 150) {
+                    dummy.position.set(px, terrainH + height, pz);
+                    dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+                    dummy.scale.setScalar(0.4 + Math.random() * 0.6);
+                    dummy.updateMatrix();
+                    steam.setMatrixAt(steamCount++, dummy.matrix);
+                }
+            }
+        }
+
         walls.count = wCount; floors.count = fCount; pillars.count = pCount; trees.count = tCount; rocks.count = rCount; debris.count = dCount; barrels.count = brlCount;
+        pipes.count = pipeCount; steam.count = steamCount;
+        
         chunkGroup.add(walls); chunkGroup.add(floors); chunkGroup.add(pillars); chunkGroup.add(trees); chunkGroup.add(rocks); chunkGroup.add(debris); chunkGroup.add(barrels);
+        chunkGroup.add(pipes); chunkGroup.add(steam);
 
         this.chunks.set(key, {
             group: chunkGroup,
             costField: costField,
-            walls: walls, floors: floors, pillars: pillars, trees: trees, rocks: rocks, debris: debris, barrels: barrels
+            walls: walls, floors: floors, pillars: pillars, trees: trees, rocks: rocks, debris: debris, barrels: barrels,
+            pipes: pipes, steam: steam
         });
     }
 

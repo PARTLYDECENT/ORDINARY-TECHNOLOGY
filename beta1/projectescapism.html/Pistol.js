@@ -19,8 +19,29 @@ class Pistol extends THREE.Group {
         this.tracers = [];
 
         // Materials
-        this.polyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8, metalness: 0.2 });
-        this.metalMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.7 });
+        const loader = new THREE.TextureLoader();
+        const gunTex = loader.load('./assets/tactical_texture.png');
+        gunTex.wrapS = gunTex.wrapT = THREE.RepeatWrapping;
+        gunTex.repeat.set(2, 2);
+
+        this.polyMat = new THREE.MeshStandardMaterial({ 
+            color: 0x1e293b, 
+            map: gunTex,
+            roughness: 0.6, 
+            metalness: 0.4,
+            emissive: 0xff0000,
+            emissiveMap: gunTex,
+            emissiveIntensity: 0.4
+        });
+        this.metalMat = new THREE.MeshStandardMaterial({ 
+            color: 0x334155, 
+            map: gunTex,
+            roughness: 0.3, 
+            metalness: 0.85,
+            emissive: 0xff0000,
+            emissiveMap: gunTex,
+            emissiveIntensity: 0.7
+        });
         this.barrelMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.3, metalness: 0.9 });
         this.brassMat = new THREE.MeshStandardMaterial({ color: 0xb5943b, metalness: 0.8, roughness: 0.2 });
         this.dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
@@ -33,16 +54,16 @@ class Pistol extends THREE.Group {
         const frameGroup = new THREE.Group();
         this.add(frameGroup);
 
-        const gripGeo = new THREE.BoxGeometry(0.3, 1.2, 0.5);
+        const gripGeo = new THREE.BoxGeometry(0.18, 1.2, 0.5);
         const grip = new THREE.Mesh(gripGeo, this.polyMat);
         grip.position.set(0, -0.6, 0.2);
         grip.rotation.x = Math.PI * 0.1;
         grip.castShadow = true;
         frameGroup.add(grip);
 
-        const receiverGeo = new THREE.BoxGeometry(0.32, 0.25, 1.6);
+        const receiverGeo = new THREE.BoxGeometry(0.2, 0.25, 1.7);
         const receiver = new THREE.Mesh(receiverGeo, this.polyMat);
-        receiver.position.set(0, 0.1, -0.2);
+        receiver.position.set(0, 0.1, -0.25);
         receiver.castShadow = true;
         frameGroup.add(receiver);
 
@@ -56,30 +77,30 @@ class Pistol extends THREE.Group {
         this.triggerMesh.position.set(0, -0.1, -0.35);
         frameGroup.add(this.triggerMesh);
 
-        const barrelGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.6, 16);
+        const barrelGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.7, 16);
         const barrel = new THREE.Mesh(barrelGeo, this.barrelMat);
         barrel.rotation.x = Math.PI / 2;
-        barrel.position.set(0, 0.35, -0.2);
+        barrel.position.set(0, 0.35, -0.25);
         frameGroup.add(barrel);
 
         // --- B. Upper Slide (Blowback) ---
         this.slideGroup = new THREE.Group();
         this.add(this.slideGroup);
 
-        const slideTop = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 1.6), this.metalMat);
-        slideTop.position.set(0, 0.5, -0.2);
+        const slideTop = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 1.7), this.metalMat);
+        slideTop.position.set(0, 0.5, -0.25);
         this.slideGroup.add(slideTop);
 
-        const slideLeft = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.25, 1.6), this.metalMat);
-        slideLeft.position.set(-0.145, 0.35, -0.2);
+        const slideLeft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.25, 1.7), this.metalMat);
+        slideLeft.position.set(-0.095, 0.35, -0.25);
         this.slideGroup.add(slideLeft);
 
-        const slideRightFront = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.25, 0.8), this.metalMat);
-        slideRightFront.position.set(0.145, 0.35, -0.6);
+        const slideRightFront = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.25, 0.9), this.metalMat);
+        slideRightFront.position.set(0.095, 0.35, -0.65);
         this.slideGroup.add(slideRightFront);
 
-        const slideRightBack = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.25, 0.5), this.metalMat);
-        slideRightBack.position.set(0.145, 0.35, 0.35);
+        const slideRightBack = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.25, 0.5), this.metalMat);
+        slideRightBack.position.set(0.095, 0.35, 0.35);
         this.slideGroup.add(slideRightBack);
 
         // Lights / Sights
@@ -99,7 +120,7 @@ class Pistol extends THREE.Group {
                     new THREE.BoxGeometry(0.01, 0.08, 0.04),
                     this.polyMat
                 );
-                ridge.position.set(0.16 * side, -0.35 - i * 0.09, 0.2);
+                ridge.position.set(0.1 * side, -0.35 - i * 0.09, 0.2);
                 ridge.rotation.x = Math.PI * 0.1;
                 frameGroup.add(ridge);
             }
@@ -128,7 +149,7 @@ class Pistol extends THREE.Group {
             new THREE.BoxGeometry(0.04, 0.06, 0.04),
             this.metalMat
         );
-        magRelease.position.set(0.16, -0.15, 0.05);
+        magRelease.position.set(0.1, -0.15, 0.05);
         frameGroup.add(magRelease);
 
         // === ACCESSORY RAIL (Under barrel) ===

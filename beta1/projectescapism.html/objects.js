@@ -2,7 +2,7 @@
  * OBJECT FACTORY: High-Fidelity Environmental Debris & Special Effects
  */
 const ObjectFactory = {
-    _safeMerge: function(geometries) {
+    _safeMerge: function (geometries) {
         if (!THREE.BufferGeometryUtils) return geometries[0];
         const sanitized = geometries.map(g => {
             let clone = g.index ? g.toNonIndexed() : g.clone();
@@ -20,7 +20,7 @@ const ObjectFactory = {
     thrownRockGeo: null,
     weaponCrateGeo: null,
 
-    init: function() {
+    init: function () {
         this.rockGeo = this._createRockGeo();
         this.debrisGeo = this._createDebrisGeo();
         this.barrelGeo = this._createBarrelGeo();
@@ -30,23 +30,23 @@ const ObjectFactory = {
         this.weaponCrateGeo = this._createWeaponCrateGeo();
     },
 
-    getRockGeo: function() { return this.rockGeo || (this.rockGeo = this._createRockGeo()); },
-    getDebrisGeo: function() { return this.debrisGeo || (this.debrisGeo = this._createDebrisGeo()); },
-    getBarrelGeo: function() { return this.barrelGeo || (this.barrelGeo = this._createBarrelGeo()); },
-    getFireGeo: function() { return this.fireGeo || (this.fireGeo = this._createFireGeo()); },
-    getPukePuddleGeo: function() { return this.pukePuddleGeo || (this.pukePuddleGeo = this._createPukePuddleGeo()); },
-    getThrownRockGeo: function() { return this.thrownRockGeo || (this.thrownRockGeo = this._createThrownRockGeo()); },
-    getWeaponCrateGeo: function() { return this.weaponCrateGeo || (this.weaponCrateGeo = this._createWeaponCrateGeo()); },
+    getRockGeo: function () { return this.rockGeo || (this.rockGeo = this._createRockGeo()); },
+    getDebrisGeo: function () { return this.debrisGeo || (this.debrisGeo = this._createDebrisGeo()); },
+    getBarrelGeo: function () { return this.barrelGeo || (this.barrelGeo = this._createBarrelGeo()); },
+    getFireGeo: function () { return this.fireGeo || (this.fireGeo = this._createFireGeo()); },
+    getPukePuddleGeo: function () { return this.pukePuddleGeo || (this.pukePuddleGeo = this._createPukePuddleGeo()); },
+    getThrownRockGeo: function () { return this.thrownRockGeo || (this.thrownRockGeo = this._createThrownRockGeo()); },
+    getWeaponCrateGeo: function () { return this.weaponCrateGeo || (this.weaponCrateGeo = this._createWeaponCrateGeo()); },
 
     // --- Geometry Generators ---
 
-    _createRockGeo: function() {
+    _createRockGeo: function () {
         const parts = [];
-        const base = new THREE.DodecahedronGeometry(0.4, 0); 
+        const base = new THREE.DodecahedronGeometry(0.4, 0);
         base.translate(0, 0.2, 0);
         if (base.attributes.uv) base.deleteAttribute('uv');
         parts.push(base);
-        
+
         for (let i = 0; i < 3; i++) {
             const chip = new THREE.BoxGeometry(0.2, 0.2, 0.2);
             chip.rotateX(Math.random() * Math.PI);
@@ -58,47 +58,47 @@ const ObjectFactory = {
         return this._safeMerge(parts);
     },
 
-    _createDebrisGeo: function() {
+    _createDebrisGeo: function () {
         const parts = [];
         const concrete = new THREE.BoxGeometry(0.8, 0.15, 0.4);
         concrete.rotateY(0.5);
         if (concrete.attributes.uv) concrete.deleteAttribute('uv');
         parts.push(concrete);
-        
+
         const rebar = new THREE.CylinderGeometry(0.015, 0.015, 1.2, 4);
         rebar.rotateZ(Math.PI / 2);
         rebar.translate(0, 0, 0.1);
         if (rebar.attributes.uv) rebar.deleteAttribute('uv');
         parts.push(rebar);
-        
+
         const rebar2 = rebar.clone();
         rebar2.translate(0, 0, -0.2);
         rebar2.rotateY(0.3);
         parts.push(rebar2);
-        
+
         return this._safeMerge(parts);
     },
 
-    _createBarrelGeo: function() {
+    _createBarrelGeo: function () {
         const parts = [];
         const body = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 12);
         if (body.attributes.uv) body.deleteAttribute('uv');
         parts.push(body);
-        
+
         const ring1 = new THREE.TorusGeometry(0.31, 0.02, 8, 16);
         ring1.rotateX(Math.PI / 2);
         ring1.translate(0, 0.2, 0);
         if (ring1.attributes.uv) ring1.deleteAttribute('uv');
         parts.push(ring1);
-        
+
         const ring2 = ring1.clone();
-        ring2.translate(0, -0.4, 0); 
+        ring2.translate(0, -0.4, 0);
         parts.push(ring2);
-        
+
         return this._safeMerge(parts);
     },
 
-    _createFireGeo: function() {
+    _createFireGeo: function () {
         const parts = [];
         for (let i = 0; i < 3; i++) {
             const cone = new THREE.ConeGeometry(0.15 - i * 0.03, 0.6 + i * 0.2, 6);
@@ -109,25 +109,25 @@ const ObjectFactory = {
         return this._safeMerge(parts);
     },
 
-    _createPukePuddleGeo: function() {
+    _createPukePuddleGeo: function () {
         const parts = [];
         const base = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 12);
         base.translate(0, 0.025, 0);
         if (base.attributes.uv) base.deleteAttribute('uv');
         parts.push(base);
 
-        for(let i=0; i<3; i++){
+        for (let i = 0; i < 3; i++) {
             const blob = new THREE.CylinderGeometry(0.3, 0.3, 0.08, 8);
-            blob.translate((Math.random()-0.5)*0.8, 0.04, (Math.random()-0.5)*0.8);
+            blob.translate((Math.random() - 0.5) * 0.8, 0.04, (Math.random() - 0.5) * 0.8);
             if (blob.attributes.uv) blob.deleteAttribute('uv');
             parts.push(blob);
         }
         return this._safeMerge(parts);
     },
 
-    _createThrownRockGeo: function() {
+    _createThrownRockGeo: function () {
         const parts = [];
-        const base = new THREE.DodecahedronGeometry(0.2, 0); 
+        const base = new THREE.DodecahedronGeometry(0.2, 0);
         if (base.attributes.uv) base.deleteAttribute('uv');
         parts.push(base);
         for (let i = 0; i < 2; i++) {
@@ -141,13 +141,13 @@ const ObjectFactory = {
         return this._safeMerge(parts);
     },
 
-    _createWeaponCrateGeo: function() {
+    _createWeaponCrateGeo: function () {
         const parts = [];
         const base = new THREE.BoxGeometry(0.8, 0.5, 0.4);
         base.translate(0, 0.25, 0);
         if (base.attributes.uv) base.deleteAttribute('uv');
         parts.push(base);
-        
+
         // Straps/Bands
         const band1 = new THREE.BoxGeometry(0.85, 0.55, 0.05);
         band1.translate(0, 0.25, 0.1);
@@ -164,7 +164,7 @@ const ObjectFactory = {
 
     // --- Materials & Shaders ---
 
-    getRockMat: function() {
+    getRockMat: function () {
         const mat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9, metalness: 0.05 });
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
@@ -207,9 +207,9 @@ const ObjectFactory = {
         return mat;
     },
 
-    getPukeMat: function() {
-        const mat = new THREE.MeshStandardMaterial({ 
-            color: 0x4ade80, 
+    getPukeMat: function () {
+        const mat = new THREE.MeshStandardMaterial({
+            color: 0x4ade80,
             emissive: 0x16a34a,
             emissiveIntensity: 0.5,
             roughness: 0.1,
@@ -217,7 +217,7 @@ const ObjectFactory = {
             transparent: true,
             opacity: 0.8
         });
-        
+
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             shader.fragmentShader = `
@@ -244,12 +244,12 @@ const ObjectFactory = {
         return mat;
     },
 
-    getThrownRockMat: function() {
+    getThrownRockMat: function () {
         return new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 1.0, metalness: 0.0 });
     },
 
-    getScrapMat: function() {
-        const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7, metalness: 0.8 }); 
+    getScrapMat: function () {
+        const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7, metalness: 0.8 });
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             mat.userData.shader = shader;
@@ -279,7 +279,7 @@ const ObjectFactory = {
         return mat;
     },
 
-    getBarrelMat: function() {
+    getBarrelMat: function () {
         // We use emissive: white and color it inside the shader instead of setting emissive property
         const mat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4, metalness: 0.6, emissive: 0xffffff, emissiveIntensity: 1.0 });
         mat.onBeforeCompile = (shader) => {
@@ -330,7 +330,7 @@ const ObjectFactory = {
         return mat;
     },
 
-    getFireMat: function() {
+    getFireMat: function () {
         const mat = new THREE.MeshStandardMaterial({
             color: 0xff4500, // Safety orange
             emissive: 0xff2200,
@@ -338,7 +338,7 @@ const ObjectFactory = {
             transparent: true,
             opacity: 0.85
         });
-        
+
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             shader.vertexShader = `
@@ -364,7 +364,7 @@ const ObjectFactory = {
         return mat;
     },
 
-    getWeaponCrateMat: function() {
+    getWeaponCrateMat: function () {
         const mat = new THREE.MeshStandardMaterial({
             color: 0x2233aa,
             emissive: 0x00aaff,

@@ -42,7 +42,7 @@ const MainMenu = {
     loreStrings: [
         'CHASSIS #1997 — SPECIAL UNIT 76 — STATUS: DORMANT',
         'MAYA_ENGINE V1.4 // NEURAL LINK CALIBRATING...',
-        'HIVE NODE NETWORK: 6 ACTIVE SIGNATURES DETECTED',
+        'HIVE NODE NETWORK: 2 ACTIVE SIGNATURES DETECTED',
         'THREAT LEVEL: EXTINCTION // RECOMMENDED: IMMEDIATE DEPLOYMENT',
         'INFECTION VECTOR: UNKNOWN // ORIGIN: SUBLEVEL 9',
         'ARSENAL STATUS: SERVICE PISTOL LOADED // TACTICAL SHOTGUN — LOCKED',
@@ -83,7 +83,7 @@ const MainMenu = {
 
     missionLogs: [
         { id: '1996-01', status: 'FAILURE', chassis: '#1996', result: 'Destroyed in Sector B. Neural link severed.', date: '2026-04-01' },
-        { id: '1997-01', status: 'SUCCESS', chassis: '#1997', result: 'Sector A cleared. 6 Hive Nodes neutralized.', date: '2026-04-03' },
+        { id: '1997-01', status: 'SUCCESS', chassis: '#1997', result: 'Sector A cleared. 2 Hive Nodes neutralized.', date: '2026-04-03' },
         { id: '1995-12', status: 'MIA', chassis: '#1995', result: 'Signal lost in Facility Deeps. Last seen: Sublevel 9.', date: '2026-03-30' },
         { id: '1997-02', status: 'ACTIVE', chassis: '#1997', result: 'Awaiting deployment to next priority sector.', date: 'PRESENT' },
     ],
@@ -114,7 +114,7 @@ const MainMenu = {
     dossierEntries: [
         {
             title: 'THE INFECTION',
-            content: 'Origin unknown. First contact: Sublevel 9 of Facility Prometheus. The viral agent converts organic matter into weaponized biomass within 47 seconds of exposure. No known cure. Six Hive Nodes sustain the infection\'s neural network — destroy them all to sever the swarm\'s coordination.'
+            content: 'Origin unknown. First contact: Sublevel 9 of Facility Prometheus. The viral agent converts organic matter into weaponized biomass within 47 seconds of exposure. No known cure. Two Hive Nodes sustain the infection\'s neural network — destroy them all to sever the swarm\'s coordination.'
         },
         {
             title: 'THE TITAN — CHASSIS #1997',
@@ -134,7 +134,7 @@ const MainMenu = {
         }
     ],
 
-    init: function() {
+    init: function () {
         this.canvas = document.getElementById('menu-canvas');
         if (!this.canvas) return;
         this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
@@ -159,14 +159,14 @@ const MainMenu = {
         this.animate();
     },
 
-    resize: function() {
+    resize: function () {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.canvas.width = this.width;
         this.canvas.height = this.height;
     },
 
-    initParticles: function() {
+    initParticles: function () {
         // Floating ember/spore particles
         for (let i = 0; i < 120; i++) {
             this.ambientParticles.push({
@@ -183,7 +183,7 @@ const MainMenu = {
         }
     },
 
-    initDataStreams: function() {
+    initDataStreams: function () {
         // Vertical data rain columns
         for (let i = 0; i < 25; i++) {
             this.dataStreams.push({
@@ -197,7 +197,7 @@ const MainMenu = {
         }
     },
 
-    initHexGrid: function() {
+    initHexGrid: function () {
         const hexSize = 60;
         const rows = Math.ceil(this.height / (hexSize * 1.5)) + 2;
         const cols = Math.ceil(this.width / (hexSize * Math.sqrt(3))) + 2;
@@ -215,7 +215,7 @@ const MainMenu = {
         }
     },
 
-    handleClick: function(e) {
+    handleClick: function (e) {
         if (!this.active || this.fadeOut) return;
 
         // Check sub-menu back button
@@ -273,7 +273,7 @@ const MainMenu = {
         }
     },
 
-    handleKey: function(e) {
+    handleKey: function (e) {
         if (!this.active || this.fadeOut) return;
 
         if (this.subMenuActive) {
@@ -293,7 +293,7 @@ const MainMenu = {
         }
     },
 
-    selectItem: function(index) {
+    selectItem: function (index) {
         const item = this.menuItems[index];
         this.selectedIndex = index;
         if (window.SFX) window.SFX.triggerUI();
@@ -329,7 +329,7 @@ const MainMenu = {
         }
     },
 
-    triggerDeploy: function(mode = 'campaign') {
+    triggerDeploy: function (mode = 'campaign') {
         this.deployMode = mode;
         this.fadeOut = true;
         this.fadeOutAlpha = 0;
@@ -337,23 +337,23 @@ const MainMenu = {
         this.glitchActive = true;
         this.glitchDuration = 0.8;
         this.glitchTimer = 0;
-        
+
         if (window.SFX) window.SFX.startBGM();
     },
 
-    stop: function() {
+    stop: function () {
         this.active = false;
         if (window.MenuBG) window.MenuBG.stop();
         const menuEl = document.getElementById('main-menu');
         if (menuEl) menuEl.style.display = 'none';
-        
+
         // Hide the cinematic border so it doesn't carry into the game world
         const borderEl = document.getElementById('cinematic-border');
         if (borderEl) borderEl.style.display = 'none';
     },
 
     // --- DRAWING ---
-    animate: function() {
+    animate: function () {
         if (!this.active) return;
         this.time += 0.016;
         this.loreTimer += 0.016;
@@ -412,7 +412,7 @@ const MainMenu = {
         requestAnimationFrame(() => this.animate());
     },
 
-    updateHover: function() {
+    updateHover: function () {
         if (this.subMenuActive) { this.hoveredItem = -1; return; }
         const menuStartY = this.height * 0.48;
         const itemH = 72;
@@ -426,14 +426,14 @@ const MainMenu = {
                 newHover = i;
             }
         }
-        
+
         if (newHover !== -1 && newHover !== this.hoveredItem) {
             if (window.SFX) window.SFX.triggerUI();
         }
         this.hoveredItem = newHover;
     },
 
-    updateParticles: function() {
+    updateParticles: function () {
         this.ambientParticles.forEach(p => {
             p.x += p.vx + Math.sin(this.time + p.life) * 0.15;
             p.y += p.vy;
@@ -452,7 +452,7 @@ const MainMenu = {
         });
     },
 
-    draw: function() {
+    draw: function () {
         const ctx = this.ctx;
         const w = this.width;
         const h = this.height;
@@ -478,7 +478,7 @@ const MainMenu = {
         this.drawAmbientParticles(ctx);
 
         // Vignette
-        const vig = ctx.createRadialGradient(w/2, h/2, h * 0.2, w/2, h/2, h * 0.9);
+        const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.9);
         vig.addColorStop(0, 'rgba(0,0,0,0)');
         vig.addColorStop(1, 'rgba(0,0,0,0.7)');
         ctx.fillStyle = vig;
@@ -520,16 +520,16 @@ const MainMenu = {
                 ctx.font = 'bold 18px "Courier New", monospace';
                 ctx.fillStyle = '#ef4444';
                 ctx.textAlign = 'center';
-                ctx.fillText('DEPLOYING CHASSIS #1997...', w/2, h/2);
+                ctx.fillText('DEPLOYING CHASSIS #1997...', w / 2, h / 2);
                 ctx.font = '12px "Courier New", monospace';
                 ctx.fillStyle = '#666';
-                ctx.fillText('MAYA_ENGINE V1.4 // INITIALIZING COMBAT SYSTEMS', w/2, h/2 + 30);
+                ctx.fillText('MAYA_ENGINE V1.4 // INITIALIZING COMBAT SYSTEMS', w / 2, h / 2 + 30);
                 ctx.restore();
             }
         }
     },
 
-    drawHexGrid: function(ctx, w, h) {
+    drawHexGrid: function (ctx, w, h) {
         ctx.save();
         this.hexGrid.forEach(hex => {
             const dist = Math.sqrt(
@@ -561,7 +561,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawDataStreams: function(ctx, w, h) {
+    drawDataStreams: function (ctx, w, h) {
         ctx.save();
         const chars = '01アイウエオカキクケコ█▓▒░ABCDEF';
         this.dataStreams.forEach(s => {
@@ -579,7 +579,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawAmbientParticles: function(ctx) {
+    drawAmbientParticles: function (ctx) {
         ctx.save();
         this.ambientParticles.forEach(p => {
             const lifeRatio = 1 - (p.life / p.maxLife);
@@ -615,7 +615,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawTitle: function(ctx, w, h) {
+    drawTitle: function (ctx, w, h) {
         if (this.logoScale < 0.01) return;
         ctx.save();
 
@@ -674,7 +674,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawMenuItems: function(ctx, w, h) {
+    drawMenuItems: function (ctx, w, h) {
         if (!this.menuItemsVisible) return;
         ctx.save();
 
@@ -751,7 +751,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawSubMenu: function(ctx, w, h) {
+    drawSubMenu: function (ctx, w, h) {
         ctx.save();
         ctx.globalAlpha = this.subMenuFade;
 
@@ -778,12 +778,12 @@ const MainMenu = {
         ctx.font = 'bold 14px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
-        ctx.fillText('[ ESC / CLICK TO RETURN ]', w/2, backY);
+        ctx.fillText('[ ESC / CLICK TO RETURN ]', w / 2, backY);
 
         ctx.restore();
     },
 
-    drawArsenalMenu: function(ctx, w, h) {
+    drawArsenalMenu: function (ctx, w, h) {
         const startX = w * 0.08;
         let y = h * 0.08;
 
@@ -859,7 +859,7 @@ const MainMenu = {
         });
     },
 
-    drawDossierMenu: function(ctx, w, h) {
+    drawDossierMenu: function (ctx, w, h) {
         const startX = w * 0.08;
         let y = h * 0.08;
 
@@ -910,7 +910,7 @@ const MainMenu = {
         });
     },
 
-    drawSettingsMenu: function(ctx, w, h) {
+    drawSettingsMenu: function (ctx, w, h) {
         const startX = w * 0.08;
         let y = h * 0.08;
 
@@ -974,10 +974,10 @@ const MainMenu = {
         });
 
         // Note
-        ctx.fillText('[1][2][3] to swap weapons. [ESC] to pause. Destroy all 6 Hive Nodes to weaken the swarm.', startX, y + 36);
+        ctx.fillText('[1][2][3] to swap weapons. [ESC] to pause. Destroy all 2 Hive Nodes to weaken the swarm.', startX, y + 36);
     },
 
-    drawMapsMenu: function(ctx, w, h) {
+    drawMapsMenu: function (ctx, w, h) {
         const startX = w * 0.08;
         let y = h * 0.08;
 
@@ -1003,7 +1003,7 @@ const MainMenu = {
             // Card background
             ctx.fillStyle = isSelected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(15, 23, 42, 0.6)';
             ctx.fillRect(cx, cy, cardW, cardH);
-            
+
             // Border
             ctx.strokeStyle = isSelected ? map.color : 'rgba(56, 189, 248, 0.2)';
             ctx.lineWidth = isSelected ? 2 : 1;
@@ -1027,7 +1027,7 @@ const MainMenu = {
             ctx.font = '11px "Courier New", monospace';
             ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
             this.wrapText(ctx, map.desc, cx + 12, cy + 90, cardW - 24, 16);
-            
+
             // Visual scanline preview box
             const previewX = cx + cardW - 100;
             const previewY = cy + 20;
@@ -1040,11 +1040,11 @@ const MainMenu = {
         });
     },
 
-    drawMapsPreview: function(ctx, x, y, size, map) {
+    drawMapsPreview: function (ctx, x, y, size, map) {
         // Reserved for future procedural biome preview
     },
 
-    drawModsMenu: function(ctx, w, h) {
+    drawModsMenu: function (ctx, w, h) {
         const startX = w * 0.08;
         let y = h * 0.08;
 
@@ -1090,7 +1090,7 @@ const MainMenu = {
         });
     },
 
-    drawLogsMenu: function(ctx, w, h) {
+    drawLogsMenu: function (ctx, w, h) {
         const startX = w * 0.08;
         let y = h * 0.08;
 
@@ -1120,15 +1120,15 @@ const MainMenu = {
             const ly = y + i * 40;
             ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
             ctx.fillRect(startX - 10, ly - 15, w * 0.8, 30);
-            
+
             ctx.font = '11px "Courier New", monospace';
             ctx.fillStyle = '#e2e8f0';
             ctx.fillText(log.id, startX, ly + 5);
-            
+
             const statusColor = log.status === 'SUCCESS' ? '#39ff14' : (log.status === 'FAILURE' ? '#ef4444' : '#ffd700');
             ctx.fillStyle = statusColor;
             ctx.fillText(log.status, startX + 100, ly + 5);
-            
+
             ctx.fillStyle = '#e2e8f0';
             ctx.fillText(log.chassis, startX + 220, ly + 5);
             ctx.fillText(log.result, startX + 320, ly + 5);
@@ -1136,7 +1136,7 @@ const MainMenu = {
         });
     },
 
-    drawLoreTicker: function(ctx, w, h) {
+    drawLoreTicker: function (ctx, w, h) {
         ctx.save();
         const tickerY = h - 30;
 
@@ -1158,12 +1158,12 @@ const MainMenu = {
         // Typewriter effect
         const visibleChars = Math.floor(loreText.length * Math.min(1, this.loreTimer * 1.5));
         const displayText = loreText.substring(0, visibleChars);
-        ctx.fillText(displayText + (visibleChars < loreText.length ? '█' : ''), w/2, tickerY + 6);
+        ctx.fillText(displayText + (visibleChars < loreText.length ? '█' : ''), w / 2, tickerY + 6);
 
         ctx.restore();
     },
 
-    drawHUDFrame: function(ctx, w, h) {
+    drawHUDFrame: function (ctx, w, h) {
         ctx.save();
         const cornerSize = 40;
         ctx.strokeStyle = 'rgba(0, 255, 68, 0.2)';
@@ -1202,7 +1202,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawEngineStamp: function(ctx, w, h) {
+    drawEngineStamp: function (ctx, w, h) {
         ctx.save();
         ctx.font = '9px "Courier New", monospace';
         ctx.textAlign = 'right';
@@ -1222,7 +1222,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawScanlines: function(ctx, w, h) {
+    drawScanlines: function (ctx, w, h) {
         ctx.save();
         ctx.globalAlpha = 0.03;
         for (let y = 0; y < h; y += 3) {
@@ -1243,7 +1243,7 @@ const MainMenu = {
         ctx.restore();
     },
 
-    drawGlitch: function(ctx, w, h) {
+    drawGlitch: function (ctx, w, h) {
         ctx.save();
 
         // RGB shift
@@ -1260,7 +1260,7 @@ const MainMenu = {
             try {
                 const imageData = ctx.getImageData(0, Math.floor(sliceY), w, Math.floor(sliceH));
                 ctx.putImageData(imageData, shift, Math.floor(sliceY));
-            } catch(e) { /* security restrictions */ }
+            } catch (e) { /* security restrictions */ }
         }
 
         // Color overlay flash
@@ -1285,7 +1285,7 @@ const MainMenu = {
     },
 
     // Utility: word wrap
-    wrapText: function(ctx, text, x, y, maxWidth, lineHeight) {
+    wrapText: function (ctx, text, x, y, maxWidth, lineHeight) {
         const words = text.split(' ');
         let line = '';
         let lineY = y;
