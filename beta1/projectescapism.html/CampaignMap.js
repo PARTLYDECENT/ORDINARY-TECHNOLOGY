@@ -41,11 +41,14 @@ const CampaignMapManager = (function () {
                 shader.uniforms.uTime = { value: 0 };
                 this.treeMat.userData.shader = shader;
 
-                shader.vertexShader = `
+                shader.vertexShader = shader.vertexShader.replace(
+                    `#include <common>`,
+                    `#include <common>
                 uniform float uTime;
                 varying vec3 vWorldPosOut;
                 varying vec3 vLocalPosOut;
-            ` + shader.vertexShader;
+                `
+                );
                 shader.vertexShader = shader.vertexShader.replace(
                     `#include <begin_vertex>`,
                     `#include <begin_vertex>
@@ -62,11 +65,14 @@ const CampaignMapManager = (function () {
                 vWorldPosOut = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
                 `
                 );
-                shader.fragmentShader = `
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    `#include <common>`,
+                    `#include <common>
                 varying vec3 vWorldPosOut;
                 varying vec3 vLocalPosOut;
                 float snoise(vec3 v) { return fract(sin(dot(v, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
-            ` + shader.fragmentShader;
+                `
+                );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     `#include <color_fragment>`,
                     `#include <color_fragment>
@@ -163,82 +169,45 @@ const CampaignMapManager = (function () {
             chunkGroup.position.set(worldOffsetX, 0, worldOffsetZ);
             this.scene.add(chunkGroup);
 
-            const walls = new THREE.InstancedMesh(FacilityGen.wallGeo, FacilityGen.wallMat, 2000);
-            const floors = new THREE.InstancedMesh(FacilityGen.floorGeo, FacilityGen.floorMat, 2000);
+            const sdfBunkers = new THREE.InstancedMesh(FacilityGen.sdfBunkerGeo, FacilityGen.sdfBunkerMat, 2);
             const pillars = new THREE.InstancedMesh(FacilityGen.pillarGeo, FacilityGen.pillarMat, 1000);
             const trees = new THREE.InstancedMesh(this.treeGeo, this.treeMat, 300);
             const rocks = new THREE.InstancedMesh(this.rockGeo, this.rockMat, 400);
             const debris = new THREE.InstancedMesh(this.debrisGeo, this.debrisMat, 200);
             const barrels = new THREE.InstancedMesh(this.barrelGeo, this.barrelMat, 100);
+            const pipes = new THREE.InstancedMesh(FacilityGen.pipeGeo, FacilityGen.pipeMat, 800);
+            const steam = new THREE.InstancedMesh(FacilityGen.steamGeo, FacilityGen.steamMat, 150);
 
-            [walls, floors, pillars, trees, rocks, debris, barrels].forEach(m => {
+            [sdfBunkers, pillars, trees, rocks, debris, barrels, pipes, steam].forEach(m => {
                 m.castShadow = true; m.receiveShadow = true;
             });
 
-            let wCount = 0, fCount = 0, pCount = 0, tCount = 0, rCount = 0, dCount = 0, brlCount = 0;
+            let sdfCount = 0, pCount = 0, tCount = 0, rCount = 0, dCount = 0, brlCount = 0, pipeCount = 0, steamCount = 0;
             const dummy = new THREE.Object3D();
 
-            // 1. Procedural Building Generation (BSP)
-            const roots = [];
-            for (let i = 0; i < 4; i++) { // Fewer roots per chunk
-                const bw = 8 + Math.floor(Math.random() * 8);
-                const bh = 8 + Math.floor(Math.random() * 8);
-                const bx = Math.floor(Math.random() * (this.config.gridSize - bw - 2)) + 1;
-                const bz = Math.floor(Math.random() * (this.config.gridSize - bh - 2)) + 1;
+            // 1. Procedural SDF Bunker Generation
+            for(let i=0; i<2; i++) { // 2 bunkers per chunk
+                const bx = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+                const bz = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
 
-                const root = new BSPNode(bx, bz, bw, bh);
-                const leaves = [root];
-                let toSplit = true;
-                while (toSplit) {
-                    toSplit = false;
-                    for (let j = leaves.length - 1; j >= 0; j--) {
-                        if (leaves[j].split()) {
-                            leaves.splice(j, 1, leaves[j].leftChild, leaves[j].rightChild);
-                            toSplit = true;
+                const wx = bx * this.config.cellSize + worldOffsetX;
+                const wz = bz * this.config.cellSize + worldOffsetZ;
+                const gh = TerrainGen.getMeshHeight(wx, wz);
+
+                dummy.position.set(bx * this.config.cellSize, gh, bz * this.config.cellSize);
+                dummy.rotation.set(0, Math.random() > 0.5 ? 0 : Math.PI / 2, 0); 
+                dummy.scale.set(1, 1, 1);
+                dummy.updateMatrix();
+                sdfBunkers.setMatrixAt(sdfCount++, dummy.matrix);
+
+                const bw = 7, bh = 5;
+                for(let x = bx - bw; x <= bx + bw; x++) {
+                    for(let z = bz - bh; z <= bz + bh; z++) {
+                        if (x >= 0 && x < this.config.gridSize && z >= 0 && z < this.config.gridSize) {
+                            this._setCost(costField, x, z, 255);
                         }
                     }
                 }
-
-                leaves.forEach(leaf => {
-                    // Instanced Facility Floors inside the BSP Leaf Boundary
-                    for (let x = leaf.x + 1; x < leaf.x + leaf.w - 1; x++) {
-                        for (let z = leaf.z + 1; z < leaf.z + leaf.h - 1; z++) {
-                            const gh = TerrainGen.getMeshHeight(x * this.config.cellSize + this.config.cellSize / 2 + worldOffsetX, z * this.config.cellSize + this.config.cellSize / 2 + worldOffsetZ);
-                            dummy.position.set(x * this.config.cellSize + this.config.cellSize / 2, gh, z * this.config.cellSize + this.config.cellSize / 2);
-                            dummy.scale.setScalar(1);
-                            dummy.rotation.set(0, 0, 0);
-                            dummy.updateMatrix();
-                            floors.setMatrixAt(fCount++, dummy.matrix);
-                        }
-                    }
-
-                    // Track corners for pillars
-                    const corners = [
-                        { x: leaf.x, z: leaf.z },
-                        { x: leaf.x + leaf.w - 1, z: leaf.z },
-                        { x: leaf.x, z: leaf.z + leaf.h - 1 },
-                        { x: leaf.x + leaf.w - 1, z: leaf.z + leaf.h - 1 }
-                    ];
-                    corners.forEach(c => {
-                        const wx = c.x * this.config.cellSize + this.config.cellSize / 2 + worldOffsetX;
-                        const wz = c.z * this.config.cellSize + this.config.cellSize / 2 + worldOffsetZ;
-                        const gh = TerrainGen.getMeshHeight(wx, wz);
-                        dummy.position.set(c.x * this.config.cellSize + this.config.cellSize / 2, gh, c.z * this.config.cellSize + this.config.cellSize / 2);
-                        dummy.scale.set(1, 1, 1);
-                        dummy.updateMatrix();
-                        pillars.setMatrixAt(pCount++, dummy.matrix);
-                    });
-
-                    // Set Cost Boundaries for Pathfinding & Walls
-                    for (let x = leaf.x; x < leaf.x + leaf.w; x++) {
-                        this._setCost(costField, x, leaf.z, 255);
-                        this._setCost(costField, x, leaf.z + leaf.h - 1, 255);
-                    }
-                    for (let z = leaf.z; z < leaf.z + leaf.h; z++) {
-                        this._setCost(costField, leaf.x, z, 255);
-                        this._setCost(costField, leaf.x + leaf.w - 1, z, 255);
-                    }
-                });
             }
 
             // Fill Layers
@@ -246,30 +215,7 @@ const CampaignMapManager = (function () {
                 const lx = i % this.config.gridSize;
                 const lz = Math.floor(i / this.config.gridSize);
 
-                if (costField[i] === 255) {
-                    // Sci-Fi Walls
-                    const wx = lx * this.config.cellSize + this.config.cellSize / 2 + worldOffsetX;
-                    const wz = lz * this.config.cellSize + this.config.cellSize / 2 + worldOffsetZ;
-                    const gh = TerrainGen.getMeshHeight(wx, wz);
-                    dummy.position.set(lx * this.config.cellSize + this.config.cellSize / 2, gh + this.config.cellSize / 2, lz * this.config.cellSize + this.config.cellSize / 2);
-                    dummy.scale.set(1, 1, 1);
-                    dummy.updateMatrix();
-                    walls.setMatrixAt(wCount++, dummy.matrix);
-
-                    // Debris logic removed for performance
-                    /*
-                                    if (Math.random() < 0.15 && wCount < 500) {
-                                        const dx = lx * this.config.cellSize + (Math.random()-0.5)*3;
-                                        const dz = lz * this.config.cellSize + (Math.random()-0.5)*3;
-                                        const dgh = TerrainGen.getMeshHeight(dx + worldOffsetX, dz + worldOffsetZ);
-                                        dummy.position.set(dx, dgh + 0.05, dz);
-                                        dummy.rotation.set(Math.random()*0.4, Math.random()*6.28, Math.random()*0.4);
-                                        dummy.scale.setScalar(0.5 + Math.random()*0.5);
-                                        dummy.updateMatrix();
-                                        debris.setMatrixAt(dCount++, dummy.matrix);
-                                    }
-                    */
-                } else {
+            if (costField[i] !== 255) {
                     const rand = Math.random();
                     let pTree = 0.04, pRock = 0.07, pBarrel = 0.015, pFire = 0.003;
 
@@ -291,13 +237,20 @@ const CampaignMapManager = (function () {
                         const gh = TerrainGen.getMeshHeight(tx, tz);
                         dummy.position.set(lx * this.config.cellSize + this.config.cellSize / 2, gh, lz * this.config.cellSize + this.config.cellSize / 2);
                         dummy.rotation.y = Math.random() * Math.PI * 2;
-                        dummy.scale.setScalar(0.8 + Math.random() * 0.4);
+                        const s = 0.8 + Math.random() * 0.4;
+                        dummy.scale.set(s * 2, s * 4, s * 2);
                         dummy.updateMatrix();
                         trees.setMatrixAt(tCount++, dummy.matrix);
                         costField[i] = 10;
                     } else if (rand < pTree + pRock && rCount < 400) { // Rocks
-                        // Removed for performance
-                    } else if (rand < pTree + pRock + pBarrel && brlCount < 100) { // Barrels
+                        const rx = lx * this.config.cellSize + Math.random() * 2;
+                        const rz = lz * this.config.cellSize + Math.random() * 2;
+                        const gh = TerrainGen.getMeshHeight(rx + worldOffsetX, rz + worldOffsetZ);
+                        dummy.position.set(rx, gh, rz);
+                        dummy.rotation.set(Math.random() * 0.2, Math.random() * 6.28, Math.random() * 0.2);
+                        dummy.scale.setScalar(0.4 + Math.random() * (chunkBiome === 'wasteland' ? 1.5 : 0.8)); // bigger rocks in wasteland
+                        dummy.updateMatrix();
+                        rocks.setMatrixAt(rCount++, dummy.matrix);
                     } else if (rand < pTree + pRock + pBarrel && brlCount < 100) { // Barrels
                         const bx = lx * this.config.cellSize + 1;
                         const bz = lz * this.config.cellSize + 1;
@@ -329,16 +282,76 @@ const CampaignMapManager = (function () {
                 }
             }
 
-            walls.count = wCount; floors.count = fCount; pillars.count = pCount; trees.count = tCount; rocks.count = rCount; debris.count = dCount; barrels.count = brlCount;
-            chunkGroup.add(walls); chunkGroup.add(floors); chunkGroup.add(pillars); chunkGroup.add(trees); chunkGroup.add(rocks); chunkGroup.add(debris); chunkGroup.add(barrels);
+            // 2. Continuous Industrial Pipe Network (Hazard Orange)
+            for (let i = 0; i < 8; i++) {
+                const startX = Math.random() * this.chunkSize;
+                const startZ = Math.random() * this.chunkSize;
+                const dir = Math.random() > 0.5 ? 'x' : 'z';
+                const length = 20 + Math.floor(Math.random() * 30);
+                const pipeHeightOffset = 1.5 + Math.random() * 3.5;
+                const pipeSpacing = 1.0; 
+
+                // Sample terrain once at start to keep pipe perfectly level
+                const baseTerrainH = TerrainGen.getMeshHeight(startX + worldOffsetX, startZ + worldOffsetZ);
+
+                for (let l = 0; l < length; l++) {
+                    if (pipeCount >= 800) break;
+                    const px = dir === 'x' ? startX + l * pipeSpacing : startX;
+                    const pz = dir === 'z' ? startZ + l * pipeSpacing : startZ;
+
+                    if (px < 0 || px >= this.chunkSize || pz < 0 || pz >= this.chunkSize) continue;
+
+                    dummy.position.set(px, baseTerrainH + pipeHeightOffset, pz);
+
+                    // Orientation
+                    dummy.rotation.set(0, 0, 0);
+                    if (dir === 'x') {
+                        dummy.rotation.z = Math.PI / 2;
+                    } else {
+                        dummy.rotation.x = Math.PI / 2;
+                    }
+
+                    dummy.scale.set(1.05, 1.05, 1.05); // Ensure overlap for continuity
+                    dummy.updateMatrix();
+                    pipes.setMatrixAt(pipeCount++, dummy.matrix);
+
+                    // Add Pipe Supports (Pillars) reaching to the ground
+                    if (l % 10 === 0 && pCount < 1000) {
+                        const currentTerrainH = TerrainGen.getMeshHeight(px + worldOffsetX, pz + worldOffsetZ);
+                        const pHeight = (baseTerrainH + pipeHeightOffset) - currentTerrainH;
+                        if (pHeight > 0.1) {
+                            dummy.position.set(px, currentTerrainH, pz);
+                            dummy.rotation.set(0, 0, 0);
+                            dummy.scale.set(0.12, pHeight / (this.config.cellSize * 1.8), 0.12);
+                            dummy.updateMatrix();
+                            pillars.setMatrixAt(pCount++, dummy.matrix);
+                        }
+                    }
+
+                    // Random Steam Emission
+                    if (Math.random() < 0.03 && steamCount < 150) {
+                        dummy.position.set(px, baseTerrainH + pipeHeightOffset, pz);
+                        dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+                        dummy.scale.setScalar(0.5 + Math.random() * 0.7);
+                        dummy.updateMatrix();
+                        steam.setMatrixAt(steamCount++, dummy.matrix);
+                    }
+                }
+            }
+
+            sdfBunkers.count = sdfCount; pillars.count = pCount; trees.count = tCount; rocks.count = rCount; debris.count = dCount; barrels.count = brlCount;
+            pipes.count = pipeCount; steam.count = steamCount;
+
+            chunkGroup.add(sdfBunkers); chunkGroup.add(pillars); chunkGroup.add(trees); chunkGroup.add(rocks); chunkGroup.add(debris); chunkGroup.add(barrels);
+            chunkGroup.add(pipes); chunkGroup.add(steam);
 
             this.chunks.set(key, {
                 group: chunkGroup,
                 costField: costField,
-                walls: walls, floors: floors, pillars: pillars, trees: trees, rocks: rocks, debris: debris, barrels: barrels
+                sdfBunkers: sdfBunkers, pillars: pillars, trees: trees, rocks: rocks, debris: debris, barrels: barrels,
+                pipes: pipes, steam: steam
             });
         }
-
         _setCost(field, x, z, cost) {
             if (x < 0 || x >= this.config.gridSize || z < 0 || z >= this.config.gridSize) return;
             field[z * this.config.gridSize + x] = cost;
@@ -351,20 +364,11 @@ const CampaignMapManager = (function () {
 
                 // Cleanup animatable objects belonging to this chunk
                 this.animatableObjects = this.animatableObjects.filter(obj => {
-                    const isChild = chunk.group.children.includes(obj);
-                    if (isChild) {
-                        if (obj.geometry) obj.geometry.dispose();
-                        if (obj.material) {
-                            if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-                            else obj.material.dispose();
-                        }
-                    }
-                    return !isChild;
+                    return !chunk.group.children.includes(obj);
                 });
 
                 // InstancedMeshes and their matrices are garbage collected
                 // Associated geometries/materials are global (FacilityGen, ModelFactory) and should not be disposed here
-
                 this.chunks.delete(key);
             }
         }

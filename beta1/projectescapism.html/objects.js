@@ -169,11 +169,14 @@ const ObjectFactory = {
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             mat.userData.shader = shader;
-            shader.vertexShader = `
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `#include <common>
                 varying vec3 vWorldPosOut;
                 varying vec3 vLocalPosOut;
                 float snoise(vec3 v) { return fract(sin(dot(v, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
-            ` + shader.vertexShader;
+                `
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <begin_vertex>`,
                 `#include <begin_vertex>
@@ -188,11 +191,14 @@ const ObjectFactory = {
                 vWorldPosOut = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
                 `
             );
-            shader.fragmentShader = `
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <common>`,
+                `#include <common>
                 varying vec3 vWorldPosOut;
                 varying vec3 vLocalPosOut;
                 float snoise(vec3 v) { return fract(sin(dot(v, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
-            ` + shader.fragmentShader;
+                `
+            );
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <color_fragment>`,
                 `#include <color_fragment>
@@ -220,19 +226,25 @@ const ObjectFactory = {
 
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
-            shader.fragmentShader = `
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <common>`,
+                `#include <common>
                 uniform float uTime;
                 varying vec3 vWorldPosition;
-                ` + shader.fragmentShader;
+                `
+            );
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <emissivemap_fragment>`,
                 `#include <emissivemap_fragment>
                 totalEmissiveRadiance *= 1.0 + sin(uTime * 3.0 + vWorldPosition.x * 5.0) * 0.2;
                 `
             );
-            shader.vertexShader = `
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `#include <common>
                 varying vec3 vWorldPosition;
-                ` + shader.vertexShader;
+                `
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <worldpos_vertex>`,
                 `#include <worldpos_vertex>
@@ -253,10 +265,13 @@ const ObjectFactory = {
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             mat.userData.shader = shader;
-            shader.fragmentShader = `
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <common>`,
+                `#include <common>
                 varying vec3 vWorldPosOut;
                 float snoise(vec3 v) { return fract(sin(dot(v, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
-            ` + shader.fragmentShader;
+                `
+            );
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <color_fragment>`,
                 `#include <color_fragment>
@@ -266,9 +281,12 @@ const ObjectFactory = {
                 }
                 `
             );
-            shader.vertexShader = `
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `#include <common>
                 varying vec3 vWorldPosOut;
-            ` + shader.vertexShader;
+                `
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <worldpos_vertex>`,
                 `#include <worldpos_vertex>
@@ -285,10 +303,13 @@ const ObjectFactory = {
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             mat.userData.shader = shader;
-            shader.vertexShader = `
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `#include <common>
                 varying vec3 vWorldPosOut;
                 varying vec3 vLocalPosOut;
-            ` + shader.vertexShader;
+                `
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <begin_vertex>`,
                 `#include <begin_vertex>
@@ -301,12 +322,15 @@ const ObjectFactory = {
                 vWorldPosOut = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
                 `
             );
-            shader.fragmentShader = `
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <common>`,
+                `#include <common>
                 uniform float uTime;
                 varying vec3 vWorldPosOut;
                 varying vec3 vLocalPosOut;
                 float snoise(vec3 v) { return fract(sin(dot(v, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
-            ` + shader.fragmentShader;
+                `
+            );
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <color_fragment>`,
                 `#include <color_fragment>
@@ -341,9 +365,12 @@ const ObjectFactory = {
 
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
-            shader.vertexShader = `
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `#include <common>
                 uniform float uTime;
-                ` + shader.vertexShader;
+                `
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <begin_vertex>`,
                 `#include <begin_vertex>
@@ -375,12 +402,18 @@ const ObjectFactory = {
 
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
-            shader.vertexShader = `
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `#include <common>
                 uniform float uTime;
-                ` + shader.vertexShader;
-            shader.fragmentShader = `
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <common>`,
+                `#include <common>
                 uniform float uTime;
-                ` + shader.fragmentShader;
+                `
+            );
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <emissivemap_fragment>`,
                 `#include <emissivemap_fragment>

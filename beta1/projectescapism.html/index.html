@@ -1327,6 +1327,24 @@
         const terrain = TerrainGen.getMesh();
         scene.add(terrain);
 
+        const waterGeo = new THREE.PlaneBufferGeometry(2400, 2400);
+        const waterTex = new THREE.TextureLoader().load('assets/water_texture.png');
+        waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
+        waterTex.repeat.set(100, 100);
+        const waterMat = new THREE.MeshStandardMaterial({
+            map: waterTex,
+            transparent: true,
+            opacity: 0.85,
+            roughness: 0.1,
+            metalness: 0.8,
+            emissive: new THREE.Color(0x001122),
+            emissiveIntensity: 0.2
+        });
+        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+        waterMesh.rotation.x = -Math.PI / 2;
+        waterMesh.position.y = -2.0; // Water hazard level
+        scene.add(waterMesh);
+
         // Subtle ground fog removed for clear visuals
         scene.fog = new THREE.FogExp2(0x0a1a0f, 0.000); // 0 density
         scene.background = new THREE.Color(0x0a1a0f);
@@ -2259,7 +2277,7 @@
                 cameraFPS.add(flashLight.target);
 
                 // Initial map update for item spawning check
-                mapManager.update(player.position);
+                mapManager.update(player.position, 0.016, activeCamera);
 
                 // 2. Items
                 const itemGeo = ModelFactory.getItemGeo();
@@ -3743,9 +3761,9 @@
             cameraIso.position.lerp(camTarget, 5.0 * delta);
 
             // 2. Map & Flow Field Updates
-            mapManager.update(player.position, delta);
+            mapManager.update(player.position, delta, activeCamera);
             TerrainGen.update(delta);
-            FacilityGen.update(delta);
+            FacilityGen.update(delta, activeCamera);
 
             timeSincePathUpdate += delta;
             if (timeSincePathUpdate > 0.2) {
@@ -3879,6 +3897,22 @@
                         frameDamage += 10 * delta; // nasty DOT
                     }
                     ep.mesh.material.opacity = Math.max(0.0, Math.min(0.8, ep.life * 0.4)); // fade out
+                }
+            }
+
+            // Hazard water damage and texture animation
+            if (waterTex) {
+                waterTex.offset.x += delta * 0.05;
+                waterTex.offset.y += delta * 0.02;
+            }
+            if (player.position.y <= -1.8) { // Give a little buffer below -2.0 mesh for wading
+                frameDamage += 15 * delta; // Damage over time
+                
+                // Extra visual cue for being in toxic water
+                if (Math.random() < 0.1) {
+                    emitParticle(player.position.x + (Math.random()-0.5)*2, -2.0, player.position.z + (Math.random()-0.5)*2,
+                        0, Math.random()*2, 0,
+                        0.1, 0.8, 0.4, 2.0, 0.5);
                 }
             }
 
