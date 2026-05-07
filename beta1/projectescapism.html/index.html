@@ -42,6 +42,9 @@
     <script src="./Railgun.js"></script>
     <script src="./SolarFlare.js"></script>
     <script src="./GravSingularity.js"></script>
+    <script src="./Sword.js"></script>
+    <script src="./Flamethrower.js"></script>
+    <script src="./TentacleArm.js"></script>
     <script src="./navigator.js"></script>
 
     <style>
@@ -106,6 +109,133 @@
             border-bottom: 12vh solid black;
             z-index: 100;
         }
+
+        /* --- NEURAL CONSOLE --- */
+        #neural-console {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 380px;
+            max-height: 400px;
+            background: rgba(5, 10, 15, 0.9);
+            border: 1px solid #00ffcc;
+            border-radius: 4px;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            display: none;
+            flex-direction: column;
+            pointer-events: auto;
+            z-index: 20000;
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.15);
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+        }
+
+        #neural-console::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+        }
+
+        #console-header {
+            background: #00ffcc;
+            color: #000;
+            padding: 4px 10px;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            letter-spacing: 1px;
+        }
+
+        #console-log {
+            flex-grow: 1;
+            padding: 12px;
+            overflow-y: auto;
+            max-height: 320px;
+            scrollbar-width: thin;
+            scrollbar-color: #00ffcc transparent;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        #console-input-wrap {
+            border-top: 1px solid rgba(0, 255, 200, 0.3);
+            padding: 10px;
+            display: flex;
+            background: rgba(0, 255, 200, 0.05);
+        }
+
+        #console-prefix {
+            margin-right: 10px;
+            color: #00ffcc;
+            font-weight: bold;
+        }
+
+        #console-input {
+            background: transparent;
+            border: none;
+            color: #00ffcc;
+            outline: none;
+            width: 100%;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .log-entry {
+            margin-bottom: 6px;
+            text-shadow: 0 0 5px rgba(0, 255, 200, 0.3);
+        }
+
+        .log-cmd {
+            color: #888;
+        }
+
+        .log-sys {
+            color: #00ffcc;
+            font-weight: bold;
+        }
+
+        .log-res {
+            color: #ffffff;
+        }
+
+        .log-err {
+            color: #ff5555;
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+
 
         #cinematic-border::after {
             content: '';
@@ -328,6 +458,7 @@
             z-index: 10000;
             cursor: default;
             font-family: 'Courier New', Courier, monospace;
+            background: #000000;
         }
 
         #menu-canvas {
@@ -607,6 +738,21 @@
         <span id="ui-timer">00:00</span>
     </div>
 
+    <div id="neural-console">
+        <div id="console-header">
+            <span>Neural Link Interface [v2.6.4]</span>
+            <span id="console-status" style="animation: blink-fade 1s infinite;">CONNECTED</span>
+        </div>
+        <div id="console-log">
+            <div class="log-entry log-sys">> NEURAL LINK ESTABLISHED...</div>
+            <div class="log-entry log-sys">> TYPE 'HELP' FOR SYSTEM OVERRIDES.</div>
+        </div>
+        <div id="console-input-wrap">
+            <span id="console-prefix">></span>
+            <input type="text" id="console-input" autocomplete="off" spellcheck="false" placeholder="Enter command...">
+        </div>
+    </div>
+
     <div id="ui-layer" class="flex justify-between items-start">
 
         <!-- Top Left Info Panel -->
@@ -638,7 +784,7 @@
             <div class="border-t border-slate-600 pt-2">
                 <ul class="text-xs text-slate-500 space-y-1">
                     <li>[WASD] Move · [V] FPS · [Mouse] Aim/Fire</li>
-                    <li>[1-3] Swap Weapon · [Shift] Sprint</li>
+                    <li>[1-7] Swap Weapon · [Shift] Sprint</li>
                 </ul>
             </div>
         </div>
@@ -699,7 +845,7 @@
         style="pointer-events: auto;">
         <div class="scanline-overlay"></div>
 
-        <div class="w-full max-w-6xl h-[80vh] flex flex-col gap-6 relative z-10 pause-glitch-active font-mono">
+        <div class="w-full max-w-6xl h-[80vh] flex flex-col gap-6 relative z-10 font-mono">
             <!-- Header -->
             <div class="flex justify-between items-end border-b border-slate-700/50 pb-4">
                 <div>
@@ -1214,16 +1360,11 @@
         // The loader does NOT start until the player clicks DEPLOY in the main menu.
         MainMenu.onStart = function () {
             TutorialManager.start(() => {
-                // Show the loading screen & start the fluid loader
-                const ls = document.getElementById('loading-screen');
-                if (ls) ls.style.display = 'flex';
-                MayaLoader.init();
+                // Skip the loader — go straight to game
 
                 // 1. APPLY MAP SELECTION
                 const selectedMap = MainMenu.mapData[MainMenu.selectedMap];
                 if (selectedMap) {
-                    // We'll update the scene fog and background once they are created
-                    // (This happens in startGamePipeline or slightly after)
                     window.GAME_START_CONFIG = {
                         fogColor: selectedMap.fog,
                         difficulty: selectedMap.difficulty,
@@ -1273,7 +1414,8 @@
             numItems: 15,
             playerSpeed: 4.0,       // Slowed by half (was 8.0)
             zombieSpeed: 2.5,
-            obstacleDensity: 0.15
+            obstacleDensity: 0.15,
+            gravity: 25.0
         };
 
         const WORLD_SIZE = CONFIG.gridSize * CONFIG.cellSize;
@@ -1388,18 +1530,29 @@
             ar: { id: 'ar', name: 'Assault Rifle', damage: 14, fireRate: 0.1, spread: 0.05, pellets: 1, color: 0x00aaff, speed: 60, maxAmmo: 90 },
             railgun: { id: 'railgun', name: 'Volt Railgun', damage: 120, fireRate: 1.5, spread: 0.0, pellets: 1, color: 0x44ffff, speed: 120, maxAmmo: 10, isSpecial: true, type: 'pierce' },
             flare: { id: 'flare', name: 'Solar Flare', damage: 45, fireRate: 1.2, spread: 0.02, pellets: 1, color: 0xffaa44, speed: 15, maxAmmo: 8, isSpecial: true, type: 'aoe' },
-            singular: { id: 'singular', name: 'Grav-Singularity', damage: 5, fireRate: 2.5, spread: 0.05, pellets: 1, color: 0xaa44ff, speed: 20, maxAmmo: 5, isSpecial: true, type: 'pull' }
+            singular: { id: 'singular', name: 'Grav-Singularity', damage: 5, fireRate: 2.5, spread: 0.05, pellets: 1, color: 0xaa44ff, speed: 20, maxAmmo: 5, isSpecial: true, type: 'pull' },
+            sword: { id: 'sword', name: 'Plasma Sword', damage: 55, fireRate: 0.45, spread: 0, pellets: 1, color: 0x00ffaa, speed: 0, maxAmmo: Infinity, isMelee: true },
+            flame: { id: 'flame', name: 'Flamethrower', damage: 25, fireRate: 0.05, spread: 0.3, pellets: 1, color: 0xff4400, speed: 12, maxAmmo: 200 },
+            tentacle: { id: 'tentacle', name: 'Tentacle Arm', damage: 0, fireRate: 0.6, spread: 0, pellets: 1, color: 0x44ff88, speed: 0, maxAmmo: Infinity, isMelee: true, isAbsorb: true }
         };
 
         const inventory = [
             { ...weaponsCfg.pistol, ammo: Infinity },
             { ...weaponsCfg.railgun, ammo: 10 },
             { ...weaponsCfg.flare, ammo: 8 },
-            { ...weaponsCfg.singular, ammo: 5 }
+            { ...weaponsCfg.singular, ammo: 5 },
+            { ...weaponsCfg.sword, ammo: Infinity },
+            { ...weaponsCfg.flame, ammo: 200 },
+            { ...weaponsCfg.tentacle, ammo: Infinity }
         ];
         let currentWeaponIdx = 0;
         let perks = null;
         let upgradeSystem = null;
+        let TIME_SCALE = 1.0;
+        let NEURAL_SCAN_TIMER = 0;
+        let ECHO_WALK_ACTIVE = false;
+        let echoTimer = 0;
+        const ghosts = [];
 
         const zPosX = new Float32Array(CONFIG.maxZombies);
         const zPosZ = new Float32Array(CONFIG.maxZombies);
@@ -1742,6 +1895,12 @@
                     return new SolarFlare();
                 } else if (weaponId === 'singular') {
                     return new GravSingularity();
+                } else if (weaponId === 'sword') {
+                    return new Sword();
+                } else if (weaponId === 'flame') {
+                    return new Flamethrower();
+                } else if (weaponId === 'tentacle') {
+                    return new TentacleArm();
                 } else {
                     // Fallback: return a pistol
                     return new Pistol();
@@ -1769,7 +1928,8 @@
                 const rubberMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.95, metalness: 0.0 });
 
                 const armGroup = new THREE.Group();
-                armGroup.position.set(0.35, -0.28, -0.4);
+                armGroup.position.set(0.25, -0.22, -0.3);
+                armGroup.scale.set(0.33, 0.33, 0.33);
                 root.add(armGroup);
 
                 // === UPPER ARM (Partially visible, extends from screen edge) ===
@@ -1981,84 +2141,52 @@
                 palmPlate.position.set(0, 0.04, 0);
                 handGroup.add(palmPlate);
 
-                // === FINGERS (4 mechanical digits) ===
-                const fingerPositions = [
-                    { x: -0.05, z: -0.06 },
-                    { x: -0.02, z: -0.07 },
-                    { x: 0.02, z: -0.07 },
-                    { x: 0.05, z: -0.06 }
+                // === HEAVY 2-FINGER GRABBER (Pincers) ===
+                const pincerPositions = [
+                    { x: -0.06, side: 'left', flip: 1 },
+                    { x: 0.06, side: 'right', flip: -1 }
                 ];
 
-                fingerPositions.forEach((fp, idx) => {
-                    const fingerGroup = new THREE.Group();
-                    fingerGroup.position.set(fp.x, -0.01, fp.z);
+                pincerPositions.forEach((pp) => {
+                    const pincerGroup = new THREE.Group();
+                    pincerGroup.position.set(pp.x, 0, -0.04);
 
-                    // Proximal segment
-                    const seg1 = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.028, 0.035, 0.07),
-                        innerMat
-                    );
-                    seg1.position.set(0, 0, -0.035);
-                    seg1.rotation.x = -0.3; // Gripping angle
-                    fingerGroup.add(seg1);
-
-                    // Knuckle joint
-                    const knuckle = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.016, 6, 6),
+                    // Pincer Base/Actuator
+                    const base = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.02, 0.03, 0.08, 8),
                         jointMat
                     );
-                    knuckle.position.set(0, 0, -0.07);
-                    fingerGroup.add(knuckle);
+                    base.rotation.x = Math.PI / 2;
+                    pincerGroup.add(base);
 
-                    // Distal segment
-                    const seg2 = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.024, 0.03, 0.06),
-                        innerMat
-                    );
-                    seg2.position.set(0, -0.015, -0.1);
-                    seg2.rotation.x = -0.5; // More curled
-                    fingerGroup.add(seg2);
-
-                    // Fingertip armor
-                    const tipArmor = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.026, 0.015, 0.025),
+                    // Pincer Arm
+                    const arm = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.04, 0.05, 0.12),
                         armorMat
                     );
-                    tipArmor.position.set(0, -0.02, -0.12);
-                    tipArmor.rotation.x = -0.6;
-                    fingerGroup.add(tipArmor);
+                    arm.position.set(0, -0.01, -0.08);
+                    arm.rotation.y = 0.3 * pp.flip; // Angle inward
+                    pincerGroup.add(arm);
 
-                    handGroup.add(fingerGroup);
+                    // Pincer Tip/Claw
+                    const tipGeo = new THREE.CylinderGeometry(0.01, 0.03, 0.10, 4);
+                    const tip = new THREE.Mesh(tipGeo, innerMat);
+                    tip.position.set(-0.01 * pp.flip, -0.02, -0.16);
+                    tip.rotation.x = Math.PI / 2;
+                    tip.rotation.z = Math.PI / 4 + (0.3 * pp.flip);
+                    pincerGroup.add(tip);
+
+                    // Hydraulic piston for the pincer
+                    const piston = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.008, 0.008, 0.08, 8),
+                        pistonMat
+                    );
+                    piston.position.set(0.02 * pp.flip, 0.02, -0.06);
+                    piston.rotation.x = Math.PI / 2;
+                    pincerGroup.add(piston);
+
+                    handGroup.add(pincerGroup);
                 });
-
-                // === THUMB (Opposing, thicker) ===
-                const thumbGroup = new THREE.Group();
-                thumbGroup.position.set(0.08, -0.01, -0.02);
-                thumbGroup.rotation.z = -0.4;
-
-                const thumbSeg = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.035, 0.035, 0.06),
-                    innerMat
-                );
-                thumbSeg.rotation.x = -0.4;
-                thumbGroup.add(thumbSeg);
-
-                const thumbTip = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.03, 0.03, 0.04),
-                    innerMat
-                );
-                thumbTip.position.set(0, -0.015, -0.05);
-                thumbTip.rotation.x = -0.6;
-                thumbGroup.add(thumbTip);
-
-                const thumbArmor = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.032, 0.015, 0.03),
-                    armorMat
-                );
-                thumbArmor.position.set(0, 0.02, -0.01);
-                thumbGroup.add(thumbArmor);
-
-                handGroup.add(thumbGroup);
 
                 // === ARM STATUS LIGHT ===
                 const statusLight = new THREE.Mesh(
@@ -2095,14 +2223,17 @@
 
                 // Per-weapon scale & position — weapons 2/3/4 scaled UP significantly
                 const wpScales = {
-                    pistol: { s: 0.28, x: 0.42, y: -0.15, z: -1.3 },
-                    shotgun: { s: 0.20, x: 0.38, y: -0.18, z: -1.1 },
-                    ar: { s: 0.20, x: 0.35, y: -0.14, z: -1.0 },
-                    railgun: { s: 0.22, x: 0.35, y: -0.12, z: -1.0 },
-                    flare: { s: 0.22, x: 0.35, y: -0.16, z: -0.9 },
-                    singular: { s: 0.24, x: 0.35, y: -0.12, z: -1.0 },
+                    pistol: { s: 0.28, x: 0.42, y: -0.15, z: -1.3, muzzleZ: -1.2 },
+                    shotgun: { s: 0.20, x: 0.38, y: -0.18, z: -1.1, muzzleZ: -1.4 },
+                    ar: { s: 0.20, x: 0.35, y: -0.14, z: -1.0, muzzleZ: -1.4 },
+                    railgun: { s: 0.22, x: 0.35, y: -0.12, z: -1.0, muzzleZ: -1.8 },
+                    flare: { s: 0.22, x: 0.35, y: -0.16, z: -0.9, muzzleZ: -1.8 },
+                    singular: { s: 0.24, x: 0.35, y: -0.12, z: -1.0, muzzleZ: -1.6 },
+                    sword: { s: 0.18, x: 0.30, y: -0.20, z: -0.8, muzzleZ: -3.5 },
+                    flame: { s: 0.20, x: 0.35, y: -0.16, z: -0.9, muzzleZ: -2.4 },
+                    tentacle: { s: 0.12, x: 0.35, y: -0.20, z: -0.9, muzzleZ: -3.0 },
                 };
-                const wp = wpScales[weaponId] || { s: 0.22, x: 0.4, y: -0.15, z: -1.2 };
+                const wp = wpScales[weaponId] || { s: 0.22, x: 0.4, y: -0.15, z: -1.2, muzzleZ: -1.2 };
                 weapon.scale.set(wp.s, wp.s, wp.s);
                 weapon.position.set(wp.x, wp.y, wp.z);
                 weapon.rotation.set(0, 0, 0);
@@ -2113,7 +2244,7 @@
 
                 // Muzzle point reference for particle emission
                 const muzzlePoint = new THREE.Object3D();
-                muzzlePoint.position.set(0, 0, -1.2);
+                muzzlePoint.position.set(0, 0, wp.muzzleZ);
                 weapon.add(muzzlePoint);
                 root.muzzlePoint = muzzlePoint;
 
@@ -2217,7 +2348,7 @@
             ModelFactory.loadAll().then(() => {
                 // Hide loader only when all models are ready
                 setTimeout(() => {
-                    MayaLoader.stop();
+                    if (MayaLoader.active) MayaLoader.stop();
                     // Immediately spawn a weapon nearby for the player
                     spawnWeaponDrop();
                     spawnWeaponDrop();
@@ -2279,26 +2410,8 @@
                 // Initial map update for item spawning check
                 mapManager.update(player.position, 0.016, activeCamera);
 
-                // 2. Items
-                const itemGeo = ModelFactory.getItemGeo();
-                const itemMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xca8a04 });
-                for (let i = 0; i < CONFIG.numItems; i++) {
-                    const item = new THREE.Mesh(itemGeo, itemMat);
-                    let valid = false;
-                    while (!valid) {
-                        const gx = Math.floor(Math.random() * CONFIG.gridSize);
-                        const gz = Math.floor(Math.random() * CONFIG.gridSize);
-                        const tx = (gx * CONFIG.cellSize) - HALF_WORLD + (CONFIG.cellSize / 2);
-                        const tz = (gz * CONFIG.cellSize) - HALF_WORLD + (CONFIG.cellSize / 2);
-                        if (mapManager.getCostAt(tx, tz) !== 255) {
-                            const itemHeight = TerrainGen.getHeight(tx, tz);
-                            item.position.set(tx, itemHeight + 0.4, tz);
-                            valid = true;
-                        }
-                    }
-                    scene.add(item);
-                    items.push({ mesh: item, active: true });
-                }
+                // 2. Items — REMOVED (no floating yellow cubes)
+
 
                 // 3. The Horde (SDF Raymarching Character Mode)
                 // We replace the box-based zombies with the BobBoss SDF Character
@@ -2876,7 +2989,7 @@
             if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
 
             // Weapon swapping
-            if (e.key >= '1' && e.key <= '3') {
+            if (e.key >= '1' && e.key <= '7') {
                 const idx = parseInt(e.key) - 1;
                 if (idx < inventory.length) {
                     currentWeaponIdx = idx;
@@ -2925,9 +3038,9 @@
         document.addEventListener('mousemove', (e) => {
             if (isFPSMode && document.pointerLockElement === document.body && !isPaused) {
                 // Rotate Player Yaw (left/right)
-                player.rotation.y -= e.movementX * 0.003;
+                player.rotation.y -= e.movementX * 0.0015;
                 // Rotate Camera Pitch (up/down) — clamped
-                cameraFPS.rotation.x -= e.movementY * 0.003;
+                cameraFPS.rotation.x -= e.movementY * 0.0015;
                 cameraFPS.rotation.x = Math.max(-1.4, Math.min(1.4, cameraFPS.rotation.x));
             }
         });
@@ -3178,6 +3291,22 @@
         window.addEventListener('mouseup', e => { if (e.button === 0) mouseHeld = false; });
 
         window.addEventListener('keydown', e => {
+            if (NeuralConsole.isOpen) {
+                if (e.key === 'Enter') {
+                    NeuralConsole.execute();
+                    e.preventDefault();
+                } else if (e.key === 'Escape' || e.key === '`') {
+                    NeuralConsole.toggle();
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            if (e.key === '`') {
+                NeuralConsole.toggle();
+                e.preventDefault();
+            }
+
             if (e.code === 'KeyQ' && player && !isPaused) {
                 player.activateAbility();
             }
@@ -3210,6 +3339,197 @@
                 currentWeaponIdx = 0;
                 updateWeaponUI();
                 return;
+            }
+
+            // === MELEE / SPECIAL WEAPON HANDLING ===
+            if (weapon.isMelee || weapon.isAbsorb) {
+                if (weapon.ammo !== Infinity) {
+                    weapon.ammo--;
+                    updateWeaponUI();
+                }
+
+                // Trigger weapon fire animation
+                if (isFPSMode && fpsViewmodel && fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.fire === 'function') {
+                    fpsViewmodel.weaponMesh.fire();
+                } else if (player.rightWeaponMesh && typeof player.rightWeaponMesh.fire === 'function') {
+                    player.rightWeaponMesh.fire();
+                }
+                if (player.leftWeaponMesh && typeof player.leftWeaponMesh.fire === 'function') {
+                    player.leftWeaponMesh.fire();
+                }
+
+                // Player recoil
+                player.fire();
+
+                // Get attack origin and direction
+                const meleeOrigin = player.position.clone();
+                const meleeDir = new THREE.Vector3(0, 0, 1).applyQuaternion(
+                    isFPSMode ? cameraFPS.getWorldQuaternion(new THREE.Quaternion()) : player.quaternion
+                );
+                const meleeRange = weapon.id === 'tentacle' ? 5.0 : 3.5;
+                const meleeFOV = weapon.id === 'sword' ? Math.PI * 0.5 : Math.PI * 0.4;
+
+                // Damage/absorb zombies in frontal arc
+                const nearby = getNearby(player.position.x, player.position.z);
+                for (let k = 0; k < nearby.length; k++) {
+                    const zi = nearby[k];
+                    if (zState[zi] === 0) continue;
+                    const dx = zPosX[zi] - meleeOrigin.x;
+                    const dz = zPosZ[zi] - meleeOrigin.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist > meleeRange) continue;
+
+                    // Check angle (frontal arc)
+                    const toZombie = new THREE.Vector3(dx, 0, dz).normalize();
+                    const dot = meleeDir.dot(toZombie);
+                    if (dot < Math.cos(meleeFOV / 2)) continue;
+
+                    if (weapon.isAbsorb) {
+                        // TENTACLE: Absorb zombie for points + healing
+                        const absorbPoints = zHP[zi] * 10;
+                        totalKills++;
+                        zState[zi] = 0;
+                        activeZombies--;
+                        // Bonus score
+                        survivalTime += absorbPoints * 0.01;
+                        // Heal player
+                        playerHealth = Math.min(playerHealth + 5, CONFIG.playerHealth || 100);
+                        if (player) player.health = playerHealth;
+                        // Absorb particles
+                        for (let p = 0; p < 12; p++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            emitParticle(
+                                zPosX[zi], 1.0, zPosZ[zi],
+                                Math.cos(angle) * 3 + (meleeOrigin.x - zPosX[zi]) * 2,
+                                2 + Math.random() * 3,
+                                Math.sin(angle) * 3 + (meleeOrigin.z - zPosZ[zi]) * 2,
+                                0.3, 1.0, 0.5, 4, 0.4
+                            );
+                        }
+                        // Update hurt time
+                        const hurtTimeAttr = zombieMeshes.normal.geometry.attributes.aHurtTime;
+                        if (hurtTimeAttr && zi < hurtTimeAttr.count) {
+                            hurtTimeAttr.setX(zi, clock.elapsedTime);
+                            hurtTimeAttr.needsUpdate = true;
+                        }
+                        break; // Tentacle grabs one at a time
+                    } else {
+                        // SWORD: Damage in frontal arc
+                        zHP[zi] = Math.max(0, zHP[zi] - weapon.damage);
+                        // Slash particles
+                        for (let p = 0; p < 6; p++) {
+                            emitParticle(
+                                zPosX[zi], 1.0, zPosZ[zi],
+                                (Math.random() - 0.5) * 8, 2 + Math.random() * 4, (Math.random() - 0.5) * 8,
+                                0.0, 1.0, 0.7, 3, 0.3
+                            );
+                        }
+                        // Update hurt time
+                        const hurtTimeAttr2 = zombieMeshes.normal.geometry.attributes.aHurtTime;
+                        if (hurtTimeAttr2 && zi < hurtTimeAttr2.count) {
+                            hurtTimeAttr2.setX(zi, clock.elapsedTime);
+                            hurtTimeAttr2.needsUpdate = true;
+                        }
+                        if (zHP[zi] <= 0) {
+                            zState[zi] = 0;
+                            activeZombies--;
+                            totalKills++;
+                            killFlashTimer = 0.06;
+                        }
+                    }
+                }
+
+                // Melee screen shake (mild)
+                if (isFPSMode) screenShakeIntensity += 0.003;
+                return; // Skip bullet spawning for melee weapons
+            }
+
+            // === FLAMETHROWER SPECIAL HANDLING ===
+            if (weapon.id === 'flame') {
+                if (weapon.ammo !== Infinity) {
+                    weapon.ammo--;
+                    updateWeaponUI();
+                }
+
+                // Trigger weapon fire animation
+                if (isFPSMode && fpsViewmodel && fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.fire === 'function') {
+                    fpsViewmodel.weaponMesh.fire();
+                } else if (player.rightWeaponMesh && typeof player.rightWeaponMesh.fire === 'function') {
+                    player.rightWeaponMesh.fire();
+                }
+                if (player.leftWeaponMesh && typeof player.leftWeaponMesh.fire === 'function') {
+                    player.leftWeaponMesh.fire();
+                }
+
+                let flameOrigin = new THREE.Vector3();
+                let flameDir = new THREE.Vector3();
+
+                if (isFPSMode && fpsViewmodel) {
+                    fpsViewmodel.muzzlePoint.getWorldPosition(flameOrigin);
+                    flameDir.set(0, 0, -1).applyQuaternion(cameraFPS.getWorldQuaternion(new THREE.Quaternion()));
+                    fpsViewmodel.position.z += 0.05;
+                } else {
+                    player._lastFiredRight = !player._lastFiredRight;
+                    const activeArm = player._lastFiredRight ? player.rightArm : player.leftArm;
+                    activeArm.hand.getWorldPosition(flameOrigin);
+                    flameDir.set(0, 0, 1).applyQuaternion(player.quaternion);
+                }
+
+                // Project flameDir onto XZ plane for accurate 2D cone collision
+                const flatFlameDir = new THREE.Vector3(flameDir.x, 0, flameDir.z).normalize();
+
+                // Spawn flame particles (narrow stream that arcs and droops)
+                for (let fp = 0; fp < 30; fp++) {
+                    const spreadX = (Math.random() - 0.5) * 0.15;
+                    const spreadY = (Math.random() - 0.5) * 0.15;
+                    const spreadZ = (Math.random() - 0.5) * 0.15;
+                    const speed = 25 + Math.random() * 10;
+                    const r = 1.0, g = 0.1 + Math.random() * 0.4, b = 0.02;
+                    emitParticle(
+                        flameOrigin.x, flameOrigin.y, flameOrigin.z,
+                        (flameDir.x + spreadX) * speed,
+                        (flameDir.y + spreadY) * speed * 0.3 + 3.0, // Give it an upward arc to droop over distance
+                        (flameDir.z + spreadZ) * speed,
+                        r, g, b, 7 + Math.random() * 4, 1.0 + Math.random() * 0.5 // Longer life allows gravity to take over
+                    );
+                }
+
+                // Damage zombies in flame cone
+                const flameRange = 16.0;
+                const flameFOV = Math.PI * 0.25; // Narrower damage cone to match visuals
+                const nearby2 = getNearby(player.position.x, player.position.z);
+                for (let k = 0; k < nearby2.length; k++) {
+                    const zi = nearby2[k];
+                    if (zState[zi] === 0) continue;
+                    const dx = zPosX[zi] - player.position.x;
+                    const dz = zPosZ[zi] - player.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist > flameRange) continue;
+                    const toZ = new THREE.Vector3(dx, 0, dz).normalize();
+                    const dot = flatFlameDir.dot(toZ);
+                    if (dot < Math.cos(flameFOV / 2)) continue;
+                    zHP[zi] = Math.max(0, zHP[zi] - weapon.damage);
+                    const hurtTimeAttr3 = zombieMeshes.normal.geometry.attributes.aHurtTime;
+                    if (hurtTimeAttr3 && zi < hurtTimeAttr3.count) {
+                        hurtTimeAttr3.setX(zi, clock.elapsedTime);
+                        hurtTimeAttr3.needsUpdate = true;
+                    }
+                    if (zHP[zi] <= 0) {
+                        zState[zi] = 0;
+                        activeZombies--;
+                        totalKills++;
+                        killFlashTimer = 0.06;
+                    }
+                }
+
+                muzzleFlashTimer = 0.04;
+                if (muzzleFlashLight) {
+                    muzzleFlashLight.color.setHex(0xff4400);
+                    muzzleFlashLight.intensity = 10;
+                    muzzleFlashLight.position.copy(flameOrigin);
+                }
+                if (isFPSMode) screenShakeIntensity += 0.001;
+                return; // Skip standard bullet spawning
             }
 
             if (weapon.ammo !== Infinity) {
@@ -3253,7 +3573,8 @@
 
             // --- MUZZLE FLASH (Weapon-Specific Intensity) ---
             const flashIntensity = {
-                pistol: 8, shotgun: 14, ar: 6, railgun: 18, flare: 20, singular: 12
+                pistol: 8, shotgun: 14, ar: 6, railgun: 18, flare: 20, singular: 12,
+                sword: 6, flame: 16, tentacle: 4
             };
             muzzleFlashTimer = weapon.id === 'shotgun' ? 0.1 : (weapon.id === 'railgun' ? 0.15 : 0.06);
             if (muzzleFlashLight) {
@@ -3353,9 +3674,10 @@
                     );
                 }
             }
+            // Note: sword, flame, tentacle are handled above and return early
 
             // --- RECOIL KICK (Weapon-specific intensity) ---
-            const recoilMap = { pistol: 0.06, shotgun: 0.14, ar: 0.04, railgun: 0.12, flare: 0.1, singular: 0.05 };
+            const recoilMap = { pistol: 0.06, shotgun: 0.14, ar: 0.04, railgun: 0.12, flare: 0.1, singular: 0.05, sword: 0.02, flame: 0.01, tentacle: 0.03 };
             recoilOffset = recoilMap[weapon.id] || 0.08;
             recoilRotation = -recoilOffset * 0.6;
             if (isFPSMode) screenShakeIntensity += (weapon.id === 'shotgun' ? 0.012 : weapon.id === 'railgun' ? 0.01 : 0.004) * weapon.pellets;
@@ -3497,9 +3819,158 @@
             }
         };
 
+        /**
+         * NeuralConsole — Direct Engine Interaction Layer
+         */
+        const NeuralConsole = {
+            isOpen: false,
+            logEl: document.getElementById('console-log'),
+            inputEl: document.getElementById('console-input'),
+            wrapEl: document.getElementById('neural-console'),
+
+            toggle() {
+                this.isOpen = !this.isOpen;
+                this.wrapEl.style.display = this.isOpen ? 'flex' : 'none';
+                if (this.isOpen) {
+                    this.inputEl.focus();
+                    this.log("SYSTEM LINK STABLE. WAITING FOR INPUT...");
+                    this.beep(880, 0.05);
+                    setTimeout(() => this.beep(1320, 0.05), 50);
+                }
+            },
+
+            beep(freq, dur) {
+                if (!window.audioCtx) return;
+                const osc = window.audioCtx.createOscillator();
+                const gain = window.audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(freq, window.audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, window.audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, window.audioCtx.currentTime + dur);
+                osc.connect(gain); gain.connect(window.audioCtx.destination);
+                osc.start(); osc.stop(window.audioCtx.currentTime + dur);
+            },
+
+            shake() {
+                this.wrapEl.style.animation = 'none';
+                this.wrapEl.offsetHeight; /* trigger reflow */
+                this.wrapEl.style.animation = 'shake 0.3s cubic-bezier(.36,.07,.19,.97) both';
+            },
+
+            log(msg, type = 'sys') {
+                const entry = document.createElement('div');
+                entry.className = `log-entry log-${type}`;
+                entry.textContent = `> ${msg}`;
+                this.logEl.appendChild(entry);
+                this.logEl.scrollTop = this.logEl.scrollHeight;
+            },
+
+            execute() {
+                const raw = this.inputEl.value.trim();
+                if (!raw) return;
+                this.log(raw, 'cmd');
+                this.inputEl.value = '';
+
+                const parts = raw.toLowerCase().split(' ');
+                const cmd = parts[0];
+                const args = parts.slice(1);
+
+                switch (cmd) {
+                    case 'help':
+                        this.log("CORE COMMANDS:", 'sys');
+                        this.log("override gravity [n] - default -0.15", 'res');
+                        this.log("mutate speed [n] - player velocity multiplier", 'res');
+                        this.log("chronos scale [n] - world time scale", 'res');
+                        this.log("neural scan - wallhack pulse", 'res');
+                        this.log("echo walk - ghost trails (toggle)", 'res');
+                        this.log("purge - clear entities", 'res');
+                        this.log("relink ammo - refill logic", 'res');
+                        this.log("warp seed [n] - world gen override", 'res');
+                        break;
+                    case 'override':
+                        if (args[0] === 'gravity' && args[1]) {
+                            CONFIG.gravity = parseFloat(args[1]);
+                            this.log(`GRAVITATIONAL CONSTANT OVERRIDDEN: ${CONFIG.gravity}`);
+                        }
+                        break;
+                    case 'mutate':
+                        if (args[0] === 'speed' && args[1]) {
+                            const mul = parseFloat(args[1]);
+                            player.speedMultiplier = mul;
+                            this.log(`BIOLOGICAL CONSTRAINTS MUTATED: SPEED x${mul}`);
+                        }
+                        break;
+                    case 'chronos':
+                        if (args[0] === 'scale' && args[1]) {
+                            TIME_SCALE = parseFloat(args[1]);
+                            this.log(`TEMPORAL DILATION ACTIVE: SCALE ${TIME_SCALE}`);
+                        }
+                        break;
+                    case 'neural':
+                        if (args[0] === 'scan') {
+                            NEURAL_SCAN_TIMER = 8.0;
+                            window.triggerNeuralScan();
+                            this.log("NEURAL SCAN PULSE EMITTED. SYNCHRONIZING ENTITY DATA.");
+                        }
+                        break;
+                    case 'echo':
+                        if (args[0] === 'walk') {
+                            ECHO_WALK_ACTIVE = !ECHO_WALK_ACTIVE;
+                            this.log(`TEMPORAL ECHOES: ${ECHO_WALK_ACTIVE ? 'STABILIZED' : 'TERMINATED'}`);
+                        }
+                        break;
+                    case 'purge':
+                        for (let i = 0; i < zState.length; i++) zState[i] = 0;
+                        activeZombies = 0;
+                        this.log("BIOLOGICAL PURGE EXECUTED. AREA CLEAR.");
+                        break;
+                    case 'relink':
+                        if (args[0] === 'ammo') {
+                            inventory.forEach(w => w.ammo = w.maxAmmo);
+                            updateWeaponUI();
+                            this.log("WEAPON LINKS RE-ESTABLISHED. AMMO REPLENISHED.");
+                        }
+                        break;
+                    case 'warp':
+                        if (args[0] === 'seed' && args[1]) {
+                            const seed = parseInt(args[1]);
+                            if (survivalMap) survivalMap.seed = seed;
+                            this.log(`WORLD SEED WARP INITIALIZED: ${seed}`);
+                            this.beep(440, 0.5);
+                        }
+                        break;
+                    case 'ghost':
+                        if (args[0] === 'decoy') {
+                            const decoy = new THREE.Mesh(
+                                new THREE.BoxGeometry(1, 2, 1),
+                                new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true })
+                            );
+                            decoy.position.copy(player.position).add(new THREE.Vector3(0, 0, -5).applyQuaternion(player.quaternion));
+                            scene.add(decoy);
+                            // Simple decoy logic: divert nearby zombies
+                            const nearby = getNearby(decoy.position.x, decoy.position.z);
+                            nearby.forEach(zi => {
+                                // Just a simple displacement for now to show "attraction"
+                                zPosX[zi] = decoy.position.x + (Math.random() - 0.5);
+                                zPosZ[zi] = decoy.position.z + (Math.random() - 0.5);
+                            });
+                            setTimeout(() => scene.remove(decoy), 10000);
+                            this.log("NEURAL DECOY DEPLOYED. ZOMBIE DATA-STREAMS DIVERTED.");
+                            this.beep(660, 0.2);
+                        }
+                        break;
+                    default:
+                        this.log(`UNKNOWN OVERRIDE: ${cmd}`, 'err');
+                        this.shake();
+                        this.beep(110, 0.2);
+                }
+            }
+        };
+
         function animate() {
             requestAnimationFrame(animate);
-            const delta = Math.min(clock.getDelta(), 0.1);
+            const rawDelta = Math.min(clock.getDelta(), 0.1);
+            const delta = rawDelta * TIME_SCALE;
             lastDelta = delta;
 
             if (!player || !zombieMeshes.normal) return;
@@ -3509,8 +3980,38 @@
                 return;
             }
 
+            // --- NEURAL CONSOLE UNIQUE FEATURES ---
+            if (NEURAL_SCAN_TIMER > 0) {
+                NEURAL_SCAN_TIMER -= delta;
+                // High-tech flicker effect on screen or entities could go here
+            }
+
+            if (ECHO_WALK_ACTIVE) {
+                echoTimer += delta;
+                if (echoTimer > 0.1) {
+                    echoTimer = 0;
+                    const ghostGeo = new THREE.BoxGeometry(0.8, 1.8, 0.8);
+                    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.3 });
+                    const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+                    ghost.position.copy(player.position);
+                    ghost.rotation.copy(player.rotation);
+                    scene.add(ghost);
+                    ghosts.push({ mesh: ghost, life: 1.0 });
+                }
+            }
+
+            for (let i = ghosts.length - 1; i >= 0; i--) {
+                ghosts[i].life -= delta * 2.0;
+                ghosts[i].mesh.material.opacity = ghosts[i].life * 0.3;
+                if (ghosts[i].life <= 0) {
+                    scene.remove(ghosts[i].mesh);
+                    ghosts.splice(i, 1);
+                }
+            }
+
             const uTime = clock.elapsedTime;
             if (typeof TWEEN !== 'undefined') TWEEN.update();
+
 
             // Update SDF Zombie Shader Time
             zombieSDFMat.uniforms.uTime.value = uTime;
@@ -3581,7 +4082,7 @@
             const sprintSpeed = keys.shift ? 1.8 : 1.0;
 
             // Jump Physics
-            const gravity = 25.0;
+            const gravity = CONFIG.gravity || 25.0;
             if (keys.space && isGrounded) {
                 velocityY = 9.0;
                 isGrounded = false;
@@ -3601,7 +4102,7 @@
             }
 
             if (moveX !== 0 || moveZ !== 0) {
-                const moveVec = new THREE.Vector3(moveX, 0, moveZ).normalize().multiplyScalar(CONFIG.playerSpeed * delta * sprintSpeed);
+                const moveVec = new THREE.Vector3(moveX, 0, moveZ).normalize().multiplyScalar(CONFIG.playerSpeed * delta * sprintSpeed * (player.speedMultiplier || 1.0));
 
                 if (isFPSMode) {
                     moveVec.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y);
@@ -3907,11 +4408,11 @@
             }
             if (player.position.y <= -1.8) { // Give a little buffer below -2.0 mesh for wading
                 frameDamage += 15 * delta; // Damage over time
-                
+
                 // Extra visual cue for being in toxic water
                 if (Math.random() < 0.1) {
-                    emitParticle(player.position.x + (Math.random()-0.5)*2, -2.0, player.position.z + (Math.random()-0.5)*2,
-                        0, Math.random()*2, 0,
+                    emitParticle(player.position.x + (Math.random() - 0.5) * 2, -2.0, player.position.z + (Math.random() - 0.5) * 2,
+                        0, Math.random() * 2, 0,
                         0.1, 0.8, 0.4, 2.0, 0.5);
                 }
             }
@@ -4145,21 +4646,8 @@
                 }
             }
 
-            // 5. Items Logic
-            items.forEach(item => {
-                if (!item.active) return;
+            // 5. Items Logic — REMOVED (no floating yellow cubes)
 
-                item.mesh.rotation.x += delta;
-                item.mesh.rotation.y += delta;
-
-                const dx = player.position.x - item.mesh.position.x;
-                const dz = player.position.z - item.mesh.position.z;
-                if (dx * dx + dz * dz < 2.0) {
-                    item.active = false;
-                    item.mesh.visible = false;
-                    itemsCollected++;
-                }
-            });
 
             // 6. Weapon Drops Logic
             for (let i = weaponDrops.length - 1; i >= 0; i--) {

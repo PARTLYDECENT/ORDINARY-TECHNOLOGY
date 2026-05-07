@@ -3,9 +3,9 @@
 
 // --- Terrain FBM Map Logic (Copied from terrain.js for independent worker execution) ---
 const TerrainGen = {
-    _glsl_mod289: function(x) { return x - Math.floor(x * (1.0 / 289.0)) * 289.0; },
-    _glsl_permute: function(x) { return this._glsl_mod289(((x * 34.0) + 1.0) * x); },
-    __snoise: function(v_x, v_y) {
+    _glsl_mod289: function (x) { return x - Math.floor(x * (1.0 / 289.0)) * 289.0; },
+    _glsl_permute: function (x) { return this._glsl_mod289(((x * 34.0) + 1.0) * x); },
+    __snoise: function (v_x, v_y) {
         let C0 = 0.211324865405187, C1 = 0.366025403784439, C2 = -0.577350269189626, C3 = 0.024390243902439;
         let d_v_Cyy = v_x * C1 + v_y * C1;
         let i_x = Math.floor(v_x + d_v_Cyy);
@@ -27,56 +27,56 @@ const TerrainGen = {
         let px0 = this._glsl_permute(py0 + i_x + 0.0);
         let px1 = this._glsl_permute(py1 + i_x + i1_x);
         let px2 = this._glsl_permute(py2 + i_x + 1.0);
-        
+
         // m0 calculation fixes
-        let mx = 0.5 - (x0_x*x0_x + x0_y*x0_y); let m0 = mx > 0.0 ? mx : 0.0;
-        let my = 0.5 - (x12_x*x12_x + x12_y*x12_y); let m1 = my > 0.0 ? my : 0.0;
-        let mz = 0.5 - (x12_z*x12_z + x12_w*x12_w); let m2 = mz > 0.0 ? mz : 0.0;
-        
+        let mx = 0.5 - (x0_x * x0_x + x0_y * x0_y); let m0 = mx > 0.0 ? mx : 0.0;
+        let my = 0.5 - (x12_x * x12_x + x12_y * x12_y); let m1 = my > 0.0 ? my : 0.0;
+        let mz = 0.5 - (x12_z * x12_z + x12_w * x12_w); let m2 = mz > 0.0 ? mz : 0.0;
+
         m0 = m0 * m0; m0 = m0 * m0;
         m1 = m1 * m1; m1 = m1 * m1;
         m2 = m2 * m2; m2 = m2 * m2;
-        
+
         let f0 = px0 * C3; f0 = f0 - Math.floor(f0);
         let f1 = px1 * C3; f1 = f1 - Math.floor(f1);
         let f2 = px2 * C3; f2 = f2 - Math.floor(f2);
-        
+
         let x__x = 2.0 * f0 - 1.0;
         let x__y = 2.0 * f1 - 1.0;
         let x__z = 2.0 * f2 - 1.0;
-        
+
         let h_x = Math.abs(x__x) - 0.5;
         let h_y = Math.abs(x__y) - 0.5;
         let h_z = Math.abs(x__z) - 0.5;
-        
+
         let ox_x = Math.floor(x__x + 0.5);
         let ox_y = Math.floor(x__y + 0.5);
         let ox_z = Math.floor(x__z + 0.5);
-        
+
         let a0_x = x__x - ox_x;
         let a0_y = x__y - ox_y;
         let a0_z = x__z - ox_z;
-        
-        m0 *= 1.79284291400159 - 0.85373472095314 * (a0_x*a0_x + h_x*h_x);
-        m1 *= 1.79284291400159 - 0.85373472095314 * (a0_y*a0_y + h_y*h_y);
-        m2 *= 1.79284291400159 - 0.85373472095314 * (a0_z*a0_z + h_z*h_z);
-        
+
+        m0 *= 1.79284291400159 - 0.85373472095314 * (a0_x * a0_x + h_x * h_x);
+        m1 *= 1.79284291400159 - 0.85373472095314 * (a0_y * a0_y + h_y * h_y);
+        m2 *= 1.79284291400159 - 0.85373472095314 * (a0_z * a0_z + h_z * h_z);
+
         return 130.0 * (
             m0 * (a0_x * x0_x + h_x * x0_y) +
             m1 * (a0_y * x12_x + h_y * x12_y) +
             m2 * (a0_z * x12_z + h_z * x12_w)
         );
     },
-    getHeight: function(x, z) {
+    getHeight: function (x, z) {
         let v = 0.0;
         let a = 0.5;
         let px = x * 0.005;
         let py = z * 0.005;
-        
+
         const c = Math.cos(0.5);
         const s = Math.sin(0.5);
-        
-        for (let i = 0; i < 6; i++) { 
+
+        for (let i = 0; i < 6; i++) {
             v += a * this.__snoise(px, py);
             let nx = (c * px - s * py) * 2.0 + 100.0;
             let ny = (s * px + c * py) * 2.0 + 100.0;
@@ -84,26 +84,26 @@ const TerrainGen = {
             py = ny;
             a *= 0.5;
         }
-        
-        const base = Math.sign(v) * Math.pow(Math.abs(v), 1.2) * 55.0;
+
+        const base = Math.sign(v) * Math.pow(Math.abs(v), 1.2) * 20.0;
         const detail = this.__snoise(x * 0.03, z * 0.03) * 2.5;
         return base + detail;
     },
-    getMeshHeight: function(x, z) {
+    getMeshHeight: function (x, z) {
         const s = 6.25;
         const x0 = Math.floor(x / s) * s;
         const z0 = Math.floor(z / s) * s;
         const x1 = x0 + s;
         const z1 = z0 + s;
-        
+
         const h00 = this.getHeight(x0, z0);
         const h10 = this.getHeight(x1, z0);
         const h01 = this.getHeight(x0, z1);
         const h11 = this.getHeight(x1, z1);
-        
+
         const u = (x - x0) / s;
         const v = (z - z0) / s;
-        
+
         if (u + v < 1) {
             return h00 + u * (h10 - h00) + v * (h01 - h00);
         } else {
@@ -116,13 +116,13 @@ const TerrainGen = {
 const gridCells = new Map();
 function getSpatialGridKey(x, z) {
     const s = 4.0;
-    return `${Math.floor(x/s)}_${Math.floor(z/s)}`;
+    return `${Math.floor(x / s)}_${Math.floor(z / s)}`;
 }
 
 // --- Worker Message Listener ---
-self.onmessage = function(e) {
+self.onmessage = function (e) {
     const data = e.data;
-    
+
     const delta = Math.min(data.delta, 0.1);
     const elapsedTime = data.elapsedTime;
     const px = data.playerPos.x;
@@ -130,7 +130,7 @@ self.onmessage = function(e) {
     const vfX = data.vectorFieldX;
     const vfZ = data.vectorFieldZ;
     const config = data.config;
-    
+
     // Arrays representing state
     const zState = data.zState;
     const zPosX = data.zPosX;
@@ -142,17 +142,17 @@ self.onmessage = function(e) {
     const zStateTimer = data.zStateTimer;
     const zCooldown = data.zCooldown;
     const zHP = data.zHP;
-    
+
     // Output objects
     let frameDamage = 0;
     const enemyProjectiles = [];
     const triggerAudio = [];
-    
+
     // Track instances for matrix population
     let nIdx = 0, pIdx = 0, tIdx = 0;
-    
+
     gridCells.clear();
-    
+
     // Build spatial hash
     for (let i = 0; i < data.spawnedZombies; i++) {
         if (zState[i] === 0) continue;
@@ -160,17 +160,17 @@ self.onmessage = function(e) {
         if (!gridCells.has(key)) gridCells.set(key, []);
         gridCells.get(key).push(i);
     }
-    
+
     // Helper to get nearby
     function getNearby(x, z) {
         const s = 4.0;
         const out = [];
-        const bx = Math.floor(x/s), bz = Math.floor(z/s);
-        for(let ox=-1; ox<=1; ox++) {
-            for(let oz=-1; oz<=1; oz++) {
-                const arr = gridCells.get(`${bx+ox}_${bz+oz}`);
-                if(arr) {
-                    for(let j=0; j<arr.length; j++) out.push(arr[j]);
+        const bx = Math.floor(x / s), bz = Math.floor(z / s);
+        for (let ox = -1; ox <= 1; ox++) {
+            for (let oz = -1; oz <= 1; oz++) {
+                const arr = gridCells.get(`${bx + ox}_${bz + oz}`);
+                if (arr) {
+                    for (let j = 0; j < arr.length; j++) out.push(arr[j]);
                 }
             }
         }
@@ -320,7 +320,7 @@ self.onmessage = function(e) {
 
         // Determine target mesh properties
         const zh = TerrainGen.getMeshHeight(zx, zz);
-        
+
         let faceX = vx, faceZ = vz;
         if (faceX === 0 && faceZ === 0) { faceX = dirPX; faceZ = dirPZ; }
         if (faceX !== 0 || faceZ !== 0) {
@@ -333,14 +333,14 @@ self.onmessage = function(e) {
         // Basic translation + Y-axis rotation matrix
         const cosY = Math.cos(zRotY[i]);
         const sinY = Math.sin(zRotY[i]);
-        
+
         // Structure matches THREE.Matrix4 .elements (Column-major order)
         // [ m11, m21, m31, m41, m12, m22, m32, m42, m13, m23, m33, m43, m14, m24, m34, m44 ]
         const matrix = [
-             cosY,  0, -sinY,  0,
-                0,  1,     0,  0,
-             sinY,  0,  cosY,  0,
-               zx, zh,    zz,  1
+            cosY, 0, -sinY, 0,
+            0, 1, 0, 0,
+            sinY, 0, cosY, 0,
+            zx, zh, zz, 1
         ];
 
         let offset = 0;

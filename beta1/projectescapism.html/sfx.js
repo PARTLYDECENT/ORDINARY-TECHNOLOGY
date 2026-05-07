@@ -94,6 +94,9 @@ const SFX = {
     triggerFire(weaponId) {
         if (weaponId === 'shotgun') this.play('SHOTGUN', { volume: 0.6 });
         else if (weaponId === 'ar' || weaponId === 'rifle') this.play('RIFLE', { volume: 0.4 });
+        else if (weaponId === 'sword') this.play('WATER_1', { volume: 0.5, pitch: 1.8 + Math.random() * 0.4 });
+        else if (weaponId === 'flame') this.play('EXP_1', { volume: 0.3, pitch: 0.4 + Math.random() * 0.2 });
+        else if (weaponId === 'tentacle') this.play('WATER_2', { volume: 0.6, pitch: 0.6 + Math.random() * 0.3 });
         else this.play('PISTOL', { volume: 0.5 });
     },
 

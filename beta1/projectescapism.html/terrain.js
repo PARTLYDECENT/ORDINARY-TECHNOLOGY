@@ -4,12 +4,12 @@
 const TerrainGen = {
     mesh: null,
     mat: null,
-    
+
     // JS Port of the GLSL Noise for CPU-side height sampling
     _mod289: (x) => x - Math.floor(x * (1.0 / 289.0)) * 289.0,
-    _permute: function(x) { return this._mod289(((x * 34.0) + 1.0) * x); },
-    
-    _snoise: function(x, y) {
+    _permute: function (x) { return this._mod289(((x * 34.0) + 1.0) * x); },
+
+    _snoise: function (x, y) {
         const C = [0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439];
         let i = Math.floor(x + (x + y) * C[1]);
         let j = Math.floor(y + (x + y) * C[1]);
@@ -26,77 +26,77 @@ const TerrainGen = {
         // Actually, let's use a simpler but deterministic JS noise for the CPU height
         // to avoid huge performance hits in the main loop, while keeping it 'close enough'
         // or worth the cost for perfect grounding.
-        
+
         // Re-implementing the exact GLSL logic is complex due to vec3 operations.
         // Let's use a standard robust 2D Simplex port.
         return this.__snoise(x, y);
     },
 
-    _glsl_mod289: function(x) { return x - Math.floor(x * (1.0 / 289.0)) * 289.0; },
-    _glsl_permute: function(x) { return this._glsl_mod289(((x * 34.0) + 1.0) * x); },
+    _glsl_mod289: function (x) { return x - Math.floor(x * (1.0 / 289.0)) * 289.0; },
+    _glsl_permute: function (x) { return this._glsl_mod289(((x * 34.0) + 1.0) * x); },
     // Exact port of GLSL snoise
-    __snoise: function(v_x, v_y) {
+    __snoise: function (v_x, v_y) {
         let C0 = 0.211324865405187, C1 = 0.366025403784439, C2 = -0.577350269189626, C3 = 0.024390243902439;
-        
+
         let d_v_Cyy = v_x * C1 + v_y * C1;
         let i_x = Math.floor(v_x + d_v_Cyy);
         let i_y = Math.floor(v_y + d_v_Cyy);
-        
+
         let d_i_Cxx = i_x * C0 + i_y * C0;
         let x0_x = v_x - i_x + d_i_Cxx;
         let x0_y = v_y - i_y + d_i_Cxx;
-        
+
         let i1_x = (x0_x > x0_y) ? 1.0 : 0.0;
         let i1_y = (x0_x > x0_y) ? 0.0 : 1.0;
-        
+
         let x12_x = x0_x + C0 - i1_x;
         let x12_y = x0_y + C0 - i1_y;
         let x12_z = x0_x + C2;
         let x12_w = x0_y + C2;
-        
+
         i_x = this._glsl_mod289(i_x);
         i_y = this._glsl_mod289(i_y);
-        
+
         let py0 = this._glsl_permute(i_y + 0.0);
         let py1 = this._glsl_permute(i_y + i1_y);
         let py2 = this._glsl_permute(i_y + 1.0);
-        
+
         let px0 = this._glsl_permute(py0 + i_x + 0.0);
         let px1 = this._glsl_permute(py1 + i_x + i1_x);
         let px2 = this._glsl_permute(py2 + i_x + 1.0);
-        
-        let m0 = Math.max(0.5 - (x0_x*x0_x + x0_y*x0_y), 0.0);
-        let m1 = Math.max(0.5 - (x12_x*x12_x + x12_y*x12_y), 0.0);
-        let m2 = Math.max(0.5 - (x12_z*x12_z + x12_w*x12_w), 0.0);
-        
+
+        let m0 = Math.max(0.5 - (x0_x * x0_x + x0_y * x0_y), 0.0);
+        let m1 = Math.max(0.5 - (x12_x * x12_x + x12_y * x12_y), 0.0);
+        let m2 = Math.max(0.5 - (x12_z * x12_z + x12_w * x12_w), 0.0);
+
         m0 = m0 * m0; m0 = m0 * m0;
         m1 = m1 * m1; m1 = m1 * m1;
         m2 = m2 * m2; m2 = m2 * m2;
-        
+
         let f0 = px0 * C3; f0 = f0 - Math.floor(f0);
         let f1 = px1 * C3; f1 = f1 - Math.floor(f1);
         let f2 = px2 * C3; f2 = f2 - Math.floor(f2);
-        
+
         let x__x = 2.0 * f0 - 1.0;
         let x__y = 2.0 * f1 - 1.0;
         let x__z = 2.0 * f2 - 1.0;
-        
+
         let h_x = Math.abs(x__x) - 0.5;
         let h_y = Math.abs(x__y) - 0.5;
         let h_z = Math.abs(x__z) - 0.5;
-        
+
         let ox_x = Math.floor(x__x + 0.5);
         let ox_y = Math.floor(x__y + 0.5);
         let ox_z = Math.floor(x__z + 0.5);
-        
+
         let a0_x = x__x - ox_x;
         let a0_y = x__y - ox_y;
         let a0_z = x__z - ox_z;
-        
-        m0 *= 1.79284291400159 - 0.85373472095314 * (a0_x*a0_x + h_x*h_x);
-        m1 *= 1.79284291400159 - 0.85373472095314 * (a0_y*a0_y + h_y*h_y);
-        m2 *= 1.79284291400159 - 0.85373472095314 * (a0_z*a0_z + h_z*h_z);
-        
+
+        m0 *= 1.79284291400159 - 0.85373472095314 * (a0_x * a0_x + h_x * h_x);
+        m1 *= 1.79284291400159 - 0.85373472095314 * (a0_y * a0_y + h_y * h_y);
+        m2 *= 1.79284291400159 - 0.85373472095314 * (a0_z * a0_z + h_z * h_z);
+
         return 130.0 * (
             m0 * (a0_x * x0_x + h_x * x0_y) +
             m1 * (a0_y * x12_x + h_y * x12_y) +
@@ -104,17 +104,17 @@ const TerrainGen = {
         );
     },
 
-    getHeight: function(x, z) {
+    getHeight: function (x, z) {
         // Match the FBM and Magnitude in GLSL EXACTLY
         let v = 0.0;
         let a = 0.5;
         let px = x * 0.005;
         let py = z * 0.005;
-        
+
         const c = Math.cos(0.5);
         const s = Math.sin(0.5);
-        
-        for (let i = 0; i < 6; i++) { 
+
+        for (let i = 0; i < 6; i++) {
             v += a * this.__snoise(px, py);
             let nx = (c * px - s * py) * 2.0 + 100.0;
             let ny = (s * px + c * py) * 2.0 + 100.0;
@@ -122,28 +122,28 @@ const TerrainGen = {
             py = ny;
             a *= 0.5;
         }
-        
-        const base = Math.sign(v) * Math.pow(Math.abs(v), 1.2) * 55.0;
+
+        const base = Math.sign(v) * Math.pow(Math.abs(v), 1.2) * 20.0;
         const detail = this.__snoise(x * 0.03, z * 0.03) * 2.5;
         return base + detail;
     },
 
     // Calculates the actual linear height on the triangle face to prevent clipping/sinking
-    getMeshHeight: function(x, z) {
+    getMeshHeight: function (x, z) {
         const s = 6.25; // Grid spacing in segments
         const x0 = Math.floor(x / s) * s;
         const z0 = Math.floor(z / s) * s;
         const x1 = x0 + s;
         const z1 = z0 + s;
-        
+
         const h00 = this.getHeight(x0, z0);
         const h10 = this.getHeight(x1, z0);
         const h01 = this.getHeight(x0, z1);
         const h11 = this.getHeight(x1, z1);
-        
+
         const u = (x - x0) / s;
         const v = (z - z0) / s;
-        
+
         // Match standard PlaneGeometry triangle layout: two triangles per quad
         // Triangle 1: (0,0), (0,1), (1,1) or (0,0), (1,0), (1,1)?
         // In Three.js PlaneGeometry, quad (i, j) is split into:
@@ -158,16 +158,16 @@ const TerrainGen = {
         }
     },
 
-    getMesh: function() {
+    getMesh: function () {
         if (this.mesh) return this.mesh;
-        
+
         const terrainGeo = new THREE.PlaneBufferGeometry(2400, 2400, 384, 384);
-        const terrainMat = new THREE.MeshStandardMaterial({ 
-            color: 0x888888, 
-            roughness: 0.9, 
-            metalness: 0.1 
+        const terrainMat = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            roughness: 0.9,
+            metalness: 0.1
         });
-        
+
         const glslFBM = `
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec2 mod289v2(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -221,7 +221,7 @@ float getBiomeNoise(vec2 pos) {
 
 float getTerrainHeight(vec2 pos) {
     float b = fbm(pos * 0.005);
-    float base = sign(b) * pow(abs(b), 1.2) * 55.0;
+    float base = sign(b) * pow(abs(b), 1.2) * 20.0;
     float detail = snoise(pos * 0.03) * 2.5;
     return base + detail;
 }
@@ -245,13 +245,13 @@ float getTerrainHeight(vec2 pos) {
             shader.uniforms.texForest = { value: texForest };
             shader.uniforms.texWaste = { value: texWaste };
             shader.uniforms.uMapType = { value: 0 };
-            
+
             shader.vertexShader = glslFBM + `
                 varying vec2 vWorldPosRaw;
                 varying float vDistToCam;
                 varying float vHeight;
             ` + shader.vertexShader;
-            
+
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <beginnormal_vertex>`,
                 `#include <beginnormal_vertex>
@@ -280,7 +280,7 @@ float getTerrainHeight(vec2 pos) {
                 `#include <worldpos_vertex>
                  vDistToCam = length(worldPosition.xyz - cameraPosition.xyz);`
             );
-            
+
             shader.fragmentShader = glslFBM + `
                 uniform float uTime;
                 uniform vec2 uPlayerPos;
@@ -313,12 +313,12 @@ float getTerrainHeight(vec2 pos) {
                     return va/w1;
                 }
             ` + shader.fragmentShader;
-            
+
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <map_fragment>`,
                 `#include <map_fragment>
                 float biomen = getBiomeNoise(vWorldPosRaw);
-                vec2 uv = vWorldPosRaw * 0.15;
+                vec2 uv = vWorldPosRaw * 1.5;
                 
                 vec3 colToxic = textureNoTile(texToxic, uv);
                 vec3 colForest = textureNoTile(texForest, uv);
@@ -373,8 +373,8 @@ float getTerrainHeight(vec2 pos) {
         this.mesh = terrain;
         return terrain;
     },
-    
-    follow: function(playerPosition) {
+
+    follow: function (playerPosition) {
         if (!this.mesh) return;
         const snap = 6.25;
         this.mesh.position.x = Math.floor(playerPosition.x / snap) * snap;
@@ -383,8 +383,8 @@ float getTerrainHeight(vec2 pos) {
             this.mat.userData.shader.uniforms.uPlayerPos.value.set(playerPosition.x, playerPosition.z);
         }
     },
-    
-    update: function(delta) {
+
+    update: function (delta) {
         if (this.mat && this.mat.userData && this.mat.userData.shader) {
             if (this.mat.userData.shader.uniforms.uTime) {
                 this.mat.userData.shader.uniforms.uTime.value += delta;
