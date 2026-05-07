@@ -249,34 +249,93 @@
             box-sizing: border-box;
         }
 
+        /* --- SCI-FI CROSSHAIR HUD --- */
         #crosshair {
-            position: absolute;
-            width: 20px;
-            height: 20px;
+            position: fixed;
+            width: 44px;
+            height: 44px;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            z-index: 100;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            mix-blend-mode: screen;
         }
 
-        #crosshair::before,
-        #crosshair::after {
-            content: '';
+        .ch-core {
+            width: 4px;
+            height: 4px;
+            background: #00ffcc;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ffcc;
+            transition: all 0.1s;
+        }
+
+        .ch-bracket {
             position: absolute;
-            background: rgba(239, 68, 68, 0.8);
+            width: 12px;
+            height: 12px;
+            border: 1.5px solid #00ffcc;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0.8;
+            box-shadow: 0 0 5px rgba(0, 255, 204, 0.3);
         }
 
-        #crosshair::before {
-            top: 9px;
-            left: 0;
-            width: 20px;
-            height: 2px;
+        .ch-bracket.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .ch-bracket.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+        .ch-bracket.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+        .ch-bracket.br { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+        .ch-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px dashed rgba(0, 255, 204, 0.25);
+            border-radius: 50%;
+            animation: ch-rotate 12s linear infinite;
         }
 
-        #crosshair::after {
-            top: 0;
-            left: 9px;
-            width: 2px;
-            height: 20px;
+        @keyframes ch-rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Reactivity */
+        @keyframes ch-kick {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            15% { transform: translate(-50%, -50%) scale(1.5); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        #crosshair.firing {
+            animation: ch-kick 0.15s ease-out;
+        }
+
+        #crosshair.firing .ch-bracket {
+            border-color: #ef4444;
+            box-shadow: 0 0 10px #ef4444;
+        }
+
+        #crosshair.firing .ch-core {
+            background: #ef4444;
+            transform: scale(1.5);
+        }
+
+        @keyframes ch-hit {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.8); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        #crosshair.hit {
+            animation: ch-hit 0.2s ease-out;
+        }
+
+        #crosshair.hit .ch-core {
+            background: #ffffff;
+            box-shadow: 0 0 20px #ffffff;
+            transform: scale(2.5);
         }
 
         #survival-timer {
@@ -727,7 +786,14 @@
     </div>
     <div id="cinematic-border"></div>
     <div id="canvas-container"></div>
-    <div id="crosshair"></div>
+    <div id="crosshair">
+        <div class="ch-ring"></div>
+        <div class="ch-core"></div>
+        <div class="ch-bracket tl"></div>
+        <div class="ch-bracket tr"></div>
+        <div class="ch-bracket bl"></div>
+        <div class="ch-bracket br"></div>
+    </div>
     <div id="damage-vignette"></div>
     <div id="kill-flash"></div>
     <div id="low-health-pulse"></div>
@@ -1507,6 +1573,25 @@
 
         // --- GLOBALS & ENTITIES ---
         let player;
+
+        // --- Crosshair Reactivity Helpers ---
+        let crosshairEl = document.getElementById('crosshair');
+        function kickCrosshair() {
+            if (!crosshairEl) crosshairEl = document.getElementById('crosshair');
+            if (crosshairEl) {
+                crosshairEl.classList.remove('firing');
+                void crosshairEl.offsetWidth; // trigger reflow
+                crosshairEl.classList.add('firing');
+            }
+        }
+        function hitCrosshair() {
+            if (!crosshairEl) crosshairEl = document.getElementById('crosshair');
+            if (crosshairEl) {
+                crosshairEl.classList.remove('hit');
+                void crosshairEl.offsetWidth; // trigger reflow
+                crosshairEl.classList.add('hit');
+            }
+        }
         let playerHealth = 100;
         let itemsCollected = 0;
         const items = [];
@@ -1607,7 +1692,7 @@
         const bulletMat = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Neutral gray instead of yellow
         const bullets = [];
         const enemyProjectiles = [];
-        const weaponDrops = [];
+        window.weaponDrops = [];
 
         // --- Tracer Geometries (pre-allocated per weapon type) ---
         const tracerGeoPistol = new THREE.BoxGeometry(0.06, 0.06, 0.8);
@@ -1762,15 +1847,15 @@
             if (!player) return;
             const dropTypes = ['shotgun', 'ar'];
             const typeId = dropTypes[Math.floor(Math.random() * dropTypes.length)];
-            const wCfg = weaponsCfg[typeId];
-
-            const wGeo = ObjectFactory.getWeaponCrateGeo();
-            const wMat = ObjectFactory.getWeaponCrateMat();
-            const matClone = wMat.clone();
-            matClone.color.setHex(wCfg.color);
-            matClone.emissive.setHex(wCfg.color);
-
-            const dropMesh = new THREE.Mesh(wGeo, matClone);
+            
+            // USE SHOTGUN MODEL FOR ALL DROPS AS REQUESTED
+            const dropMesh = new Shotgun();
+            dropMesh.scale.set(0.6, 0.6, 0.6);
+            
+            // Remove the light from the pickup model to save performance
+            if (dropMesh.muzzleLight) {
+                dropMesh.remove(dropMesh.muzzleLight);
+            }
 
             const angle = Math.random() * Math.PI * 2;
             const dist = 10 + Math.random() * 20; // 10-30 units away
@@ -1778,7 +1863,10 @@
             const dropPosZ = player.position.z + Math.sin(angle) * dist;
             const dropHeight = TerrainGen.getHeight(dropPosX, dropPosZ);
 
-            dropMesh.position.set(dropPosX, dropHeight + 0.25, dropPosZ);
+            dropMesh.position.set(dropPosX, dropHeight + 0.4, dropPosZ);
+            // Random scatter rotation
+            dropMesh.rotation.set(0.2, Math.random() * Math.PI * 2, 0.1);
+
             scene.add(dropMesh);
             weaponDrops.push({ mesh: dropMesh, type: typeId });
         }
@@ -2212,9 +2300,7 @@
                 });
 
                 // === FOREARM ENERGY GLOW LIGHT ===
-                const armGlow = new THREE.PointLight(0x00aaff, 0.4, 2);
-                armGlow.position.set(0.0, -0.06, -0.4);
-                armGroup.add(armGlow);
+                // Random lights removed as requested
 
                 // =================================================================
                 // WEAPON ATTACHMENT
@@ -2315,10 +2401,7 @@
 
             updateWeaponMesh(); // Re-attach guns to new player
 
-            if (muzzleFlashLight) {
-                player.add(muzzleFlashLight);
-                muzzleFlashLight.intensity = 0;
-            }
+            // muzzleFlashLight removed
 
             // 6. UI Update
             document.getElementById('ui-health').style.width = '100%';
@@ -2384,9 +2467,7 @@
                 }
 
                 // Muzzle Flash Light (pre-allocated, reused every shot)
-                muzzleFlashLight = new THREE.PointLight(0xffaa00, 0, 10);
-                muzzleFlashLight.position.set(0, 1.5, 1.0);
-                player.add(muzzleFlashLight);
+                // muzzleFlashLight removed
 
                 // Initialize HUD Navigator
                 hudNavigator = new HUDNavigator(scene, cameraIso, spawnNodes);
@@ -2880,13 +2961,11 @@
                     scene.add(hiveMesh);
 
                     // Green glow light
-                    const hiveLight = new THREE.PointLight(0x00ff44, 1.5, 12);
-                    hiveLight.position.set(pos.x, hiveH + 1.5, pos.z);
-                    scene.add(hiveLight);
+                    // hiveLight removed as requested
 
                     spawnNodes.push({
                         x: pos.x, z: pos.z, hp: 500, maxHP: 500,
-                        mesh: hiveMesh, light: hiveLight, mat: hiveMat,
+                        mesh: hiveMesh, light: null, mat: hiveMat,
                         spawnTimer: Math.random() * 2, active: true,
                         respawnTimer: 0, idx: idx
                     });
@@ -3360,6 +3439,7 @@
 
                 // Player recoil
                 player.fire();
+                kickCrosshair();
 
                 // Get attack origin and direction
                 const meleeOrigin = player.position.clone();
@@ -3460,6 +3540,7 @@
                 if (player.leftWeaponMesh && typeof player.leftWeaponMesh.fire === 'function') {
                     player.leftWeaponMesh.fire();
                 }
+                kickCrosshair();
 
                 let flameOrigin = new THREE.Vector3();
                 let flameDir = new THREE.Vector3();
@@ -3548,6 +3629,7 @@
                 // Add snappy recoil to fps viewmodel
                 fpsViewmodel.position.z += 0.2;
                 fpsViewmodel.rotation.x += 0.08;
+                kickCrosshair();
             } else {
                 // Toggle active arm (ISO Mode)
                 player._lastFiredRight = !player._lastFiredRight;
@@ -3560,6 +3642,7 @@
                 if (player._lastFiredRight) player.recoilRight = 0.35;
                 else player.recoilLeft = 0.35;
                 player.fire(); // Global recoil/shake
+                kickCrosshair();
             }
 
             // Trigger internal mechanical animations if the weapon is procedural
@@ -4199,10 +4282,7 @@
             }
 
             // Muzzle Flash Light Decay
-            if (muzzleFlashLight) {
-                muzzleFlashLight.intensity *= Math.pow(0.00001, delta);
-                if (muzzleFlashLight.intensity < 0.01) muzzleFlashLight.intensity = 0;
-            }
+            // muzzleFlashLight intensity update removed
 
             // Screen Shake (FPS only — pitch only, never yaw to avoid drift)
             if (isFPSMode && screenShakeIntensity > 0.0005) {
@@ -4290,7 +4370,7 @@
                         node.hp = node.maxHP;
                         node.respawnTimer = 0;
                         node.mesh.visible = true;
-                        node.light.intensity = 1.5;
+                        // hive light intensity update removed
                         node.mat.opacity = 0.9;
                     }
                     return;
@@ -4558,7 +4638,7 @@
                         if (node.hp <= 0) {
                             node.active = false;
                             node.mesh.visible = false;
-                            node.light.intensity = 0;
+                            // hive light intensity update removed
                             node.respawnTimer = 0;
                             nodesDestroyed++;
                             const anc = spawnNodes.filter(n => n.active).length;
@@ -4571,7 +4651,9 @@
                                     0.1, 0.9, 0.2, 4 + Math.random() * 4, 0.5 + Math.random() * 0.5);
                             }
                         }
-                        scene.remove(b.mesh); bullets.splice(i, 1); hit = true; break;
+                        scene.remove(b.mesh); bullets.splice(i, 1); hit = true; 
+                        hitCrosshair();
+                        break;
                     }
                 }
                 if (hit) continue;
@@ -4585,6 +4667,7 @@
                     if (dx * dx + dz * dz < 0.8) {
                         const finalDmg = b.damage;
                         zHP[j] = Math.max(0, zHP[j] - finalDmg);
+                        hitCrosshair();
 
                         const hitX = b.mesh.position.x;
                         const hitY = b.mesh.position.y || 1.0;

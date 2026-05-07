@@ -87,8 +87,6 @@ const CampaignMapManager = (function () {
             };
 
             // Environmental Detailing (Procedural Debris)
-            this.rockGeo = ObjectFactory.getRockGeo();
-            this.rockMat = ObjectFactory.getRockMat();
             this.debrisGeo = ObjectFactory.getDebrisGeo();
             this.debrisMat = ObjectFactory.getScrapMat();
             this.barrelGeo = ObjectFactory.getBarrelGeo();
@@ -114,7 +112,7 @@ const CampaignMapManager = (function () {
                 }
             });
 
-            const sharedMats = [this.treeMat, this.rockMat, this.debrisMat, this.barrelMat];
+            const sharedMats = [this.treeMat, this.debrisMat, this.barrelMat];
             sharedMats.forEach(mat => {
                 if (mat && mat.userData && mat.userData.shader && mat.userData.shader.uniforms.uTime) {
                     mat.userData.shader.uniforms.uTime.value += delta;
@@ -171,18 +169,17 @@ const CampaignMapManager = (function () {
 
             const sdfBunkers = new THREE.InstancedMesh(FacilityGen.sdfBunkerGeo, FacilityGen.sdfBunkerMat, 2);
             const pillars = new THREE.InstancedMesh(FacilityGen.pillarGeo, FacilityGen.pillarMat, 1000);
-            const trees = new THREE.InstancedMesh(this.treeGeo, this.treeMat, 300);
-            const rocks = new THREE.InstancedMesh(this.rockGeo, this.rockMat, 400);
+            const trees = new THREE.InstancedMesh(this.treeGeo, this.treeMat, 150);
             const debris = new THREE.InstancedMesh(this.debrisGeo, this.debrisMat, 200);
-            const barrels = new THREE.InstancedMesh(this.barrelGeo, this.barrelMat, 100);
+            const barrels = new THREE.InstancedMesh(this.barrelGeo, this.barrelMat, 50);
             const pipes = new THREE.InstancedMesh(FacilityGen.pipeGeo, FacilityGen.pipeMat, 800);
             const steam = new THREE.InstancedMesh(FacilityGen.steamGeo, FacilityGen.steamMat, 150);
 
-            [sdfBunkers, pillars, trees, rocks, debris, barrels, pipes, steam].forEach(m => {
+            [sdfBunkers, pillars, trees, debris, barrels, pipes, steam].forEach(m => {
                 m.castShadow = true; m.receiveShadow = true;
             });
 
-            let sdfCount = 0, pCount = 0, tCount = 0, rCount = 0, dCount = 0, brlCount = 0, pipeCount = 0, steamCount = 0;
+            let sdfCount = 0, pCount = 0, tCount = 0, dCount = 0, brlCount = 0, pipeCount = 0, steamCount = 0;
             const dummy = new THREE.Object3D();
 
             // 1. Procedural SDF Bunker Generation
@@ -217,21 +214,17 @@ const CampaignMapManager = (function () {
 
             if (costField[i] !== 255) {
                     const rand = Math.random();
-                    let pTree = 0.04, pRock = 0.07, pBarrel = 0.015, pFire = 0.003;
+                    let pTree = 0.02, pBarrel = 0.00375;
 
                     if (chunkBiome === 'wasteland') {
-                        pTree = 0.005; // very rare dead trees
-                        pRock = 0.15;  // very dense rocks
-                        pBarrel = 0.025;
-                        pFire = 0.008;  // more fires
+                        pTree = 0.0025; // very rare dead trees
+                        pBarrel = 0.00625;
                     } else if (chunkBiome === 'toxic') {
-                        pTree = 0.01;
-                        pRock = 0.05;
-                        pBarrel = 0.05; // high industrial debris
-                        pFire = 0.006;
+                        pTree = 0.005;
+                        pBarrel = 0.0125; // halved industrial debris
                     }
 
-                    if (rand < pTree && tCount < 300) { // Trees
+                    if (rand < pTree && tCount < 150) { // Trees
                         const tx = lx * this.config.cellSize + this.config.cellSize / 2 + worldOffsetX;
                         const tz = lz * this.config.cellSize + this.config.cellSize / 2 + worldOffsetZ;
                         const gh = TerrainGen.getMeshHeight(tx, tz);
@@ -242,16 +235,7 @@ const CampaignMapManager = (function () {
                         dummy.updateMatrix();
                         trees.setMatrixAt(tCount++, dummy.matrix);
                         costField[i] = 10;
-                    } else if (rand < pTree + pRock && rCount < 400) { // Rocks
-                        const rx = lx * this.config.cellSize + Math.random() * 2;
-                        const rz = lz * this.config.cellSize + Math.random() * 2;
-                        const gh = TerrainGen.getMeshHeight(rx + worldOffsetX, rz + worldOffsetZ);
-                        dummy.position.set(rx, gh, rz);
-                        dummy.rotation.set(Math.random() * 0.2, Math.random() * 6.28, Math.random() * 0.2);
-                        dummy.scale.setScalar(0.4 + Math.random() * (chunkBiome === 'wasteland' ? 1.5 : 0.8)); // bigger rocks in wasteland
-                        dummy.updateMatrix();
-                        rocks.setMatrixAt(rCount++, dummy.matrix);
-                    } else if (rand < pTree + pRock + pBarrel && brlCount < 100) { // Barrels
+                    } else if (rand < pTree + pBarrel && brlCount < 50) { // Barrels
                         const bx = lx * this.config.cellSize + 1;
                         const bz = lz * this.config.cellSize + 1;
                         const gh = TerrainGen.getHeight(bx + worldOffsetX, bz + worldOffsetZ);
@@ -262,22 +246,6 @@ const CampaignMapManager = (function () {
                         dummy.updateMatrix();
                         barrels.setMatrixAt(brlCount++, dummy.matrix);
                         costField[i] = 50;
-                    } else if (rand < pTree + pRock + pBarrel + pFire) {
-                        const fx = lx * this.config.cellSize + 1;
-                        const fz = lz * this.config.cellSize + 1;
-                        const gh = TerrainGen.getHeight(fx + worldOffsetX, fz + worldOffsetZ);
-                        if (chunkBiome === 'toxic' && Math.random() > 0.4) {
-                            const puke = new THREE.Mesh(ObjectFactory.getPukePuddleGeo(), ObjectFactory.getPukeMat());
-                            puke.position.set(fx, gh + 0.05, fz);
-                            puke.scale.setScalar(1.0 + Math.random() * 1.5);
-                            chunkGroup.add(puke);
-                        } else {
-                            const fire = new THREE.Mesh(this.fireGeo, this.fireMat.clone());
-                            fire.position.set(fx, gh, fz);
-                            fire.scale.setScalar(0.8 + Math.random() * 0.5);
-                            chunkGroup.add(fire);
-                            this.animatableObjects.push(fire);
-                        }
                     }
                 }
             }
@@ -339,16 +307,16 @@ const CampaignMapManager = (function () {
                 }
             }
 
-            sdfBunkers.count = sdfCount; pillars.count = pCount; trees.count = tCount; rocks.count = rCount; debris.count = dCount; barrels.count = brlCount;
+            sdfBunkers.count = sdfCount; pillars.count = pCount; trees.count = tCount; debris.count = dCount; barrels.count = brlCount;
             pipes.count = pipeCount; steam.count = steamCount;
 
-            chunkGroup.add(sdfBunkers); chunkGroup.add(pillars); chunkGroup.add(trees); chunkGroup.add(rocks); chunkGroup.add(debris); chunkGroup.add(barrels);
+            chunkGroup.add(sdfBunkers); chunkGroup.add(pillars); chunkGroup.add(trees); chunkGroup.add(debris); chunkGroup.add(barrels);
             chunkGroup.add(pipes); chunkGroup.add(steam);
 
             this.chunks.set(key, {
                 group: chunkGroup,
                 costField: costField,
-                sdfBunkers: sdfBunkers, pillars: pillars, trees: trees, rocks: rocks, debris: debris, barrels: barrels,
+                sdfBunkers: sdfBunkers, pillars: pillars, trees: trees, debris: debris, barrels: barrels,
                 pipes: pipes, steam: steam
             });
         }
