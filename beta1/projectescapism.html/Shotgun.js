@@ -222,8 +222,70 @@ class Shotgun extends THREE.Group {
         this.triggerZ = -0.25;
         this.lightIntensity = 5.0; // Brighter flash
         
+        // Play shotgun blast audio
+        this.playProceduralShot();
+        
         // Wait briefly, then auto-pump
         setTimeout(() => this.triggerPumpAction(), 250);
+    }
+
+    playProceduralShot() {
+        if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = window.audioCtx;
+        if (ctx.state === 'suspended') ctx.resume();
+
+        const t = ctx.currentTime;
+
+        // Layer 1: Massive wide-band noise blast (the BOOM)
+        const bufLen = ctx.sampleRate * 0.12;
+        const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.08));
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+        const nGain = ctx.createGain();
+        nGain.gain.setValueAtTime(0.45, t);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        const nFilter = ctx.createBiquadFilter();
+        nFilter.type = 'lowpass';
+        nFilter.frequency.value = 4000;
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(ctx.destination);
+        noise.start(t); noise.stop(t + 0.15);
+
+        // Layer 2: Deep sub-bass concussion (chest thump)
+        const sub = ctx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(55, t);
+        sub.frequency.exponentialRampToValueAtTime(20, t + 0.2);
+        const subGain = ctx.createGain();
+        subGain.gain.setValueAtTime(0.6, t);
+        subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        sub.connect(subGain); subGain.connect(ctx.destination);
+        sub.start(t); sub.stop(t + 0.3);
+
+        // Layer 3: Sharp initial crack (muzzle report)
+        const crack = ctx.createOscillator();
+        crack.type = 'sawtooth';
+        crack.frequency.setValueAtTime(1500, t);
+        crack.frequency.exponentialRampToValueAtTime(100, t + 0.02);
+        const crackGain = ctx.createGain();
+        crackGain.gain.setValueAtTime(0.35, t);
+        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+        crack.connect(crackGain); crackGain.connect(ctx.destination);
+        crack.start(t); crack.stop(t + 0.04);
+
+        // Layer 4: Low rumble tail (reverb simulation)
+        const tail = ctx.createOscillator();
+        tail.type = 'sine';
+        tail.frequency.setValueAtTime(70, t + 0.05);
+        tail.frequency.exponentialRampToValueAtTime(30, t + 0.35);
+        const tailGain = ctx.createGain();
+        tailGain.gain.setValueAtTime(0.12, t + 0.05);
+        tailGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        tail.connect(tailGain); tailGain.connect(ctx.destination);
+        tail.start(t + 0.05); tail.stop(t + 0.45);
     }
 
     triggerPumpAction() {

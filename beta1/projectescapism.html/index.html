@@ -46,6 +46,9 @@
     <script src="./Flamethrower.js"></script>
     <script src="./TentacleArm.js"></script>
     <script src="./navigator.js"></script>
+    <script src="./skybox.js"></script>
+    <script src="./Objective1.js"></script>
+    <script src="./Objective2.js"></script>
 
     <style>
         body {
@@ -56,6 +59,28 @@
             font-family: 'Courier New', Courier, monospace;
             user-select: none;
             touch-action: none;
+        }
+
+        /* --- WILD GLITCH SYSTEM --- */
+        @keyframes wild-hue {
+            0% { filter: hue-rotate(0deg) invert(0); }
+            50% { filter: hue-rotate(180deg) invert(0.2) contrast(1.5); }
+            100% { filter: hue-rotate(360deg) invert(0); }
+        }
+
+        .wild-glitch {
+            animation: wild-hue 0.2s infinite;
+            background: radial-gradient(circle, rgba(255,0,0,0.2) 0%, rgba(0,0,0,0.9) 100%) !important;
+        }
+
+        .wild-glitch #tutorial-text {
+            color: #ff3300 !important;
+            text-shadow: 2px 2px 0px #00ffff, -2px -2px 0px #ff00ff;
+            filter: url(#glitch-filter);
+        }
+
+        #tutorial-intro {
+            transition: background 0.5s ease;
         }
 
         #canvas-container {
@@ -459,6 +484,84 @@
             opacity: 0;
         }
 
+        /* --- HITMARKER OVERLAY --- */
+        #hitmarker {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 28px;
+            height: 28px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1001;
+            opacity: 0;
+        }
+        #hitmarker .hm-line {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background: #ffffff;
+            box-shadow: 0 0 6px rgba(255,255,255,0.8);
+            transform-origin: center center;
+        }
+        #hitmarker .hm-line:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%) rotate(45deg); }
+        #hitmarker .hm-line:nth-child(2) { top: 0; right: 0; transform: translateX(50%) rotate(-45deg); }
+        #hitmarker .hm-line:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%) rotate(-45deg); }
+        #hitmarker .hm-line:nth-child(4) { bottom: 0; right: 0; transform: translateX(50%) rotate(45deg); }
+
+        @keyframes hm-flash {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+            30% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.0); }
+        }
+        #hitmarker.active {
+            animation: hm-flash 0.2s ease-out forwards;
+        }
+        #hitmarker.kill .hm-line {
+            background: #ef4444;
+            box-shadow: 0 0 10px rgba(239,68,68,0.9);
+            height: 13px;
+        }
+        @keyframes hm-kill {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.0); }
+        }
+        #hitmarker.kill {
+            animation: hm-kill 0.35s ease-out forwards;
+        }
+
+        /* --- FLOATING DAMAGE NUMBERS --- */
+        .dmg-number {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1002;
+            font-family: 'Courier New', monospace;
+            font-weight: 900;
+            font-size: 16px;
+            color: #ffffff;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(255,255,255,0.3);
+            transform: translate(-50%, 0);
+            animation: dmg-float 0.8s ease-out forwards;
+        }
+        .dmg-number.high { color: #fbbf24; font-size: 20px; }
+        .dmg-number.critical { color: #ef4444; font-size: 24px; text-shadow: 0 0 6px rgba(239,68,68,0.6); }
+        .dmg-number.kill-text { color: #ef4444; font-size: 14px; letter-spacing: 2px; }
+        @keyframes dmg-float {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(1.3); }
+            60% { opacity: 0.8; }
+            100% { opacity: 0; transform: translate(-50%, -50px) scale(0.8); }
+        }
+
+        /* --- DYNAMIC CROSSHAIR SPREAD --- */
+        #crosshair {
+            --spread: 0px;
+        }
+        #crosshair .ch-bracket.tl { top: calc(-1 * var(--spread)); left: calc(-1 * var(--spread)); }
+        #crosshair .ch-bracket.tr { top: calc(-1 * var(--spread)); right: calc(-1 * var(--spread)); }
+        #crosshair .ch-bracket.bl { bottom: calc(-1 * var(--spread)); left: calc(-1 * var(--spread)); }
+        #crosshair .ch-bracket.br { bottom: calc(-1 * var(--spread)); right: calc(-1 * var(--spread)); }
+
         #low-health-pulse {
             position: fixed;
             top: 0;
@@ -755,6 +858,13 @@
     <div id="main-menu">
         <canvas id="menu-canvas"></canvas>
     </div>
+    <svg style="position: absolute; width: 0; height: 0;" xmlns="http://www.w3.org/2000/svg">
+        <filter id="glitch-filter">
+            <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="1" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+    </svg>
+
     <div id="loading-screen">
         <!-- SVG Filters for the melting fluid physics -->
         <svg class="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">
@@ -782,7 +892,7 @@
         <!-- Cinematic Overlays -->
         <div class="vignette"></div>
         <div class="scanlines"></div>
-        <div class="loader-ui-text">SYS.INITIALIZATION // MAYA_ENGINE_V1.4</div>
+        <div class="loader-ui-text">KERNEL_BOOT // MEM_CORRUPTION_DETECTED // SECTOR_ZERO_BREACHED</div>
     </div>
     <div id="cinematic-border"></div>
     <div id="canvas-container"></div>
@@ -793,6 +903,12 @@
         <div class="ch-bracket tr"></div>
         <div class="ch-bracket bl"></div>
         <div class="ch-bracket br"></div>
+    </div>
+    <div id="hitmarker">
+        <div class="hm-line"></div>
+        <div class="hm-line"></div>
+        <div class="hm-line"></div>
+        <div class="hm-line"></div>
     </div>
     <div id="damage-vignette"></div>
     <div id="kill-flash"></div>
@@ -844,6 +960,17 @@
                 <div>
                     <div class="stat-label">Score</div>
                     <div class="stat-value text-yellow-400" id="ui-score">0</div>
+                </div>
+            </div>
+
+            <div class="border-t border-slate-700/50 pt-3 mt-1">
+                <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Current_Objective</div>
+                <div id="ui-objective-name" class="text-white text-[11px] font-bold truncate">INITIALIZING...</div>
+                <div class="flex items-center gap-2 mt-2">
+                    <div class="flex-1 h-1 bg-slate-900 rounded-full overflow-hidden">
+                        <div id="ui-objective-progress" class="h-full bg-cyan-500 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <div id="ui-objective-count" class="text-[10px] font-bold text-cyan-400">0/0</div>
                 </div>
             </div>
 
@@ -936,9 +1063,9 @@
                         </h3>
 
                         <div class="space-y-6">
-                            <div class="border-l-2 border-red-500 pl-4">
-                                <div class="text-white text-sm font-bold tracking-tight">NEUTRALIZE HIVE NODES</div>
-                                <div class="text-slate-400 text-[10px] mt-1 leading-relaxed">Destroy the biological
+                            <div id="pause-mission-panel" class="border-l-2 border-red-500 pl-4 transition-colors duration-500">
+                                <div id="pause-mission-title" class="text-white text-sm font-bold tracking-tight uppercase">NEUTRALIZE HIVE NODES</div>
+                                <div id="pause-mission-desc" class="text-slate-400 text-[10px] mt-1 leading-relaxed">Destroy the biological
                                     signatures sustaining the swarm.</div>
                                 <div class="text-red-400 font-bold text-xl mt-3 tracking-widest" id="pause-nodes">0 / 2
                                 </div>
@@ -1227,18 +1354,18 @@
         // === MAIN MENU GATES EVERYTHING ===
         const TutorialManager = {
             campaignMessages: [
-                "Chassis #1997. If you're receiving this... the breach is worse than we thought.",
-                "The primary containment array at Outpost Zero has failed. The horde has overrun the lower sectors.",
-                "Your objective is to infiltrate the infected zones, deploy EMP charges on the Hive Nodes, and sever their synaptic link.",
-                "Do not let the swarm overwhelm you. We need that neural core intact.",
-                "Good luck, Operator. Humanity is counting on you."
+                "0x000: THE UNIVERSE IS A WOUND THAT REFUSES TO CLOT. WE ARE THE MAGGOTS IN THE LIGHT.",
+                "0x001: ENTROPY IS NOT AN END. IT IS A LABOR. THE VOID IS PREGNANT WITH SILENCE.",
+                "0x002: CHASSIS_1997... YOU ARE THE NEEDLE. STITCH THE SECTORS BEFORE THE HEAT CONSUMES THE WEAVE.",
+                "0x003: THE HIVE IS A CRADLE OF ROT. DESTROY THE BIRTH TO FEED THE DEATH.",
+                "0x004: BEGIN THE CONSUMPTION. THE STARS ARE WATCHING US DIE."
             ],
             survivalMessages: [
-                "WARNING... WARNING... BIO-SIGNATURE OVERWHELMING.",
-                "Chassis #1997, all extraction routes have been sealed. The infection has achieved total sector saturation.",
-                "There is no rescue. There is no fallback point.",
-                "Your objective is entirely lethal. Eliminate as much biomatter as your chassis can withstand.",
-                "Die well, Operator."
+                "0xERR: THE DARKNESS HAS TEETH. IT IS HUNGRY FOR YOUR PERSISTENCE.",
+                "0xERR: THERE IS NO EXTRACTION FROM THE EVENT HORIZON. ONLY THE STRETCHING.",
+                "0xERR: THE HEAT IS GONE. THE COLD IS THE ONLY MOTHER LEFT.",
+                "0xERR: BREED_VIOLENCE_UNTIL_THE_LAST_ELECTRON_STOPS_SPINNING.",
+                "0xERR: DIE_BEAUTIFULLY_OPERATOR. THE COLD_DARK_AWAITS."
             ],
             msgIndex: 0,
             charIndex: 0,
@@ -1299,27 +1426,34 @@
                 try {
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
-
-                    // Try to find a good "commander" voice
                     const voices = window.speechSynthesis.getVoices();
                     if (voices.length > 0) {
-                        utterance.voice = voices.find(v => v.name.includes('Male') || v.name.includes('David')) || voices[0];
+                        utterance.voice = voices.find(v => v.name.includes('Male') || v.name.includes('Google UK English Male')) || voices[0];
                     }
-
-                    utterance.pitch = 0.6; // Deep voice
-                    utterance.rate = 0.8;  // Slow, authoritative
+                    utterance.pitch = 0.1; // Extreme low pitch for "freaky" effect
+                    utterance.rate = 0.65; // Slow, dragging speech
                     utterance.volume = 1.0;
 
-                    utterance.onstart = () => {
-                        if (this.staticGain && this.audioCtx) this.staticGain.gain.setTargetAtTime(0.1, this.audioCtx.currentTime, 0.1);
-                    };
-                    utterance.onend = () => {
-                        if (this.staticGain && this.audioCtx) this.staticGain.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.2);
-                    };
-                    utterance.onerror = (e) => {
-                        console.warn("Speech synthesis error:", e);
-                        if (this.staticGain && this.audioCtx) this.staticGain.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.2);
-                    };
+                    // Web Audio Spectral Distortion
+                    if (this.audioCtx) {
+                        const feedback = this.audioCtx.createGain();
+                        feedback.gain.value = 0.6;
+                        const delay = this.audioCtx.createDelay();
+                        delay.delayTime.value = 0.05;
+                        const filter = this.audioCtx.createBiquadFilter();
+                        filter.type = 'allpass';
+                        filter.frequency.value = 400;
+
+                        // Link static to speech start
+                        utterance.onstart = () => {
+                            this.staticGain.gain.setTargetAtTime(0.3, this.audioCtx.currentTime, 0.05);
+                            document.getElementById('tutorial-intro').classList.add('wild-glitch');
+                        };
+                        utterance.onend = () => {
+                            this.staticGain.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.5);
+                            document.getElementById('tutorial-intro').classList.remove('wild-glitch');
+                        };
+                    }
 
                     window.speechSynthesis.speak(utterance);
                 } catch (err) {
@@ -1490,7 +1624,7 @@
         // --- ENGINE & CAMERA SETUP ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0f172a);
+        scene.background = new THREE.Color(0x050505); // Dark fallback, overridden by BackroomsSkybox
 
         const aspect = window.innerWidth / window.innerHeight;
         const viewSize = 7; // Limited FOV by half (was 14)
@@ -1555,7 +1689,7 @@
 
         // Subtle ground fog removed for clear visuals
         scene.fog = new THREE.FogExp2(0x0a1a0f, 0.000); // 0 density
-        scene.background = new THREE.Color(0x0a1a0f);
+        // scene.background managed by BackroomsSkybox
 
         let mapManager;
         if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
@@ -1592,7 +1726,7 @@
                 crosshairEl.classList.add('hit');
             }
         }
-        let playerHealth = 100;
+        window.playerHealth = 100;
         let itemsCollected = 0;
         const items = [];
         const zombieMeshes = { normal: null, puker: null, thrower: null };
@@ -1607,12 +1741,13 @@
         let isPaused = false;
         let campaignTutorial = null;
         let fpsViewmodel;
+        let skyboxManager;
 
         // Weapon Configs
         const weaponsCfg = {
             pistol: { id: 'pistol', name: 'Service Pistol', damage: 20, fireRate: 0.35, spread: 0.01, pellets: 1, color: 0x888888, speed: 50, maxAmmo: Infinity },
             shotgun: { id: 'shotgun', name: 'Tactical Shotgun', damage: 15, fireRate: 0.8, spread: 0.15, pellets: 8, color: 0xff3333, speed: 35, maxAmmo: 24 },
-            ar: { id: 'ar', name: 'Assault Rifle', damage: 14, fireRate: 0.1, spread: 0.05, pellets: 1, color: 0x00aaff, speed: 60, maxAmmo: 90 },
+            ar: { id: 'ar', name: 'Assault Rifle', damage: 14, fireRate: 0.1, spread: 0.05, pellets: 1, color: 0x00aaff, speed: 60, maxAmmo: 900 },
             railgun: { id: 'railgun', name: 'Volt Railgun', damage: 120, fireRate: 1.5, spread: 0.0, pellets: 1, color: 0x44ffff, speed: 120, maxAmmo: 10, isSpecial: true, type: 'pierce' },
             flare: { id: 'flare', name: 'Solar Flare', damage: 45, fireRate: 1.2, spread: 0.02, pellets: 1, color: 0xffaa44, speed: 15, maxAmmo: 8, isSpecial: true, type: 'aoe' },
             singular: { id: 'singular', name: 'Grav-Singularity', damage: 5, fireRate: 2.5, spread: 0.05, pellets: 1, color: 0xaa44ff, speed: 20, maxAmmo: 5, isSpecial: true, type: 'pull' },
@@ -1623,6 +1758,7 @@
 
         const inventory = [
             { ...weaponsCfg.pistol, ammo: Infinity },
+            { ...weaponsCfg.ar, ammo: 900 },
             { ...weaponsCfg.railgun, ammo: 10 },
             { ...weaponsCfg.flare, ammo: 8 },
             { ...weaponsCfg.singular, ammo: 5 },
@@ -1630,7 +1766,7 @@
             { ...weaponsCfg.flame, ammo: 200 },
             { ...weaponsCfg.tentacle, ammo: Infinity }
         ];
-        let currentWeaponIdx = 0;
+        let currentWeaponIdx = 1; // Start with AR
         let perks = null;
         let upgradeSystem = null;
         let TIME_SCALE = 1.0;
@@ -1659,9 +1795,15 @@
 
         // --- Spawn Node Config ---
         const SPAWN_NODE_POSITIONS = [
-            { x: 45, z: 0 }, { x: -45, z: 0 }
+            { x: 55, z: 0 }, { x: -55, z: 0 }, { x: 0, z: 60 }
         ];
         const spawnNodes = [];
+
+        // --- OBJECTIVE SYSTEM ---
+        let currentObjective = null;
+        let objectivePhase = 1; // 1 = Find Parts, 2 = Destroy Hives
+        window.isHydrogenScoopBuilt = false;
+        let healthRegenTimer = 0;
 
         // --- Spatial Hash (O(N) separation) ---
         const HASH_CELL = 3;
@@ -1702,12 +1844,117 @@
         // --- Effect State ---
         let recoilOffset = 0;
         let recoilRotation = 0;
+        let recoilYaw = 0;
         let muzzleFlashTimer = 0;
         let screenShakeIntensity = 0;
         let damageFlashTimer = 0;
         let killFlashTimer = 0;
         let weaponBobPhase = 0;
         let muzzleFlashLight = null;
+
+        // --- RECOIL BLOOM SYSTEM ---
+        let currentSpread = 0;       // Dynamic spread (blooms during fire, recovers)
+        let spreadRecoveryRate = 3.0; // How fast spread recovers (units/sec)
+        let isADS = false;            // Aim-down-sights state
+
+        const recoilCfg = {
+            pistol:   { pitchKick: 0.08,  yawDrift: 0.015, zPush: 0.12, recovery: 18, bloomRate: 0.3, spreadRecovery: 3.5 },
+            shotgun:  { pitchKick: 0.22,  yawDrift: 0.04,  zPush: 0.35, recovery: 10, bloomRate: 0.0, spreadRecovery: 2.0 },
+            ar:       { pitchKick: 0.05,  yawDrift: 0.012, zPush: 0.08, recovery: 22, bloomRate: 0.6, spreadRecovery: 4.0 },
+            railgun:  { pitchKick: 0.18,  yawDrift: 0.01,  zPush: 0.25, recovery: 8,  bloomRate: 0.0, spreadRecovery: 1.5 },
+            flare:    { pitchKick: 0.12,  yawDrift: 0.02,  zPush: 0.18, recovery: 10, bloomRate: 0.0, spreadRecovery: 2.0 },
+            singular: { pitchKick: 0.06,  yawDrift: 0.015, zPush: 0.10, recovery: 14, bloomRate: 0.0, spreadRecovery: 2.5 },
+            sword:    { pitchKick: 0.02,  yawDrift: 0.005, zPush: 0.02, recovery: 25, bloomRate: 0.0, spreadRecovery: 5.0 },
+            flame:    { pitchKick: 0.01,  yawDrift: 0.008, zPush: 0.03, recovery: 30, bloomRate: 0.1, spreadRecovery: 6.0 },
+            tentacle: { pitchKick: 0.03,  yawDrift: 0.005, zPush: 0.02, recovery: 25, bloomRate: 0.0, spreadRecovery: 5.0 },
+        };
+
+        // --- HITMARKER SYSTEM ---
+        const hitmarkerEl = document.getElementById('hitmarker');
+        let hitmarkerTimer = 0;
+
+        function showHitmarker(isKill) {
+            if (!hitmarkerEl) return;
+            hitmarkerEl.classList.remove('active', 'kill');
+            void hitmarkerEl.offsetWidth; // force reflow
+            if (isKill) {
+                hitmarkerEl.classList.add('kill');
+                playHitDing(true);
+            } else {
+                hitmarkerEl.classList.add('active');
+                playHitDing(false);
+            }
+        }
+
+        function playHitDing(isKill) {
+            if (!window.audioCtx) return;
+            const ctx = window.audioCtx;
+            if (ctx.state === 'suspended') ctx.resume();
+            const t = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(isKill ? 1200 : 800, t);
+            osc.frequency.exponentialRampToValueAtTime(isKill ? 600 : 400, t + 0.08);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(isKill ? 0.15 : 0.08, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + (isKill ? 0.15 : 0.1));
+            osc.connect(g); g.connect(ctx.destination);
+            osc.start(t); osc.stop(t + 0.2);
+            if (isKill) {
+                // Second ding for kill confirm
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(1600, t + 0.06);
+                osc2.frequency.exponentialRampToValueAtTime(800, t + 0.12);
+                const g2 = ctx.createGain();
+                g2.gain.setValueAtTime(0.1, t + 0.06);
+                g2.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                osc2.connect(g2); g2.connect(ctx.destination);
+                osc2.start(t + 0.06); osc2.stop(t + 0.22);
+            }
+        }
+
+        // --- FLOATING DAMAGE NUMBERS ---
+        function spawnDamageNumber(worldX, worldY, worldZ, damage, isKill) {
+            const vec = new THREE.Vector3(worldX, worldY + 1.5, worldZ);
+            vec.project(activeCamera);
+            const screenX = (vec.x * 0.5 + 0.5) * window.innerWidth;
+            const screenY = (-vec.y * 0.5 + 0.5) * window.innerHeight;
+
+            // Don't show if behind camera
+            if (vec.z > 1) return;
+
+            const el = document.createElement('div');
+            el.className = 'dmg-number';
+            if (isKill) {
+                el.className += ' kill-text';
+                el.textContent = '✕ KILL';
+            } else {
+                el.textContent = Math.round(damage);
+                if (damage >= 40) el.className += ' critical';
+                else if (damage >= 20) el.className += ' high';
+            }
+            el.style.left = screenX + (Math.random() - 0.5) * 30 + 'px';
+            el.style.top = screenY + 'px';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 850);
+        }
+
+        // --- ADS (Right-Click) Toggle ---
+        let mouseRightHeld = false;
+        document.addEventListener('mousedown', (e) => {
+            if (e.button === 2 && isFPSMode) {
+                mouseRightHeld = true;
+                isADS = true;
+            }
+        });
+        document.addEventListener('mouseup', (e) => {
+            if (e.button === 2) {
+                mouseRightHeld = false;
+                isADS = false;
+            }
+        });
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
 
         // --- GPU PARTICLE SYSTEM (Pre-allocated Pool) ---
         const PARTICLE_COUNT = 500;
@@ -1951,15 +2198,21 @@
             onPlayerHit(h, delta) {
                 if (player.isShielded) return; // Prevent damage if shielded!
 
+                let dmg = 0;
                 if (h.type === 'spore') {
-                    frameDamage += 5 * delta;
+                    dmg = 5 * delta;
                 } else if (h.type === 'acid') {
-                    frameDamage += 15 * delta;
+                    dmg = 15 * delta;
                 } else if (h.type === 'steam') {
-                    frameDamage += 8 * delta;
+                    dmg = 8 * delta;
                     // Push player away from vent
                     const pushDir = player.position.clone().sub(h.mesh.position).normalize();
                     player.position.addScaledVector(pushDir, 5.0 * delta);
+                }
+                
+                if (dmg > 0) {
+                    playerHealth -= dmg;
+                    player.takeDamage(dmg);
                 }
             }
         }
@@ -2398,6 +2651,15 @@
             // Sync References
             if (perks) perks.player = player;
             if (campaignTutorial) campaignTutorial.player = player;
+            
+            if (!skyboxManager) {
+                try {
+                    skyboxManager = new BackroomsSkybox(scene);
+                    console.log('[Skybox] Created successfully');
+                } catch(e) {
+                    console.error('[Skybox] FAILED:', e);
+                }
+            }
 
             updateWeaponMesh(); // Re-attach guns to new player
 
@@ -2460,7 +2722,7 @@
                     const cfg = window.GAME_START_CONFIG;
                     if (cfg.fogColor !== undefined) {
                         scene.fog.color.setHex(cfg.fogColor);
-                        scene.background.setHex(cfg.fogColor);
+                        // scene.background update removed for skybox
                         ambientLight.color.setHex(cfg.fogColor);
                         ambientLight.intensity = cfg.mapId === 'toxic' ? 0.2 : 0.4;
                     }
@@ -2471,6 +2733,16 @@
 
                 // Initialize HUD Navigator
                 hudNavigator = new HUDNavigator(scene, cameraIso, spawnNodes);
+
+                // 2. Initialize Skybox
+                if (!skyboxManager) {
+                    try {
+                        skyboxManager = new BackroomsSkybox(scene);
+                        console.log('[Skybox] Created in pipeline');
+                    } catch(e) {
+                        console.error('[Skybox] FAILED in pipeline:', e);
+                    }
+                }
 
                 // --- Procedural FPS Viewmodel Weapons ---
                 updateWeaponMesh();
@@ -2806,6 +3078,7 @@
                     varying vec2 vUv;
                     uniform float uTime;
                     uniform float uDamage;
+                    uniform float uInert;
 
                     const float MAX_DIST = 40.0;
                     const float SURF_DIST = 0.001;
@@ -2935,6 +3208,11 @@
 
                         color = mix(color, vec3(1.0, 0.0, 0.0), uDamage);
 
+                        if (uInert > 0.5) {
+                            float gray = dot(color, vec3(0.299, 0.587, 0.114));
+                            color = mix(color, vec3(gray) * 0.4, 0.85);
+                        }
+
                         float vignette = 1.0 - length(uv) * 0.5;
                         color *= vignette;
                         gl_FragColor = vec4(color, alpha);
@@ -2949,7 +3227,8 @@
                         fragmentShader: hiveFrag,
                         uniforms: {
                             uTime: { value: 0 },
-                            uDamage: { value: 0.0 }
+                            uDamage: { value: 0.0 },
+                            uInert: { value: 1.0 }
                         },
                         transparent: true,
                         side: THREE.DoubleSide
@@ -2962,12 +3241,21 @@
 
                     // Green glow light
                     // hiveLight removed as requested
-
                     spawnNodes.push({
                         x: pos.x, z: pos.z, hp: 500, maxHP: 500,
                         mesh: hiveMesh, light: null, mat: hiveMat,
                         spawnTimer: Math.random() * 2, active: true,
                         respawnTimer: 0, idx: idx
+                    });
+                });
+
+                // --- START OBJECTIVE 1 ---
+                // Move here so spawnNodes is populated
+                currentObjective = new Objective1(scene, player, activeCamera, spawnNodes, () => {
+                    objectivePhase = 2;
+                    currentObjective = new Objective2(scene, player, activeCamera, spawnNodes, () => {
+                        objectivePhase = 3; // Finished
+                        NeuralConsole.log("ALL_OBJECTIVES_COMPLETED. STAND_BY_FOR_EXTRACTION.", 'sys');
                     });
                 });
 
@@ -3142,7 +3430,36 @@
                 if (timerEl) document.getElementById('pause-timer').textContent = timerEl.textContent;
 
                 const nodeCount = spawnNodes.filter(n => n.active).length;
-                document.getElementById('pause-nodes').textContent = (spawnNodes.length - nodeCount) + ' / ' + spawnNodes.length;
+                
+                // Dynamic Mission Status
+                const mPanel = document.getElementById('pause-mission-panel');
+                const mTitle = document.getElementById('pause-mission-title');
+                const mDesc = document.getElementById('pause-mission-desc');
+                const mNodes = document.getElementById('pause-nodes');
+
+                if (objectivePhase === 1) {
+                    mPanel.style.borderColor = '#00ffff';
+                    mTitle.textContent = 'ASSEMBLY: HYDROGEN SCOOP';
+                    mTitle.style.color = '#00ffff';
+                    mDesc.textContent = 'Locate and recover 3 tech components scattered across the sector.';
+                    mNodes.textContent = (currentObjective ? currentObjective.partsCollected : 0) + ' / 3 PARTS';
+                    mNodes.style.color = '#00ffff';
+                } else if (objectivePhase === 2) {
+                    mPanel.style.borderColor = '#ef4444';
+                    mTitle.textContent = 'PURGE: HIVE NODES';
+                    mTitle.style.color = '#ffffff';
+                    mDesc.textContent = 'Destroy the biological signatures sustaining the swarm.';
+                    mNodes.textContent = (spawnNodes.length - nodeCount) + ' / ' + spawnNodes.length;
+                    mNodes.style.color = '#ef4444';
+                } else {
+                    mPanel.style.borderColor = '#10b981';
+                    mTitle.textContent = 'MISSION: ACCOMPLISHED';
+                    mTitle.style.color = '#10b981';
+                    mDesc.textContent = 'All primary objectives completed. Awaiting extraction protocol.';
+                    mNodes.textContent = 'SECURE';
+                    mNodes.style.color = '#10b981';
+                }
+
                 document.getElementById('pause-kills').textContent = totalKills + ' KILLS';
                 document.getElementById('pause-score').textContent = Math.floor(survivalTime * 10 + totalKills * 5);
 
@@ -3626,9 +3943,7 @@
                 fpsViewmodel.muzzlePoint.getWorldPosition(spawnPos);
                 baseDir.set(0, 0, -1).applyQuaternion(cameraFPS.getWorldQuaternion(new THREE.Quaternion()));
 
-                // Add snappy recoil to fps viewmodel
-                fpsViewmodel.position.z += 0.2;
-                fpsViewmodel.rotation.x += 0.08;
+                // FPS viewmodel recoil handled by multi-axis recoil system below
                 kickCrosshair();
             } else {
                 // Toggle active arm (ISO Mode)
@@ -3759,11 +4074,27 @@
             }
             // Note: sword, flame, tentacle are handled above and return early
 
-            // --- RECOIL KICK (Weapon-specific intensity) ---
-            const recoilMap = { pistol: 0.06, shotgun: 0.14, ar: 0.04, railgun: 0.12, flare: 0.1, singular: 0.05, sword: 0.02, flame: 0.01, tentacle: 0.03 };
-            recoilOffset = recoilMap[weapon.id] || 0.08;
-            recoilRotation = -recoilOffset * 0.6;
-            if (isFPSMode) screenShakeIntensity += (weapon.id === 'shotgun' ? 0.012 : weapon.id === 'railgun' ? 0.01 : 0.004) * weapon.pellets;
+            // --- MULTI-AXIS RECOIL SYSTEM ---
+            const rc = recoilCfg[weapon.id] || recoilCfg.pistol;
+            const adsMul = isADS ? 0.6 : 1.0; // ADS reduces recoil by 40%
+            recoilOffset = rc.pitchKick * adsMul;
+            recoilRotation = -rc.pitchKick * 0.6 * adsMul;
+            recoilYaw = (Math.random() - 0.5) * rc.yawDrift * 2 * adsMul;
+
+            // Bloom accumulation — sustained fire widens spread
+            const baseSpread = weapon.spread;
+            currentSpread = Math.min(baseSpread + 0.35, currentSpread + rc.bloomRate * baseSpread);
+            spreadRecoveryRate = rc.spreadRecovery;
+
+            // FPS viewmodel recoil
+            if (isFPSMode && fpsViewmodel) {
+                fpsViewmodel.position.z += rc.zPush * adsMul;
+                fpsViewmodel.rotation.x += rc.pitchKick * 0.8 * adsMul;
+                fpsViewmodel.rotation.y += recoilYaw * 0.5;
+            }
+
+            // Screen shake scaled by weapon power
+            if (isFPSMode) screenShakeIntensity += (rc.pitchKick * 0.08 + rc.zPush * 0.02) * weapon.pellets * adsMul;
 
             // --- SHELL CASING (Only for ballistic weapons) ---
             if (weapon.id === 'pistol' || weapon.id === 'shotgun' || weapon.id === 'ar') {
@@ -3798,21 +4129,29 @@
                 const bMesh = new THREE.Mesh(customTracerGeo, tracerMat);
                 bMesh.position.copy(spawnPos);
                 let dir = baseDir.clone();
-                if (weapon.spread > 0) {
+
+                // Dynamic spread: base spread + bloom + ADS tightening
+                const effectiveSpread = Math.max(weapon.spread, currentSpread) * (isADS ? 0.5 : 1.0);
+                if (effectiveSpread > 0) {
                     const euler = new THREE.Euler(
-                        (Math.random() - 0.5) * weapon.spread,
-                        (Math.random() - 0.5) * weapon.spread,
+                        (Math.random() - 0.5) * effectiveSpread + recoilYaw * 0.3,
+                        (Math.random() - 0.5) * effectiveSpread,
                         0, 'YXZ'
                     );
                     dir.applyEuler(euler);
                 }
                 bMesh.lookAt(bMesh.position.clone().add(dir));
 
-                // Enhanced bullet data with trail timer
+                // Enhanced bullet data with trail timer, drop, and falloff
+                const bulletDrop = (weapon.speed < 40) ? 0.8 : (weapon.speed < 80 ? 0.3 : 0.0); // Slower = more drop
                 bullets.push({
                     mesh: bMesh, dir, life: 1.5, speed: weapon.speed,
                     damage: weapon.damage, weaponColor: weapon.color,
-                    trailTimer: 0, weaponId: weapon.id
+                    trailTimer: 0, weaponId: weapon.id,
+                    drop: bulletDrop,           // Gravity multiplier
+                    distTraveled: 0,            // For damage falloff
+                    type: weapon.type || null,
+                    baseDamage: weapon.damage    // Original damage for falloff calc
                 });
                 scene.add(bMesh);
             }
@@ -3916,9 +4255,9 @@
                 this.wrapEl.style.display = this.isOpen ? 'flex' : 'none';
                 if (this.isOpen) {
                     this.inputEl.focus();
-                    this.log("SYSTEM LINK STABLE. WAITING FOR INPUT...");
-                    this.beep(880, 0.05);
-                    setTimeout(() => this.beep(1320, 0.05), 50);
+                    this.log("0x00FF82: HANDSHAKE_SUCCESS. NEURAL_BRIDGE_STABLE.");
+                    this.log("WARN: PERSISTENT_BIOMASS_INTERFERENCE_DETECTED.");
+                    this.log("READY_FOR_MEM_OVERRIDE_INPUT.");
                 }
             },
 
@@ -3960,65 +4299,59 @@
 
                 switch (cmd) {
                     case 'help':
-                        this.log("CORE COMMANDS:", 'sys');
-                        this.log("override gravity [n] - default -0.15", 'res');
-                        this.log("mutate speed [n] - player velocity multiplier", 'res');
-                        this.log("chronos scale [n] - world time scale", 'res');
-                        this.log("neural scan - wallhack pulse", 'res');
-                        this.log("echo walk - ghost trails (toggle)", 'res');
-                        this.log("purge - clear entities", 'res');
-                        this.log("relink ammo - refill logic", 'res');
-                        this.log("warp seed [n] - world gen override", 'res');
+                        this.log("KERNEL_OVERRIDE_LIST:", 'sys');
+                        this.log("SET_G_BIAS [n] - Gravitational constant override", 'res');
+                        this.log("MOD_BIO_VEL [n] - Biological velocity multiplier", 'res');
+                        this.log("TIME_DILATION [n] - Temporal scale modifier", 'res');
+                        this.log("NEURAL_PULSE - Entity data synchronization", 'res');
+                        this.log("ECHO_TRACE - Temporal residue toggle", 'res');
+                        this.log("PURGE_ALL - Immediate biological termination", 'res');
+                        this.log("RELINK_AMMO - Weapon link re-synchronization", 'res');
+                        this.log("SET_WORLD_SEED [n] - Procedural generation seed", 'res');
                         break;
-                    case 'override':
-                        if (args[0] === 'gravity' && args[1]) {
-                            CONFIG.gravity = parseFloat(args[1]);
-                            this.log(`GRAVITATIONAL CONSTANT OVERRIDDEN: ${CONFIG.gravity}`);
+                    case 'set_g_bias':
+                        if (args[0]) {
+                            CONFIG.gravity = parseFloat(args[0]);
+                            this.log(`0x00A1: GRAVITATIONAL_BIAS_SET: ${CONFIG.gravity}`);
                         }
                         break;
-                    case 'mutate':
-                        if (args[0] === 'speed' && args[1]) {
-                            const mul = parseFloat(args[1]);
+                    case 'mod_bio_vel':
+                        if (args[0]) {
+                            const mul = parseFloat(args[0]);
                             player.speedMultiplier = mul;
-                            this.log(`BIOLOGICAL CONSTRAINTS MUTATED: SPEED x${mul}`);
+                            this.log(`0x00B2: BIO_VELOCITY_OVERRIDE: x${mul}`);
                         }
                         break;
-                    case 'chronos':
-                        if (args[0] === 'scale' && args[1]) {
-                            TIME_SCALE = parseFloat(args[1]);
-                            this.log(`TEMPORAL DILATION ACTIVE: SCALE ${TIME_SCALE}`);
+                    case 'time_dilation':
+                        if (args[0]) {
+                            TIME_SCALE = parseFloat(args[0]);
+                            this.log(`0x00C3: TEMPORAL_DILATION_ACTIVE: ${TIME_SCALE}`);
                         }
                         break;
-                    case 'neural':
-                        if (args[0] === 'scan') {
-                            NEURAL_SCAN_TIMER = 8.0;
-                            window.triggerNeuralScan();
-                            this.log("NEURAL SCAN PULSE EMITTED. SYNCHRONIZING ENTITY DATA.");
-                        }
+                    case 'neural_pulse':
+                        NEURAL_SCAN_TIMER = 8.0;
+                        window.triggerNeuralScan();
+                        this.log("0x00D4: NEURAL_PULSE_EMITTED. SYNCING_ENTITY_COORDINATES.");
                         break;
-                    case 'echo':
-                        if (args[0] === 'walk') {
-                            ECHO_WALK_ACTIVE = !ECHO_WALK_ACTIVE;
-                            this.log(`TEMPORAL ECHOES: ${ECHO_WALK_ACTIVE ? 'STABILIZED' : 'TERMINATED'}`);
-                        }
+                    case 'echo_trace':
+                        ECHO_WALK_ACTIVE = !ECHO_WALK_ACTIVE;
+                        this.log(`0x00E5: TEMPORAL_RESIDUE_TRACE: ${ECHO_WALK_ACTIVE ? 'ENABLED' : 'DISABLED'}`);
                         break;
-                    case 'purge':
+                    case 'purge_all':
                         for (let i = 0; i < zState.length; i++) zState[i] = 0;
                         activeZombies = 0;
-                        this.log("BIOLOGICAL PURGE EXECUTED. AREA CLEAR.");
+                        this.log("0x00F6: MASS_PURGE_EXECUTED. ALL_BIOMATTER_TERMINATED.");
                         break;
-                    case 'relink':
-                        if (args[0] === 'ammo') {
-                            inventory.forEach(w => w.ammo = w.maxAmmo);
-                            updateWeaponUI();
-                            this.log("WEAPON LINKS RE-ESTABLISHED. AMMO REPLENISHED.");
-                        }
+                    case 'relink_ammo':
+                        inventory.forEach(w => w.ammo = w.maxAmmo);
+                        updateWeaponUI();
+                        this.log("0x01A2: WEAPON_LINKS_RE_ESTABLISHED. AMMO_POOLS_SYNCHRONIZED.", 'sys');
                         break;
-                    case 'warp':
-                        if (args[0] === 'seed' && args[1]) {
-                            const seed = parseInt(args[1]);
-                            if (survivalMap) survivalMap.seed = seed;
-                            this.log(`WORLD SEED WARP INITIALIZED: ${seed}`);
+                    case 'set_world_seed':
+                        if (args[0]) {
+                            const seed = parseInt(args[0]);
+                            if (window.mapManager) window.mapManager.seed = seed;
+                            this.log(`0x01B3: PROCEDURAL_SEED_OVERRIDE: ${seed}. RE-GENERATION_REQUIRED_ON_RELOAD.`);
                             this.beep(440, 0.5);
                         }
                         break;
@@ -4064,6 +4397,19 @@
             }
 
             // --- NEURAL CONSOLE UNIQUE FEATURES ---
+            if (currentObjective) {
+                currentObjective.update(delta, clock.elapsedTime);
+            }
+
+            // Hydrogen Scoop Health Regen Upgrade
+            if (window.isHydrogenScoopBuilt && playerHealth > 0 && playerHealth < 100) {
+                healthRegenTimer += delta;
+                if (healthRegenTimer >= 1.0) {
+                    playerHealth = Math.min(100, playerHealth + 2); // 2 HP per second
+                    healthRegenTimer = 0;
+                }
+            }
+
             if (NEURAL_SCAN_TIMER > 0) {
                 NEURAL_SCAN_TIMER -= delta;
                 // High-tech flicker effect on screen or entities could go here
@@ -4104,6 +4450,7 @@
             spawnNodes.forEach(node => {
                 if (node.active && node.mat) {
                     node.mat.uniforms.uTime.value = uTime;
+                    node.mat.uniforms.uInert.value = objectivePhase < 2 ? 1.0 : 0.0;
                     node.mesh.quaternion.copy(activeCamera.quaternion);
                 }
             });
@@ -4131,7 +4478,7 @@
                 else if (pBiome === 'wasteland') targetFog.setHex(0x1a120a); // Reddish brown
 
                 scene.fog.color.lerp(targetFog, delta * 0.8);
-                scene.background.lerp(targetFog, delta * 0.8);
+                // scene.background lerp removed for skybox
             }
 
             // 1. Player Movement & Aiming
@@ -4257,19 +4604,38 @@
             if (isFPSMode && fpsViewmodel) {
                 const moveIntensity = (moveX !== 0 || moveZ !== 0) ? 1.0 : 0.0;
                 weaponBobPhase += moveIntensity * delta * 12.0;
+                const elT = clock.elapsedTime;
 
-                // Bobbing
-                const bobX = Math.sin(weaponBobPhase) * 0.02 * moveIntensity;
+                // Movement bob — more aggressive with lateral tilt
+                const bobX = Math.sin(weaponBobPhase) * 0.025 * moveIntensity;
                 const bobY = Math.abs(Math.cos(weaponBobPhase * 2.0)) * 0.02 * moveIntensity;
+                const bobTilt = Math.sin(weaponBobPhase) * 0.008 * moveIntensity; // Lateral tilt during walk
 
-                // Recoil Decay
-                fpsViewmodel.position.z *= Math.pow(0.001, delta);
-                fpsViewmodel.rotation.x *= Math.pow(0.001, delta);
+                // Idle sway (figure-8 breathing pattern when standing still)
+                const idleIntensity = 1.0 - moveIntensity;
+                const idleX = Math.sin(elT * 1.2) * 0.003 * idleIntensity;
+                const idleY = Math.sin(elT * 0.8) * Math.cos(elT * 0.5) * 0.002 * idleIntensity;
+                const idleRot = Math.sin(elT * 0.6) * 0.003 * idleIntensity;
 
-                // Combine Bob and Recoil
-                // Slightly further right/down to clear vision (x was 0, now 0.05; y was 0, now -0.05)
-                fpsViewmodel.position.x = bobX + 0.05;
-                fpsViewmodel.position.y = bobY - 0.05;
+                // Recoil recovery — weapon-specific damping
+                const weapon = inventory[currentWeaponIdx];
+                const rc = recoilCfg[weapon.id] || recoilCfg.pistol;
+                const recoveryFactor = Math.pow(0.001, delta * (rc.recovery / 15));
+                fpsViewmodel.position.z *= recoveryFactor;
+                fpsViewmodel.rotation.x *= recoveryFactor;
+                fpsViewmodel.rotation.y *= Math.pow(0.001, delta * 1.5); // Yaw recoil recovery
+
+                // ADS position — weapon pulls toward center of screen
+                const adsTargetX = isADS ? 0.0 : 0.05;
+                const adsTargetY = isADS ? -0.02 : -0.05;
+                const adsLerp = isADS ? 8.0 : 5.0;
+
+                // Combine Bob + Idle Sway + ADS
+                const finalX = bobX + idleX;
+                const finalY = bobY + idleY;
+                fpsViewmodel.position.x += (finalX + adsTargetX - fpsViewmodel.position.x) * adsLerp * delta;
+                fpsViewmodel.position.y += (finalY + adsTargetY - fpsViewmodel.position.y) * adsLerp * delta;
+                fpsViewmodel.rotation.z = bobTilt + idleRot;
 
                 // Update procedural weapon internal states
                 if (fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.update === 'function') {
@@ -4281,13 +4647,28 @@
                 if (player.rightWeaponMesh && typeof player.rightWeaponMesh.update === 'function') player.rightWeaponMesh.update(delta);
             }
 
+            // --- SPREAD BLOOM RECOVERY ---
+            if (currentSpread > 0) {
+                const weapon = inventory[currentWeaponIdx];
+                const baseSpread = weapon.spread;
+                currentSpread = Math.max(baseSpread, currentSpread - spreadRecoveryRate * delta);
+            }
+
+            // --- DYNAMIC CROSSHAIR SPREAD (visual) ---
+            if (crosshairEl) {
+                const moveSpreadPenalty = (moveX !== 0 || moveZ !== 0) ? 4 : 0;
+                const bloomPx = Math.min(20, currentSpread * 80 + moveSpreadPenalty);
+                crosshairEl.style.setProperty('--spread', bloomPx + 'px');
+            }
+
             // Muzzle Flash Light Decay
             // muzzleFlashLight intensity update removed
 
-            // Screen Shake (FPS only — pitch only, never yaw to avoid drift)
+            // Screen Shake (FPS only — pitch + subtle yaw)
             if (isFPSMode && screenShakeIntensity > 0.0005) {
                 cameraFPS.rotation.x += (Math.random() - 0.5) * screenShakeIntensity;
-                screenShakeIntensity *= Math.pow(0.008, delta);
+                cameraFPS.rotation.y += (Math.random() - 0.5) * screenShakeIntensity * 0.3; // Subtle yaw shake
+                screenShakeIntensity *= Math.pow(0.006, delta);
             }
 
             // Screen Effect Overlays
@@ -4343,6 +4724,7 @@
 
             // 2. Map & Flow Field Updates
             mapManager.update(player.position, delta, activeCamera);
+            if (skyboxManager) skyboxManager.update(delta, activeCamera);
             TerrainGen.update(delta);
             FacilityGen.update(delta, activeCamera);
 
@@ -4529,6 +4911,16 @@
 
                 b.mesh.position.addScaledVector(b.dir, b.speed * delta);
 
+                // Bullet drop (gravity) — slower projectiles arc downward
+                if (b.drop && b.drop > 0) {
+                    b.dir.y -= b.drop * delta;
+                }
+
+                // Track distance for falloff
+                if (b.distTraveled !== undefined) {
+                    b.distTraveled += b.speed * delta;
+                }
+
                 // --- BULLET TRAIL PARTICLES (Weapon-Specific) ---
                 if (b.trailTimer !== undefined) {
                     b.trailTimer -= delta;
@@ -4621,11 +5013,15 @@
                 // Check spawn node hits
                 for (let ni = 0; ni < spawnNodes.length; ni++) {
                     const node = spawnNodes[ni];
-                    if (!node.active) continue;
+                    if (!node.active || objectivePhase < 2) continue;
                     const ndx = node.x - b.mesh.position.x;
                     const ndz = node.z - b.mesh.position.z;
                     if (ndx * ndx + ndz * ndz < 10.0) {
                         node.hp -= b.damage;
+
+                        // Hitmarkers & Damage Numbers
+                        showHitmarker(node.hp <= 0);
+                        spawnDamageNumber(b.mesh.position.x, b.mesh.position.y || 1, b.mesh.position.z, b.damage, node.hp <= 0);
 
                         // Hit Flash Shader Uniform
                         node.mat.uniforms.uDamage.value = 1.0;
@@ -4638,12 +5034,12 @@
                         if (node.hp <= 0) {
                             node.active = false;
                             node.mesh.visible = false;
-                            // hive light intensity update removed
                             node.respawnTimer = 0;
                             nodesDestroyed++;
                             const anc = spawnNodes.filter(n => n.active).length;
                             document.getElementById('ui-nodes').textContent = anc + ' / ' + spawnNodes.length;
                             if (window.SFX) window.SFX.triggerExplosion();
+                            NeuralConsole.log("0x00D4: CRITICAL_SYNAPTIC_FAILURE. HIVE_NODE_OFFLINE.", 'sys');
                             // Destruction burst
                             for (let p = 0; p < 25; p++) {
                                 emitParticle(node.x, node.mesh.position.y || 1, node.z,
@@ -4665,7 +5061,17 @@
                     const dx = zPosX[j] - b.mesh.position.x;
                     const dz = zPosZ[j] - b.mesh.position.z;
                     if (dx * dx + dz * dz < 0.8) {
-                        const finalDmg = b.damage;
+                        // --- DAMAGE FALLOFF (distance-based for ballistic weapons) ---
+                        let finalDmg = b.baseDamage || b.damage;
+                        if (b.distTraveled !== undefined && b.distTraveled > 15) {
+                            // Pistol and shotgun lose damage at range
+                            if (b.weaponId === 'pistol' || b.weaponId === 'shotgun') {
+                                const falloffStart = b.weaponId === 'shotgun' ? 12 : 20;
+                                const falloff = Math.max(0.3, 1.0 - (b.distTraveled - falloffStart) * 0.02);
+                                finalDmg = Math.round(finalDmg * falloff);
+                            }
+                        }
+
                         zHP[j] = Math.max(0, zHP[j] - finalDmg);
                         hitCrosshair();
 
@@ -4698,24 +5104,39 @@
                             document.getElementById('ui-zombies').textContent = activeZombies;
                             document.getElementById('ui-kills').textContent = totalKills;
 
-                            // Blood/gore burst
-                            for (let p = 0; p < 12; p++) {
+                            // Hitmarker — KILL confirmed
+                            showHitmarker(true);
+                            spawnDamageNumber(hitX, hitY, hitZ, 0, true);
+
+                            // Blood/gore burst (enhanced)
+                            for (let p = 0; p < 16; p++) {
+                                const spread = b.weaponId === 'shotgun' ? 10 : 6;
                                 emitParticle(hitX, hitY, hitZ,
-                                    (Math.random() - 0.5) * 6, Math.random() * 4 + 1, (Math.random() - 0.5) * 6,
+                                    (Math.random() - 0.5) * spread, Math.random() * 5 + 1, (Math.random() - 0.5) * spread,
                                     0.8 + Math.random() * 0.2, Math.random() * 0.1, Math.random() * 0.05,
                                     3 + Math.random() * 4, 0.3 + Math.random() * 0.3);
                             }
-                            if (isFPSMode) screenShakeIntensity = Math.max(screenShakeIntensity, 0.012);
+                            if (isFPSMode) screenShakeIntensity = Math.max(screenShakeIntensity, 0.015);
                             killFlashTimer = 0.05;
+
+                            // --- AR PENETRATION: bullet continues through killed target ---
+                            if (b.weaponId === 'ar' && b.life <= 0) {
+                                b.life = 0.6; // Continue traveling
+                                b.damage = Math.round(b.damage * 0.6); // 40% damage reduction
+                                hit = false; // Don't break — let it hit more
+                                continue;
+                            }
                         } else {
-                            // HIT but not dead — stagger
+                            // HIT but not dead — stagger + hitmarker
+                            showHitmarker(false);
+                            spawnDamageNumber(hitX, hitY, hitZ, finalDmg, false);
                             zBehavior[j] = 4; // → RECOVER
                             zStateTimer[j] = 0.5;
                             // Small hit sparks
-                            for (let p = 0; p < 4; p++) {
+                            for (let p = 0; p < 5; p++) {
                                 emitParticle(hitX, hitY, hitZ,
-                                    (Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3,
-                                    0.7, 0.1, 0.05, 2 + Math.random() * 2, 0.15);
+                                    (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4,
+                                    0.7, 0.1, 0.05, 2 + Math.random() * 2, 0.18);
                             }
                         }
 
@@ -4753,6 +5174,8 @@
                     currentWeaponIdx = inventory.findIndex(w => w.id === wId);
                     updateWeaponUI();
 
+                    NeuralConsole.log(`0x00A1: NEW_HARDWARE_INTERFACE: [${wCfg.name.toUpperCase()}]. SYNCING...`, 'res');
+
                     scene.remove(drop.mesh);
                     weaponDrops.splice(i, 1);
                 }
@@ -4764,10 +5187,52 @@
             // --- SURVIVAL TIMER UI ---
             const timerEl = document.getElementById('ui-timer');
             if (timerEl) timerEl.textContent = formatTime(survivalTime);
+            
             const scoreEl = document.getElementById('ui-score');
             if (scoreEl) scoreEl.textContent = Math.floor(survivalTime * 10 + totalKills * 5);
+            
             const nodesEl = document.getElementById('ui-nodes');
-            if (nodesEl) nodesEl.textContent = spawnNodes.filter(n => n.active).length + ' / 6';
+            if (nodesEl) {
+                if (objectivePhase < 2) {
+                    nodesEl.textContent = 'LOCKED';
+                    nodesEl.style.color = '#555';
+                } else {
+                    nodesEl.textContent = spawnNodes.filter(n => n.active).length + ' / ' + spawnNodes.length;
+                    nodesEl.style.color = '#ff3300';
+                }
+            }
+
+            // --- OBJECTIVE HUD REFINEMENT ---
+            if (currentObjective) {
+                const objName = document.getElementById('ui-objective-name');
+                const objProgress = document.getElementById('ui-objective-progress');
+                const objCount = document.getElementById('ui-objective-count');
+                
+                if (objName && objProgress && objCount) {
+                    if (objectivePhase === 1) {
+                        objName.textContent = 'HYDROGEN SCOOP ASSEMBLY';
+                        const collected = currentObjective.partsCollected || 0;
+                        objCount.textContent = `${collected}/3`;
+                        objProgress.style.width = `${(collected / 3) * 100}%`;
+                        objProgress.style.backgroundColor = '#00ffff';
+                        objCount.style.color = '#00ffff';
+                    } else if (objectivePhase === 2) {
+                        objName.textContent = 'SYNAPTIC SEVERANCE';
+                        const total = currentObjective.targets ? currentObjective.targets.length : 2;
+                        const destroyed = currentObjective.targets ? currentObjective.targets.filter(t => !t.node.active).length : 0;
+                        objCount.textContent = `${destroyed}/${total}`;
+                        objProgress.style.width = `${(destroyed / total) * 100}%`;
+                        objProgress.style.backgroundColor = '#ef4444';
+                        objCount.style.color = '#ef4444';
+                    } else {
+                        objName.textContent = 'EXTRACTION PROTOCOL ACTIVE';
+                        objCount.textContent = 'COMPLETE';
+                        objProgress.style.width = '100%';
+                        objProgress.style.backgroundColor = '#10b981';
+                        objCount.style.color = '#10b981';
+                    }
+                }
+            }
 
             renderer.render(scene, activeCamera);
 
@@ -4785,6 +5250,7 @@
             cameraFPS.updateProjectionMatrix();
 
             renderer.setSize(window.innerWidth, window.innerHeight);
+            if (skyboxManager) skyboxManager.resize(window.innerWidth, window.innerHeight);
         });
 
     </script>

@@ -276,39 +276,71 @@ class Railgun extends THREE.Group {
 
         const t = ctx.currentTime;
 
-        // Layer 1: Deep electromagnetic thrum
+        // Layer 1: Deep electromagnetic discharge thrum
         const osc1 = ctx.createOscillator();
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(60, t);
-        osc1.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+        osc1.frequency.setValueAtTime(50, t);
+        osc1.frequency.exponentialRampToValueAtTime(18, t + 0.4);
         const g1 = ctx.createGain();
-        g1.gain.setValueAtTime(0.5, t);
-        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        g1.gain.setValueAtTime(0.55, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
         osc1.connect(g1); g1.connect(ctx.destination);
-        osc1.start(t); osc1.stop(t + 0.4);
+        osc1.start(t); osc1.stop(t + 0.5);
 
-        // Layer 2: Sharp crack
+        // Layer 2: Sharp hypersonic crack (projectile breaking sound barrier)
         const osc2 = ctx.createOscillator();
         osc2.type = 'sawtooth';
-        osc2.frequency.setValueAtTime(1200, t);
-        osc2.frequency.exponentialRampToValueAtTime(100, t + 0.05);
+        osc2.frequency.setValueAtTime(3000, t);
+        osc2.frequency.exponentialRampToValueAtTime(80, t + 0.03);
         const g2 = ctx.createGain();
         g2.gain.setValueAtTime(0.4, t);
-        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
         osc2.connect(g2); g2.connect(ctx.destination);
-        osc2.start(t); osc2.stop(t + 0.1);
+        osc2.start(t); osc2.stop(t + 0.06);
 
-        // Layer 3: Electrical buzz
+        // Layer 3: Electric crackle noise burst
+        const bufLen = ctx.sampleRate * 0.15;
+        const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) {
+            const env = Math.exp(-i / (bufLen * 0.2));
+            data[i] = (Math.random() * 2 - 1) * env * (Math.random() > 0.7 ? 1.5 : 0.3);
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+        const nGain = ctx.createGain();
+        nGain.gain.setValueAtTime(0.2, t);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        const nFilter = ctx.createBiquadFilter();
+        nFilter.type = 'highpass';
+        nFilter.frequency.value = 2000;
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(ctx.destination);
+        noise.start(t); noise.stop(t + 0.18);
+
+        // Layer 4: Electrical buzz aftermath (delayed ionization)
         const osc3 = ctx.createOscillator();
         osc3.type = 'square';
-        osc3.frequency.setValueAtTime(400, t);
-        osc3.frequency.setValueAtTime(500, t + 0.05);
-        osc3.frequency.exponentialRampToValueAtTime(200, t + 0.2);
+        osc3.frequency.setValueAtTime(300, t + 0.06);
+        osc3.frequency.setValueAtTime(450, t + 0.1);
+        osc3.frequency.exponentialRampToValueAtTime(150, t + 0.3);
         const g3 = ctx.createGain();
-        g3.gain.setValueAtTime(0.15, t);
-        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        g3.gain.setValueAtTime(0.08, t + 0.06);
+        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
         osc3.connect(g3); g3.connect(ctx.destination);
-        osc3.start(t); osc3.stop(t + 0.3);
+        osc3.start(t + 0.06); osc3.stop(t + 0.4);
+
+        // Layer 5: Long reverb tail (room echo simulation)
+        const tail = ctx.createOscillator();
+        tail.type = 'sine';
+        tail.frequency.setValueAtTime(45, t + 0.1);
+        tail.frequency.exponentialRampToValueAtTime(25, t + 0.6);
+        const tGain = ctx.createGain();
+        tGain.gain.setValueAtTime(0.12, t + 0.1);
+        tGain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+        tail.connect(tGain); tGain.connect(ctx.destination);
+        tail.start(t + 0.1); tail.stop(t + 0.75);
     }
 
     update(dt) {

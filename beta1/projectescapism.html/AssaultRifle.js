@@ -439,27 +439,57 @@ class AssaultRifle extends THREE.Group {
 
         const t = ctx.currentTime;
 
-        // Layer 1: Sharp crack
+        // Layer 1: Tight supersonic crack (very fast attack/decay for full-auto clarity)
         const osc1 = ctx.createOscillator();
         osc1.type = 'sawtooth';
-        osc1.frequency.setValueAtTime(200, t);
-        osc1.frequency.exponentialRampToValueAtTime(50, t + 0.06);
+        osc1.frequency.setValueAtTime(2200, t);
+        osc1.frequency.exponentialRampToValueAtTime(120, t + 0.018);
         const g1 = ctx.createGain();
-        g1.gain.setValueAtTime(0.35, t);
-        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        g1.gain.setValueAtTime(0.28, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
         osc1.connect(g1); g1.connect(ctx.destination);
-        osc1.start(t); osc1.stop(t + 0.1);
+        osc1.start(t); osc1.stop(t + 0.05);
 
-        // Layer 2: Mechanical clack (bolt)
+        // Layer 2: Sub-bass punch (short, punchy)
         const osc2 = ctx.createOscillator();
-        osc2.type = 'square';
-        osc2.frequency.setValueAtTime(800, t + 0.02);
-        osc2.frequency.exponentialRampToValueAtTime(200, t + 0.05);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(80, t);
+        osc2.frequency.exponentialRampToValueAtTime(35, t + 0.06);
         const g2 = ctx.createGain();
-        g2.gain.setValueAtTime(0.1, t + 0.02);
-        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        g2.gain.setValueAtTime(0.3, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
         osc2.connect(g2); g2.connect(ctx.destination);
-        osc2.start(t + 0.02); osc2.stop(t + 0.08);
+        osc2.start(t); osc2.stop(t + 0.08);
+
+        // Layer 3: Noise burst (powder crack — bandpassed)
+        const bufLen = ctx.sampleRate * 0.03;
+        const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.12));
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+        const nGain = ctx.createGain();
+        nGain.gain.setValueAtTime(0.18, t);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+        const nFilter = ctx.createBiquadFilter();
+        nFilter.type = 'bandpass';
+        nFilter.frequency.value = 3500;
+        nFilter.Q.value = 0.6;
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(ctx.destination);
+        noise.start(t); noise.stop(t + 0.04);
+
+        // Layer 4: Bolt carrier return click (delayed metallic ping)
+        const bolt = ctx.createOscillator();
+        bolt.type = 'square';
+        bolt.frequency.setValueAtTime(1200, t + 0.04);
+        bolt.frequency.exponentialRampToValueAtTime(400, t + 0.055);
+        const bGain = ctx.createGain();
+        bGain.gain.setValueAtTime(0.06, t + 0.04);
+        bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        bolt.connect(bGain); bGain.connect(ctx.destination);
+        bolt.start(t + 0.04); bolt.stop(t + 0.07);
     }
 
     update(dt) {

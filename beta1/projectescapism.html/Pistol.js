@@ -245,17 +245,47 @@ class Pistol extends THREE.Group {
         if (ctx.state === 'suspended') ctx.resume();
 
         const t = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(120, t);
-        osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.5, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + 0.2);
+
+        // Layer 1: Sharp transient snap (initial crack)
+        const osc1 = ctx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(1800, t);
+        osc1.frequency.exponentialRampToValueAtTime(200, t + 0.025);
+        const g1 = ctx.createGain();
+        g1.gain.setValueAtTime(0.3, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        osc1.connect(g1); g1.connect(ctx.destination);
+        osc1.start(t); osc1.stop(t + 0.05);
+
+        // Layer 2: Sub-bass thump (concussion)
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(90, t);
+        osc2.frequency.exponentialRampToValueAtTime(30, t + 0.12);
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.45, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        osc2.connect(g2); g2.connect(ctx.destination);
+        osc2.start(t); osc2.stop(t + 0.18);
+
+        // Layer 3: Noise burst (gunpowder crack)
+        const bufLen = ctx.sampleRate * 0.06;
+        const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.15));
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.25, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = 2500;
+        noiseFilter.Q.value = 0.8;
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noise.start(t); noise.stop(t + 0.08);
     }
 
     update(dt) {

@@ -318,7 +318,7 @@ float getTerrainHeight(vec2 pos) {
                 `#include <map_fragment>`,
                 `#include <map_fragment>
                 float biomen = getBiomeNoise(vWorldPosRaw);
-                vec2 uv = vWorldPosRaw * 1.5;
+                vec2 uv = vWorldPosRaw * 3.0;
                 
                 vec3 colToxic = textureNoTile(texToxic, uv);
                 vec3 colForest = textureNoTile(texForest, uv);
@@ -354,6 +354,10 @@ float getTerrainHeight(vec2 pos) {
                 
                 groundCol += gridCol;
                 
+                // Void Holes
+                float voidMask = snoise(vWorldPosRaw * 0.002);
+                if (voidMask < -0.5) discard; 
+
                 // bioluminescent veins in toxic
                 if(biomen < 0.3) {
                    float vein = snoise(vWorldPosRaw * 0.1 + uTime * 0.2);
