@@ -210,12 +210,13 @@ float fbm(vec2 p) {
 
 uniform int uMapType;
 float getBiomeNoise(vec2 pos) {
-    if (uMapType == 1) return 0.5; // forest
-    if (uMapType == 2) return 0.0; // toxic
-    if (uMapType == 3) return 1.0; // wasteland
+    if (uMapType == 1) return 0.0; // Toxic
+    if (uMapType == 2) return 0.0; // Toxic
+    if (uMapType == 3) return 1.0; // Wasteland
     
-    float n = snoise(pos * 0.0005) * 0.5 + 0.5; 
-    n += snoise(pos * 0.0015) * 0.2;            
+    // Higher frequency for more randomization
+    float n = snoise(pos * 0.0012) * 0.5 + 0.5; 
+    n += snoise(pos * 0.004) * 0.3;            
     return clamp(n, 0.0, 1.0);
 }
 
@@ -230,7 +231,7 @@ float getTerrainHeight(vec2 pos) {
         const loader = new THREE.TextureLoader();
         const texToxic = loader.load('assets/toxic_ground.png');
         const texForest = loader.load('assets/forest_ground.png');
-        const texWaste = loader.load('assets/wasteland_ground.png');
+        const texWaste = loader.load('assets/black_sand.png');
 
         [texToxic, texForest, texWaste].forEach(t => {
             t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -328,13 +329,13 @@ float getTerrainHeight(vec2 pos) {
                 float cliff = smoothstep(0.3, 0.6, slope);
                 
                 vec3 groundCol;
-                if (biomen < 0.35) {
-                    groundCol = mix(colToxic, colForest, smoothstep(0.2, 0.35, biomen));
-                } else if (biomen > 0.65) {
-                    groundCol = mix(colForest, colWaste, smoothstep(0.65, 0.8, biomen));
-                } else {
-                    groundCol = colForest;
-                }
+                // Randomized blending between Toxic and Wasteland (Green removed)
+                float blend = smoothstep(0.4, 0.6, biomen);
+                groundCol = mix(colToxic, colWaste, blend);
+                
+                // Add localized patches for variety
+                float patches = snoise(vWorldPosRaw * 0.02);
+                groundCol = mix(groundCol, colWaste * 0.6, smoothstep(0.5, 0.8, patches));
                 
                 // Rock/Cliff blending
                 vec3 rockCol = colWaste * 0.4;

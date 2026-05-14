@@ -80,17 +80,47 @@ const ModelFactory = {
     getTreeGeo: function() {
         if (this.treeGeometry) return this.treeGeometry;
         const components = [];
-        const trunk = new THREE.CylinderGeometry(0.15, 0.2, 1.0, 8);
-        trunk.translate(0, 0.5, 0);
+        
+        // 1. MAIN TRUNK
+        const trunkHeight = 1.4;
+        const trunk = new THREE.CylinderGeometry(0.1, 0.18, trunkHeight, 7);
+        trunk.translate(0, trunkHeight / 2, 0);
         components.push(trunk);
 
-        const foliage1 = new THREE.SphereGeometry(0.6, 8, 8);
-        foliage1.translate(0, 1.2, 0);
-        components.push(foliage1);
+        // 2. SKELETAL BRANCHES
+        const branchConfigs = [
+            { h: 0.5, len: 0.7, angle: 0.2, tilt: 0.9 },
+            { h: 0.8, len: 0.6, angle: 2.3, tilt: 1.2 },
+            { h: 1.1, len: 0.5, angle: 4.5, tilt: 0.7 },
+            { h: 1.3, len: 0.4, angle: 1.1, tilt: 0.5 },
+            { h: 0.6, len: 0.5, angle: 3.5, tilt: 1.0 }
+        ];
 
-        const foliage2 = new THREE.SphereGeometry(0.45, 8, 8);
-        foliage2.translate(0, 1.8, 0);
-        components.push(foliage2);
+        branchConfigs.forEach(cfg => {
+            const branch = new THREE.CylinderGeometry(0.02, 0.08, cfg.len, 5);
+            branch.translate(0, cfg.len / 2, 0);
+            branch.rotateX(cfg.tilt);
+            branch.rotateY(cfg.angle);
+            branch.translate(0, cfg.h, 0);
+            components.push(branch);
+
+            // Jagged sub-branch
+            if (cfg.len > 0.4) {
+                const subLen = cfg.len * 0.7;
+                const sub = new THREE.CylinderGeometry(0.01, 0.04, subLen, 4);
+                sub.translate(0, subLen / 2, 0);
+                sub.rotateX(cfg.tilt + 0.6);
+                sub.rotateY(cfg.angle + 1.8);
+                
+                // Position at middle of parent branch
+                const px = Math.sin(cfg.angle) * Math.sin(cfg.tilt) * cfg.len * 0.6;
+                const py = cfg.h + Math.cos(cfg.tilt) * cfg.len * 0.6;
+                const pz = Math.cos(cfg.angle) * Math.sin(cfg.tilt) * cfg.len * 0.6;
+                
+                sub.translate(px, py, pz);
+                components.push(sub);
+            }
+        });
 
         this.treeGeometry = this._safeMerge(components);
         return this.treeGeometry;

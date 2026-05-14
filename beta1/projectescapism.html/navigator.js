@@ -26,7 +26,10 @@ class HUDNavigator {
     update(player) {
         if (!player) return;
 
-        const activeNodes = this.spawnNodes.filter(n => n.active);
+        let activeNodes = [];
+        if (window.objectivePhase >= 2) {
+            activeNodes = this.spawnNodes.filter(n => n.active);
+        }
         
         // Remove markers for nodes no longer active
         for (const [node, marker] of this.markers) {

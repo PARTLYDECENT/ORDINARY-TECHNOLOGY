@@ -17,26 +17,11 @@ class Objective1 {
         // Define 3 tech parts to find
         const partNames = ["Fuel Cell", "Ionizer", "Scoop Core"];
         
-        // Use the hive nodes as reference points
-        // Fixed offsets to ensure they are FAR from the hives
-        const offsets = [
-            { x: 50, z: 0 },   // Hive 1 offset
-            { x: -50, z: 0 },  // Hive 2 offset
-            { x: 0, z: 50 }    // Hive 3 offset
-        ];
-
         for (let i = 0; i < 3; i++) {
-            const node = this.spawnNodes[i % this.spawnNodes.length];
-            const offset = offsets[i % offsets.length];
-            const px = node.x + offset.x;
-            const pz = node.z + offset.z;
+            // Get random position far from the player (60 to 150 units away)
+            const posData = this.getRandomPosition(60, 150);
+            const pos = new THREE.Vector3(posData.x, posData.y + 1.5, posData.z);
             
-            let py = 1.0;
-            if (window.TerrainGen) {
-                py = window.TerrainGen.getMeshHeight(px, pz);
-            }
-
-            const pos = new THREE.Vector3(px, py + 1.5, pz);
             const mesh = this.createPartMesh(partNames[i]);
             mesh.position.copy(pos);
             this.scene.add(mesh);
@@ -50,7 +35,7 @@ class Objective1 {
             });
 
             if (window.NeuralConsole) {
-                window.NeuralConsole.log(`DEPLOYED: ${partNames[i]} at [${Math.round(px)}, ${Math.round(pz)}]`, 'res');
+                window.NeuralConsole.log(`DEPLOYED: ${partNames[i]} at [${Math.round(posData.x)}, ${Math.round(posData.z)}]`, 'res');
             }
         }
         
@@ -61,11 +46,28 @@ class Objective1 {
     }
 
     getRandomPosition(minDist, maxDist) {
-        // Get random direction
-        const angle = Math.random() * Math.PI * 2;
-        const dist = minDist + Math.random() * (maxDist - minDist);
-        const x = this.player.position.x + Math.cos(angle) * dist;
-        const z = this.player.position.z + Math.sin(angle) * dist;
+        let x = 0, z = 0;
+        let isValid = false;
+        let attempts = 0;
+
+        while (!isValid && attempts < 50) {
+            // Get random direction
+            const angle = Math.random() * Math.PI * 2;
+            const dist = minDist + Math.random() * (maxDist - minDist);
+            x = this.player.position.x + Math.cos(angle) * dist;
+            z = this.player.position.z + Math.sin(angle) * dist;
+
+            isValid = true;
+            for (let node of this.spawnNodes) {
+                const dx = x - node.x;
+                const dz = z - node.z;
+                if (Math.sqrt(dx*dx + dz*dz) < 40) {
+                    isValid = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
         
         // Get height from TerrainGen if available, else default
         let y = 1.0;

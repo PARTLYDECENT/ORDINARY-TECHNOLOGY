@@ -425,14 +425,29 @@ const FacilityGen = {
             );
         };
 
-        // Industrial Pipes
-        this.pipeGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.0, 8);
-        this.pipeMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.2, metalness: 0.9 });
+        // Industrial Pipes - Enhanced "Brilliant Orange Brop"
+        this.pipeGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.0, 8);
+        this.pipeMat = new THREE.MeshStandardMaterial({ 
+            color: 0xff4400, 
+            roughness: 0.2, 
+            metalness: 0.8,
+            emissive: 0xff3300,
+            emissiveIntensity: 3.5
+        });
         this.pipeMat.onBeforeCompile = (shader) => {
+            shader.uniforms.uTime = { value: 0 };
+            this.pipeMat.userData.shader = shader;
             shader.vertexShader = shader.vertexShader.replace(`#include <common>`, `#include <common>\nvarying vec3 vWorldPos;`);
-            shader.vertexShader = shader.vertexShader.replace(`#include <worldpos_vertex>`, `#include <worldpos_vertex>\nvWorldPos = worldPosition.xyz;`);
-            shader.fragmentShader = shader.fragmentShader.replace(`#include <common>`, `#include <common>\nvarying vec3 vWorldPos;`);
-            shader.fragmentShader = shader.fragmentShader.replace(`#include <color_fragment>`, `#include <color_fragment>\nfloat stripe = step(0.9, fract(vWorldPos.x * 2.0 + vWorldPos.z * 2.0 + vWorldPos.y * 2.0));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.12, 0.15), stripe * 0.5);`);
+            shader.vertexShader = shader.vertexShader.replace(`#include <worldpos_vertex>`, `#include <worldpos_vertex>\nvWorldPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;`);
+            shader.fragmentShader = shader.fragmentShader.replace(`#include <common>`, `#include <common>\nuniform float uTime;\nvarying vec3 vWorldPos;`);
+            shader.fragmentShader = shader.fragmentShader.replace(`#include <color_fragment>`, `#include <color_fragment>\nfloat stripe = step(0.85, fract(vWorldPos.x * 0.5 + vWorldPos.z * 0.5 + vWorldPos.y * 0.5));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.05, 0.08), stripe * 0.8);`);
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <emissivemap_fragment>`,
+                `#include <emissivemap_fragment>
+                float pulse = sin(uTime * 5.0 + (vWorldPos.x + vWorldPos.z + vWorldPos.y) * 0.5) * 0.5 + 0.5;
+                totalEmissiveRadiance *= 0.6 + pulse * 1.5;
+                `
+            );
         };
 
         // Industrial Girders
@@ -503,6 +518,9 @@ const FacilityGen = {
         }
         if (this.girderMat && this.girderMat.userData && this.girderMat.userData.shader) {
             this.girderMat.userData.shader.uniforms.uTime.value += delta;
+        }
+        if (this.pipeMat && this.pipeMat.userData && this.pipeMat.userData.shader) {
+            this.pipeMat.userData.shader.uniforms.uTime.value += delta;
         }
         if (this.steamMat) {
             this.steamMat.uniforms.uTime.value += delta;

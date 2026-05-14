@@ -11,6 +11,7 @@ The project "ORDINARY TECHNOLOGY" is a large, multi-faceted web application and 
   - game contains a 3D resource management and defense game with NPCs, building placement, and enemy waves.  
   - ordinary-mars-builder and ordinary-recycling are additional game modules with unique mechanics and assets.
   - game2 appears to be another game or simulation with its own assets and logic.
+  - **Project Escapism (beta1/projectescapism.html/):** A high-performance 3D isometric survival simulation featuring massive procedural hordes, advanced weapon systems, and objective-based gameplay.
 
 - **Music & Audio:**  
   - liquidMusic.html and related scripts provide a music player with real-time filter controls and recording features.

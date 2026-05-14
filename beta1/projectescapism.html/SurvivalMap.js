@@ -13,15 +13,13 @@ function getBiomeNoise(x, z) {
 
 function getBiomeAt(x, z) {
     if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId) {
-        if (window.GAME_START_CONFIG.mapId === 'forest') return 'forest';
+        if (window.GAME_START_CONFIG.mapId === 'forest') return 'toxic'; // Fallback
         if (window.GAME_START_CONFIG.mapId === 'toxic') return 'toxic';
         if (window.GAME_START_CONFIG.mapId === 'facility') return 'wasteland';
     }
 
-    const n = getBiomeNoise(x, z);
-    if (n < 0.38) return 'toxic';       // Sickly neon/gray
-    if (n > 0.62) return 'wasteland';   // Scorched sand/rock
-    return 'forest';                    // Green dirt/grass
+    const n = getBiomeNoise(x * 1.5, z * 1.5); // Higher frequency randomization
+    return n < 0.5 ? 'toxic' : 'wasteland';
 }
 
 class SurvivalMapManager {
@@ -36,7 +34,7 @@ class SurvivalMapManager {
         FacilityGen.init(config);
         
         this.treeGeo = ModelFactory.getTreeGeo();
-        this.treeMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27, roughness: 0.9 });
+        this.treeMat = new THREE.MeshStandardMaterial({ color: 0x443a32, roughness: 0.9 });
         this.treeMat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             this.treeMat.userData.shader = shader; 
@@ -76,12 +74,10 @@ class SurvivalMapManager {
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <color_fragment>`,
                 `#include <color_fragment>
-                float n = snoise(vWorldPosOut * 3.0);
-                if (vLocalPosOut.y > 0.8) {
-                    diffuseColor.rgb *= 0.6 + n * 0.5; // Foliage texture
-                } else {
-                    diffuseColor.rgb = mix(vec3(0.2, 0.12, 0.05), vec3(0.15, 0.1, 0.05), n); // Bark texture
-                }
+                float n = snoise(vWorldPosOut * 4.0);
+                // Weathered, desaturated bark texture
+                diffuseColor.rgb = mix(vec3(0.22, 0.15, 0.1), vec3(0.1, 0.08, 0.05), n);
+                diffuseColor.rgb *= 0.7 + n * 0.6;
                 `
             );
         };
@@ -258,57 +254,85 @@ class SurvivalMapManager {
             }
         }
 
-        // 2. Continuous Industrial Pipe Network (Hazard Orange)
-        for (let i = 0; i < 8; i++) {
-            const startX = Math.random() * this.chunkSize;
-            const startZ = Math.random() * this.chunkSize;
-            const dir = Math.random() > 0.5 ? 'x' : 'z';
-            const length = 20 + Math.floor(Math.random() * 30);
-            const pipeHeightOffset = 1.5 + Math.random() * 3.5;
-            const pipeSpacing = 1.0; 
+        // 2. Structured Industrial Infrastructure: SUBSTATIONS & LONG RUNS
+        const isHub = (cx % 4 === 0 && cz % 4 === 0);
+        const isPipeX = (cz % 4 === 0);
+        const isPipeZ = (cx % 4 === 0);
 
-            // Sample terrain once at start to keep pipe perfectly level
-            const baseTerrainH = TerrainGen.getMeshHeight(startX + worldOffsetX, startZ + worldOffsetZ);
-
-            for (let l = 0; l < length; l++) {
-                if (pipeCount >= 800) break;
-                const px = dir === 'x' ? startX + l * pipeSpacing : startX;
-                const pz = dir === 'z' ? startZ + l * pipeSpacing : startZ;
-
-                if (px < 0 || px >= this.chunkSize || pz < 0 || pz >= this.chunkSize) continue;
-
-                dummy.position.set(px, baseTerrainH + pipeHeightOffset, pz);
-
-                // Orientation
+        // --- SUBSTATION HUB GEN ---
+        if (isHub) {
+            for (let i = 0; i < 4; i++) {
+                const hx = 16 + (i % 2) * 32;
+                const hz = 16 + Math.floor(i / 2) * 32;
+                const wx = hx * this.config.cellSize + worldOffsetX;
+                const wz = hz * this.config.cellSize + worldOffsetZ;
+                const gh = TerrainGen.getMeshHeight(wx, wz);
+                
+                // Central Power Pillar
+                dummy.position.set(hx * this.config.cellSize, gh, hz * this.config.cellSize);
                 dummy.rotation.set(0, 0, 0);
-                if (dir === 'x') {
-                    dummy.rotation.z = Math.PI / 2;
+                dummy.scale.set(1.5, 4.0, 1.5);
+                dummy.updateMatrix();
+                pillars.setMatrixAt(pCount++, dummy.matrix);
+
+                // Cluster of vertical pipes around hub
+                for (let j = 0; j < 6; j++) {
+                    const ang = (j / 6) * Math.PI * 2;
+                    dummy.position.set(
+                        hx * this.config.cellSize + Math.sin(ang) * 4,
+                        gh,
+                        hz * this.config.cellSize + Math.cos(ang) * 4
+                    );
+                    dummy.rotation.set(0, 0, 0); // Vertical
+                    dummy.scale.set(2, 6, 2);
+                    dummy.updateMatrix();
+                    pipes.setMatrixAt(pipeCount++, dummy.matrix);
+                }
+            }
+        }
+
+        // --- CONTINUOUS PIPELINE RUNS ---
+        if (isPipeX || isPipeZ) {
+            const pipeHeight = 4.0;
+            const step = 2.0;
+            const segments = Math.floor(this.chunkSize / step);
+            
+            for (let s = 0; s < segments; s++) {
+                let px, pz;
+                if (isPipeX) {
+                    px = s * step;
+                    pz = this.chunkSize / 2;
                 } else {
-                    dummy.rotation.x = Math.PI / 2;
+                    px = this.chunkSize / 2;
+                    pz = s * step;
                 }
 
-                dummy.scale.set(1.05, 1.05, 1.05); // Ensure overlap for continuity
+                const wx = px + worldOffsetX;
+                const wz = pz + worldOffsetZ;
+                const terrainH = TerrainGen.getMeshHeight(wx, wz);
+
+                // Main Pipeline Segment
+                dummy.position.set(px, terrainH + pipeHeight, pz);
+                dummy.rotation.set(0, 0, 0);
+                if (isPipeX) dummy.rotation.z = Math.PI / 2;
+                else dummy.rotation.x = Math.PI / 2;
+                
+                dummy.scale.set(3.0, 2.1, 3.0); // Thick industrial pipes
                 dummy.updateMatrix();
                 pipes.setMatrixAt(pipeCount++, dummy.matrix);
 
-                // Add Pipe Supports (Pillars) reaching to the ground
-                if (l % 10 === 0 && pCount < 1000) {
-                    const currentTerrainH = TerrainGen.getMeshHeight(px + worldOffsetX, pz + worldOffsetZ);
-                    const pHeight = (baseTerrainH + pipeHeightOffset) - currentTerrainH;
-                    if (pHeight > 0.1) {
-                        dummy.position.set(px, currentTerrainH, pz);
-                        dummy.rotation.set(0, 0, 0);
-                        dummy.scale.set(0.12, pHeight / (this.config.cellSize * 1.8), 0.12);
-                        dummy.updateMatrix();
-                        pillars.setMatrixAt(pCount++, dummy.matrix);
-                    }
+                // Structural Supports
+                if (s % 10 === 0 && pCount < 1000) {
+                    dummy.position.set(px, terrainH, pz);
+                    dummy.rotation.set(0, 0, 0);
+                    dummy.scale.set(0.2, pipeHeight / (this.config.cellSize * 1.8), 0.2);
+                    dummy.updateMatrix();
+                    pillars.setMatrixAt(pCount++, dummy.matrix);
                 }
 
-                // Random Steam Emission
-                if (Math.random() < 0.03 && steamCount < 150) {
-                    dummy.position.set(px, baseTerrainH + pipeHeightOffset, pz);
-                    dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
-                    dummy.scale.setScalar(0.5 + Math.random() * 0.7);
+                // Frequent Steam at long runs
+                if (Math.random() < 0.05 && steamCount < 150) {
+                    dummy.position.set(px, terrainH + pipeHeight, pz);
                     dummy.updateMatrix();
                     steam.setMatrixAt(steamCount++, dummy.matrix);
                 }

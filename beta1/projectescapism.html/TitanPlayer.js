@@ -157,6 +157,10 @@ class TitanPlayer extends THREE.Group {
         this.chestCore.position.set(0, 0.2, 0.75);
         this.torso.add(this.chestCore);
 
+        // Chest Light — sinister red glow casting real light
+        this.chestLight = new THREE.PointLight(0xff2200, 1.5, 6);
+        this.chestCore.add(this.chestLight);
+
         // Vents
         for (let i = 0; i < 5; i++) {
             const vent = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.3), accentMat);
@@ -369,6 +373,9 @@ class TitanPlayer extends THREE.Group {
         if (this.energyMat) {
             const pulseSpeed = 5;
             this.energyMat.emissiveIntensity = 3.0 + Math.sin(this.t * pulseSpeed) * 1.5;
+            if (this.chestLight) {
+                this.chestLight.intensity = this.energyMat.emissiveIntensity * 0.4;
+            }
         }
 
         if (this.recoil > 0) this.recoil *= Math.pow(0.0001, dt);

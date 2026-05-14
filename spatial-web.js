@@ -81,7 +81,7 @@ export function initSpatialWeb() {
     // animate(); // Loop paused by default
 
     // 10. Environment & Content
-    setupAgents();
+    // setupAgents();
     setupNavigation();
     loadMap();
     createStarfield();
@@ -91,7 +91,7 @@ export function initSpatialWeb() {
     setupWarpEffect();
     setupAudio();
     createInfiniteGrid();
-    createGridCreatures();
+    // createGridCreatures();
     loadCursor(); // Load the 3D cursor
 }
 
