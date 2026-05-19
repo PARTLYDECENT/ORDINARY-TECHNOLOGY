@@ -295,7 +295,7 @@ class CompanionOrb {
         if (this.hives && this.hives.length > 0) {
             // Find nearest active hive, or just the first active one
             activeHive = this.hives.find(h => h.active);
-            
+
             // If we have a player, maybe find the one closest to player?
             if (this.player) {
                 let minDist = Infinity;
@@ -316,7 +316,7 @@ class CompanionOrb {
             const orbitSpeed = 0.2;
             const orbitX = Math.sin(time * orbitSpeed) * this.orbitDrift;
             const orbitZ = Math.cos(time * orbitSpeed) * this.orbitDrift;
-            
+
             this.targetPos.set(activeHive.x + orbitX, activeHive.mesh.position.y + this.hoverHeight, activeHive.z + orbitZ);
             this.targetPos.y += Math.sin(time * this.bobSpeed) * this.bobAmount;
         } else if (this.player) {
@@ -452,5 +452,7 @@ class CompanionOrb {
         this.light.dispose();
     }
 }
+
+window.CompanionOrb = CompanionOrb;
 
 window.CompanionOrb = CompanionOrb;

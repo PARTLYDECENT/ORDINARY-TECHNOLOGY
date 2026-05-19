@@ -60,6 +60,7 @@
     <script src="./easter_egg.js"></script>
     <script src="./banner.js"></script>
     <script src="./CompanionOrb.js"></script>
+    <script src="./gore.js"></script>
 
     <style>
         body {
@@ -109,6 +110,7 @@
         }
 
         #ui-layer {
+            display: none;
             position: absolute;
             top: 0;
             left: 0;
@@ -295,6 +297,8 @@
 
         /* --- SCI-FI CROSSHAIR HUD --- */
         #crosshair {
+            display: none;
+        }
             position: fixed;
             width: 44px;
             height: 44px;
@@ -1610,12 +1614,19 @@
             },
 
             finish: function () {
+                if (this.isFinished) return; // Guard against multiple calls
+                this.isFinished = true;
+
                 const introPanel = document.getElementById('tutorial-intro');
                 introPanel.style.opacity = '0';
                 introPanel.style.transition = 'opacity 0.6s ease-out';
                 setTimeout(() => {
                     introPanel.style.display = 'none';
-                    if (this.onComplete) this.onComplete();
+                    if (this.onComplete) {
+                        const cb = this.onComplete;
+                        this.onComplete = null; // Clear to prevent re-runs
+                        cb();
+                    }
                 }, 600);
             }
         };
@@ -1687,12 +1698,15 @@
         // --- ENGINE & CAMERA SETUP ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
+        window.goreSystem = new GoreSystem(scene);
         scene.background = new THREE.Color(0x010101); // Near-black night sky
 
         const aspect = window.innerWidth / window.innerHeight;
         const viewSize = 7; // Limited FOV by half (was 14)
         const cameraIso = new THREE.OrthographicCamera(-viewSize * aspect, viewSize * aspect, viewSize, -viewSize, -100, 1000);
         cameraIso.position.set(30, 30, 30);
+
+        let isGameLoopRunning = false;
         cameraIso.lookAt(0, 0, 0);
 
         const cameraFPS = new THREE.PerspectiveCamera(32, aspect, 0.1, 1000); // Limited FOV by half (was 65)
@@ -1737,23 +1751,127 @@
         const terrain = TerrainGen.getMesh();
         scene.add(terrain);
 
-        const waterGeo = new THREE.PlaneBufferGeometry(2400, 2400);
-        const waterTex = new THREE.TextureLoader().load('assets/water_texture.png');
-        waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
-        waterTex.repeat.set(100, 100);
-        const waterMat = new THREE.MeshStandardMaterial({
-            map: waterTex,
-            transparent: true,
-            opacity: 0.85,
-            roughness: 0.1,
-            metalness: 0.8,
-            emissive: new THREE.Color(0x001122),
-            emissiveIntensity: 0.2
+        const waterGeo = new THREE.PlaneBufferGeometry(2400, 2400, 128, 128); // Increased segments for vertex waves
+        const waterMat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uPlayerPos: { value: new THREE.Vector3() },
+                uColorDeep: { value: new THREE.Color(0x010408) }, // Almost black deeps
+                uColorMid: { value: new THREE.Color(0x051a2a) },  // Dark teal
+                uColorGlow: { value: new THREE.Color(0x00ffff) }, // Synaptic cyan
+                uFogColor: { value: new THREE.Color(0x020204) },
+                uFogDensity: { value: 0.035 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                varying vec3 vWorldPos;
+                varying float vWaveHeight;
+                uniform float uTime;
+                
+                void main() {
+                    vUv = uv;
+                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    
+                    // Multi-octave Sine Waves (Gerstner-ish)
+                    float h = sin(worldPos.x * 0.15 + uTime * 1.5) * 0.15;
+                    h += cos(worldPos.z * 0.2 + uTime * 1.2) * 0.12;
+                    h += sin((worldPos.x + worldPos.z) * 0.1 + uTime * 0.8) * 0.2;
+                    
+                    worldPos.y += h;
+                    vWaveHeight = h;
+                    vWorldPos = worldPos.xyz;
+                    gl_Position = projectionMatrix * viewMatrix * worldPos;
+                }
+            `,
+            fragmentShader: `
+                varying vec2 vUv;
+                varying vec3 vWorldPos;
+                varying float vWaveHeight;
+                uniform float uTime;
+                uniform vec3 uPlayerPos;
+                uniform vec3 uColorDeep;
+                uniform vec3 uColorMid;
+                uniform vec3 uColorGlow;
+                uniform vec3 uFogColor;
+                uniform float uFogDensity;
+
+                // --- Noise Foundations ---
+                float hash(vec2 p) {
+                    return fract(sin(dot(p, vec3(12.9898, 78.233, 45.164).xy)) * 43758.5453);
+                }
+                
+                float voronoi(vec2 x) {
+                    vec2 n = floor(x);
+                    vec2 f = fract(x);
+                    float m = 8.0;
+                    for(int j=-1; j<=1; j++)
+                    for(int i=-1; i<=1; i++) {
+                        vec2 g = vec2(float(i),float(j));
+                        vec2 o = vec2(hash(n + g));
+                        vec2 r = g + o - f;
+                        float d = dot(r,r);
+                        if(d < m) m = d;
+                    }
+                    return sqrt(m);
+                }
+
+                void main() {
+                    // --- SYNAPTIC TEXTURE ---
+                    // Multiple scrolling layers for organic depth
+                    vec2 uv1 = vWorldPos.xz * 0.12 + uTime * 0.04;
+                    vec2 uv2 = vWorldPos.xz * 0.07 - uTime * 0.02;
+                    
+                    float v1 = voronoi(uv1);
+                    float v2 = voronoi(uv2 + v1 * 0.4);
+                    
+                    // "Synaptic Veins" - Organic neural pathways
+                    float veins = smoothstep(0.08, 0.0, abs(v1 - 0.5)) * 0.6;
+                    veins += smoothstep(0.12, 0.0, abs(v2 - 0.4)) * 0.4;
+                    veins *= (0.7 + 0.3 * sin(uTime * 1.5 + vWorldPos.x * 0.5));
+                    
+                    // --- COLOR BLENDING ---
+                    // Deep abyss vs mid-level biological activity
+                    vec3 col = mix(uColorDeep, uColorMid, v1 * 0.7 + vWaveHeight * 2.0);
+                    
+                    // Bioluminescent Glow
+                    float glowMask = pow(1.0 - v1, 10.0) * 2.5;
+                    glowMask += veins * (0.4 + 0.6 * sin(uTime * 3.0 + v1 * 12.0));
+                    col = mix(col, uColorGlow, glowMask * 0.45);
+                    
+                    // --- FRESNEL & LIGHTING ---
+                    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+                    // More detailed fake normal based on noise derivative approximation
+                    vec3 normal = normalize(vec3(-vWaveHeight * 3.0, 1.0, -vWaveHeight * 3.0));
+                    float fresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 4.0);
+                    
+                    // Specular Highlight (Fake Directional Light from [20, 50, -20])
+                    vec3 lightDir = normalize(vec3(0.3, 1.0, -0.3));
+                    vec3 halfDir = normalize(lightDir + viewDir);
+                    float spec = pow(max(0.0, dot(normal, halfDir)), 64.0);
+                    col += uColorGlow * spec * 1.2;
+                    
+                    // --- MICRO-GLITTER (Surface Sparkle) ---
+                    float sparkle = hash(vWorldPos.xz * 50.0 + floor(uTime * 15.0));
+                    float sparkleMask = step(0.995, sparkle) * fresnel;
+                    col += vec3(1.0) * sparkleMask * 2.0;
+                    
+                    col += uColorGlow * fresnel * 0.8;
+                    
+                    // --- DISTANCE FOG ---
+                    float dist = length(cameraPosition - vWorldPos);
+                    float fogFactor = 1.0 - exp(-dist * uFogDensity);
+                    col = mix(col, uFogColor, fogFactor);
+                    
+                    gl_FragColor = vec4(col, 0.92);
+                }
+            `,
+            transparent: true
         });
         const waterMesh = new THREE.Mesh(waterGeo, waterMat);
         waterMesh.rotation.x = -Math.PI / 2;
         waterMesh.position.y = -2.0; // Water hazard level
         scene.add(waterMesh);
+        window.waterMat = waterMat; // Global for update
 
         // Subtle ground fog removed for clear visuals
         scene.fog = new THREE.FogExp2(0x020204, 0.035); // Dense nighttime fog — flashlight-only visibility
@@ -2281,8 +2399,93 @@
         let hazardManager;
 
         /**
-         * WEAPON MODEL FACTORY - High-Fidelity Procedural Gun Geometry
+         * BIO-SHADER UTILITIES - Shared foundations for organic reconstruction
          */
+        const BioShaderUtils = {
+            getSynapticArmorMaterial(params = {}) {
+                const vert = `
+                    varying vec3 vNormal;
+                    varying vec3 vModelPos;
+                    varying vec3 vViewPos;
+                    void main() {
+                        vNormal = normalize(normalMatrix * normal);
+                        vModelPos = position;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        vViewPos = -mvPosition.xyz;
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `;
+                const frag = `
+                    varying vec3 vNormal;
+                    varying vec3 vModelPos;
+                    varying vec3 vViewPos;
+                    uniform float uTime;
+                    uniform float uHealthPct;
+                    uniform float uDamagePulse;
+                    uniform vec3 uColorYellow;
+                    uniform vec3 uColorBlack;
+                    uniform vec3 uColorPulse;
+
+                    float hash12(vec2 p) {
+                        vec3 p3  = fract(vec3(p.xyx) * .1031);
+                        p3 += dot(p3, p3.yzx + 33.33);
+                        return fract((p3.x + p3.y) * p3.z);
+                    }
+                    float noise(in vec2 p) {
+                        vec2 i = floor(p); vec2 f = fract(p);
+                        vec2 u = f*f*(3.0-2.0*f);
+                        return mix( mix( hash12( i + vec2(0.0,0.0) ), hash12( i + vec2(1.0,0.0) ), u.x),
+                                    mix( hash12( i + vec2(0.0,1.0) ), hash12( i + vec2(1.0,1.0) ), u.x), u.y);
+                    }
+                    float fbm(vec2 x) {
+                        float v = 0.0; float a = 0.5;
+                        mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+                        for (int i = 0; i < 4; ++i) {
+                            v += a * noise(x); x = rot * x * 2.0 + vec2(10.0); a *= 0.5;
+                        }
+                        return v;
+                    }
+                    float smin(float a, float b, float k) {
+                        float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+                        return mix(b, a, h) - k * h * (1.0 - h);
+                    }
+
+                    void main() {
+                        vec3 n = normalize(vNormal);
+                        float neuralT = uTime * (0.5 + (1.0 - uHealthPct) * 2.0);
+                        float pattern = fbm(vModelPos.xy * 2.0 + neuralT * 0.2);
+                        pattern = smin(pattern, fbm(vModelPos.yz * 1.5 - neuralT * 0.1), 0.5);
+                        float stripe = fract((vModelPos.x + vModelPos.y + vModelPos.z) * 1.5 - uTime * 0.1);
+                        float stripeMask = step(0.5, stripe);
+                        float bioMask = smoothstep(0.4, 0.6, pattern + (1.0 - uHealthPct) * 0.3);
+                        vec3 baseCol = mix(uColorYellow, uColorBlack, stripeMask);
+                        vec3 bruiseCol = mix(vec3(0.1, 0.0, 0.05), vec3(0.4, 0.0, 0.1), pattern);
+                        baseCol = mix(baseCol, bruiseCol, bioMask * (1.0 - uHealthPct));
+                        float damageEffect = uDamagePulse * fbm(vModelPos.xz * 10.0 + uTime * 20.0);
+                        baseCol = mix(baseCol, uColorPulse, damageEffect);
+                        vec3 viewDir = normalize(vViewPos);
+                        float diff = max(0.2, dot(n, normalize(vec3(0.5, 1.0, 0.5))));
+                        float fresnel = pow(1.0 - max(0.0, dot(n, viewDir)), 3.0);
+                        vec3 glowColor = mix(uColorYellow, uColorPulse, 1.0 - uHealthPct);
+                        vec3 finalCol = baseCol * diff + (glowColor * fresnel * 0.8);
+                        gl_FragColor = vec4(finalCol, 1.0);
+                    }
+                `;
+                return new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uHealthPct: { value: 1.0 },
+                        uDamagePulse: { value: 0.0 },
+                        uColorYellow: { value: new THREE.Color(params.colorYellow || 0xffcc00) },
+                        uColorBlack: { value: new THREE.Color(params.colorBlack || 0x111111) },
+                        uColorPulse: { value: new THREE.Color(params.colorPulse || 0xff2200) }
+                    },
+                    vertexShader: vert,
+                    fragmentShader: frag
+                });
+            }
+        };
+
         const WeaponModelFactory = {
             getMesh(weaponId) {
                 if (weaponId === 'pistol') {
@@ -2316,7 +2519,13 @@
                 // TITAN MECHANICAL ARM — Full Procedural FPS Viewmodel Appendage
                 // =================================================================
                 const frameMat = new THREE.MeshStandardMaterial({ color: 0x0a0e14, roughness: 0.3, metalness: 0.95 });
-                const armorMat = new THREE.MeshStandardMaterial({ color: 0x1a2030, roughness: 0.25, metalness: 0.9 });
+                const synapticMat = BioShaderUtils.getSynapticArmorMaterial({
+                    colorYellow: 0x1a2030,
+                    colorBlack: 0x0a0e14
+                });
+                root.synapticMaterials = [synapticMat]; // For external update sync
+
+                const armorMat = synapticMat;
                 const innerMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.7 });
                 const pistonMat = new THREE.MeshStandardMaterial({ color: 0x556677, roughness: 0.15, metalness: 0.95 });
                 const jointMat = new THREE.MeshStandardMaterial({ color: 0x222833, roughness: 0.3, metalness: 0.85 });
@@ -2623,15 +2832,15 @@
 
                 // Per-weapon scale & position — weapons 2/3/4 scaled UP significantly
                 const wpScales = {
-                    pistol: { s: 0.28, x: 0.42, y: -0.15, z: -1.3, muzzleZ: -1.2 },
-                    shotgun: { s: 0.20, x: 0.38, y: -0.18, z: -1.1, muzzleZ: -1.4 },
-                    ar: { s: 0.20, x: 0.35, y: -0.14, z: -1.0, muzzleZ: -1.4 },
-                    railgun: { s: 0.22, x: 0.35, y: -0.12, z: -1.0, muzzleZ: -1.8 },
-                    flare: { s: 0.22, x: 0.35, y: -0.16, z: -0.9, muzzleZ: -1.8 },
-                    singular: { s: 0.24, x: 0.35, y: -0.12, z: -1.0, muzzleZ: -1.6 },
-                    sword: { s: 0.18, x: 0.30, y: -0.20, z: -0.8, muzzleZ: -3.5 },
-                    flame: { s: 0.20, x: 0.35, y: -0.16, z: -0.9, muzzleZ: -2.4 },
-                    tentacle: { s: 0.12, x: 0.35, y: -0.20, z: -0.9, muzzleZ: -3.0 },
+                    pistol: { s: 0.28, x: 0.42, y: -0.15, z: -1.3, adsX: 0.42, adsY: -0.06, muzzleZ: -1.2 },
+                    shotgun: { s: 0.20, x: 0.38, y: -0.18, z: -1.1, adsX: 0.38, adsY: -0.12, muzzleZ: -1.4 },
+                    ar: { s: 0.20, x: 0.35, y: -0.14, z: -1.0, adsX: 0.35, adsY: -0.08, muzzleZ: -1.4 },
+                    railgun: { s: 0.22, x: 0.35, y: -0.12, z: -1.0, adsX: 0.35, adsY: -0.06, muzzleZ: -1.8 },
+                    flare: { s: 0.22, x: 0.35, y: -0.16, z: -0.9, adsX: 0.35, adsY: -0.10, muzzleZ: -1.8 },
+                    singular: { s: 0.24, x: 0.35, y: -0.12, z: -1.0, adsX: 0.35, adsY: -0.06, muzzleZ: -1.6 },
+                    sword: { s: 0.18, x: 0.30, y: -0.20, z: -0.8, adsX: 0.0, adsY: 0.0, muzzleZ: -3.5 },
+                    flame: { s: 0.20, x: 0.35, y: -0.16, z: -0.9, adsX: 0.35, adsY: -0.10, muzzleZ: -2.4 },
+                    tentacle: { s: 0.12, x: 0.35, y: -0.20, z: -0.9, adsX: 0.0, adsY: 0.0, muzzleZ: -3.0 },
                 };
                 const wp = wpScales[weaponId] || { s: 0.22, x: 0.4, y: -0.15, z: -1.2, muzzleZ: -1.2 };
                 weapon.scale.set(wp.s, wp.s, wp.s);
@@ -2647,6 +2856,26 @@
                 muzzlePoint.position.set(0, 0, wp.muzzleZ);
                 weapon.add(muzzlePoint);
                 root.muzzlePoint = muzzlePoint;
+
+                // Save ADS config to root
+                root.adsConfig = { x: wp.adsX, y: wp.adsY };
+
+                // --- HOLOGRAPHIC ADS SIGHT (Titan Machine Vision) ---
+                if (!weaponId.includes('sword') && !weaponId.includes('tentacle')) {
+                    const sightGroup = new THREE.Group();
+                    sightGroup.position.set(0, 0.45, 0); // Position on top of gun
+                    weapon.add(sightGroup);
+
+                    const ringGeo = new THREE.TorusGeometry(0.12, 0.01, 8, 32);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.0 });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    sightGroup.add(ring);
+                    root.adsRing = ringMat; // Reference for fading in
+                    
+                    const dotGeo = new THREE.SphereGeometry(0.01, 8, 8);
+                    const dot = new THREE.Mesh(dotGeo, ringMat);
+                    sightGroup.add(dot);
+                }
 
                 return root;
             }
@@ -2691,7 +2920,10 @@
             });
 
             // 5. Recreate Player (to fix limbs/state)
-            if (player) scene.remove(player);
+            if (player) {
+                if (typeof player.dispose === 'function') player.dispose();
+                else scene.remove(player);
+            }
 
             const selectedMod = MainMenu.modData[MainMenu.selectedMod];
             let aType = "dash";
@@ -2747,6 +2979,18 @@
 
         // Start App Pipeline — called by MainMenu.onStart
         function startGamePipeline() {
+            // --- CLEANUP EXISTING ENTITIES (Prevent static ghosts) ---
+            if (player) {
+                console.log("[Pipeline] Cleaning up existing player...");
+                if (typeof player.dispose === 'function') player.dispose();
+                else scene.remove(player);
+            }
+            if (window.companionOrb) {
+                console.log("[Pipeline] Cleaning up existing orb...");
+                if (typeof window.companionOrb.dispose === 'function') window.companionOrb.dispose();
+                else scene.remove(window.companionOrb.group);
+            }
+
             ModelFactory.loadAll().then(() => {
                 // Hide loader only when all models are ready
                 setTimeout(() => {
@@ -3386,7 +3630,10 @@
                 // --- Spawn Companion Orb ("The Watcher") ---
                 window.companionOrb = new CompanionOrb(scene, player, cameraFPS, spawnNodes);
 
-                animate();
+                if (!isGameLoopRunning) {
+                    isGameLoopRunning = true;
+                    animate();
+                }
             }).catch(console.error);
         } // end startGamePipeline
 
@@ -3474,11 +3721,15 @@
 
 
         // --- INPUT & CONTROLS ---
-        const keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
+        const keys = { w: false, a: false, s: false, d: false, q: false, shift: false, space: false };
         window.addEventListener('keydown', e => {
             if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
             if (e.code === 'Space') keys.space = true; // Special map for space
             if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
+            if (e.key.toLowerCase() === 'q') {
+                keys.q = true;
+                if (isFPSMode) isADS = true;
+            }
 
             // Weapon swapping
             if (e.key >= '1' && e.key <= '7') {
@@ -3533,14 +3784,19 @@
             if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false;
             if (e.code === 'Space') keys.space = false;
             if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
+            if (e.key.toLowerCase() === 'q') {
+                keys.q = false;
+                if (!mouseRightHeld) isADS = false;
+            }
         });
 
         document.addEventListener('mousemove', (e) => {
             if (isFPSMode && document.pointerLockElement === document.body && !isPaused) {
+                const sensitivity = isADS ? 0.0009 : 0.0015;
                 // Rotate Player Yaw (left/right)
-                player.rotation.y -= e.movementX * 0.0015;
+                player.rotation.y -= e.movementX * sensitivity;
                 // Rotate Camera Pitch (up/down) — clamped
-                cameraFPS.rotation.x -= e.movementY * 0.0015;
+                cameraFPS.rotation.x -= e.movementY * sensitivity;
                 cameraFPS.rotation.x = Math.max(-1.4, Math.min(1.4, cameraFPS.rotation.x));
             }
         });
@@ -4199,7 +4455,7 @@
 
             // --- MULTI-AXIS RECOIL SYSTEM ---
             const rc = recoilCfg[weapon.id] || recoilCfg.pistol;
-            const adsMul = isADS ? 0.6 : 1.0; // ADS reduces recoil by 40%
+            const adsMul = isADS ? 0.0 : 1.0; // ADS removes recoil entirely (Real Machine Precision)
             recoilOffset = rc.pitchKick * adsMul;
             recoilRotation = -rc.pitchKick * 0.6 * adsMul;
             recoilYaw = (Math.random() - 0.5) * rc.yawDrift * 2 * adsMul;
@@ -4508,6 +4764,11 @@
         function animate() {
             requestAnimationFrame(animate);
             const rawDelta = Math.min(clock.getDelta(), 0.1);
+            
+            // --- TACTICAL BULLET-TIME (ADS) ---
+            const targetTimeScale = isADS ? 0.65 : 1.0;
+            TIME_SCALE += (targetTimeScale - TIME_SCALE) * rawDelta * 10.0;
+            
             const delta = rawDelta * TIME_SCALE;
             lastDelta = delta;
 
@@ -4691,6 +4952,11 @@
                     player.position.z + camForward.z
                 );
 
+                // ADS FOV Zoom
+                const targetFOV = isADS ? 22 : 32;
+                cameraFPS.fov += (targetFOV - cameraFPS.fov) * delta * 10.0;
+                cameraFPS.updateProjectionMatrix();
+
                 // Sync yaw from player, keep local pitch from mousemove
                 cameraFPS.rotation.set(cameraFPS.rotation.x, player.rotation.y, 0, 'YXZ');
             } else {
@@ -4711,6 +4977,12 @@
 
             // Update Companion Orb
             if (window.companionOrb) window.companionOrb.update(delta, uTime);
+
+            // Update Water Shader
+            if (window.waterMat) {
+                window.waterMat.uniforms.uTime.value = uTime;
+                window.waterMat.uniforms.uPlayerPos.value.copy(player.position);
+            }
 
             // Muzzle Flash Decay
             if (muzzleFlashLight && muzzleFlashLight.intensity > 0) {
@@ -4737,15 +5009,16 @@
                 const elT = clock.elapsedTime;
 
                 // Movement bob — more aggressive with lateral tilt
-                const bobX = Math.sin(weaponBobPhase) * 0.025 * moveIntensity;
-                const bobY = Math.abs(Math.cos(weaponBobPhase * 2.0)) * 0.02 * moveIntensity;
-                const bobTilt = Math.sin(weaponBobPhase) * 0.008 * moveIntensity; // Lateral tilt during walk
+                const stabilityMul = isADS ? 0.35 : 1.0;
+                const bobX = Math.sin(weaponBobPhase) * 0.025 * moveIntensity * stabilityMul;
+                const bobY = Math.abs(Math.cos(weaponBobPhase * 2.0)) * 0.02 * moveIntensity * stabilityMul;
+                const bobTilt = Math.sin(weaponBobPhase) * 0.008 * moveIntensity * stabilityMul; // Lateral tilt during walk
 
                 // Idle sway (figure-8 breathing pattern when standing still)
                 const idleIntensity = 1.0 - moveIntensity;
-                const idleX = Math.sin(elT * 1.2) * 0.003 * idleIntensity;
-                const idleY = Math.sin(elT * 0.8) * Math.cos(elT * 0.5) * 0.002 * idleIntensity;
-                const idleRot = Math.sin(elT * 0.6) * 0.003 * idleIntensity;
+                const idleX = Math.sin(elT * 1.2) * 0.003 * idleIntensity * stabilityMul;
+                const idleY = Math.sin(elT * 0.8) * Math.cos(elT * 0.5) * 0.002 * idleIntensity * stabilityMul;
+                const idleRot = Math.sin(elT * 0.6) * 0.003 * idleIntensity * stabilityMul;
 
                 // Recoil recovery — weapon-specific damping
                 const weapon = inventory[currentWeaponIdx];
@@ -4756,9 +5029,10 @@
                 fpsViewmodel.rotation.y *= Math.pow(0.001, delta * 1.5); // Yaw recoil recovery
 
                 // ADS position — weapon pulls toward center of screen
-                const adsTargetX = isADS ? 0.0 : 0.05;
-                const adsTargetY = isADS ? -0.02 : -0.05;
-                const adsLerp = isADS ? 8.0 : 5.0;
+                const adsCfg = fpsViewmodel.adsConfig || { x: 0.05, y: -0.05 };
+                const adsTargetX = isADS ? -adsCfg.x : 0.05;
+                const adsTargetY = isADS ? -adsCfg.y : -0.05;
+                const adsLerp = isADS ? 12.0 : 8.0;
 
                 // Combine Bob + Idle Sway + ADS
                 const finalX = bobX + idleX;
@@ -4766,6 +5040,21 @@
                 fpsViewmodel.position.x += (finalX + adsTargetX - fpsViewmodel.position.x) * adsLerp * delta;
                 fpsViewmodel.position.y += (finalY + adsTargetY - fpsViewmodel.position.y) * adsLerp * delta;
                 fpsViewmodel.rotation.z = bobTilt + idleRot;
+
+                // Update holographic sight opacity
+                if (fpsViewmodel.adsRing) {
+                    const targetOpacity = isADS ? 0.8 : 0.0;
+                    fpsViewmodel.adsRing.opacity += (targetOpacity - fpsViewmodel.adsRing.opacity) * delta * 15.0;
+                }
+
+                // Update synaptic armor on viewmodel
+                if (fpsViewmodel.synapticMaterials) {
+                    fpsViewmodel.synapticMaterials.forEach(m => {
+                        m.uniforms.uTime.value = uTime;
+                        m.uniforms.uHealthPct.value = playerHealth / 100;
+                        m.uniforms.uDamagePulse.value = player.armorMat ? player.armorMat.uniforms.uDamagePulse.value : 0;
+                    });
+                }
 
                 // Update procedural weapon internal states
                 if (fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.update === 'function') {
@@ -4789,6 +5078,11 @@
                 const moveSpreadPenalty = (moveX !== 0 || moveZ !== 0) ? 4 : 0;
                 const bloomPx = Math.min(20, currentSpread * 80 + moveSpreadPenalty);
                 crosshairEl.style.setProperty('--spread', bloomPx + 'px');
+                
+                // Hide crosshair when in ADS for "Real ADS" feel
+                const targetOpacity = isADS ? '0' : '1';
+                crosshairEl.style.opacity = targetOpacity;
+                crosshairEl.style.transition = 'opacity 0.15s ease';
             }
 
             // Muzzle Flash Light Decay
@@ -4993,11 +5287,7 @@
                 }
             }
 
-            // Hazard water damage and texture animation
-            if (waterTex) {
-                waterTex.offset.x += delta * 0.05;
-                waterTex.offset.y += delta * 0.02;
-            }
+            // Hazard water damage logic
             if (player.position.y <= -1.8) { // Give a little buffer below -2.0 mesh for wading
                 frameDamage += 15 * delta; // Damage over time
 
@@ -5250,14 +5540,12 @@
                             showHitmarker(true);
                             spawnDamageNumber(hitX, hitY, hitZ, 0, true);
 
-                            // Blood/gore burst (enhanced)
-                            for (let p = 0; p < 16; p++) {
-                                const spread = b.weaponId === 'shotgun' ? 10 : 6;
-                                emitParticle(hitX, hitY, hitZ,
-                                    (Math.random() - 0.5) * spread, Math.random() * 5 + 1, (Math.random() - 0.5) * spread,
-                                    0.8 + Math.random() * 0.2, Math.random() * 0.1, Math.random() * 0.05,
-                                    3 + Math.random() * 4, 0.3 + Math.random() * 0.3);
+                            // Blood/gore burst (GoreSystem integration)
+                            if (window.goreSystem) {
+                                const zTypeLabel = zType[j] === 0 ? 'normal' : (zType[j] === 1 ? 'puker' : 'thrower');
+                                window.goreSystem.spawnDeath(new THREE.Vector3(hitX, hitY, hitZ), zTypeLabel);
                             }
+                            
                             if (isFPSMode) screenShakeIntensity = Math.max(screenShakeIntensity, 0.015);
                             killFlashTimer = 0.05;
 
@@ -5325,6 +5613,7 @@
 
             // --- UPDATE GPU PARTICLE SYSTEM ---
             updateParticles(delta);
+            if (window.goreSystem) window.goreSystem.update(delta);
 
             // --- GUI STATE PUSH ---
             if (typeof gui !== 'undefined') {

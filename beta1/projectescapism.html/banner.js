@@ -51,20 +51,16 @@ class HoloBanner {
 
         ctx.clearRect(0, 0, w, h);
 
-        // The scrolling message
+        // The scrolling message (Resident Evil / Biohazard style)
         const msg = [
-            'OTSF ORDINARY TECHNOLOGY SPACE FORCE',
-            '◆',
-            'CHASSIS #1997 — COMBAT DEPLOYMENT ACTIVE',
-            '◆',
-            'PROPERTY OF OTSF ARMAMENTS DIVISION',
-            '◆',
-            'NEURAL UPLINK SYNCHRONIZED',
-            '◆',
-            'HOSTILE CONTAINMENT PROTOCOL ENGAGED',
-            '◆',
-            'OTSF — BEYOND THE FRONTIER',
-            '◆',
+            '◆ CAUTION: BIOLOGICAL HAZARD DETECTED ◆',
+            '◆ CONTAINMENT BREACH IN SECTOR 7 ◆',
+            '◆ SUBJECT: ORGANOID-ALPHA // MUTATION RATE: 42% ◆',
+            '◆ UMBRELLA RESEARCH DIVISION — CLASSIFIED ◆',
+            '◆ WARNING: NEURAL DEGRADATION IMMINENT ◆',
+            '◆ PROTOCOL: STERILIZATION ACTIVE ◆',
+            '◆ ANALYSIS: T-VIRUS VARIANT DETECTED ◆',
+            '◆ PROPERTY OF OTSF BIO-WEAPONS DIVISION ◆',
         ].join('   ');
 
         // Render text repeating across the wide canvas
@@ -101,13 +97,12 @@ class HoloBanner {
             uniform vec2 uResolution;
             uniform float uTime;
             uniform sampler2D uTextTex;
-            uniform float uBannerY;     // normalized Y center
-            uniform float uBannerH;     // banner height in px
-            uniform float uScrollSpeed; // text scroll
+            uniform float uBannerY;     
+            uniform float uBannerH;     
+            uniform float uScrollSpeed; 
 
             varying vec2 vUv;
 
-            // --- Noise ---
             float hash12(vec2 p) {
                 vec3 p3 = fract(vec3(p.xyx) * .1031);
                 p3 += dot(p3, p3.yzx + 33.33);
@@ -136,81 +131,90 @@ class HoloBanner {
                 return v;
             }
 
-            // --- 3D Rotating DNA Double Helix ---
-            // Returns vec2: x = SDF distance, y = depth (0=front, 1=back) for shading
-            vec2 dnaHelix3D(vec2 p, float t) {
+            // --- DNA FLOW 1: Stable Double Helix ---
+            vec2 dnaFlowStable(vec2 p, float t) {
                 float d = 1000.0;
                 float bestDepth = 0.5;
-
                 float PI = 3.14159265;
-                float helixRadius = 10.0;
-                float twistFreq = 0.06;    // How tight the twist is
-                float rotSpeed = 2.5;      // Rotation speed around the axis
-                float scrollSpeed = 80.0;  // Horizontal scroll of the helix
+                float radius = 22.0; // Increased for wrap
+                float twist = 0.04;
+                float rot = t * 2.5;
 
-                // Two backbone strands with 3D projection
-                for (int strand = 0; strand < 2; strand++) {
-                    float strandPhase = float(strand) * PI;
-
-                    // For each column of pixels, compute the 3D strand position
-                    float angle = (p.x + t * scrollSpeed) * twistFreq + t * rotSpeed + strandPhase;
-
-                    // 3D cylinder coordinates projected to 2D
-                    float strandY = cos(angle) * helixRadius;  // Y on screen
-                    float strandZ = sin(angle);                // Z depth (-1 to 1)
-
-                    // Strand thickness varies with depth (closer = thicker)
-                    float thickness = 1.8 + strandZ * 0.6;
-                    float dist = abs(p.y - strandY) - thickness;
-
-                    if (dist < d) {
-                        d = dist;
-                        bestDepth = strandZ * 0.5 + 0.5; // normalize to 0-1
-                    }
+                for (int i = 0; i < 2; i++) {
+                    float phase = float(i) * PI;
+                    float angle = p.x * twist + rot + phase;
+                    float y = cos(angle) * radius;
+                    float z = sin(angle);
+                    float dist = abs(p.y - y) - (2.5 + z * 1.0);
+                    if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
                 }
 
-                // Rungs (base pairs) connecting the two strands
-                float rungSpacing = 30.0;
-                float rungX = mod(p.x + t * scrollSpeed, rungSpacing) - rungSpacing * 0.5;
-
-                if (abs(rungX) < 1.2) {
-                    // Get both strand Y positions at this x
-                    float angle0 = (p.x + t * scrollSpeed) * twistFreq + t * rotSpeed;
-                    float y0 = cos(angle0) * helixRadius;
-                    float z0 = sin(angle0);
-                    float y1 = cos(angle0 + PI) * helixRadius;
-                    float z1 = sin(angle0 + PI);
-
-                    float minRY = min(y0, y1);
-                    float maxRY = max(y0, y1);
-
-                    if (p.y > minRY && p.y < maxRY) {
-                        float rungDist = abs(rungX) - 0.6;
-                        // Depth of rung = average of two strands
-                        float rungDepth = (z0 + z1) * 0.25 + 0.5;
-                        if (rungDist < d) {
-                            d = rungDist;
-                            bestDepth = rungDepth;
-                        }
+                // Rungs
+                float rungSpacing = 36.0;
+                float rx = mod(p.x + t * 40.0, rungSpacing) - rungSpacing * 0.5;
+                if (abs(rx) < 1.8) {
+                    float a0 = p.x * twist + rot;
+                    float y0 = cos(a0) * radius;
+                    float y1 = cos(a0 + PI) * radius;
+                    if (p.y > min(y0, y1) && p.y < max(y0, y1)) {
+                        float rd = abs(rx) - 1.0;
+                        if (rd < d) { d = rd; bestDepth = 0.5; }
                     }
-
-                    // Nucleotide blobs at connection points
-                    float blobDist0 = length(vec2(rungX, p.y - y0)) - 2.5;
-                    float blobDist1 = length(vec2(rungX, p.y - y1)) - 2.5;
-                    if (blobDist0 < d) { d = blobDist0; bestDepth = z0 * 0.5 + 0.5; }
-                    if (blobDist1 < d) { d = blobDist1; bestDepth = z1 * 0.5 + 0.5; }
                 }
-
                 return vec2(d, bestDepth);
             }
 
-            // --- Holographic Prismatic Color ---
-            vec3 prismatic(float t, float offset) {
-                return vec3(
-                    sin(t * 2.0 + offset) * 0.5 + 0.5,
-                    sin(t * 2.0 + offset + 2.094) * 0.5 + 0.5,
-                    sin(t * 2.0 + offset + 4.189) * 0.5 + 0.5
-                );
+            // --- DNA FLOW 2: Mutated Multi-Strand Vortex ---
+            vec2 dnaFlowMutant(vec2 p, float t) {
+                float d = 1000.0;
+                float bestDepth = 0.5;
+                float PI = 3.14159265;
+                
+                for (int i = 0; i < 4; i++) {
+                    float phase = float(i) * (PI * 0.5);
+                    float twist = 0.07 + sin(t * 0.4) * 0.02;
+                    float radius = 24.0 + sin(p.x * 0.02 + t) * 6.0; // Increased
+                    float angle = p.x * twist + t * 4.5 + phase;
+                    
+                    float y = cos(angle) * radius;
+                    float z = sin(angle);
+                    y += noise(vec2(p.x * 0.1, t)) * 8.0;
+                    
+                    float dist = abs(p.y - y) - (2.0 + z * 0.8);
+                    if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
+                }
+                return vec2(d, bestDepth);
+            }
+
+            // --- DNA FLOW 3: Decaying / Dissolving Strands ---
+            vec2 dnaFlowDecay(vec2 p, float t) {
+                float d = 1000.0;
+                float bestDepth = 0.5;
+                float PI = 3.14159265;
+                
+                float twist = 0.035;
+                float rot = t * 1.8;
+                float radius = 20.0; // Increased
+
+                for (int i = 0; i < 2; i++) {
+                    float phase = float(i) * PI;
+                    float angle = p.x * twist + rot + phase;
+                    float y = cos(angle) * radius;
+                    float z = sin(angle);
+                    
+                    float dissolve = noise(vec2(p.x * 0.04, t * 2.2));
+                    if (dissolve > 0.55) {
+                        float dist = length(vec2(p.x, p.y - y)) - (2.5 + z * 1.5);
+                        float chunk = sin(p.x * 0.15 + t * 6.0);
+                        if (chunk > 0.0) {
+                            if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
+                        }
+                    } else {
+                        float dist = abs(p.y - y) - (2.5 + z * 0.8);
+                        if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
+                    }
+                }
+                return vec2(d, bestDepth);
             }
 
             void main() {
@@ -222,179 +226,78 @@ class HoloBanner {
                 float halfH = uBannerH * 0.5;
                 float distFromBanner = abs(px.y - bannerCenterY) - halfH;
 
-                // Soft edge
-                float bannerMask = 1.0 - smoothstep(-2.0, 3.0, distFromBanner);
-                if (bannerMask < 0.001) {
-                    gl_FragColor = vec4(0.0);
-                    return;
-                }
+                float bannerMask = 1.0 - smoothstep(-2.0, 2.0, distFromBanner);
+                if (bannerMask < 0.001) { discard; }
 
-                // Local banner UV (0-1 within the banner strip)
                 float localY = (px.y - bannerCenterY + halfH) / (halfH * 2.0);
                 float localX = vUv.x;
 
-                vec3 finalColor = vec3(0.0);
-                float alpha = 0.0;
+                // --- DNA Coordinates (Wrapping around banner height) ---
+                // We increase the radius so it goes "outside" the banner strip visually
+                vec2 dnaP = vec2(px.x, (localY - 0.5) * uBannerH * 2.2); 
 
-                // ==============================
-                // LAYER 1: Base Holographic Panel
-                // ==============================
-                {
-                    // Deep dark substrate with subtle blue tint
-                    vec3 base = vec3(0.0, 0.02, 0.06);
-
-                    // Moving interference pattern
-                    float interference = sin(px.x * 0.1 + t * 4.0) * sin(px.y * 0.3 + t * 2.0);
-                    interference *= 0.15;
-                    base += vec3(0.0, 0.05, 0.1) * (interference + 0.15);
-
-                    // Holographic noise texture
-                    float n = fbm(vec2(px.x * 0.01 + t * 0.5, localY * 5.0 + t * 0.3));
-                    base += vec3(0.0, 0.03, 0.08) * n;
-
-                    // Faint horizontal scanlines
-                    float scan = sin(localY * uBannerH * 3.14159 * 2.0 + t * 15.0) * 0.5 + 0.5;
-                    base += vec3(0.0, 0.01, 0.03) * scan * 0.3;
-
-                    finalColor = base;
-                    alpha = bannerMask * 0.85;
+                // --- DNA Transitions ---
+                float cycle = mod(t * 0.1, 3.0);
+                vec2 dna;
+                if (cycle < 1.0) {
+                    dna = mix(dnaFlowStable(dnaP, t), dnaFlowMutant(dnaP, t), smoothstep(0.8, 1.0, cycle));
+                } else if (cycle < 2.0) {
+                    dna = mix(dnaFlowMutant(dnaP, t), dnaFlowDecay(dnaP, t), smoothstep(1.8, 2.0, cycle));
+                } else {
+                    dna = mix(dnaFlowDecay(dnaP, t), dnaFlowStable(dnaP, t), smoothstep(2.8, 3.0, cycle));
                 }
 
+                float dDna = dna.x;
+                float depth = dna.y; // 0 (back) to 1 (front)
+
                 // ==============================
-                // LAYER 2: Prismatic Hologram Mid
+                // LAYERED RENDERING (3D WRAP)
                 // ==============================
-                {
-                    // Prismatic rainbow shimmer that shifts with angle/time
-                    float prismAngle = localX * 20.0 + localY * 5.0 + t * 1.5;
-                    vec3 prism = prismatic(prismAngle, px.x * 0.005);
-                    prism *= 0.12;
+                
+                // 1. Base substrate (The Black Strip)
+                vec3 finalColor = vec3(0.002, 0.0, 0.0);
+                float alpha = bannerMask * 0.95;
+                
+                // Subtle scanlines
+                finalColor += sin(localY * 120.0 + t * 5.0) * 0.015;
 
-                    // Fresnel-like edge brightening
-                    float edgeBright = pow(1.0 - abs(localY - 0.5) * 2.0, 0.5);
-                    prism *= edgeBright;
-
-                    // Moving light streak (like hologram card tilt)
-                    float streak = exp(-pow((localX - fract(t * 0.15)) * 8.0, 2.0));
-                    prism += prismatic(t * 3.0 + px.x * 0.01, 0.0) * streak * 0.3;
-
-                    finalColor += prism;
+                // 2. DNA BACK STRANDS (Depth < 0.5)
+                float backGlow = (1.0 - smoothstep(0.0, 12.0, dDna)) * step(depth, 0.5);
+                if (backGlow > 0.0) {
+                    vec3 backCol = mix(vec3(0.3, 0.0, 0.0), vec3(0.8, 0.2, 0.1), depth * 2.0);
+                    // Dimmer and more blurred for back
+                    finalColor = mix(finalColor, backCol, backGlow * 0.4);
                 }
 
-                // ==============================
-                // LAYER 3: 3D Rotating DNA Helix
-                // ==============================
-                {
-                    vec2 dnaP = vec2(px.x, (localY - 0.5) * uBannerH);
-                    vec2 dnaResult = dnaHelix3D(dnaP, t);
-                    float dDna = dnaResult.x;
-                    float depth = dnaResult.y; // 0=back, 1=front
-
-                    float dnaGlow = 1.0 - smoothstep(0.0, 6.0, dDna);
-                    float dnaCore = 1.0 - smoothstep(0.0, 1.0, dDna);
-
-                    if (dnaGlow > 0.0) {
-                        // Depth-based shading: front strands are bright, back are dim
-                        float depthShade = 0.3 + 0.7 * depth;
-
-                        // Orange palette: dark amber -> hot orange -> bright yellow core
-                        vec3 dnaBase = mix(
-                            vec3(0.4, 0.15, 0.0),   // Dark amber (back)
-                            vec3(1.0, 0.5, 0.0),    // Bright orange (front)
-                            depth
-                        );
-                        vec3 dnaHot = mix(
-                            dnaBase,
-                            vec3(1.0, 0.9, 0.3),    // Yellow-white hot core
-                            dnaCore
-                        );
-                        dnaHot *= depthShade;
-
-                        // Warm prismatic refraction (orange/gold spectrum)
-                        float prismShift = sin(t * 3.0 + dnaP.x * 0.02) * 0.5 + 0.5;
-                        dnaHot += vec3(0.2, 0.08, 0.0) * prismShift * dnaGlow;
-
-                        // Ember particle glow on front-facing strands
-                        if (depth > 0.6) {
-                            float ember = fbm(dnaP * 0.1 + t * 5.0);
-                            dnaHot += vec3(0.3, 0.1, 0.0) * ember * dnaCore;
-                        }
-
-                        finalColor = mix(finalColor, dnaHot, dnaGlow * 0.7);
-                        alpha = max(alpha, bannerMask * (0.85 + dnaGlow * 0.15));
+                // 3. TEXT LAYER (In the middle of the "wrap")
+                vec2 textUv = vec2(fract(localX + t * uScrollSpeed), localY);
+                vec4 textSample = texture2D(uTextTex, textUv);
+                if (textSample.a > 0.05) {
+                    vec3 txtCol = mix(vec3(0.7, 0.0, 0.0), vec3(1.0, 0.95, 0.95), textSample.a);
+                    // Add glitch
+                    if (hash12(vec2(t, floor(localY * 15.0))) > 0.98) {
+                        txtCol = vec3(1.0, 1.0, 1.0);
+                        textUv.x += 0.01;
                     }
+                    finalColor = mix(finalColor, txtCol, textSample.a * 0.9);
+                    alpha = max(alpha, bannerMask * textSample.a);
                 }
 
-                // ==============================
-                // SCROLLING OTSF TEXT
-                // ==============================
-                {
-                    // Scroll UV
-                    vec2 textUv = vec2(
-                        fract(localX + t * uScrollSpeed),
-                        localY
-                    );
-
-                    vec4 textSample = texture2D(uTextTex, textUv);
-
-                    if (textSample.a > 0.0) {
-                        // Holographic text coloring — cyan core with white hot center
-                        vec3 textColor = mix(
-                            vec3(0.0, 0.6, 0.8),
-                            vec3(0.9, 1.0, 1.0),
-                            textSample.a * 0.8
-                        );
-
-                        // Chromatic split on text
-                        float rShift = texture2D(uTextTex, textUv + vec2(0.002, 0.0)).a;
-                        float bShift = texture2D(uTextTex, textUv - vec2(0.002, 0.0)).a;
-                        textColor.r += rShift * 0.15;
-                        textColor.b += bShift * 0.15;
-
-                        // Glitch flicker
-                        float glitch = step(0.97, hash12(vec2(floor(t * 12.0), floor(textUv.y * 20.0))));
-                        textColor += glitch * vec3(0.5, 0.0, 0.3);
-
-                        finalColor = mix(finalColor, textColor, textSample.a * 0.9);
-                        alpha = max(alpha, bannerMask * textSample.a * 0.95);
-                    }
+                // 4. DNA FRONT STRANDS (Depth >= 0.5)
+                float frontGlow = (1.0 - smoothstep(0.0, 8.0, dDna)) * step(0.5, depth);
+                float frontCore = (1.0 - smoothstep(0.0, 1.8, dDna)) * step(0.5, depth);
+                if (frontGlow > 0.0) {
+                    vec3 frontCol = mix(vec3(0.8, 0.1, 0.0), vec3(1.0, 0.4, 0.2), (depth - 0.5) * 2.0);
+                    frontCol = mix(frontCol, vec3(1.0, 1.0, 0.9), frontCore);
+                    
+                    // Brighter and sharper for front
+                    finalColor = mix(finalColor, frontCol, frontGlow * 0.9);
+                    alpha = max(alpha, bannerMask * frontGlow);
                 }
 
-                // ==============================
-                // EDGE GLOW + BORDER LINES
-                // ==============================
-                {
-                    // Top and bottom bright border lines
-                    float topLine = 1.0 - smoothstep(0.0, 2.0, abs(distFromBanner + halfH * 2.0 - 1.0));
-                    float botLine = 1.0 - smoothstep(0.0, 2.0, abs(distFromBanner + 1.0));
-
-                    // Use the actual banner edge
-                    float edgeTop = 1.0 - smoothstep(-1.5, 0.5, distFromBanner + 0.5);
-                    float edgeBot = 1.0 - smoothstep(-1.5, 0.5, -distFromBanner - halfH * 2.0 + 0.5);
-
-                    // Combine as bright cyan lines at banner edges
-                    float borderIntensity = smoothstep(halfH - 2.0, halfH, abs(px.y - bannerCenterY));
-                    borderIntensity *= bannerMask;
-
-                    if (borderIntensity > 0.0) {
-                        vec3 borderColor = vec3(0.0, 0.8, 1.0);
-                        // Pulsing
-                        borderColor *= 0.6 + 0.4 * sin(t * 4.0 + px.x * 0.05);
-                        finalColor = mix(finalColor, borderColor, borderIntensity * 0.8);
-                        alpha = max(alpha, borderIntensity * 0.9);
-                    }
-                }
-
-                // ==============================
-                // FINAL COMPOSITING
-                // ==============================
-
-                // Subtle overall scanline grain
-                float globalScan = sin(vUv.y * uResolution.y * 2.0 + t * 20.0) * 0.5 + 0.5;
-                finalColor *= 0.95 + globalScan * 0.05;
-
-                // Holographic flicker (rare full-strip flash)
-                float flicker = step(0.995, hash12(vec2(floor(t * 20.0), 42.0)));
-                finalColor += flicker * vec3(0.1, 0.2, 0.3);
+                // 5. EDGE POLISH
+                float edge = smoothstep(halfH - 1.0, halfH, abs(px.y - bannerCenterY));
+                finalColor = mix(finalColor, vec3(1.0, 0.0, 0.0), edge * 0.5 * bannerMask);
 
                 gl_FragColor = vec4(finalColor, alpha);
             }

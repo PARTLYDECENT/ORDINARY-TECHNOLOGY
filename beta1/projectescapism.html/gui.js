@@ -23,7 +23,7 @@ class SDFGUI {
         this.canvas.width = width;
         this.canvas.height = height;
         this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-        
+
         this.textTexture = new THREE.CanvasTexture(this.canvas);
         this.textTexture.minFilter = THREE.LinearFilter;
         this.textTexture.magFilter = THREE.LinearFilter;
@@ -119,27 +119,65 @@ class SDFGUI {
                 return length( pa - ba*h ) - r;
             }
 
-            // --- Organic Morphing Crosshair (Hyper-Fluid) ---
+            // --- 5-Form Morphing Crosshair (Tactical/Biological) ---
+            float sdBox(vec2 p, vec2 b) {
+                vec2 d = abs(p)-b;
+                return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+            }
+            float sdEquilateralTriangle(in vec2 p, in float r) {
+                const float k = sqrt(3.0);
+                p.x = abs(p.x) - r;
+                p.y = p.y + r/k;
+                if( p.x+k*p.y>0.0 ) p = vec2(p.x-k*p.y,-k*p.x-p.y)/2.0;
+                p.x -= clamp( p.x, -2.0*r, 0.0 );
+                return -length(p)*sign(p.y);
+            }
+
+            float crosshairForms(vec2 p) {
+                float cycle = 39.0;
+                float t = mod(uTime, cycle);
+                float state = floor(t / (cycle / 5.0));
+                float progress = fract(t / (cycle / 5.0));
+                progress = smoothstep(0.0, 1.0, progress);
+
+                // Form 0: Classic Cross (+)
+                float d0 = min(sdBox(p, vec2(12.0, 1.2)), sdBox(p, vec2(1.2, 12.0)));
+                
+                // Form 1: Tactical X (x)
+                vec2 p1 = p * mat2(0.707, -0.707, 0.707, 0.707);
+                float d1 = min(sdBox(p1, vec2(10.0, 1.5)), sdBox(p1, vec2(1.5, 10.0)));
+                
+                // Form 2: Bio-Diamond (v)
+                float d2 = abs(length(p) - 8.0) - 1.0;
+                d2 = max(d2, -sdBox(p, vec2(4.0))); // hollow
+                
+                // Form 3: Triple-Blade / Biohazard
+                float d3 = 100.0;
+                for(int i=0; i<3; i++) {
+                    float ang = float(i) * 2.094; // 120 deg
+                    vec2 tp = p * mat2(cos(ang), sin(ang), -sin(ang), cos(ang));
+                    d3 = min(d3, sdCapsule(tp, vec2(4.0, 0.0), vec2(14.0, 0.0), 1.0));
+                }
+                
+                // Form 4: Hex-Grid Focus
+                float d4 = abs(max(abs(p.x)*0.866 + p.y*0.5, abs(p.y)) - 10.0) - 1.2;
+
+                float res = 0.0;
+                if (state == 0.0) res = mix(d0, d1, progress);
+                else if (state == 1.0) res = mix(d1, d2, progress);
+                else if (state == 2.0) res = mix(d2, d3, progress);
+                else if (state == 3.0) res = mix(d3, d4, progress);
+                else res = mix(d4, d0, progress);
+
+                // Frantic micro-vibrations
+                res += fbm(p * 0.5 + uTime * 10.0) * 1.5;
+                return res;
+            }
+
             float organicCrosshair(vec2 p) {
-                // Base circle with frantic rotation
-                mat2 rot = mat2(cos(uTime), sin(uTime), -sin(uTime), cos(uTime));
-                vec2 rp = rot * p;
-                
-                float d = sdCircle(rp, 14.0);
-                
-                // Super wild squirming noise (multiple octaves mixed)
-                float n = fbm(rp * 0.1 + uTime * 3.0) * 10.0;
-                float n2 = fbm(rp * 0.3 - uTime * 5.0) * 3.0;
-                d += n - n2;
-                
-                // Inner mutating eye/dot
-                float inner = sdCircle(p, 2.0 + sin(uTime * 8.0) * 1.5 + fbm(p * 0.5 + uTime) * 2.0);
-                
-                // Reconstructive tendrils occasionally snapping out
-                float tendril = sdCapsule(p, vec2(0.0), vec2(sin(uTime * 15.0), cos(uTime * 15.0)) * 18.0 * step(0.95, hash12(vec2(uTime * 2.0, 0.0))), 0.5);
-                
-                float combined = smin(abs(d) - 1.5, inner, 4.0); 
-                return smin(combined, tendril, 2.0);
+                float d = crosshairForms(p);
+                float inner = sdCircle(p, 1.5 + sin(uTime * 12.0) * 0.8);
+                return smin(d, inner, 3.0);
             }
 
             // --- Fluid Health Bar (Organic Sacs + Reconstruction) ---
@@ -360,10 +398,10 @@ class SDFGUI {
         ctx.font = fSmall;
         ctx.fillStyle = '#ff6b6b';
         ctx.fillText(`KILLS: ${this.state.kills}`, 20, 20);
-        
+
         ctx.fillStyle = '#a8a8a8';
         ctx.fillText(`ZOMBIES: ${this.state.zombies}`, 20, 40);
-        
+
         ctx.fillStyle = '#4ade80';
         ctx.fillText(`NODES: ${this.state.nodesActive}`, 20, 60);
 
@@ -381,7 +419,7 @@ class SDFGUI {
         ctx.fillStyle = '#cbd5e1';
         ctx.font = fSmall;
         ctx.fillText(this.state.weaponName.toUpperCase(), this.width - 20, this.height - 60);
-        
+
         ctx.fillStyle = '#38bdf8';
         ctx.font = fLarge;
         ctx.fillText(this.state.ammo, this.width - 20, this.height - 20);
@@ -431,7 +469,7 @@ class SDFGUI {
     resize(w, h) {
         this.width = w;
         this.height = h;
-        
+
         this.camera.left = -w / 2;
         this.camera.right = w / 2;
         this.camera.top = h / 2;
@@ -440,10 +478,10 @@ class SDFGUI {
 
         this.canvas.width = w;
         this.canvas.height = h;
-        
+
         this.mesh.geometry.dispose();
         this.mesh.geometry = new THREE.PlaneGeometry(w, h);
-        
+
         this.material.uniforms.uResolution.value.set(w, h);
         this.updateText();
     }

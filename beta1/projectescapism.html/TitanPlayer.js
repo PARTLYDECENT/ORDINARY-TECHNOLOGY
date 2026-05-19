@@ -56,19 +56,24 @@ class TitanPlayer extends THREE.Group {
     }
 
     setupMaterials() {
-        // --- HAZMAT WARNING SHADER (ARMOR) ---
+        // --- SYNAPTIC ARMOR SHADER (ORGANIC RECONSTRUCTION) ---
         this.armorMat = new THREE.ShaderMaterial({
             uniforms: {
                 uTime: { value: 0 },
+                uHealthPct: { value: 1.0 },
+                uDamagePulse: { value: 0.0 },
                 uColorYellow: { value: new THREE.Color(0xffcc00) },
                 uColorBlack: { value: new THREE.Color(0x111111) },
-                uLightPos: { value: new THREE.Vector3(5, 10, 5) }
+                uColorPulse: { value: new THREE.Color(0xff2200) }
             },
             vertexShader: `
                 varying vec3 vNormal;
                 varying vec3 vModelPos;
                 varying vec3 vViewPos;
+                varying vec2 vUv;
+                
                 void main() {
+                    vUv = uv;
                     vNormal = normalize(normalMatrix * normal);
                     vModelPos = position;
                     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -80,31 +85,89 @@ class TitanPlayer extends THREE.Group {
                 varying vec3 vNormal;
                 varying vec3 vModelPos;
                 varying vec3 vViewPos;
+                varying vec2 vUv;
+                
                 uniform float uTime;
+                uniform float uHealthPct;
+                uniform float uDamagePulse;
                 uniform vec3 uColorYellow;
                 uniform vec3 uColorBlack;
+                uniform vec3 uColorPulse;
+
+                // --- Math Foundations ---
+                float hash12(vec2 p) {
+                    vec3 p3  = fract(vec3(p.xyx) * .1031);
+                    p3 += dot(p3, p3.yzx + 33.33);
+                    return fract((p3.x + p3.y) * p3.z);
+                }
+
+                float noise(in vec2 p) {
+                    vec2 i = floor(p);
+                    vec2 f = fract(p);
+                    vec2 u = f*f*(3.0-2.0*f);
+                    return mix( mix( hash12( i + vec2(0.0,0.0) ), 
+                                     hash12( i + vec2(1.0,0.0) ), u.x),
+                                mix( hash12( i + vec2(0.0,1.0) ), 
+                                     hash12( i + vec2(1.0,1.0) ), u.x), u.y);
+                }
+
+                float fbm(vec2 x) {
+                    float v = 0.0;
+                    float a = 0.5;
+                    vec2 shift = vec2(100.0);
+                    mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+                    for (int i = 0; i < 4; ++i) {
+                        v += a * noise(x);
+                        x = rot * x * 2.0 + shift;
+                        a *= 0.5;
+                    }
+                    return v;
+                }
+
+                float smin(float a, float b, float k) {
+                    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+                    return mix(b, a, h) - k * h * (1.0 - h);
+                }
 
                 void main() {
-                    // --- STRIPE PATTERN ---
-                    // Diagonal stripes based on local X+Y coordinates
-                    float stripe = fract((vModelPos.x + vModelPos.y + vModelPos.z) * 1.5 - uTime * 0.5);
-                    float mask = step(0.5, stripe);
-                    vec3 baseCol = mix(uColorYellow, uColorBlack, mask);
-
-                    // --- LIGHTING (SIMPLE PHONG-ISH) ---
                     vec3 n = normalize(vNormal);
+                    vec3 viewDir = normalize(vViewPos);
+                    
+                    // --- SYNAPTIC PATTERN ---
+                    // Organic veins that pulse with neural activity
+                    float neuralT = uTime * (0.5 + (1.0 - uHealthPct) * 2.0);
+                    float pattern = fbm(vModelPos.xy * 2.0 + neuralT * 0.2);
+                    pattern = smin(pattern, fbm(vModelPos.yz * 1.5 - neuralT * 0.1), 0.5);
+                    
+                    // Diagonal "Hazard" stripes integration (Procedural)
+                    float stripe = fract((vModelPos.x + vModelPos.y + vModelPos.z) * 1.5 - uTime * 0.1);
+                    float stripeMask = step(0.5, stripe);
+                    
+                    // Mix synaptic noise into stripes
+                    float bioMask = smoothstep(0.4, 0.6, pattern + (1.0 - uHealthPct) * 0.3);
+                    vec3 baseCol = mix(uColorYellow, uColorBlack, stripeMask);
+                    
+                    // "Bruising" effect where health is low
+                    vec3 bruiseCol = mix(vec3(0.1, 0.0, 0.05), vec3(0.4, 0.0, 0.1), pattern);
+                    baseCol = mix(baseCol, bruiseCol, bioMask * (1.0 - uHealthPct));
+
+                    // --- DAMAGE MELTING ---
+                    float damageEffect = uDamagePulse * fbm(vModelPos.xz * 10.0 + uTime * 20.0);
+                    baseCol = mix(baseCol, uColorPulse, damageEffect);
+
+                    // --- LIGHTING ---
                     vec3 l = normalize(vec3(0.5, 1.0, 0.5));
                     float diff = max(0.2, dot(n, l));
                     
-                    // --- PULSING ENERGY ---
-                    float pulse = 0.5 + 0.5 * sin(uTime * 3.0);
-                    vec3 emissive = vec3(1.0, 0.4, 0.0) * pulse * 0.3;
+                    // Edge Glow (Fresnel)
+                    float fresnel = pow(1.0 - max(0.0, dot(n, viewDir)), 3.0);
+                    vec3 glowColor = mix(uColorYellow, uColorPulse, 1.0 - uHealthPct);
                     
-                    // --- EDGE GLOW / FRESNEL ---
-                    float fresnel = 1.0 - max(0.0, dot(n, normalize(vViewPos)));
-                    fresnel = pow(fresnel, 3.0);
+                    vec3 finalCol = baseCol * diff + (glowColor * fresnel * 0.8);
                     
-                    vec3 finalCol = baseCol * diff + emissive + (uColorYellow * fresnel * 0.5);
+                    // Occasional "reconstruction" flicker
+                    float flicker = step(0.98, hash12(vec2(uTime, 0.0)));
+                    finalCol += flicker * 0.2 * (1.0 - uHealthPct);
                     
                     gl_FragColor = vec4(finalCol, 1.0);
                 }
@@ -332,9 +395,15 @@ class TitanPlayer extends THREE.Group {
         if (this.isDead) return;
         this.t += dt;
 
-        // Update Shader Time
+        // Update Shader Time & Health State
         if (this.armorMat && this.armorMat.uniforms) {
             this.armorMat.uniforms.uTime.value = this.t;
+            this.armorMat.uniforms.uHealthPct.value = this.health / this.maxHealth;
+
+            // Damage pulse decay
+            if (this.armorMat.uniforms.uDamagePulse.value > 0) {
+                this.armorMat.uniforms.uDamagePulse.value *= Math.pow(0.01, dt * 2.0);
+            }
         }
 
         // Ability Cooldown & Active Durations
@@ -369,12 +438,18 @@ class TitanPlayer extends THREE.Group {
 
         this.animateNPC(dt);
 
-        // Pulse energy
+        // Pulse energy & Link to Health
         if (this.energyMat) {
-            const pulseSpeed = 5;
-            this.energyMat.emissiveIntensity = 3.0 + Math.sin(this.t * pulseSpeed) * 1.5;
+            const healthFactor = this.health / this.maxHealth;
+            const pulseSpeed = 5.0 + (1.0 - healthFactor) * 10.0; // Faster pulse when low health
+            const intensityBase = 2.0 + (1.0 - healthFactor) * 4.0;
+
+            this.energyMat.emissiveIntensity = intensityBase + Math.sin(this.t * pulseSpeed) * (1.5 + (1.0 - healthFactor) * 2.0);
+
             if (this.chestLight) {
-                this.chestLight.intensity = this.energyMat.emissiveIntensity * 0.4;
+                this.chestLight.intensity = this.energyMat.emissiveIntensity * 0.5;
+                // Shift light color from blue to red as health drops
+                this.chestLight.color.setRGB(1.0 - healthFactor, healthFactor * 0.6, healthFactor);
             }
         }
 
@@ -468,6 +543,12 @@ class TitanPlayer extends THREE.Group {
     takeDamage(amount, region = "torso") {
         if (this.isDead) return;
         this.health -= amount;
+
+        // Trigger surface mutation pulse
+        if (this.armorMat && this.armorMat.uniforms) {
+            this.armorMat.uniforms.uDamagePulse.value = 1.0;
+        }
+
         if (this.limbHealth[region] !== undefined) {
             this.limbHealth[region] -= amount;
             if (this.limbHealth[region] <= 0 && !this.missingLimbs[region]) {
@@ -588,7 +669,31 @@ class TitanPlayer extends THREE.Group {
         this.shieldMesh.position.set(0, 1.0, 0);
         this.add(this.shieldMesh);
     }
+
+    dispose() {
+        this.scene.remove(this);
+        if (this.armorMat) this.armorMat.dispose();
+        if (this.frameMat) this.frameMat.dispose();
+        if (this.accentMat) this.accentMat.dispose();
+        if (this.energyMat) this.energyMat.dispose();
+
+        this.traverse(obj => {
+            if (obj.isMesh) {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(m => m.dispose());
+                    } else {
+                        obj.material.dispose();
+                    }
+                }
+            }
+            if (obj.isLight) obj.dispose();
+        });
+    }
 }
 
+// Global reference for index.html
+window.TitanPlayer = TitanPlayer;
 // Global reference for index.html
 window.TitanPlayer = TitanPlayer;

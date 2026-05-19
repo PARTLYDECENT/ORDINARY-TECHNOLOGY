@@ -1,7 +1,8 @@
 /**
- * AssaultRifle — High-Fidelity Procedural M4/SCAR-Style Rifle
- * Features: Bolt carrier cycling, brass shell ejection, muzzle brake,
- * rail system, collapsible stock, magazine, and procedural audio.
+ * AssaultRifle — Upgraded High-Fidelity Procedural M4/SCAR-Style Tactical Rifle
+ * Features: Dual-tone FDE polymer & anodized black metal styling, hollow receiver chamber
+ * with golden dummy round, reciprocating side bolt handle, physical ground-bouncing
+ * shell ejection, smoke particles, and Web Audio spatialised casing impact SFX.
  */
 class AssaultRifle extends THREE.Group {
     constructor() {
@@ -15,30 +16,41 @@ class AssaultRifle extends THREE.Group {
         this.triggerRot = 0;
         this.lightIntensity = 0;
         this.chargingHandleZ = 0;
-        this.dustCoverRot = 0; // Dust cover opens on first fire
+        this.dustCoverRot = 0; 
 
         // Particle pools
         this.shells = [];
 
-        // Materials — Tactical milspec finish
+        // --- MATERIA DESIGN SYSTEM MATERIALS ---
+        // Anodized gunmetal/black receiver
         this.receiverMat = new THREE.MeshStandardMaterial({
-            color: 0x1a1f28, roughness: 0.35, metalness: 0.85
+            color: 0x141619, roughness: 0.3, metalness: 0.85
         });
+        // Picatinny rails and heatguards
         this.railMat = new THREE.MeshStandardMaterial({
-            color: 0x222831, roughness: 0.5, metalness: 0.7
+            color: 0x1c1f24, roughness: 0.45, metalness: 0.75
         });
+        // Parkerized heavy steel barrel
         this.barrelMat = new THREE.MeshStandardMaterial({
-            color: 0x2d3440, roughness: 0.2, metalness: 0.95
+            color: 0x22262d, roughness: 0.4, metalness: 0.9
         });
+        // Flat Dark Earth (FDE) tactical polymer accents
+        this.fdeMat = new THREE.MeshStandardMaterial({
+            color: 0x7d6c55, roughness: 0.8, metalness: 0.05
+        });
+        // Durable black polymer
         this.polyMat = new THREE.MeshStandardMaterial({
-            color: 0x0a0a0a, roughness: 0.85, metalness: 0.05
+            color: 0x090a0d, roughness: 0.75, metalness: 0.1
         });
-        this.magMat = new THREE.MeshStandardMaterial({
-            color: 0x14181e, roughness: 0.4, metalness: 0.6
+        // Polished chrome bolt carrier group
+        this.boltMat = new THREE.MeshStandardMaterial({
+            color: 0xeef2f6, roughness: 0.08, metalness: 0.98
         });
-        this.brassMat = new THREE.MeshStandardMaterial({
-            color: 0xb5943b, metalness: 0.85, roughness: 0.15
+        // Polished gold cartridge brass
+        this.bulletMat = new THREE.MeshStandardMaterial({
+            color: 0xd4af37, metalness: 0.9, roughness: 0.15
         });
+        // Tactical blue LED accent
         this.accentMat = new THREE.MeshStandardMaterial({
             color: 0x00aaff, emissive: 0x00aaff, emissiveIntensity: 0.4, roughness: 0.3, metalness: 0.9
         });
@@ -49,7 +61,7 @@ class AssaultRifle extends THREE.Group {
     }
 
     buildRifle() {
-        // === UPPER RECEIVER ===
+        // === UPPER RECEIVER ASSEMBLY ===
         this.upperGroup = new THREE.Group();
         this.add(this.upperGroup);
 
@@ -60,13 +72,35 @@ class AssaultRifle extends THREE.Group {
         upper.castShadow = true;
         this.upperGroup.add(upper);
 
-        // Flat top rail (Picatinny)
+        // Receiver side details (layered metal look)
+        const leftPlate = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 1.3), this.receiverMat);
+        leftPlate.position.set(-0.145, 0.2, -0.1);
+        this.upperGroup.add(leftPlate);
+
+        // Hollow Chamber Cavity Box (Behind ejection port)
+        const chamberCav = new THREE.Mesh(
+            new THREE.BoxGeometry(0.16, 0.14, 0.45),
+            new THREE.MeshStandardMaterial({ color: 0x070707, roughness: 0.95, metalness: 0.0 })
+        );
+        chamberCav.position.set(0.06, 0.2, 0.05);
+        this.upperGroup.add(chamberCav);
+
+        // Chambered Golden dummy round (visible when bolt is retracted)
+        this.chamberRound = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.026, 0.026, 0.16, 8),
+            this.bulletMat
+        );
+        this.chamberRound.rotation.x = Math.PI / 2;
+        this.chamberRound.position.set(0.06, 0.2, 0.02);
+        this.upperGroup.add(this.chamberRound);
+
+        // Flat top Picatinny rail
         const topRailGeo = new THREE.BoxGeometry(0.22, 0.04, 1.4);
         const topRail = new THREE.Mesh(topRailGeo, this.railMat);
         topRail.position.set(0, 0.35, -0.15);
         this.upperGroup.add(topRail);
 
-        // Rail teeth (Picatinny notches)
+        // Rail teeth notches
         for (let i = 0; i < 18; i++) {
             const tooth = new THREE.Mesh(
                 new THREE.BoxGeometry(0.23, 0.015, 0.02),
@@ -76,12 +110,12 @@ class AssaultRifle extends THREE.Group {
             this.upperGroup.add(tooth);
         }
 
-        // Ejection port cover (opens on fire)
+        // FDE Polymer ejection port dust cover (opens on first fire)
         this.dustCover = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.12, 0.28),
-            this.receiverMat
+            new THREE.BoxGeometry(0.02, 0.1, 0.32),
+            this.fdeMat
         );
-        this.dustCover.position.set(0.155, 0.22, -0.05);
+        this.dustCover.position.set(0.145, 0.22, -0.05);
         this.upperGroup.add(this.dustCover);
 
         // Forward assist knob
@@ -93,21 +127,21 @@ class AssaultRifle extends THREE.Group {
         fwdAssist.position.set(0.17, 0.28, 0.2);
         this.upperGroup.add(fwdAssist);
 
-        // === BOLT CARRIER GROUP (Animated) ===
+        // === BOLT CARRIER GROUP (Chrome & Reciprocating Charging Handle) ===
         this.boltGroup = new THREE.Group();
         this.upperGroup.add(this.boltGroup);
 
-        const boltGeo = new THREE.BoxGeometry(0.14, 0.1, 0.6);
-        const bolt = new THREE.Mesh(boltGeo, this.barrelMat);
-        bolt.position.set(0, 0.2, 0.1);
+        // Chrome bolt body
+        const boltGeo = new THREE.BoxGeometry(0.14, 0.1, 0.58);
+        const bolt = new THREE.Mesh(boltGeo, this.boltMat);
+        bolt.position.set(0.05, 0.2, 0.1);
         this.boltGroup.add(bolt);
 
-        // Charging handle
-        this.chHandle = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.04, 0.08),
-            this.receiverMat
-        );
-        this.chHandle.position.set(0, 0.3, 0.55);
+        // Reciprocating bolt handle (protrudes from ejection port)
+        const chHandleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.16, 8);
+        this.chHandle = new THREE.Mesh(chHandleGeo, this.receiverMat);
+        this.chHandle.rotation.z = Math.PI / 2;
+        this.chHandle.position.set(0.18, 0.22, 0.2);
         this.boltGroup.add(this.chHandle);
 
         // === BARREL ASSEMBLY ===
@@ -125,7 +159,7 @@ class AssaultRifle extends THREE.Group {
         gasTube.position.set(0, 0.32, -1.4);
         this.add(gasTube);
 
-        // Gas block / front sight base
+        // Gas block
         const gasBlock = new THREE.Mesh(
             new THREE.BoxGeometry(0.12, 0.18, 0.08),
             this.receiverMat
@@ -141,14 +175,14 @@ class AssaultRifle extends THREE.Group {
         fSightPost.position.set(0, 0.44, -2.2);
         this.add(fSightPost);
 
-        // Muzzle brake / flash hider
-        const muzzleGeo = new THREE.CylinderGeometry(0.06, 0.055, 0.18, 12);
+        // Tactical muzzle brake with porting holes
+        const muzzleGeo = new THREE.CylinderGeometry(0.06, 0.055, 0.2, 12);
         const muzzle = new THREE.Mesh(muzzleGeo, this.barrelMat);
         muzzle.rotation.x = Math.PI / 2;
         muzzle.position.set(0, 0.22, -3.5);
         this.add(muzzle);
 
-        // Muzzle brake slots
+        // Muzzle brake gas slots
         for (let i = 0; i < 4; i++) {
             const slot = new THREE.Mesh(
                 new THREE.BoxGeometry(0.08, 0.015, 0.03),
@@ -159,17 +193,17 @@ class AssaultRifle extends THREE.Group {
             this.add(slot);
         }
 
-        // === HANDGUARD / RAIL SYSTEM ===
+        // === HANDGUARD / RAIL SYSTEM (FDE Polymer & Anodized Rails) ===
         const handguardGroup = new THREE.Group();
         this.add(handguardGroup);
 
-        // Main handguard tube
+        // Main tactical handguard tube
         const hgGeo = new THREE.BoxGeometry(0.3, 0.28, 1.4);
-        const hg = new THREE.Mesh(hgGeo, this.railMat);
+        const hg = new THREE.Mesh(hgGeo, this.fdeMat);
         hg.position.set(0, 0.16, -1.55);
         handguardGroup.add(hg);
 
-        // Side rails (left & right)
+        // Picatinny rails (left & right)
         for (let side of [-1, 1]) {
             const sideRail = new THREE.Mesh(
                 new THREE.BoxGeometry(0.04, 0.06, 1.3),
@@ -179,7 +213,7 @@ class AssaultRifle extends THREE.Group {
             handguardGroup.add(sideRail);
         }
 
-        // Bottom rail
+        // Bottom Picatinny rail
         const bottomRail = new THREE.Mesh(
             new THREE.BoxGeometry(0.12, 0.04, 1.3),
             this.railMat
@@ -187,7 +221,7 @@ class AssaultRifle extends THREE.Group {
         bottomRail.position.set(0, 0.0, -1.55);
         handguardGroup.add(bottomRail);
 
-        // Ventilation cutouts
+        // Handguard ventilation slots
         for (let i = 0; i < 5; i++) {
             for (let side of [-1, 1]) {
                 const vent = new THREE.Mesh(
@@ -198,6 +232,29 @@ class AssaultRifle extends THREE.Group {
                 handguardGroup.add(vent);
             }
         }
+
+        // PEQ-15 Tactical Laser Box (Mounted on top rail)
+        const peqBox = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.08, 0.24),
+            this.fdeMat
+        );
+        peqBox.position.set(0, 0.41, -1.1);
+        this.add(peqBox);
+
+        const peqLens = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.02, 0.02, 0.02, 8),
+            new THREE.MeshBasicMaterial({ color: 0x00aaff })
+        );
+        peqLens.rotation.x = Math.PI / 2;
+        peqLens.position.set(0.03, 0.41, -1.22);
+        this.add(peqLens);
+
+        // Angled Tactical Foregrip (Bottom rail)
+        const foregripGeo = new THREE.BoxGeometry(0.1, 0.24, 0.18);
+        const foregrip = new THREE.Mesh(foregripGeo, this.fdeMat);
+        foregrip.position.set(0, -0.15, -1.4);
+        foregrip.rotation.x = -Math.PI * 0.12;
+        this.add(foregrip);
 
         // === LOWER RECEIVER ===
         const lowerGroup = new THREE.Group();
@@ -233,7 +290,7 @@ class AssaultRifle extends THREE.Group {
         // Trigger
         this.triggerMesh = new THREE.Mesh(
             new THREE.BoxGeometry(0.03, 0.12, 0.03),
-            new THREE.MeshStandardMaterial({ color: 0x111111 })
+            new THREE.MeshStandardMaterial({ color: 0x0b0c0e })
         );
         this.triggerMesh.position.set(0, -0.1, 0.15);
         lowerGroup.add(this.triggerMesh);
@@ -255,26 +312,26 @@ class AssaultRifle extends THREE.Group {
         magRelease.position.set(0.14, 0.0, 0.05);
         lowerGroup.add(magRelease);
 
-        // === PISTOL GRIP ===
+        // === PISTOL GRIP (FDE Polymer) ===
         const gripGeo = new THREE.BoxGeometry(0.22, 0.9, 0.4);
-        const grip = new THREE.Mesh(gripGeo, this.polyMat);
+        const grip = new THREE.Mesh(gripGeo, this.fdeMat);
         grip.position.set(0, -0.55, 0.42);
         grip.rotation.x = Math.PI * 0.12;
         grip.castShadow = true;
         this.add(grip);
 
-        // Grip texture ridges
+        // Grip ridges
         for (let i = 0; i < 6; i++) {
             const ridge = new THREE.Mesh(
                 new THREE.BoxGeometry(0.24, 0.015, 0.38),
-                this.polyMat
+                this.fdeMat
             );
             ridge.position.set(0, -0.3 - i * 0.1, 0.42);
             ridge.rotation.x = Math.PI * 0.12;
             this.add(ridge);
         }
 
-        // Grip bottom cap
+        // Grip cap
         const gripCap = new THREE.Mesh(
             new THREE.BoxGeometry(0.18, 0.04, 0.3),
             this.receiverMat
@@ -283,17 +340,17 @@ class AssaultRifle extends THREE.Group {
         gripCap.rotation.x = Math.PI * 0.12;
         this.add(gripCap);
 
-        // === MAGAZINE ===
+        // === MAGAZINE (FDE Polymer PMAG Style) ===
         this.magGroup = new THREE.Group();
         this.add(this.magGroup);
 
         const magBodyGeo = new THREE.BoxGeometry(0.16, 0.9, 0.3);
-        const magBody = new THREE.Mesh(magBodyGeo, this.magMat);
+        const magBody = new THREE.Mesh(magBodyGeo, this.fdeMat);
         magBody.position.set(0, -0.55, 0.0);
-        magBody.rotation.x = Math.PI * 0.02; // Slight curve
+        magBody.rotation.x = Math.PI * 0.02;
         this.magGroup.add(magBody);
 
-        // Mag floor plate
+        // Black floor plate
         const magFloor = new THREE.Mesh(
             new THREE.BoxGeometry(0.17, 0.03, 0.32),
             this.receiverMat
@@ -301,45 +358,46 @@ class AssaultRifle extends THREE.Group {
         magFloor.position.set(0, -1.0, 0.0);
         this.magGroup.add(magFloor);
 
-        // Mag witness holes
+        // Bullets visible inside mag witness slots
         for (let i = 0; i < 3; i++) {
-            const hole = new THREE.Mesh(
-                new THREE.BoxGeometry(0.02, 0.04, 0.05),
-                new THREE.MeshBasicMaterial({ color: 0x000000 })
+            const bulletInMag = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.015, 0.015, 0.05, 8),
+                this.bulletMat
             );
-            hole.position.set(-0.09, -0.3 - i * 0.2, 0.0);
-            this.magGroup.add(hole);
+            bulletInMag.rotation.x = Math.PI / 2;
+            bulletInMag.position.set(-0.065, -0.35 - i * 0.2, 0.0);
+            this.magGroup.add(bulletInMag);
         }
 
-        // === COLLAPSIBLE STOCK ===
+        // === COLLAPSIBLE STOCK (FDE Stock on Black Buffer Tube) ===
         const stockGroup = new THREE.Group();
         this.add(stockGroup);
 
-        // Buffer tube
+        // Black metal buffer tube
         const bufferGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.0, 12);
         const buffer = new THREE.Mesh(bufferGeo, this.receiverMat);
         buffer.rotation.x = Math.PI / 2;
         buffer.position.set(0, 0.18, 1.1);
         stockGroup.add(buffer);
 
-        // Stock body
+        // FDE stock body
         const stockBodyGeo = new THREE.BoxGeometry(0.2, 0.28, 0.5);
-        const stockBody = new THREE.Mesh(stockBodyGeo, this.polyMat);
+        const stockBody = new THREE.Mesh(stockBodyGeo, this.fdeMat);
         stockBody.position.set(0, 0.16, 1.4);
         stockGroup.add(stockBody);
 
-        // Buttpad (rubber)
+        // Black rubber buttpad
         const buttpad = new THREE.Mesh(
             new THREE.BoxGeometry(0.18, 0.26, 0.04),
-            new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.95 })
+            new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.95 })
         );
         buttpad.position.set(0, 0.16, 1.66);
         stockGroup.add(buttpad);
 
-        // Cheek weld riser
+        // FDE cheek riser
         const cheekWeld = new THREE.Mesh(
             new THREE.BoxGeometry(0.16, 0.06, 0.3),
-            this.polyMat
+            this.fdeMat
         );
         cheekWeld.position.set(0, 0.32, 1.35);
         stockGroup.add(cheekWeld);
@@ -352,8 +410,7 @@ class AssaultRifle extends THREE.Group {
         slingMount.position.set(-0.12, 0.1, 1.55);
         stockGroup.add(slingMount);
 
-        // === OPTIC ACCENT ===
-        // Small holographic sight
+        // === OPTIC ASSEMBLY ===
         const sightBase = new THREE.Mesh(
             new THREE.BoxGeometry(0.18, 0.1, 0.18),
             this.receiverMat
@@ -370,7 +427,7 @@ class AssaultRifle extends THREE.Group {
         sightWindow.position.set(0, 0.48, -0.15);
         this.add(sightWindow);
 
-        // Reticle dot
+        // Aim Reticle
         const reticle = new THREE.Mesh(
             new THREE.SphereGeometry(0.008, 8, 8),
             this.sightDotMat
@@ -378,12 +435,12 @@ class AssaultRifle extends THREE.Group {
         reticle.position.set(0, 0.48, -0.15);
         this.add(reticle);
 
-        // === MUZZLE LIGHT ===
+        // === MUZZLE DYNAMIC POINTLIGHT ===
         this.muzzleLight = new THREE.PointLight(0x00aaff, 0, 6);
         this.muzzleLight.position.set(0, 0.22, -3.6);
         this.add(this.muzzleLight);
 
-        // === ACCENT STRIP (Blue LED on handguard) ===
+        // === BLUE LED STRIP ===
         const ledStrip = new THREE.Mesh(
             new THREE.BoxGeometry(0.02, 0.02, 1.0),
             this.accentMat
@@ -393,43 +450,144 @@ class AssaultRifle extends THREE.Group {
     }
 
     fire() {
-        this.boltZ = 0.35;
-        this.gunPitch = 0.15;
-        this.gunZ = 0.12;
-        this.triggerRot = 0.2;
-        this.lightIntensity = 2.5;
+        // High-speed visual action values
+        this.boltZ = 0.48; // bolt slams back exposing gold dummy cartridge
+        this.gunPitch = 0.22; // Snappy visual muzzle climb
+        this.gunZ = 0.16; // Mechanical gun receiver recoil back
+        this.triggerRot = 0.25;
+        this.lightIntensity = 3.0;
 
         if (!this.hasFired) {
             this.hasFired = true;
-            this.dustCoverRot = -Math.PI / 2; // Open dust cover permanently
+            this.dustCoverRot = -Math.PI * 0.55; // Open dust cover smoothly past 90 degrees
         }
 
+        // Spawn physical ground-bouncing shell
         this.spawnShell();
+        
+        // Spawn a warm-grey mechanical smoke puff from the opening Ejection Port
+        this.spawnPortSmoke();
+
+        // Synth Web Audio firing shot
         this.playProceduralShot();
+    }
+
+    spawnPortSmoke() {
+        if (typeof window.emitParticle !== 'function') return;
+
+        // Calculate ejection port position in world space
+        const portPos = new THREE.Vector3(0.16, 0.22, -0.05);
+        portPos.applyMatrix4(this.matrixWorld);
+
+        // Eject warm gunpowder gas sideways/upward
+        const rightDir = new THREE.Vector3(1, 0.15, -0.2).applyQuaternion(this.quaternion).normalize();
+        for (let i = 0; i < 2; i++) {
+            window.emitParticle(
+                portPos.x, portPos.y, portPos.z,
+                rightDir.x * (1.2 + Math.random()) + (Math.random() - 0.5) * 0.2,
+                rightDir.y * 1.2 + 0.4 + Math.random() * 0.4,
+                rightDir.z * (1.2 + Math.random()) + (Math.random() - 0.5) * 0.2,
+                0.32, 0.29, 0.27, // warm grey gas
+                5 + Math.random() * 3, // size
+                0.3 + Math.random() * 0.2 // life
+            );
+        }
     }
 
     spawnShell() {
         const shellGeo = new THREE.CylinderGeometry(0.025, 0.02, 0.14, 8);
         const shell = new THREE.Mesh(shellGeo, this.brassMat);
 
-        const worldPos = new THREE.Vector3(0.2, 0.3, 0.05);
+        // Ejection port starting coordinates
+        const worldPos = new THREE.Vector3(0.16, 0.22, -0.05);
         worldPos.applyMatrix4(this.matrixWorld);
         shell.position.copy(worldPos);
-        shell.rotation.set(Math.random(), Math.random(), Math.random());
+        shell.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
 
-        if (this.parent) this.parent.add(shell);
-        else if (window.scene) window.scene.add(shell);
+        // Find the absolute Scene root node so the shell is isolated from player movement
+        let rootScene = window.scene;
+        if (!rootScene && this.parent) {
+            let curr = this.parent;
+            while (curr.parent) {
+                curr = curr.parent;
+            }
+            if (curr.type === "Scene") rootScene = curr;
+        }
+
+        if (rootScene) {
+            rootScene.add(shell);
+        } else if (this.parent) {
+            this.parent.add(shell);
+        }
+
+        // Calculate ejection velocity relative to current weapon orientation
+        const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(this.quaternion).normalize();
+        const upDir = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion).normalize();
+        const fwdDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.quaternion).normalize();
+
+        const speedRight = 4.2 + Math.random() * 1.8;
+        const speedUp = 2.4 + Math.random() * 1.2;
+        const speedFwd = -1.0 + (Math.random() - 0.5) * 0.5; // slight backward inertia
+
+        const vx = rightDir.x * speedRight + upDir.x * speedUp + fwdDir.x * speedFwd;
+        const vy = rightDir.y * speedRight + upDir.y * speedUp + fwdDir.y * speedFwd;
+        const vz = rightDir.z * speedRight + upDir.z * speedUp + fwdDir.z * speedFwd;
 
         this.shells.push({
             mesh: shell,
-            vx: (0.12 + Math.random() * 0.08) * 6,
-            vy: (0.15 + Math.random() * 0.12) * 5,
-            vz: (Math.random() - 0.5) * 0.5,
-            rx: Math.random() * 0.6,
-            ry: Math.random() * 0.6,
-            rz: Math.random() * 0.6,
-            life: 1.2
+            vx: vx,
+            vy: vy,
+            vz: vz,
+            rx: (Math.random() - 0.5) * 22,
+            ry: (Math.random() - 0.5) * 22,
+            rz: (Math.random() - 0.5) * 22,
+            life: 1.4 // Casing lingers a bit longer to roll
         });
+    }
+
+    playCasingClink(pos) {
+        try {
+            if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const ctx = window.audioCtx;
+            if (ctx.state === 'suspended') ctx.resume();
+
+            // Spatialised volume check relative to active camera
+            let volume = 0.22;
+            if (window.camera) {
+                const dist = pos.distanceTo(window.camera.position);
+                volume = Math.max(0.01, 0.22 * (1.0 - Math.min(dist / 18.0, 1.0)));
+            }
+
+            const t = ctx.currentTime;
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            // High metallic ringing resonance
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(2600 + Math.random() * 400, t);
+
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(3400 + Math.random() * 400, t);
+
+            gainNode.gain.setValueAtTime(volume, t);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.07 + Math.random() * 0.05);
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(3000, t);
+            filter.Q.setValueAtTime(2.2, t);
+
+            osc1.connect(filter);
+            osc2.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            osc1.start(t); osc1.stop(t + 0.16);
+            osc2.start(t); osc2.stop(t + 0.16);
+        } catch (e) {
+            // Audio execution safe fallback
+        }
     }
 
     playProceduralShot() {
@@ -439,7 +597,7 @@ class AssaultRifle extends THREE.Group {
 
         const t = ctx.currentTime;
 
-        // Layer 1: Tight supersonic crack (very fast attack/decay for full-auto clarity)
+        // Layer 1: Supersonic crack
         const osc1 = ctx.createOscillator();
         osc1.type = 'sawtooth';
         osc1.frequency.setValueAtTime(2200, t);
@@ -450,7 +608,7 @@ class AssaultRifle extends THREE.Group {
         osc1.connect(g1); g1.connect(ctx.destination);
         osc1.start(t); osc1.stop(t + 0.05);
 
-        // Layer 2: Sub-bass punch (short, punchy)
+        // Layer 2: Sub-bass punch
         const osc2 = ctx.createOscillator();
         osc2.type = 'sine';
         osc2.frequency.setValueAtTime(80, t);
@@ -461,7 +619,7 @@ class AssaultRifle extends THREE.Group {
         osc2.connect(g2); g2.connect(ctx.destination);
         osc2.start(t); osc2.stop(t + 0.08);
 
-        // Layer 3: Noise burst (powder crack — bandpassed)
+        // Layer 3: Noise powder burst
         const bufLen = ctx.sampleRate * 0.03;
         const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
         const data = noiseBuf.getChannelData(0);
@@ -480,7 +638,7 @@ class AssaultRifle extends THREE.Group {
         nGain.connect(ctx.destination);
         noise.start(t); noise.stop(t + 0.04);
 
-        // Layer 4: Bolt carrier return click (delayed metallic ping)
+        // Layer 4: Metal reciprocating bolt return click
         const bolt = ctx.createOscillator();
         bolt.type = 'square';
         bolt.frequency.setValueAtTime(1200, t + 0.04);
@@ -493,37 +651,86 @@ class AssaultRifle extends THREE.Group {
     }
 
     update(dt) {
-        // Bolt carrier return
-        this.boltZ += (0 - this.boltZ) * 25 * dt;
-        this.gunPitch += (0 - this.gunPitch) * 18 * dt;
-        this.gunZ += (0 - this.gunZ) * 18 * dt;
-        this.triggerRot += (0 - this.triggerRot) * 20 * dt;
-        this.lightIntensity = Math.max(0, this.lightIntensity - 40 * dt);
+        // Reciprocating mechanical action returns
+        this.boltZ += (0 - this.boltZ) * 26 * dt;
+        this.gunPitch += (0 - this.gunPitch) * 20 * dt;
+        this.gunZ += (0 - this.gunZ) * 20 * dt;
+        this.triggerRot += (0 - this.triggerRot) * 22 * dt;
+        this.lightIntensity = Math.max(0, this.lightIntensity - 45 * dt);
 
         this.boltGroup.position.z = this.boltZ;
         this.triggerMesh.rotation.x = this.triggerRot;
         this.muzzleLight.intensity = this.lightIntensity;
 
-        // Dust cover animation
+        // Dust cover spring open animation
         if (this.hasFired) {
-            this.dustCover.rotation.x += (this.dustCoverRot - this.dustCover.rotation.x) * 10 * dt;
+            this.dustCover.rotation.x += (this.dustCoverRot - this.dustCover.rotation.x) * 12 * dt;
         }
 
-        // LED pulse on accent strip
+        // Blue LED indicator pulse
         if (this.accentMat) {
             this.accentMat.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.005) * 0.15;
         }
 
-        // Shell physics
+        // Realistic 3D ground-bouncing shell physics simulation
         for (let i = this.shells.length - 1; i >= 0; i--) {
             const s = this.shells[i];
-            s.vy -= 9.8 * dt * 0.5;
+            
+            // Apply real-world gravity
+            s.vy -= 9.81 * dt;
+            
             s.mesh.position.x += s.vx * dt;
             s.mesh.position.y += s.vy * dt;
             s.mesh.position.z += s.vz * dt;
-            s.mesh.rotation.x += s.rx;
-            s.mesh.rotation.y += s.ry;
-            s.mesh.rotation.z += s.rz;
+            
+            s.mesh.rotation.x += s.rx * dt;
+            s.mesh.rotation.y += s.ry * dt;
+            s.mesh.rotation.z += s.rz * dt;
+
+            // Spawn wispy hot gunpowder smoke trails from casing in flight
+            if (s.life > 0.9 && typeof window.emitParticle === 'function' && Math.random() < 0.28) {
+                window.emitParticle(
+                    s.mesh.position.x, s.mesh.position.y, s.mesh.position.z,
+                    (Math.random() - 0.5) * 0.1, 0.3 + Math.random() * 0.2, (Math.random() - 0.5) * 0.1,
+                    0.55, 0.55, 0.55, // light grey wispy smoke
+                    1.2 + Math.random() * 1.2,
+                    0.25 + Math.random() * 0.2
+                );
+            }
+
+            // High-fidelity terrain collision tracking
+            let groundY = -2.0; 
+            if (window.TerrainGen && typeof window.TerrainGen.getHeight === 'function') {
+                groundY = window.TerrainGen.getHeight(s.mesh.position.x, s.mesh.position.z);
+            }
+
+            if (s.mesh.position.y <= groundY) {
+                s.mesh.position.y = groundY;
+                
+                // If the impact has high speed, bounce!
+                if (s.vy < -0.6) {
+                    s.vy = -s.vy * 0.48; // Bouncing coefficient of restitution
+                    s.vx *= 0.55;        // Ground friction dampening
+                    s.vz *= 0.55;
+                    
+                    // Trigger spin tumble variation on collision
+                    s.rx = (Math.random() - 0.5) * 12;
+                    s.ry = (Math.random() - 0.5) * 12;
+                    s.rz = (Math.random() - 0.5) * 12;
+
+                    // Play spatialized metallic clink
+                    this.playCasingClink(s.mesh.position);
+                } else {
+                    // Slide and roll to a clean halt
+                    s.vy = 0;
+                    s.vx *= 0.85 * (1 - dt * 6);
+                    s.vz *= 0.85 * (1 - dt * 6);
+                    s.rx *= 0.8 * (1 - dt * 6);
+                    s.ry *= 0.8 * (1 - dt * 6);
+                    s.rz *= 0.8 * (1 - dt * 6);
+                }
+            }
+
             s.life -= dt;
             if (s.life <= 0) {
                 if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
