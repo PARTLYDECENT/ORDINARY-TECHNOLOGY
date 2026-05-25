@@ -33,9 +33,14 @@
     <script src="./menu.js"></script>
     <script src="./models.js"></script>
     <script src="./terrain.js"></script>
+    <script src="./water.js"></script>
+    <script src="./manipulator.js"></script>
     <script src="./facilities.js"></script>
     <script src="./CampaignMap.js"></script>
     <script src="./SurvivalMap.js"></script>
+    <script src="./DesertMap.js"></script>
+    <script src="./pyramid.js"></script>
+    <script src="./spires.js"></script>
     <script src="./CampaignTutorial.js"></script>
     <script src="./objects.js"></script>
     <script src="./TitanPlayer.js"></script>
@@ -61,6 +66,8 @@
     <script src="./banner.js"></script>
     <script src="./CompanionOrb.js"></script>
     <script src="./gore.js"></script>
+    <script src="./Pickups.js"></script>
+    <script src="./virus1.js"></script>
 
     <style>
         body {
@@ -299,16 +306,17 @@
         #crosshair {
             display: none;
         }
-            position: fixed;
-            width: 44px;
-            height: 44px;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            mix-blend-mode: screen;
+
+        position: fixed;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        mix-blend-mode: screen;
         }
 
         .ch-core {
@@ -525,6 +533,17 @@
         #retry-btn:hover {
             background: #dc2626;
             transform: scale(1.05);
+        }
+
+        #game-vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.6) 80%, rgba(0, 0, 10, 0.95) 100%);
+            pointer-events: none;
+            z-index: 10;
         }
 
         #damage-vignette {
@@ -1051,6 +1070,7 @@
     </div>
     <div id="cinematic-border"></div>
     <div id="canvas-container"></div>
+    <div id="game-vignette"></div>
     <div id="damage-vignette"></div>
     <div id="kill-flash"></div>
     <div id="low-health-pulse"></div>
@@ -1203,6 +1223,165 @@
     </div>
 
     <script>
+        function showWebGLFallbackOverlay(errorMsg) {
+            // Hide the canvas container, loader, and menus to show error
+            const container = document.getElementById('canvas-container');
+            if (container) container.style.display = 'none';
+            const mainMenu = document.getElementById('main-menu');
+            if (mainMenu) mainMenu.style.display = 'none';
+            const loaderPanel = document.getElementById('loader-panel');
+            if (loaderPanel) loaderPanel.style.display = 'none';
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+
+            // Create error container
+            const errDiv = document.createElement('div');
+            errDiv.id = 'webgl-error-overlay';
+            errDiv.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at center, #0a0505 0%, #000000 100%);
+                z-index: 999999;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                color: #ff3333;
+                font-family: 'Courier New', Courier, monospace;
+                padding: 20px;
+                box-sizing: border-box;
+                text-align: center;
+            `;
+
+            // Cyberpunk glitched diagnostic header
+            const header = document.createElement('h1');
+            header.style.cssText = `
+                font-size: 2.2rem;
+                margin: 0 0 10px 0;
+                text-shadow: 0 0 10px rgba(255, 51, 51, 0.6);
+                letter-spacing: 2px;
+                animation: webglPulse 1.5s infinite alternate;
+            `;
+            header.innerHTML = `⚠️ SYSTEM CRITICAL: WEBGL ERROR`;
+            errDiv.appendChild(header);
+
+            // Subtitle
+            const sub = document.createElement('div');
+            sub.style.cssText = `
+                font-size: 1rem;
+                color: #ff8888;
+                margin-bottom: 25px;
+                max-width: 650px;
+                line-height: 1.5;
+            `;
+            sub.innerHTML = `THE BINDING OF WEBGL GRAPHICS CONTEXT FAILED.<br><small style="color:#aa4444;">Details: ${errorMsg || 'Context Creation Denied'}</small>`;
+            errDiv.appendChild(sub);
+
+            // Troubleshooter box
+            const box = document.createElement('div');
+            box.style.cssText = `
+                background: rgba(255, 0, 0, 0.05);
+                border: 1px solid rgba(255, 51, 51, 0.3);
+                border-radius: 8px;
+                padding: 20px 25px;
+                max-width: 600px;
+                text-align: left;
+                margin-bottom: 30px;
+                box-shadow: inset 0 0 20px rgba(255, 0, 0, 0.1);
+            `;
+            box.innerHTML = `
+                <h3 style="margin:0 0 8px 0; color:#ff5555; border-bottom: 1px solid rgba(255,51,51,0.2); padding-bottom:8px; font-size:1.1rem; letter-spacing:1px;">DIAGNOSTIC FLOW & RESOLUTION</h3>
+                <ol style="padding-left: 20px; margin: 0; line-height: 1.6; color: #ffcccc; font-size:0.9rem;">
+                    <li style="margin-bottom: 8px;">
+                        <strong>Too Many Active WebGL Contexts:</strong> Other open browser tabs or previous live-reload sessions might be holding WebGL resources.
+                        <br><span style="color:#888;">→ Action: Close other tabs and refresh this page.</span>
+                    </li>
+                    <li style="margin-bottom: 8px;">
+                        <strong>Hardware Acceleration Disabled:</strong> Your browser's GPU acceleration settings might be turned off, forcing low-performance CPU emulation.
+                        <br><span style="color:#888;">→ Action: Open browser Settings (search "hardware acceleration"), enable <strong>"Use graphics acceleration when available"</strong>, and restart your browser.</span>
+                    </li>
+                    <li style="margin-bottom: 0;">
+                        <strong>GPU Driver Lock / Virtual Machine:</strong> If you are running on virtualized Linux hardware or without modern drivers, WebGL might be blacklisted.
+                        <br><span style="color:#888;">→ Action: Visit <a href="chrome://gpu" target="_blank" style="color:#ff8888; text-decoration:underline;">chrome://gpu</a> (or <a href="about:support" target="_blank" style="color:#ff8888; text-decoration:underline;">about:support</a> in Firefox) to check status.</span>
+                    </li>
+                </ol>
+            `;
+            errDiv.appendChild(box);
+
+            // Action Buttons
+            const btnContainer = document.createElement('div');
+            btnContainer.style.cssText = `
+                display: flex;
+                gap: 20px;
+            `;
+
+            const reloadBtn = document.createElement('button');
+            reloadBtn.innerText = "FORCE ENGINE RELOAD";
+            reloadBtn.style.cssText = `
+                background: #ff3333;
+                color: #000;
+                border: none;
+                padding: 12px 28px;
+                font-family: 'Courier New', Courier, monospace;
+                font-weight: bold;
+                font-size: 0.95rem;
+                cursor: pointer;
+                border-radius: 4px;
+                box-shadow: 0 0 15px rgba(255, 51, 51, 0.4);
+                transition: all 0.2s ease;
+            `;
+            reloadBtn.onmouseover = () => {
+                reloadBtn.style.background = '#ff6666';
+                reloadBtn.style.boxShadow = '0 0 25px rgba(255, 51, 51, 0.7)';
+            };
+            reloadBtn.onmouseout = () => {
+                reloadBtn.style.background = '#ff3333';
+                reloadBtn.style.boxShadow = '0 0 15px rgba(255, 51, 51, 0.4)';
+            };
+            reloadBtn.onclick = () => window.location.reload();
+            btnContainer.appendChild(reloadBtn);
+
+            const ignoreBtn = document.createElement('button');
+            ignoreBtn.innerText = "PROCEED ANYWAY (MUTED)";
+            ignoreBtn.style.cssText = `
+                background: transparent;
+                color: #ff8888;
+                border: 1px solid #ff3333;
+                padding: 12px 28px;
+                font-family: 'Courier New', Courier, monospace;
+                font-weight: bold;
+                font-size: 0.95rem;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: all 0.2s ease;
+            `;
+            ignoreBtn.onmouseover = () => {
+                ignoreBtn.style.background = 'rgba(255, 51, 51, 0.1)';
+            };
+            ignoreBtn.onmouseout = () => {
+                ignoreBtn.style.background = 'transparent';
+            };
+            ignoreBtn.onclick = () => errDiv.remove();
+            btnContainer.appendChild(ignoreBtn);
+
+            errDiv.appendChild(btnContainer);
+
+            // Add CSS animation keyframes dynamically
+            const styleSheet = document.createElement("style");
+            styleSheet.innerText = `
+                @keyframes webglPulse {
+                    from { opacity: 0.8; }
+                    to { opacity: 1; text-shadow: 0 0 18px rgba(255, 51, 51, 0.9); }
+                }
+            `;
+            document.head.appendChild(styleSheet);
+
+            document.body.appendChild(errDiv);
+        }
+
         /**
          * PROJECT MAYA - ISOMETRIC FLUID LOADER ENGINE
          */
@@ -1686,7 +1865,7 @@
             zombiesPerWave: 40,     // Each wave adds this many
             waveCooldown: 25,       // Seconds between waves
             numItems: 15,
-            playerSpeed: 4.0,       // Slowed by half (was 8.0)
+            playerSpeed: 5.0,       // Sped up by a quarter (was 4.0)
             zombieSpeed: 2.5,
             obstacleDensity: 0.15,
             gravity: 25.0
@@ -1718,11 +1897,27 @@
         let velocityY = 0;
         let isGrounded = true;
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        // Try-catch fallback for main WebGLRenderer
+        let renderer;
+        try {
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        } catch (e) {
+            console.warn("Main WebGLRenderer: High-performance failed. Retrying with default settings...", e);
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: false });
+            } catch (e2) {
+                console.error("Main WebGLRenderer: Context creation failed entirely.", e2);
+                showWebGLFallbackOverlay(e2.message || e2);
+                throw e2;
+            }
+        }
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2; // Slightly boosted for realism
+        renderer.outputEncoding = THREE.sRGBEncoding;
         container.appendChild(renderer.domElement);
 
         // Initialize the organic SDF GUI
@@ -1733,10 +1928,10 @@
         // --- CLEAN PIPELINE (NO POST PROCESSING) ---
         // Post-processing passes removed for clean visuals
 
-        const ambientLight = new THREE.AmbientLight(0x0a0a1a, 0.015); // Near-total darkness — moonless night
+        const ambientLight = new THREE.AmbientLight(0x0a0a1a, 0.001); // Deeper ambient darkness
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0x1a1a33, 0.03); // Faint starlight only
+        const dirLight = new THREE.DirectionalLight(0x1a1a33, 0.002); // Minimal directional starlight
         dirLight.position.set(20, 50, -20);
         dirLight.castShadow = true;
         dirLight.shadow.camera.left = -viewSize;
@@ -1751,138 +1946,19 @@
         const terrain = TerrainGen.getMesh();
         scene.add(terrain);
 
-        const waterGeo = new THREE.PlaneBufferGeometry(2400, 2400, 128, 128); // Increased segments for vertex waves
-        const waterMat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uPlayerPos: { value: new THREE.Vector3() },
-                uColorDeep: { value: new THREE.Color(0x010408) }, // Almost black deeps
-                uColorMid: { value: new THREE.Color(0x051a2a) },  // Dark teal
-                uColorGlow: { value: new THREE.Color(0x00ffff) }, // Synaptic cyan
-                uFogColor: { value: new THREE.Color(0x020204) },
-                uFogDensity: { value: 0.035 }
-            },
-            vertexShader: `
-                varying vec2 vUv;
-                varying vec3 vWorldPos;
-                varying float vWaveHeight;
-                uniform float uTime;
-                
-                void main() {
-                    vUv = uv;
-                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-                    
-                    // Multi-octave Sine Waves (Gerstner-ish)
-                    float h = sin(worldPos.x * 0.15 + uTime * 1.5) * 0.15;
-                    h += cos(worldPos.z * 0.2 + uTime * 1.2) * 0.12;
-                    h += sin((worldPos.x + worldPos.z) * 0.1 + uTime * 0.8) * 0.2;
-                    
-                    worldPos.y += h;
-                    vWaveHeight = h;
-                    vWorldPos = worldPos.xyz;
-                    gl_Position = projectionMatrix * viewMatrix * worldPos;
-                }
-            `,
-            fragmentShader: `
-                varying vec2 vUv;
-                varying vec3 vWorldPos;
-                varying float vWaveHeight;
-                uniform float uTime;
-                uniform vec3 uPlayerPos;
-                uniform vec3 uColorDeep;
-                uniform vec3 uColorMid;
-                uniform vec3 uColorGlow;
-                uniform vec3 uFogColor;
-                uniform float uFogDensity;
+        const toxicWater = new ToxicWater(scene);
+        window.toxicWater = toxicWater;
 
-                // --- Noise Foundations ---
-                float hash(vec2 p) {
-                    return fract(sin(dot(p, vec3(12.9898, 78.233, 45.164).xy)) * 43758.5453);
-                }
-                
-                float voronoi(vec2 x) {
-                    vec2 n = floor(x);
-                    vec2 f = fract(x);
-                    float m = 8.0;
-                    for(int j=-1; j<=1; j++)
-                    for(int i=-1; i<=1; i++) {
-                        vec2 g = vec2(float(i),float(j));
-                        vec2 o = vec2(hash(n + g));
-                        vec2 r = g + o - f;
-                        float d = dot(r,r);
-                        if(d < m) m = d;
-                    }
-                    return sqrt(m);
-                }
-
-                void main() {
-                    // --- SYNAPTIC TEXTURE ---
-                    // Multiple scrolling layers for organic depth
-                    vec2 uv1 = vWorldPos.xz * 0.12 + uTime * 0.04;
-                    vec2 uv2 = vWorldPos.xz * 0.07 - uTime * 0.02;
-                    
-                    float v1 = voronoi(uv1);
-                    float v2 = voronoi(uv2 + v1 * 0.4);
-                    
-                    // "Synaptic Veins" - Organic neural pathways
-                    float veins = smoothstep(0.08, 0.0, abs(v1 - 0.5)) * 0.6;
-                    veins += smoothstep(0.12, 0.0, abs(v2 - 0.4)) * 0.4;
-                    veins *= (0.7 + 0.3 * sin(uTime * 1.5 + vWorldPos.x * 0.5));
-                    
-                    // --- COLOR BLENDING ---
-                    // Deep abyss vs mid-level biological activity
-                    vec3 col = mix(uColorDeep, uColorMid, v1 * 0.7 + vWaveHeight * 2.0);
-                    
-                    // Bioluminescent Glow
-                    float glowMask = pow(1.0 - v1, 10.0) * 2.5;
-                    glowMask += veins * (0.4 + 0.6 * sin(uTime * 3.0 + v1 * 12.0));
-                    col = mix(col, uColorGlow, glowMask * 0.45);
-                    
-                    // --- FRESNEL & LIGHTING ---
-                    vec3 viewDir = normalize(cameraPosition - vWorldPos);
-                    // More detailed fake normal based on noise derivative approximation
-                    vec3 normal = normalize(vec3(-vWaveHeight * 3.0, 1.0, -vWaveHeight * 3.0));
-                    float fresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 4.0);
-                    
-                    // Specular Highlight (Fake Directional Light from [20, 50, -20])
-                    vec3 lightDir = normalize(vec3(0.3, 1.0, -0.3));
-                    vec3 halfDir = normalize(lightDir + viewDir);
-                    float spec = pow(max(0.0, dot(normal, halfDir)), 64.0);
-                    col += uColorGlow * spec * 1.2;
-                    
-                    // --- MICRO-GLITTER (Surface Sparkle) ---
-                    float sparkle = hash(vWorldPos.xz * 50.0 + floor(uTime * 15.0));
-                    float sparkleMask = step(0.995, sparkle) * fresnel;
-                    col += vec3(1.0) * sparkleMask * 2.0;
-                    
-                    col += uColorGlow * fresnel * 0.8;
-                    
-                    // --- DISTANCE FOG ---
-                    float dist = length(cameraPosition - vWorldPos);
-                    float fogFactor = 1.0 - exp(-dist * uFogDensity);
-                    col = mix(col, uFogColor, fogFactor);
-                    
-                    gl_FragColor = vec4(col, 0.92);
-                }
-            `,
-            transparent: true
-        });
-        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-        waterMesh.rotation.x = -Math.PI / 2;
-        waterMesh.position.y = -2.0; // Water hazard level
-        scene.add(waterMesh);
-        window.waterMat = waterMat; // Global for update
+        if (typeof window.FogClouds !== 'undefined') {
+            window.fogClouds = new window.FogClouds(scene);
+        }
 
         // Subtle ground fog removed for clear visuals
-        scene.fog = new THREE.FogExp2(0x020204, 0.035); // Dense nighttime fog — flashlight-only visibility
+        const fogCol = window.GAME_START_CONFIG && window.GAME_START_CONFIG.fogColor ? window.GAME_START_CONFIG.fogColor : 0x020204;
+        scene.fog = new THREE.FogExp2(fogCol, 0.035); // Dense fog — flashlight-only visibility
         // scene.background managed by BackroomsSkybox
 
         let mapManager;
-        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
-            mapManager = new SurvivalMapManager(scene, CONFIG);
-        } else {
-            mapManager = new CampaignMapManager(scene, CONFIG);
-        }
 
         // 2. Pathfinding Fields (Localized)
         const numCells = CONFIG.gridSize * CONFIG.gridSize;
@@ -1912,10 +1988,10 @@
                 crosshairEl.classList.add('hit');
             }
         }
-        window.playerHealth = 100;
+        window.playerHealth = 200;
         let itemsCollected = 0;
         const items = [];
-        const zombieMeshes = { normal: null, puker: null, thrower: null };
+        const zombieMeshes = { normal: null, puker: null, thrower: null, mutant: null };
         let activeZombies = 0;
         let spawnedZombies = 0;  // Total spawned so far
         let currentWave = 1;
@@ -1931,7 +2007,7 @@
 
         // Weapon Configs
         const weaponsCfg = {
-            pistol: { id: 'pistol', name: 'Service Pistol', damage: 20, fireRate: 0.35, spread: 0.005, pellets: 1, color: 0x888888, speed: 250, maxAmmo: Infinity },
+            pistol: { id: 'pistol', name: 'MAC-10', damage: 14, fireRate: 0.065, spread: 0.015, pellets: 1, color: 0x888888, speed: 300, maxAmmo: Infinity },
             shotgun: { id: 'shotgun', name: 'Tactical Shotgun', damage: 15, fireRate: 0.8, spread: 0.1, pellets: 8, color: 0xff3333, speed: 200, maxAmmo: 24 },
             ar: { id: 'ar', name: 'Assault Rifle', damage: 14, fireRate: 0.1, spread: 0.015, pellets: 1, color: 0x00aaff, speed: 400, maxAmmo: 900 },
             railgun: { id: 'railgun', name: 'Volt Railgun', damage: 120, fireRate: 1.5, spread: 0.0, pellets: 1, color: 0x44ffff, speed: 600, maxAmmo: 10, isSpecial: true, type: 'pierce' },
@@ -2044,15 +2120,15 @@
         let isADS = false;            // Aim-down-sights state
 
         const recoilCfg = {
-            pistol: { pitchKick: 0.04, yawDrift: 0.005, zPush: 0.08, recovery: 20, bloomRate: 0.1, spreadRecovery: 5.0 },
+            pistol: { pitchKick: 0.018, yawDrift: 0.0, zPush: 0.04, recovery: 25, bloomRate: 0.18, spreadRecovery: 5.0 },
             shotgun: { pitchKick: 0.15, yawDrift: 0.02, zPush: 0.25, recovery: 12, bloomRate: 0.0, spreadRecovery: 3.0 },
-            ar: { pitchKick: 0.025, yawDrift: 0.005, zPush: 0.05, recovery: 26, bloomRate: 0.15, spreadRecovery: 5.0 },
-            railgun: { pitchKick: 0.12, yawDrift: 0.005, zPush: 0.18, recovery: 10, bloomRate: 0.0, spreadRecovery: 2.0 },
-            flare: { pitchKick: 0.08, yawDrift: 0.01, zPush: 0.12, recovery: 12, bloomRate: 0.0, spreadRecovery: 3.0 },
-            singular: { pitchKick: 0.04, yawDrift: 0.005, zPush: 0.08, recovery: 16, bloomRate: 0.0, spreadRecovery: 3.5 },
-            sword: { pitchKick: 0.01, yawDrift: 0.002, zPush: 0.01, recovery: 30, bloomRate: 0.0, spreadRecovery: 6.0 },
-            flame: { pitchKick: 0.005, yawDrift: 0.002, zPush: 0.01, recovery: 35, bloomRate: 0.05, spreadRecovery: 7.0 },
-            tentacle: { pitchKick: 0.01, yawDrift: 0.002, zPush: 0.01, recovery: 30, bloomRate: 0.0, spreadRecovery: 6.0 },
+            ar: { pitchKick: 0.00025, yawDrift: 0.0, zPush: 0.005, recovery: 26, bloomRate: 0.15, spreadRecovery: 5.0 },
+            railgun: { pitchKick: 0.12, yawDrift: 0.0, zPush: 0.18, recovery: 10, bloomRate: 0.0, spreadRecovery: 2.0 },
+            flare: { pitchKick: 0.08, yawDrift: 0.0, zPush: 0.12, recovery: 12, bloomRate: 0.0, spreadRecovery: 3.0 },
+            singular: { pitchKick: 0.04, yawDrift: 0.0, zPush: 0.08, recovery: 16, bloomRate: 0.0, spreadRecovery: 3.5 },
+            sword: { pitchKick: 0.01, yawDrift: 0.0, zPush: 0.01, recovery: 30, bloomRate: 0.0, spreadRecovery: 6.0 },
+            flame: { pitchKick: 0.005, yawDrift: 0.0, zPush: 0.01, recovery: 35, bloomRate: 0.05, spreadRecovery: 7.0 },
+            tentacle: { pitchKick: 0.01, yawDrift: 0.0, zPush: 0.01, recovery: 30, bloomRate: 0.0, spreadRecovery: 6.0 },
         };
 
         // --- HITMARKER SYSTEM ---
@@ -2211,6 +2287,7 @@
             particleAlphas[i] = 1.0;
             particleIndex = (particleIndex + 1) % PARTICLE_COUNT;
         }
+        window.emitParticle = emitParticle;
 
         function updateParticles(delta) {
             for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -2233,6 +2310,120 @@
             particleGeometry.attributes.aAlpha.needsUpdate = true;
             particleGeometry.attributes.aSize.needsUpdate = true;
             particleGeometry.attributes.aColor.needsUpdate = true;
+        }
+
+        // Global helper for Zombie Fireball Detonations!
+        let isExplodingFireball = false;
+        function triggerZombieFireball(x, y, z) {
+            if (isExplodingFireball) return;
+            isExplodingFireball = true;
+
+            // 1. Audio boom
+            if (window.SFX && typeof window.SFX.triggerExplosion === 'function') {
+                window.SFX.triggerExplosion();
+            }
+
+            // 2. Fireball Particles (25 expanding hot orange/yellow shells)
+            for (let p = 0; p < 25; p++) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() - 0.5) * 2);
+                const speed = 4.5 + Math.random() * 6.0;
+                const vx = Math.sin(phi) * Math.cos(theta) * speed;
+                const vy = Math.cos(phi) * speed + 2.5; // lift upwards organically
+                const vz = Math.sin(phi) * Math.sin(theta) * speed;
+                emitParticle(
+                    x + (Math.random() - 0.5) * 0.4,
+                    y + 0.5 + Math.random() * 1.0,
+                    z + (Math.random() - 0.5) * 0.4,
+                    vx, vy, vz,
+                    1.0, 0.35 + Math.random() * 0.3, 0.0, // Hot orange/yellow core
+                    18, 0.4 + Math.random() * 0.5
+                );
+            }
+
+            // 3. Dense black/grey ash smoke plumes drifting up
+            for (let s = 0; s < 12; s++) {
+                emitParticle(
+                    x + (Math.random() - 0.5) * 0.6,
+                    y + 1.0 + Math.random() * 0.8,
+                    z + (Math.random() - 0.5) * 0.6,
+                    (Math.random() - 0.5) * 1.5,
+                    2.0 + Math.random() * 2.0,
+                    (Math.random() - 0.5) * 1.5,
+                    0.25, 0.25, 0.25, // charcoal grey ash
+                    24, 0.8 + Math.random() * 0.6
+                );
+            }
+
+            // 4. Dynamic shockwave ring particles expanding on floor
+            for (let r = 0; r < 16; r++) {
+                const angle = (r / 16) * Math.PI * 2;
+                const vx = Math.cos(angle) * 7.5;
+                const vz = Math.sin(angle) * 7.5;
+                emitParticle(
+                    x, 0.1, z,
+                    vx, 0.2, vz,
+                    1.0, 0.5, 0.0, // orange shockwave
+                    12, 0.3
+                );
+            }
+
+            // 5. Radial Shockwave Damage to neighboring zombies (chain detonation potential!)
+            const blastRadius = 6.5;
+            const nearby = getNearby(x, z);
+            for (let k = 0; k < nearby.length; k++) {
+                const zi = nearby[k];
+                if (zState[zi] === 0) continue;
+                const dx = zPosX[zi] - x;
+                const dz = zPosZ[zi] - z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < blastRadius) {
+                    // Deal massive splash damage!
+                    zHP[zi] = Math.max(0, zHP[zi] - 4);
+
+                    // Ignite target zombie (emit continuous flame sparks)
+                    for (let f = 0; f < 6; f++) {
+                        emitParticle(
+                            zPosX[zi] + (Math.random() - 0.5) * 0.6,
+                            1.0 + Math.random() * 1.5,
+                            zPosZ[zi] + (Math.random() - 0.5) * 0.6,
+                            (Math.random() - 0.5) * 2.0,
+                            2.5 + Math.random() * 2.0,
+                            (Math.random() - 0.5) * 2.0,
+                            1.0, 0.35 + Math.random() * 0.25, 0.0,
+                            14, 0.4 + Math.random() * 0.3
+                        );
+                    }
+
+                    // Check if chain damage kills them
+                    if (zHP[zi] <= 0) {
+                        zState[zi] = 0;
+                        activeZombies--;
+                        totalKills++;
+                        if (window.PyramidManager) {
+                            window.PyramidManager.registerKill(zPosX[zi], 1.0, zPosZ[zi]);
+                        }
+                        if (window.goreSystem) {
+                            const zTypeLabel = zType[zi] === 0 ? 'normal' : (zType[zi] === 1 ? 'puker' : 'thrower');
+                            window.goreSystem.spawnGoreGribs(zPosX[zi], 1.2, zPosZ[zi], zTypeLabel);
+                        }
+                        // trigger normal death confirm
+                        SFX.triggerZombieDie();
+                    }
+                }
+            }
+
+            // 6. Camera Screen Shake
+            if (isFPSMode && player) {
+                const dx = player.position.x - x;
+                const dz = player.position.z - z;
+                const playerDist = Math.sqrt(dx * dx + dz * dz);
+                if (playerDist < 12.0) {
+                    screenShakeIntensity += (1.0 - playerDist / 12.0) * 0.08;
+                }
+            }
+
+            isExplodingFireball = false;
         }
 
         // Spawn a zombie at given position (from spawn node)
@@ -2261,30 +2452,38 @@
             zBehavior[i] = 0; // Start SHAMBLE
             zStateTimer[i] = 0;
             zSpeedMul[i] = 0.7 + Math.random() * 0.6; // 0.7-1.3 variation
-            // HP by type: normal=1, puker=3, thrower=2
-            zHP[i] = zType[i] === 1 ? 3 : (zType[i] === 2 ? 2 : 1);
+            // HP by type: normal=1, puker=3, thrower=2, developed (3-armed)=6
+            zHP[i] = zType[i] === 3 ? 6 : (zType[i] === 1 ? 3 : (zType[i] === 2 ? 2 : 1));
 
             spawnedZombies++;
             activeZombies++;
             return true;
         }
 
-        function spawnWeaponDrop() {
+        function spawnWeaponDrop(specificType = null, closeSpawn = false) {
             if (!player) return;
-            const dropTypes = ['shotgun', 'ar'];
-            const typeId = dropTypes[Math.floor(Math.random() * dropTypes.length)];
+            const dropTypes = ['shotgun', 'ar', 'health', 'ammo'];
+            const typeId = specificType || dropTypes[Math.floor(Math.random() * dropTypes.length)];
 
-            // USE SHOTGUN MODEL FOR ALL DROPS AS REQUESTED
-            const dropMesh = new Shotgun();
-            dropMesh.scale.set(0.6, 0.6, 0.6);
+            let dropMesh;
 
-            // Remove the light from the pickup model to save performance
-            if (dropMesh.muzzleLight) {
-                dropMesh.remove(dropMesh.muzzleLight);
+            if (typeId === 'health') {
+                dropMesh = new HealthPack();
+            } else if (typeId === 'ammo') {
+                dropMesh = new AmmoCan();
+            } else {
+                // USE SHOTGUN MODEL FOR ALL WEAPON DROPS AS REQUESTED
+                dropMesh = new Shotgun();
+                dropMesh.scale.set(0.6, 0.6, 0.6);
+
+                // Remove the light from the pickup model to save performance
+                if (dropMesh.muzzleLight) {
+                    dropMesh.remove(dropMesh.muzzleLight);
+                }
             }
 
             const angle = Math.random() * Math.PI * 2;
-            const dist = 10 + Math.random() * 20; // 10-30 units away
+            const dist = closeSpawn ? (2 + Math.random() * 3) : (10 + Math.random() * 20); // Close spawn vs far spawn
             const dropPosX = player.position.x + Math.cos(angle) * dist;
             const dropPosZ = player.position.z + Math.sin(angle) * dist;
             const dropHeight = TerrainGen.getHeight(dropPosX, dropPosZ);
@@ -2395,6 +2594,78 @@
                 }
             }
         }
+
+        class FogClouds {
+            constructor(scene) {
+                this.scene = scene;
+                const particleCount = 200;
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                const scales = new Float32Array(particleCount);
+                const offsets = new Float32Array(particleCount);
+
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] = (Math.random() - 0.5) * 400; // x spread
+                    positions[i * 3 + 1] = Math.random() * 5.0 + 1.0; // low to the ground
+                    positions[i * 3 + 2] = (Math.random() - 0.5) * 400; // z spread
+                    scales[i] = 15.0 + Math.random() * 30.0; // cloud size
+                    offsets[i] = Math.random() * Math.PI * 2;
+                }
+
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
+                geometry.setAttribute('aOffset', new THREE.BufferAttribute(offsets, 1));
+
+                const material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uFogColor: { value: new THREE.Color(0x05080c) } // Deep localized fog color
+                    },
+                    transparent: true,
+                    depthWrite: false,
+                    vertexShader: `
+                        uniform float uTime;
+                        attribute float aScale;
+                        attribute float aOffset;
+                        varying float vAlpha;
+                        void main() {
+                            vec3 pos = position;
+                            pos.x += sin(uTime * 0.2 + aOffset) * 8.0;
+                            pos.z += cos(uTime * 0.15 + aOffset) * 8.0;
+                            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                            
+                            // Fade out in distance, and fade out very close to camera
+                            float distFade = smoothstep(150.0, 50.0, -mvPosition.z);
+                            float nearFade = smoothstep(2.0, 10.0, -mvPosition.z);
+                            vAlpha = distFade * nearFade * 0.35;
+                            
+                            gl_PointSize = aScale * (300.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 uFogColor;
+                        varying float vAlpha;
+                        void main() {
+                            float dist = length(gl_PointCoord.xy - 0.5);
+                            if (dist > 0.5) discard;
+                            float alpha = smoothstep(0.5, 0.1, dist) * vAlpha;
+                            gl_FragColor = vec4(uFogColor, alpha);
+                        }
+                    `
+                });
+
+                this.mesh = new THREE.Points(geometry, material);
+                this.mesh.frustumCulled = false;
+                this.scene.add(this.mesh);
+            }
+            update(time) {
+                if (this.mesh.material.uniforms) {
+                    this.mesh.material.uniforms.uTime.value = time;
+                }
+            }
+        }
+        window.FogClouds = FogClouds;
 
         let hazardManager;
 
@@ -2541,7 +2812,228 @@
                 const armGroup = new THREE.Group();
                 armGroup.position.set(0.25, -0.22, -0.3);
                 armGroup.scale.set(0.33, 0.33, 0.33);
-                root.add(armGroup);
+                // DISABLED OLD MECHANICAL ARM: root.add(armGroup);
+
+                // === NEW SDF POINTCLOUD MANIPULATOR ===
+                if (typeof SDFManipulatorArm !== 'undefined') {
+                    root.manipulator = new SDFManipulatorArm();
+                    // Positioned at the right side, slightly lowered
+                    root.manipulator.position.set(0.28, -0.20, -0.6);
+                    // Rotate to point forward (lay flat) and angle slightly towards the gun
+                    root.manipulator.rotation.x = -Math.PI / 2;
+                    root.manipulator.rotation.z = -0.15;
+                    // Significantly scale down to match weapon proportions
+                    root.manipulator.scale.set(0.55, 0.55, 0.55);
+                    root.add(root.manipulator);
+                }
+
+                // =================================================================
+                // ENHANCED FPS BODY — Forearm Shell, Chest, Shoulder, Wrist HUD
+                // =================================================================
+                const hazmatArmorMat = new THREE.MeshStandardMaterial({
+                    color: 0xd4a800, roughness: 0.55, metalness: 0.4,
+                    emissive: 0x332200, emissiveIntensity: 0.05
+                });
+                const hazmatDarkMat = new THREE.MeshStandardMaterial({
+                    color: 0x111111, roughness: 0.7, metalness: 0.6
+                });
+                const sealRubberMat = new THREE.MeshStandardMaterial({
+                    color: 0x050505, roughness: 0.95, metalness: 0.0
+                });
+                const panelLineMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+                const fpsDetailMat = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a, roughness: 0.3, metalness: 0.9
+                });
+
+                // --- FOREARM SHELL (surrounds the SDF manipulator) ---
+                const shellGroup = new THREE.Group();
+                shellGroup.position.set(0.28, -0.22, -0.55);
+                // DISABLED TO PREVENT OBSCURING SDF MANIPULATOR: root.add(shellGroup);
+
+                // Main forearm housing — half-cylinder shell
+                const shellTopGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.45, 12, 1, true, 0, Math.PI);
+                const shellTop = new THREE.Mesh(shellTopGeo, hazmatArmorMat);
+                shellTop.rotation.x = Math.PI / 2;
+                shellTop.rotation.z = Math.PI; // Open side faces down (toward manipulator)
+                shellTop.position.set(0, 0.03, 0);
+                shellGroup.add(shellTop);
+
+                // Hazmat warning stripe on shell
+                const shellStripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.05, 0.004, 0.3), hazmatMat
+                );
+                shellStripe.position.set(0, 0.065, 0);
+                shellGroup.add(shellStripe);
+
+                // Black chevron stripes on forearm shell
+                for (let ch = 0; ch < 3; ch++) {
+                    const chev = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.015, 0.005, 0.02), hazmatDarkMat
+                    );
+                    chev.position.set(0, 0.066, -0.08 + ch * 0.08);
+                    chev.rotation.y = 0.4;
+                    shellGroup.add(chev);
+                }
+
+                // Panel seam lines on shell
+                for (let pl = 0; pl < 3; pl++) {
+                    const seam = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.065, 0.001, 0.003), panelLineMat
+                    );
+                    seam.position.set(0, 0.062, -0.12 + pl * 0.12);
+                    shellGroup.add(seam);
+                }
+
+                // Side armor strips
+                for (let side of [-1, 1]) {
+                    const sideStrip = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.008, 0.04, 0.4), fpsDetailMat
+                    );
+                    sideStrip.position.set(0.055 * side, 0.01, 0);
+                    shellGroup.add(sideStrip);
+                }
+
+                // Rubber gasket seal at wrist end
+                const wristSealFPS = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.06, 0.008, 8, 16), sealRubberMat
+                );
+                wristSealFPS.position.set(0, 0, -0.24);
+                shellGroup.add(wristSealFPS);
+
+                // Rubber gasket seal at elbow end
+                const elbowSealFPS = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.065, 0.008, 8, 16), sealRubberMat
+                );
+                elbowSealFPS.position.set(0, 0, 0.24);
+                shellGroup.add(elbowSealFPS);
+
+                // Small status LED on forearm shell
+                const fpsLED = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.005, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+                );
+                fpsLED.position.set(0.045, 0.05, 0.05);
+                shellGroup.add(fpsLED);
+                root.fpsStatusLED = fpsLED;
+
+                // Cable detail running along bottom of shell
+                for (let c = 0; c < 2; c++) {
+                    const cable = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.003, 0.003, 0.42, 6), cableMat
+                    );
+                    cable.rotation.x = Math.PI / 2;
+                    cable.position.set(-0.04 + c * 0.02, -0.03, 0);
+                    shellGroup.add(cable);
+                }
+
+                // --- WRIST MICRO-DISPLAY (inner forearm holographic readout) ---
+                const wristHUDMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uHealthPct: { value: 1.0 }
+                    },
+                    transparent: true,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float uTime;
+                        uniform float uHealthPct;
+                        varying vec2 vUv;
+                        float hash(vec2 p) {
+                            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+                        }
+                        void main() {
+                            vec2 uv = vUv;
+                            // Scanline effect
+                            float scanline = sin(uv.y * 80.0 + uTime * 15.0) * 0.5 + 0.5;
+                            scanline = smoothstep(0.3, 0.7, scanline) * 0.15;
+                            // Health bar
+                            float barY = smoothstep(0.1, 0.15, uv.y) * smoothstep(0.35, 0.3, uv.y);
+                            float barFill = step(uv.x, uHealthPct) * barY;
+                            vec3 barColor = mix(vec3(1.0, 0.1, 0.0), vec3(0.0, 1.0, 0.3), uHealthPct);
+                            // Flickering data noise
+                            float flicker = hash(vec2(floor(uv.x * 12.0), floor(uTime * 8.0)));
+                            float dataLine = smoothstep(0.45, 0.5, uv.y) * smoothstep(0.85, 0.8, uv.y);
+                            float dataBits = step(0.6, flicker) * dataLine * step(0.1, uv.x) * step(uv.x, 0.9);
+                            // Border
+                            float border = step(uv.x, 0.02) + step(0.98, uv.x) + step(uv.y, 0.02) + step(0.98, uv.y);
+                            border = min(border, 1.0);
+                            vec3 col = barColor * barFill * 0.8 + vec3(0.0, 0.6, 0.8) * dataBits * 0.4 + vec3(0.0, 0.8, 1.0) * border * 0.3;
+                            col += vec3(0.0, 0.15, 0.2) * scanline;
+                            float alpha = max(barFill * 0.7, max(dataBits * 0.5, border * 0.4)) + scanline * 0.2;
+                            // Overall flicker
+                            alpha *= 0.7 + sin(uTime * 30.0) * 0.05;
+                            gl_FragColor = vec4(col, alpha * 0.8);
+                        }
+                    `
+                });
+                const wristHUD = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.06, 0.03), wristHUDMat
+                );
+                wristHUD.position.set(-0.02, -0.04, -0.05);
+                wristHUD.rotation.x = -0.8;
+                shellGroup.add(wristHUD);
+                root.wristHUDMaterial = wristHUDMat;
+
+                // --- PARTIAL CHEST / SHOULDER (visible at screen periphery) ---
+                const chestGroup = new THREE.Group();
+                chestGroup.position.set(0.42, -0.38, -0.15);
+                // DISABLED TO PREVENT OBSCURING SDF MANIPULATOR: root.add(chestGroup);
+
+                // Right shoulder pauldron edge
+                const shoulderPlate = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.12, 0.08, 0.18), hazmatArmorMat
+                );
+                shoulderPlate.position.set(0.08, 0.12, -0.1);
+                shoulderPlate.rotation.z = 0.3;
+                chestGroup.add(shoulderPlate);
+
+                // Shoulder hazmat stripe
+                const shoulderStripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.10, 0.005, 0.06), hazmatMat
+                );
+                shoulderStripe.position.set(0.08, 0.165, -0.1);
+                shoulderStripe.rotation.z = 0.3;
+                chestGroup.add(shoulderStripe);
+
+                // Chest plate visible at bottom right
+                const chestPlate = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.15, 0.12, 0.1), hazmatArmorMat
+                );
+                chestPlate.position.set(0.0, -0.02, 0.0);
+                chestPlate.rotation.z = 0.15;
+                chestGroup.add(chestPlate);
+
+                // Chest panel line
+                const chestSeam = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.13, 0.002, 0.003), panelLineMat
+                );
+                chestSeam.position.set(0.0, 0.04, 0.052);
+                chestGroup.add(chestSeam);
+
+                // Collar/neck seal ring (visible at top of view)
+                const collarSeal = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.035, 0.006, 8, 12), sealRubberMat
+                );
+                collarSeal.position.set(-0.1, 0.18, -0.05);
+                collarSeal.rotation.z = 0.5;
+                chestGroup.add(collarSeal);
+
+                // Shoulder LED
+                const shoulderLEDfps = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.004, 6, 6),
+                    new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+                );
+                shoulderLEDfps.position.set(0.12, 0.14, -0.02);
+                chestGroup.add(shoulderLEDfps);
+                root.fpsShoulderLED = shoulderLEDfps;
 
                 // === UPPER ARM (Partially visible, extends from screen edge) ===
                 const upperArm = new THREE.Mesh(
@@ -2851,6 +3343,58 @@
                 // Save direct reference to weapon mesh so we can update its color later
                 root.weaponMesh = weapon;
 
+                // Create invisible control points (grip anchors) for high-fidelity finger tip IK binding!
+                const thumb = new THREE.Object3D();
+                const index = new THREE.Object3D();
+                const middle = new THREE.Object3D();
+                weapon.add(thumb);
+                weapon.add(index);
+                weapon.add(middle);
+                weapon.gripAnchors = { thumb, index, middle };
+
+                // Set local target offsets relative to each weapon mesh
+                const anchorCoords = {
+                    pistol: {
+                        tx: 0.10, ty: -0.45, tz: 0.20,
+                        idx: -0.06, idy: -0.32, idz: 0.16,
+                        mx: -0.08, my: -0.52, mz: 0.12
+                    },
+                    ar: {
+                        tx: 0.10, ty: -0.50, tz: 0.44,
+                        idx: -0.06, idy: -0.40, idz: 0.38,
+                        mx: -0.08, my: -0.62, mz: 0.32
+                    },
+                    shotgun: {
+                        tx: 0.10, ty: -0.55, tz: 0.34,
+                        idx: -0.06, idy: -0.45, idz: 0.28,
+                        mx: -0.08, my: -0.67, mz: 0.22
+                    },
+                    railgun: {
+                        tx: 0.10, ty: -0.50, tz: 0.44,
+                        idx: -0.06, idy: -0.40, idz: 0.38,
+                        mx: -0.08, my: -0.62, mz: 0.32
+                    },
+                    flare: {
+                        tx: 0.10, ty: -0.55, tz: 0.34,
+                        idx: -0.06, idy: -0.45, idz: 0.28,
+                        mx: -0.08, my: -0.67, mz: 0.22
+                    },
+                    singular: {
+                        tx: 0.10, ty: -0.50, tz: 0.44,
+                        idx: -0.06, idy: -0.40, idz: 0.38,
+                        mx: -0.08, my: -0.62, mz: 0.32
+                    },
+                    flame: {
+                        tx: 0.10, ty: -0.55, tz: 0.34,
+                        idx: -0.06, idy: -0.45, idz: 0.28,
+                        mx: -0.08, my: -0.67, mz: 0.22
+                    }
+                };
+                const ac = anchorCoords[weaponId] || anchorCoords.ar;
+                thumb.position.set(ac.tx, ac.ty, ac.tz);
+                index.position.set(ac.idx, ac.idy, ac.idz);
+                middle.position.set(ac.mx, ac.my, ac.mz);
+
                 // Muzzle point reference for particle emission
                 const muzzlePoint = new THREE.Object3D();
                 muzzlePoint.position.set(0, 0, wp.muzzleZ);
@@ -2860,21 +3404,256 @@
                 // Save ADS config to root
                 root.adsConfig = { x: wp.adsX, y: wp.adsY };
 
-                // --- HOLOGRAPHIC ADS SIGHT (Titan Machine Vision) ---
+                // --- CUSTOM DYNAMIC BIOMORPHIC SHADER HOLOSIGHT ---
+                let holoMat = null;
                 if (!weaponId.includes('sword') && !weaponId.includes('tentacle')) {
-                    const sightGroup = new THREE.Group();
-                    sightGroup.position.set(0, 0.45, 0); // Position on top of gun
-                    weapon.add(sightGroup);
+                    if (weaponId === 'ar') {
+                        // === EXOTIC SCI-FI HOLOGRAPHIC EMITTER FOR ASSAULT RIFLE ===
+                        const baseMat = new THREE.MeshStandardMaterial({ color: 0x08090d, roughness: 0.3, metalness: 0.9 });
+                        const carbonMat = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.7, metalness: 0.6 });
+                        const emitterCoreMat = new THREE.MeshStandardMaterial({
+                            color: 0x00f3ff, emissive: 0x00f3ff, emissiveIntensity: 2.0, metalness: 0.9, roughness: 0.1
+                        });
 
-                    const ringGeo = new THREE.TorusGeometry(0.12, 0.01, 8, 32);
-                    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.0 });
-                    const ring = new THREE.Mesh(ringGeo, ringMat);
-                    sightGroup.add(ring);
-                    root.adsRing = ringMat; // Reference for fading in
-                    
-                    const dotGeo = new THREE.SphereGeometry(0.01, 8, 8);
-                    const dot = new THREE.Mesh(dotGeo, ringMat);
-                    sightGroup.add(dot);
+                        // Sleek dual-deck base mount
+                        const mountBase1 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.025, 0.22), baseMat);
+                        mountBase1.position.set(0, 0.41, -0.05);
+                        weapon.add(mountBase1);
+
+                        const mountBase2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.18), carbonMat);
+                        mountBase2.position.set(0, 0.43, -0.05);
+                        weapon.add(mountBase2);
+
+                        // Glowing circular emitter core on the mount
+                        const emitterCore = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 16), emitterCoreMat);
+                        emitterCore.rotation.x = Math.PI / 2;
+                        emitterCore.position.set(0, 0.435, -0.05);
+                        weapon.add(emitterCore);
+
+                        // Futuristic swept-forward support brackets (Wings)
+                        const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.16, 0.05), carbonMat);
+                        wingL.position.set(-0.065, 0.49, -0.05);
+                        wingL.rotation.y = 0.15; // angled inward
+                        wingL.rotation.z = -0.08; // tilted outward
+
+                        const wingR = wingL.clone();
+                        wingR.position.x = 0.065;
+                        wingR.rotation.y = -0.15;
+                        wingR.rotation.z = 0.08;
+                        weapon.add(wingL, wingR);
+
+                        // Left & Right physical micro-projector tubes (projecting telemetry)
+                        const projL = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.006, 0.04, 8), baseMat);
+                        projL.rotation.x = Math.PI / 2 - 0.2;
+                        projL.position.set(-0.055, 0.42, -0.12);
+                        const projR = projL.clone();
+                        projR.position.x = 0.055;
+                        weapon.add(projL, projR);
+
+                        // Floating holographic telemetry rings beside the sight
+                        const sideHoloGeo = new THREE.RingGeometry(0.015, 0.025, 32);
+                        const sideHoloMatL = new THREE.MeshBasicMaterial({
+                            color: 0x00f3ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false
+                        });
+                        const sideHoloMatR = sideHoloMatL.clone();
+
+                        const sideHoloL = new THREE.Mesh(sideHoloGeo, sideHoloMatL);
+                        sideHoloL.position.set(-0.085, 0.49, -0.05);
+                        sideHoloL.rotation.y = Math.PI / 2 - 0.2;
+
+                        const sideHoloR = new THREE.Mesh(sideHoloGeo, sideHoloMatR);
+                        sideHoloR.position.set(0.085, 0.49, -0.05);
+                        sideHoloR.rotation.y = -Math.PI / 2 + 0.2;
+
+                        weapon.add(sideHoloL, sideHoloR);
+
+                        // Save references to the weapon root so they can be animated!
+                        root.sideHoloL = sideHoloL;
+                        root.sideHoloR = sideHoloR;
+                    } else {
+                        // Create base carbon bracket mount (Sleeker and wider for modern tactical feel)
+                        const baseMat = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.8, metalness: 0.4 });
+                        const mountBase = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.16), baseMat);
+                        mountBase.position.set(0, weaponId === 'ar' ? 0.43 : 0.38, -0.05);
+                        weapon.add(mountBase);
+
+                        // Left & Right support wings (Taller and wider to frame the larger glass panel perfectly)
+                        const wingHeight = weaponId === 'ar' ? 0.14 : 0.12;
+                        const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.008, wingHeight, 0.04), baseMat);
+                        wingL.position.set(-0.06, weaponId === 'ar' ? 0.49 : 0.43, -0.05);
+                        const wingR = wingL.clone();
+                        wingR.position.x = 0.06;
+                        weapon.add(wingL, wingR);
+                    }
+
+                    // Reticle color: Neon Cyan for Assault Rifle, Amber Orange for others!
+                    const reticleColor = weaponId === 'ar' ? new THREE.Color(0x00f3ff) : new THREE.Color(0xff6600);
+
+                    // Dynamic GLSL Reticle Shader Material
+                    holoMat = new THREE.ShaderMaterial({
+                        uniforms: {
+                            uTime: { value: 0 },
+                            uADS: { value: 0.05 },
+                            uColor: { value: reticleColor },
+                            uMode: { value: 0.0 },
+                            uGlitch: { value: 0.0 }
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform float uTime;
+                            uniform float uADS;
+                            uniform vec3 uColor;
+                            uniform float uMode;
+                            uniform float uGlitch;
+                            varying vec2 vUv;
+
+                            void main() {
+                                vec2 uv = vUv - vec2(0.5);
+                                
+                                // Cyberpunk glitch distortion during state change
+                                if (uGlitch > 0.01) {
+                                    float noise = fract(sin(dot(floor(uv * 50.0), vec2(12.9898, 78.233))) * 43758.5453);
+                                    uv.x += (noise - 0.5) * uGlitch * 0.08;
+                                    uv.y += (noise - 0.5) * uGlitch * 0.08;
+                                }
+
+                                float dist = length(uv);
+                                float angle = atan(uv.y, uv.x);
+                                
+                                float pulse = sin(uTime * 6.0) * 0.05 * uADS;
+                                float centerDot = smoothstep(0.002, 0.0, dist - 0.001);
+
+                                // --- RETICLE 0: BIO-THREAT RETICLE (Neon Green) ---
+                                float r0_ringVal = abs(dist - mix(0.38, 0.24, uADS) + pulse * 0.1);
+                                float r0_ring = smoothstep(mix(0.016, 0.005, uADS), 0.0, r0_ringVal);
+                                
+                                float r0_dashes = step(0.12, sin(angle * 16.0 + uTime * 0.4));
+                                r0_ring *= mix(1.0, r0_dashes, 0.8);
+                                
+                                float r0_sonar = sin(dist * 60.0 - uTime * 12.0) * 0.5 + 0.5;
+                                r0_sonar *= smoothstep(0.42, 0.24, dist) * uADS * 0.45;
+                                r0_ring = max(r0_ring, r0_sonar);
+                                
+                                float r0_coreRadius = mix(0.016, 0.007, uADS);
+                                float r0_deforms = sin(angle * 5.0 - uTime * 9.0) * 0.25;
+                                float r0_core = smoothstep(0.003, 0.0, dist - r0_coreRadius * (1.0 + r0_deforms));
+                                r0_core = max(r0_core, centerDot);
+                                
+                                float r0_tickX = abs(uv.x);
+                                float r0_tickY = abs(uv.y);
+                                float r0_tickW = mix(0.006, 0.002, uADS);
+                                float r0_ticks = 0.0;
+                                if (r0_tickY < r0_tickW && r0_tickX > 0.05 && r0_tickX < mix(0.24, 0.16, uADS)) r0_ticks = 1.0;
+                                if (r0_tickX < r0_tickW && r0_tickY > 0.05 && r0_tickY < mix(0.24, 0.16, uADS)) r0_ticks = 1.0;
+                                
+                                float r0_chev = 0.0;
+                                float r0_cPos = mix(0.20, 0.12, uADS);
+                                if (abs(r0_tickX - r0_tickY) < mix(0.04, 0.01, uADS) && dist > r0_cPos && dist < r0_cPos + 0.10) {
+                                    r0_chev = smoothstep(0.012, 0.0, abs(abs(uv.x) - abs(uv.y)));
+                                    r0_chev *= smoothstep(r0_cPos + 0.10, r0_cPos + 0.06, dist) * smoothstep(r0_cPos - 0.02, r0_cPos + 0.02, dist);
+                                }
+                                float reticle0 = max(r0_ring, max(r0_core, max(r0_ticks, r0_chev)));
+
+                                // --- RETICLE 1: QUANTUM SINGULARITY RETICLE (Cyan/Blue) ---
+                                float r1_r1Val = abs(dist - mix(0.22, 0.14, uADS));
+                                float r1_r1 = smoothstep(0.005, 0.0, r1_r1Val) * step(0.1, sin(angle * 6.0 + uTime * 4.0));
+                                
+                                float r1_r2Val = abs(dist - mix(0.34, 0.24, uADS));
+                                float r1_r2 = smoothstep(0.004, 0.0, r1_r2Val) * step(0.15, cos(angle * 8.0 - uTime * 6.0));
+                                
+                                float r1_phi120 = mod(angle + uTime * 0.8, 2.0944);
+                                float r1_chev = 0.0;
+                                if (abs(r1_phi120 - 1.0472) < 0.06 && dist > mix(0.16, 0.10, uADS) && dist < mix(0.36, 0.22, uADS)) {
+                                    r1_chev = 1.0;
+                                }
+                                float reticle1 = max(r1_r1, max(r1_r2, max(r1_chev, centerDot)));
+
+                                // --- RETICLE 2: CYBER-GRID MATRIX RETICLE (Pink/Magenta) ---
+                                float r2_grid = 0.0;
+                                if (uADS > 0.1) {
+                                    float gridX = step(0.97, sin(uv.x * 40.0));
+                                    float gridY = step(0.97, sin(uv.y * 40.0));
+                                    r2_grid = max(gridX, gridY) * 0.18 * uADS * step(dist, 0.35);
+                                }
+                                float r2_maxCoord = max(abs(uv.x), abs(uv.y));
+                                float r2_sqVal = abs(r2_maxCoord - mix(0.30, 0.18, uADS));
+                                float r2_square = smoothstep(0.005, 0.0, r2_sqVal);
+                                float r2_cornerMask = step(0.05, min(abs(uv.x), abs(uv.y)));
+                                r2_square *= r2_cornerMask;
+                                
+                                float r2_axisX = abs(uv.x);
+                                float r2_axisY = abs(uv.y);
+                                float r2_ticks = 0.0;
+                                if (r2_axisY < 0.003 && r2_axisX > 0.03 && r2_axisX < mix(0.16, 0.08, uADS)) r2_ticks = 1.0;
+                                if (r2_axisX < 0.003 && r2_axisY > 0.03 && r2_axisY < mix(0.16, 0.08, uADS)) r2_ticks = 1.0;
+                                float reticle2 = max(r2_square, max(r2_ticks, max(r2_grid, centerDot)));
+
+                                // --- RETICLE 3: CHRONO-WARP VECTOR RETICLE (Amber Orange) ---
+                                float r3_pulseR = mix(0.28, 0.16, uADS) + sin(uTime * 8.0) * 0.02 * uADS;
+                                float r3_deltaVal = abs(dist - r3_pulseR);
+                                float r3_delta = smoothstep(0.005, 0.0, r3_deltaVal);
+                                
+                                float r3_diag = abs(abs(uv.x) - abs(uv.y));
+                                float r3_sweep = 0.0;
+                                if (r3_diag < 0.005 && dist > mix(0.18, 0.10, uADS) && dist < mix(0.38, 0.22, uADS)) {
+                                    r3_sweep = 1.0;
+                                }
+                                float reticle3 = max(r3_delta, max(r3_sweep, centerDot));
+
+                                // --- BLEND & SELECTION MECHANICS ---
+                                float activeReticle = 0.0;
+                                vec3 activeColor = uColor;
+
+                                if (uMode < 0.5) {
+                                    activeReticle = reticle0;
+                                    activeColor = vec3(0.0, 1.0, 0.55); // Green Bio-Threat
+                                } else if (uMode < 1.5) {
+                                    activeReticle = reticle1;
+                                    activeColor = vec3(0.0, 0.6, 1.0); // Cyan Quantum
+                                } else if (uMode < 2.5) {
+                                    activeReticle = reticle2;
+                                    activeColor = vec3(1.0, 0.05, 0.6); // Pink Matrix
+                                } else {
+                                    activeReticle = reticle3;
+                                    activeColor = vec3(1.0, 0.45, 0.0); // Amber Chrono-Warp
+                                }
+
+                                // Apply global scanline effect
+                                float scanline = 0.78 + 0.22 * sin(vUv.y * 380.0 - uTime * 25.0);
+                                
+                                // Random glitch/flicker
+                                float glitchVal = fract(sin(dot(uv, vec2(12.9, 78.2))) * 43758.5);
+                                float glitchTrigger = step(0.993, sin(uTime * 5.0));
+                                float flicker = mix(1.0, 0.40 + 0.60 * glitchVal, max(glitchTrigger, uGlitch * 0.6));
+
+                                // Boost brightness in ADS with pulsing glow
+                                float adsGlow = 1.5 + 3.5 * uADS + 0.3 * sin(uTime * 12.0) * uADS;
+                                vec3 finalColor = activeColor * adsGlow;
+                                float finalAlpha = activeReticle * scanline * flicker * mix(0.22, 0.99, uADS);
+
+                                gl_FragColor = vec4(finalColor, finalAlpha);
+                            }
+                        `,
+                        transparent: true,
+                        depthWrite: false,
+                        depthTest: true,
+                        side: THREE.DoubleSide
+                    });
+
+                    // Floating Glass projection plane (Wider and larger for clear visual tracking)
+                    const glassW = weaponId === 'ar' ? 0.12 : 0.10;
+                    const glassGeo = new THREE.PlaneGeometry(glassW, glassW);
+                    const glassPanel = new THREE.Mesh(glassGeo, holoMat);
+                    glassPanel.position.set(0, weaponId === 'ar' ? 0.49 : 0.43, -0.05);
+                    weapon.add(glassPanel);
+
+                    root.holoMaterial = holoMat;
                 }
 
                 return root;
@@ -2884,6 +3663,7 @@
         // Respawn / Reset Game Session
         function respawnPlayer() {
             gameOver = false;
+
 
             // 1. Reset Stats
             survivalTime = 0;
@@ -2899,9 +3679,11 @@
                 zombieMeshes.normal.count = 0;
                 zombieMeshes.puker.count = 0;
                 zombieMeshes.thrower.count = 0;
+                zombieMeshes.mutant.count = 0;
                 zombieMeshes.normal.instanceMatrix.needsUpdate = true;
                 zombieMeshes.puker.instanceMatrix.needsUpdate = true;
                 zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
+                zombieMeshes.mutant.instanceMatrix.needsUpdate = true;
             }
 
             // 3. Clear Projectiles
@@ -2909,6 +3691,10 @@
             bullets.length = 0;
             enemyProjectiles.forEach(ep => scene.remove(ep.mesh));
             enemyProjectiles.length = 0;
+
+            if (window.PyramidManager) {
+                window.PyramidManager.reset();
+            }
 
             // 4. Reset Nodes
             spawnNodes.forEach(node => {
@@ -2936,7 +3722,7 @@
             // 3X Health Boost
             player.maxHealth = 300;
             player.health = 300;
-            playerHealth = 300;
+            playerHealth = 600;
 
             // Sync References
             if (perks) perks.player = player;
@@ -2995,9 +3781,10 @@
                 // Hide loader only when all models are ready
                 setTimeout(() => {
                     if (MayaLoader.active) MayaLoader.stop();
-                    // Immediately spawn a weapon nearby for the player
-                    spawnWeaponDrop();
-                    spawnWeaponDrop();
+                    // Immediately spawn guaranteed starting equipment nearby
+                    spawnWeaponDrop('shotgun', true);
+                    spawnWeaponDrop('ammo', true);
+                    spawnWeaponDrop('health', true);
                 }, 1000);
 
                 // 0. Initialize Tactical Systems
@@ -3014,6 +3801,7 @@
                 player.position.set(0, 0, 0);
                 perks.player = player;
 
+
                 if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'campaign') {
                     campaignTutorial = new CampaignTutorialManager(player, TutorialManager, spawnZombie);
                 }
@@ -3021,11 +3809,21 @@
                 // Apply Map Visuals if config exists
                 if (window.GAME_START_CONFIG) {
                     const cfg = window.GAME_START_CONFIG;
-                    if (cfg.fogColor !== undefined) {
+                    if (cfg.mapId === 'desert') {
+                        // Scorching desert twilight/sunset lighting
+                        ambientLight.color.setHex(0xffebcc);
+                        ambientLight.intensity = 0.8;
+                        dirLight.color.setHex(0xfff5e6);
+                        dirLight.intensity = 2.0;
+                        dirLight.position.set(100, 150, -50);
+
+                        scene.fog.color.setHex(0xffc896);
+                        scene.fog.density = 0.008; // gorgeous warm dust horizon haze
+                    } else if (cfg.fogColor !== undefined) {
                         scene.fog.color.setHex(cfg.fogColor);
                         // scene.background update removed for skybox
                         ambientLight.color.setHex(0x050510);
-                        ambientLight.intensity = 0.015; // Stay dark regardless of map
+                        ambientLight.intensity = 0.001; // Stay pitch black regardless of map
                     }
                 }
 
@@ -3065,6 +3863,22 @@
                 window.flashLight.target.position.set(0, -0.2, -5);
                 cameraFPS.add(window.flashLight.target);
 
+                // Initialize mapManager based on actual start config
+                const currentMapId = window.GAME_START_CONFIG ? window.GAME_START_CONFIG.mapId : 'forest';
+                if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
+                    if (currentMapId === 'desert') {
+                        mapManager = new DesertMapManager(scene, CONFIG);
+                        if (window.PyramidManager) {
+                            window.PyramidManager.init(scene);
+                        }
+                    } else {
+                        mapManager = new SurvivalMapManager(scene, CONFIG);
+                    }
+                } else {
+                    mapManager = new CampaignMapManager(scene, CONFIG);
+                }
+                window.mapManager = mapManager;
+
                 // Initial map update for item spawning check
                 mapManager.update(player.position, 0.016, activeCamera);
 
@@ -3081,24 +3895,32 @@
                 const attrHurtTime = new Float32Array(CONFIG.maxZombies).fill(-10.0);
                 const attrTypeArr = new Float32Array(CONFIG.maxZombies).fill(0); // 0=Normal, 1=Puker, 2=Thrower
                 const attrSeedArr = new Float32Array(CONFIG.maxZombies);
-                for (let s = 0; s < CONFIG.maxZombies; s++) attrSeedArr[s] = Math.random() * 100.0;
+                for (let s = 0; s < CONFIG.maxZombies; s++) attrSeedArr[s] = s;
 
                 zombieSDFMat = new THREE.ShaderMaterial({
                     uniforms: {
                         uTime: { value: 0 },
                         uDarkness: { value: 0 },
-                        uScanActive: { value: 0 }
+                        uScanActive: { value: 0 },
+                        uHoloGlitches: { value: 0.0 },
+                        uViralShedding: { value: 0.0 },
+                        uHoloMorph: { value: 0.0 }
                     },
                     vertexShader: `
             attribute float aAttackStart;
             attribute float aHurtTime;
             attribute float aType;
             attribute float aSeed;
+            uniform float uTime;
+            uniform float uHoloGlitches;
+            uniform float uViralShedding;
+            uniform float uHoloMorph;
             varying vec2 vUv;
             varying float vAttackStart;
             varying float vHurtTime;
             varying float vType;
             varying float vSeed;
+            varying float vScale;
             
             #include <common>
             void main() {
@@ -3108,13 +3930,30 @@
                 vType = aType;
                 vSeed = aSeed;
                 
+                // Extract dynamic instanced scale from the first column of the instanceMatrix
+                float instScale = length(vec3(instanceMatrix[0][0], instanceMatrix[0][1], instanceMatrix[0][2]));
+                vScale = instScale;
+                
                 // INSTANCED BILLBOARDING logic:
                 // Extract instance translation from instanceMatrix
                 vec4 worldPos = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
                 
                 // Construct billboarding view matrix (cancel rotation)
                 vec4 mvPosition = modelViewMatrix * vec4(worldPos.xyz, 1.0);
-                mvPosition.xyz += vec3(position.x, position.y, 0.0); // Offset in view-space
+
+                // Reconstruct morph parameter for this instance inside the vertex shader
+                float baseScale = (aType == 3.0) ? 1.35 : 1.0;
+                float morph = clamp((instScale - baseScale) / (baseScale * 1.65), 0.0, 1.0);
+
+                // Add holographic horizontal shearing wave glitches to the vertex coordinates
+                float holoWave = sin(worldPos.y * 30.0 + uTime * 25.0) * cos(worldPos.x * 20.0 - uTime * 15.0) * 0.18 * uHoloGlitches * morph;
+                mvPosition.x += holoWave;
+
+                // Add convective thermal bleed heat haze coordinate distortion to morphed entities
+                float thermalHaze = sin(position.y * 45.0 - uTime * 22.0) * cos(position.x * 35.0 + uTime * 14.0) * 0.08 * morph;
+                mvPosition.xy += vec2(thermalHaze);
+                
+                mvPosition.xyz += vec3(position.x * instScale, position.y * instScale, 0.0); // Offset in view-space, dynamically scaled
                 
                 gl_Position = projectionMatrix * mvPosition;
             }
@@ -3125,9 +3964,13 @@
             varying float vHurtTime;
             varying float vType;
             varying float vSeed;
+            varying float vScale;
             uniform float uTime;
             uniform float uDarkness;
             uniform float uScanActive;
+            uniform float uHoloGlitches;
+            uniform float uViralShedding;
+            uniform float uHoloMorph;
 
             // --- Math & SDF Utilities (Based on BobBoss) ---
             float hash11(float p) {
@@ -3157,9 +4000,125 @@
             }
             vec2 opU(vec2 d1, vec2 d2) { return (d1.x < d2.x) ? d1 : d2; }
 
+            float sdCapsuleTapered(vec3 p, vec3 a, vec3 b, float r1, float r2) {
+                vec3 pa = p - a, ba = b - a;
+                float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                return length(pa - ba * h) - mix(r1, r2, h);
+            }
+            vec3 foldY6(vec3 p, out float sector) {
+                float angle = atan(p.z, p.x);
+                sector = floor(angle / (3.14159265 / 3.0) + 0.5);
+                float r_angle = sector * (3.14159265 / 3.0);
+                float c = cos(-r_angle), s = sin(-r_angle);
+                vec3 p_rot = p;
+                p_rot.x = p.x * c - p.z * s;
+                p_rot.z = p.x * s + p.z * c;
+                return p_rot;
+            }
+            float sdCapsid(vec3 p, float r) {
+                vec3 pa = abs(p);
+                float d1 = (pa.x + pa.y + pa.z) * 0.57735027 - r;
+                float d2 = max(pa.x, max(pa.y, pa.z)) - r * 0.85;
+                float core_mesh = max(d1, d2);
+                float grooves = sin(max(pa.x, max(pa.y, pa.z)) * 24.0) * 0.006;
+                return core_mesh + grooves;
+            }
+            float sdTailSheath(vec3 p) {
+                vec3 p_tail = p - vec3(0.0, -0.15, 0.0);
+                float r_cyl = 0.13 + sin(p_tail.y * 35.0) * 0.015;
+                float d_cyl = length(p_tail.xz) - r_cyl;
+                return max(d_cyl, abs(p_tail.y + 0.65) - 0.7);
+            }
+            float sdBaseplate(vec3 p) {
+                vec3 p_base = p - vec3(0.0, -1.5, 0.0);
+                float angle = atan(p_base.z, p_base.x);
+                float r_angle = floor(angle / (3.14159265 / 3.0) + 0.5) * (3.14159265 / 3.0);
+                vec2 dir = vec2(cos(r_angle), sin(r_angle));
+                float d_hex = dot(p_base.xz, dir) - 0.28;
+                float prism = max(d_hex, abs(p_base.y) - 0.05);
+                float piercer = length(p_base.xz) - 0.035 * (1.0 - p_base.y * 1.5);
+                piercer = max(piercer, p_base.y - 0.2);
+                piercer = max(piercer, -p_base.y - 0.45);
+                return min(prism, piercer);
+            }
+            float sdGenome(vec3 p) {
+                vec3 p_core = p - vec3(0.0, 0.6, 0.0);
+                float d_sphere = length(p_core) - 0.28;
+                float twist = atan(p_core.z, p_core.x) + p_core.y * 15.0 + uTime * 2.5;
+                d_sphere += sin(twist) * 0.035;
+                return d_sphere;
+            }
+
+            float sdNightmareMonster(vec3 p, float seed) {
+                float walk_speed = 3.5;
+                float body_bob = sin(uTime * walk_speed) * 0.12;
+                float body_pitch = cos(uTime * walk_speed) * 0.08;
+                float body_roll = sin(uTime * walk_speed * 0.5) * 0.05;
+
+                vec3 p_body = p;
+                p_body.y -= body_bob;
+
+                float sp = sin(body_pitch), cp = cos(body_pitch);
+                p_body.yz = mat2(cp, -sp, sp, cp) * p_body.yz;
+
+                float sr = sin(body_roll), cr = cos(body_roll);
+                p_body.xy = mat2(cr, -sr, sr, cr) * p_body.xy;
+
+                float d_capsid = sdCapsid(p_body - vec3(0.0, 0.6, 0.0), 0.55);
+                float d_tail = sdTailSheath(p_body);
+                float d_baseplate = sdBaseplate(p_body);
+
+                return smin(d_capsid, smin(d_tail, d_baseplate, 0.08), 0.08);
+            }
+
+            float sdSpikesAndTeeth(vec3 p) {
+                float walk_speed = 3.5;
+                float body_bob = sin(uTime * walk_speed) * 0.12;
+                float body_pitch = cos(uTime * walk_speed) * 0.08;
+                float body_roll = sin(uTime * walk_speed * 0.5) * 0.05;
+
+                float sp = sin(body_pitch), cp = cos(body_pitch);
+                float sr = sin(body_roll), cr = cos(body_roll);
+
+                float sector = 0.0;
+                vec3 p_leg = foldY6(p, sector);
+
+                float leg_group = step(0.5, mod(floor(sector + 3.05), 2.0));
+                float leg_phase = uTime * walk_speed + leg_group * 3.14159265;
+
+                float lift = max(0.0, sin(leg_phase)) * 0.42; 
+                float swing = cos(leg_phase) * 0.32;          
+
+                vec3 j0_local = vec3(0.28 - 0.03, -1.5, 0.0);
+                vec3 j0 = j0_local;
+                j0.y += body_bob;
+                j0.yz = mat2(cp, -sp, sp, cp) * j0.yz;
+                j0.xy = mat2(cr, -sr, sr, cr) * j0.xy;
+
+                vec3 j1 = vec3(0.7, -1.2 + body_bob + lift * 0.6, swing * 0.25);
+                vec3 j2 = vec3(1.22 + swing * 0.1, -1.8 + body_bob + lift * 0.3, swing * 0.6);
+                vec3 j3 = vec3(1.55 + swing * 0.2, -2.6 + lift, swing * 1.0);
+
+                float d_seg1 = sdCapsuleTapered(p_leg, j0, j1, 0.045, 0.03);
+                float d_seg2 = sdCapsuleTapered(p_leg, j1, j2, 0.03, 0.015);
+                float d_seg3 = sdCapsuleTapered(p_leg, j2, j3, 0.015, 0.003);
+                float d_legs = min(d_seg1, min(d_seg2, d_seg3));
+
+                float node1 = length(p_leg - j1) - 0.05;
+                float node2 = length(p_leg - j2) - 0.04;
+                d_legs = smin(d_legs, min(node1, node2), 0.04);
+
+                return d_legs;
+            }
+
             vec2 map(vec3 p) {
                 float GLOBAL_SCALE = 2.8;
                 p /= GLOBAL_SCALE;
+
+                // Extract dynamic morph scale from the varying scale factor
+                float baseScale = (vType == 3.0) ? 1.35 : 1.0;
+                float morph = (vType == 3.0) ? clamp((vScale - baseScale) / (baseScale * 1.65), 0.0, 1.0) : 0.0;
+                float morphSwell = morph * 0.35; // Fleshy thickness expansion
 
                 float aT = max(0.0, uTime - vAttackStart);
                 float windup = smoothstep(0.0, 0.4, aT) * (1.0 - smoothstep(0.4, 0.5, aT));
@@ -3180,7 +4139,14 @@
                 float spineTwist = sin(t * 0.7) * 0.12 * walkBlend;
 
                 vec3 zp = p;
-                zp.y -= bob;
+                 
+                 // Shearing holographic glitches for the morphing boss
+                 if (uHoloGlitches > 0.01 && morph > 0.01) {
+                     float shear = step(0.95, sin(zp.y * 70.0 + uTime * 50.0)) * sin(zp.y * 140.0 + uTime * 90.0) * 0.16 * uHoloGlitches * morph;
+                     zp.x += shear;
+                 }
+                 
+                 zp.y -= bob;
                 zp.x += sway;
                 zp.xy *= rot(sin(t * 0.7) * 0.1 * walkBlend);
                 zp.xz *= rot(spineTwist); 
@@ -3193,17 +4159,46 @@
                 
                 float sBody = hash11(vSeed + 1.2);
                 float torsoVar = mix(0.95, 1.15, sBody);
-                float pelvis = sdCapsule(pTorso, vec3(-0.07, 0.0, 0.0), vec3(0.07, 0.0, 0.0), 0.12 * torsoVar);
-                float chest = sdCapsule(pTorso, vec3(0.0, 0.2, 0.05), vec3(0.0, 0.45, 0.05), 0.16 * torsoVar);
-                float shoulders = sdCapsule(pTorso, vec3(-0.18, 0.45, 0.05), vec3(0.18, 0.45, 0.05), 0.09 * torsoVar);
+                float pelvis = sdCapsule(pTorso, vec3(-0.07, 0.0, 0.0), vec3(0.07, 0.0, 0.0), (0.12 + morphSwell) * torsoVar);
+                float chest = sdCapsule(pTorso, vec3(0.0, 0.2, 0.05), vec3(0.0, 0.45, 0.05), (0.16 + morphSwell) * torsoVar);
+                float shoulders = sdCapsule(pTorso, vec3(-0.18, 0.45, 0.05), vec3(0.18, 0.45, 0.05), (0.09 + morphSwell * 0.5) * torsoVar);
                 
                 float torso = smin(pelvis, chest, 0.15);
                 torso = smin(torso, shoulders, 0.08);
 
                 if (vType == 1.0) { 
-                    float gut = sdSphere(pTorso - vec3(0.0, 0.15, -0.15), 0.25);
+                    float gut = sdSphere(pTorso - vec3(0.0, 0.15, -0.15), 0.25 + morph * 0.22);
                     torso = smin(torso, gut, 0.15);
                 }
+
+                // Exposed Skeletal Ribcage Cutouts
+                float ribs = 1000.0;
+                for (int ri = 0; ri < 4; ri++) {
+                    float ry = 0.22 + float(ri) * 0.075;
+                    float ribCutout = sdCapsule(pTorso - vec3(0.0, ry, 0.12), vec3(-0.13, 0.0, 0.0), vec3(0.13, 0.0, 0.0), 0.022);
+                    ribs = min(ribs, ribCutout);
+                }
+                torso = max(torso, -ribs); // Hollow ribs subtraction
+
+                // Inner Spine
+                float spineCol = sdCapsule(pTorso - vec3(0.0, 0.25, 0.05), vec3(0.0, -0.1, 0.0), vec3(0.0, 0.2, 0.0), 0.038);
+
+                // Spinal Vertebrae Spikes ( Jutting out of back )
+                float vertebrae = 1000.0;
+                for (int vi = 0; vi < 4; vi++) {
+                    float vy = 0.15 + float(vi) * 0.09;
+                    float vertNode = sdSphere(pTorso - vec3(0.0, vy, -0.09), 0.045 + sin(uTime * 3.0 + float(vi)) * 0.005);
+                    vertebrae = min(vertebrae, vertNode);
+                }
+
+                // Shoulder Spikes
+                vec3 pLSpike = pTorso - vec3(0.18, 0.47, 0.05);
+                pLSpike.xy *= rot(0.65);
+                float spikeL = sdCapsule(pLSpike, vec3(0), vec3(0.0, 0.12 + morph * 0.32, 0.0), 0.032 + morph * 0.015);
+                
+                vec3 pRSpike = pTorso - vec3(-0.18, 0.47, 0.05);
+                pRSpike.xy *= rot(-0.65);
+                float spikeR = sdCapsule(pRSpike, vec3(0), vec3(0.0, 0.12 + morph * 0.32, 0.0), 0.032 + morph * 0.015);
 
                 vec3 pNeck = pTorso - vec3(0.0, 0.55 + smash * 0.1, 0.08);
                 pNeck.yz *= rot(0.3 + twitch + smash * 0.4 + headLoll);
@@ -3213,13 +4208,21 @@
                 
                 vec3 pHead = pNeck - vec3(0.0, 0.2, 0.0);
                 float skull = length(pHead) - 0.11;
-                float jaw = sdCapsule(pHead, vec3(0), vec3(0.0, -0.08, 0.04), 0.08 + (smash * 0.05)); 
+                float jaw = sdCapsule(pHead, vec3(0), vec3(0.0, -0.08, 0.04), 0.08 + (smash * 0.05) + morph * 0.05); 
                 float head = smin(skull, jaw, 0.03);
                 head = smin(head, neck, 0.06);
 
                 vec3 eyeOff = vec3(0.05, 0.0, 0.08);
                 float eye = sdSphere(pHead - eyeOff, 0.03);
                 head = max(head, -(eye * 0.5 + 0.02)); 
+
+                // Hollow Cracked Skull cavity
+                vec3 pSkullCrack = pHead - vec3(0.05, 0.04, -0.03);
+                float skullCrack = sdSphere(pSkullCrack, 0.075);
+                head = max(head, -skullCrack);
+
+                // Exposed organic glowing brain core inside skull crack
+                float brainCore = sdSphere(pSkullCrack, 0.042);
 
                 float sLegs = hash11(vSeed + 4.5);
                 float legLen = mix(0.9, 1.1, sLegs);
@@ -3255,44 +4258,146 @@
                 float sArms = hash11(vSeed + 3.4);
                 float armBaseScale = mix(0.9, 1.1, sArms);
                 float armS = vType == 2.0 ? armBaseScale * 1.5 : armBaseScale; 
+                armS *= (1.0 + morph * 0.45); // Organic arm elongation? armBaseScale * 1.5 : armBaseScale; 
                 
+                // --- ARMS ANIMATION GAIT PHASE FIX (Swings forward correctly) ---
                 vec3 pLArm = pTorso - vec3(0.2, 0.45, 0.05);
                 pLArm.xy *= rot(-0.15); 
-                pLArm.yz *= rot(-1.2 + walkR * 0.7 - smash * 1.5 + windup * 1.0); 
+                pLArm.yz *= rot(-1.2 - walkR * 0.7 - smash * 1.5 + windup * 1.0); 
                 float armL_upper = sdCapsule(pLArm, vec3(0), vec3(0.0, -0.3 * armS, 0.0), 0.06 * armS);
                 
                 vec3 pLForearm = pLArm - vec3(0.0, -0.3 * armS, 0.0);
-                pLForearm.yz *= rot(-0.4 + walkR * 0.4 - smash * 0.5 + windup * 0.5); 
+                pLForearm.yz *= rot(-0.4 - walkR * 0.4 - smash * 0.5 + windup * 0.5); 
                 float armL_lower = sdCapsule(pLForearm, vec3(0), vec3(0.0, -0.3 * armS, 0.0), 0.045 * armS);
                 
                 float armL = smin(armL_upper, armL_lower, 0.03);
 
                 vec3 pRArm = pTorso - vec3(-0.2, 0.45, 0.05);
                 pRArm.xy *= rot(0.1);
-                pRArm.yz *= rot(-0.8 + walkL * 0.7 + twitch * 2.0 - smash * 0.5); 
+                pRArm.yz *= rot(-0.8 - walkL * 0.7 + twitch * 2.0 - smash * 0.5); 
                 float armR_upper = sdCapsule(pRArm, vec3(0), vec3(0.0, -0.3, 0.0), 0.06);
                 
                 vec3 pRForearm = pRArm - vec3(0.0, -0.3, 0.0);
                 pRForearm.xy *= rot(0.4); 
-                pRForearm.yz *= rot(-0.2 + walkL * 0.4);
+                pRForearm.yz *= rot(-0.2 - walkL * 0.4);
                 float armR_lower = sdCapsule(pRForearm, vec3(0), vec3(0.0, -0.3, 0.0), 0.045);
                 
                 float armR = smin(armR_upper, armR_lower, 0.03);
+
+                float arm3 = 1000.0;
+                if (vType == 3.0) {
+                    vec3 pArm3 = pTorso - vec3(0.0, 0.35, -0.15);
+                    pArm3.xz *= rot(sin(uTime * 8.0 + vSeed) * 0.4);
+                    pArm3.yz *= rot(-0.7 + sin(uTime * 6.0) * 0.5 - windup * 1.5);
+                    float arm3_upper = sdCapsule(pArm3, vec3(0), vec3(0.0, -0.28, 0.0), 0.055);
+                    
+                    vec3 pForearm3 = pArm3 - vec3(0.0, -0.28, 0.0);
+                    pForearm3.yz *= rot(-0.5 + sin(uTime * 12.0) * 0.6);
+                    float arm3_lower = sdCapsule(pForearm3, vec3(0), vec3(0.0, -0.28, 0.0), 0.042);
+                    
+                    arm3 = smin(arm3_upper, arm3_lower, 0.03);
+                }
+
+                // Elbow Blades jutting out of joints
+                vec3 pLElbow = pLArm - vec3(0.0, -0.3 * armS, 0.0);
+                pLElbow.yz *= rot(1.2);
+                float elbowL = sdCapsule(pLElbow, vec3(0), vec3(0.0, 0.09, 0.0), 0.025);
+                
+                vec3 pRElbow = pRArm - vec3(0.0, -0.3, 0.0);
+                pRElbow.yz *= rot(1.2);
+                float elbowR = sdCapsule(pRElbow, vec3(0), vec3(0.0, 0.09, 0.0), 0.025);
+
+                // Hand Claws / Talons
+                vec3 pLHand = pLForearm - vec3(0.0, -0.3 * armS, 0.0);
+                float clawsL = 1000.0;
+                for (int c = 0; c < 3; c++) {
+                    vec3 pClaw = pLHand;
+                    pClaw.xz *= rot(-0.3 + float(c) * 0.3);
+                    pClaw.yz *= rot(-0.2 + sin(uTime * 12.0 + float(c)) * 0.1);
+                    float claw = sdCapsule(pClaw, vec3(0), vec3(0.0, -0.09, 0.0), 0.015);
+                    clawsL = min(clawsL, claw);
+                }
+                
+                vec3 pRHand = pRForearm - vec3(0.0, -0.3, 0.0);
+                float clawsR = 1000.0;
+                for (int c = 0; c < 3; c++) {
+                    vec3 pClaw = pRHand;
+                    pClaw.xz *= rot(-0.3 + float(c) * 0.3);
+                    pClaw.yz *= rot(-0.2 + sin(uTime * 12.0 + float(c)) * 0.1);
+                    float claw = sdCapsule(pClaw, vec3(0), vec3(0.0, -0.09, 0.0), 0.015);
+                    clawsR = min(clawsR, claw);
+                }
 
                 float zombie = smin(torso, head, 0.08);
                 zombie = smin(zombie, legL, 0.06);
                 zombie = smin(zombie, legR, 0.06);
                 zombie = smin(zombie, armL, 0.05);
                 zombie = smin(zombie, armR, 0.05);
+                if (vType == 3.0) {
+                    zombie = smin(zombie, arm3, 0.05);
+                }
+
+                // Bone structures collection
+                float bones = spineCol;
+                bones = min(bones, spikeL);
+                bones = min(bones, spikeR);
+                bones = min(bones, elbowL);
+                bones = min(bones, elbowR);
+                bones = min(bones, vertebrae);
+                bones = min(bones, clawsL);
+                bones = min(bones, clawsR);
 
                 // Surface detail noise — lumps, boils, decay
                 float rotDist = sin(zp.x*35.0)*sin(zp.y*35.0)*sin(zp.z*35.0) * 0.006;
                 float boils = sin(zp.x*18.0+vSeed)*sin(zp.y*22.0)*sin(zp.z*15.0) * 0.004;
                 zombie += rotDist + boils;
 
+                // EVOLVED PROCEDURAL NIGHTMARE BOSS SYSTEM
                 vec2 res = vec2(zombie * 0.6, 1.0);
-                res = opU(res, vec2(eye * 0.6, 3.0));
-                
+                res = opU(res, vec2(brainCore * 0.6, 3.0)); // Parasite Eye Core
+                res = opU(res, vec2(eye * 0.6, 3.0));         // Standard Eyes
+                res = opU(res, vec2(bones * 0.6, 4.0));  // Bone / Spikes Material
+
+                if (morph > 0.001) {
+                    // Translate coordinate space locally to lift phage legs perfectly onto ground level (y=0.0)
+                    vec3 zpp = zp;
+                    zpp.y -= 2.6 * morph;
+
+                    // Precompute Phage components using the translated space
+                    float d_capsid = sdCapsid(zpp - vec3(0.0, 0.6, 0.0), 0.55);
+                    float d_tail = sdTailSheath(zpp);
+                    float d_baseplate = sdBaseplate(zpp);
+                    float d_legs = sdSpikesAndTeeth(zpp);
+                    float d_genome = sdGenome(zpp);
+
+                    float d_noncapsid = smin(d_tail, d_baseplate, 0.08);
+                    float d_body = min(d_capsid, min(d_noncapsid, d_legs));
+
+                    if (morph > 0.85) {
+                        // Completely bypass and eliminate all standard zombie geometries/materials
+                        if (d_body < d_genome) {
+                            if (d_legs < d_noncapsid && d_legs < d_capsid) {
+                                res = vec2(d_legs * 0.6, 4.0); // Legs -> Material 4.0 (Carbon-black legs)
+                            } else {
+                                res = vec2(d_body * 0.6, 1.0); // Capsid/Tail/Baseplate -> Material 1.0 (Slate grey)
+                            }
+                        } else {
+                            res = vec2(d_genome * 0.6, 3.0); // Genome -> Material 3.0 (Glowing Green)
+                        }
+                    } else {
+                        // Smoothly transition / morph standard zombie to Phage
+                        float zombiePhage = mix(zombie, d_body, morph);
+                        float bonesPhage = mix(bones, d_legs, morph);
+                        float corePhage = mix(brainCore, d_genome, morph);
+                        float eyePhage = mix(eye, 1000.0, morph); // Fades standard eyes out
+
+                        res = vec2(zombiePhage * 0.6, 1.0);
+                        res = opU(res, vec2(corePhage * 0.6, 3.0));
+                        res = opU(res, vec2(eyePhage * 0.6, 3.0));
+                        res = opU(res, vec2(bonesPhage * 0.6, 4.0));
+                    }
+                }
+
                 res.x *= GLOBAL_SCALE;
                 return res;
             }
@@ -3350,40 +4455,90 @@
                 float dif = (keyDif * 0.7 + fillDif + rim) * ao;
                 dif = max(dif, 0.08); // Never fully black
 
-                // --- Varied Flesh Tones ---
+                // --- Varied Flesh Tones (Grotesque Silent Hill Lava-Gore) ---
                 float sCol = hash11(vSeed + 55.5);
-                vec3 colA = vec3(0.35, 0.06, 0.03); // Meaty Red
-                vec3 colB = vec3(0.12, 0.02, 0.18); // Rotten Purple
-                vec3 colC = vec3(0.25, 0.30, 0.12); // Infected Green
-                vec3 colD = vec3(0.45, 0.35, 0.2);  // Jaundiced Yellow
-                vec3 fleshCol = mix(colA, colB, smoothstep(0.0, 0.33, sCol));
-                fleshCol = mix(fleshCol, colC, smoothstep(0.33, 0.66, sCol));
-                fleshCol = mix(fleshCol, colD, smoothstep(0.66, 1.0, sCol));
+                vec3 colA = vec3(0.38, 0.02, 0.01); // Flayed Meaty Crimson
+                vec3 colB = vec3(0.06, 0.05, 0.05); // Charred Obsidian Black
+                vec3 colC = vec3(0.55, 0.12, 0.0);  // Bubbling Molten Slag
+                vec3 colD = vec3(0.85, 0.28, 0.0);  // Viscous Lava Orange
+                vec3 fleshCol = mix(colA, colB, smoothstep(0.0, 0.35, sCol));
+                fleshCol = mix(fleshCol, colC, smoothstep(0.35, 0.7, sCol));
+                fleshCol = mix(fleshCol, colD, smoothstep(0.7, 1.0, sCol));
 
-                if (vType == 1.0) fleshCol = mix(fleshCol, vec3(0.35, 0.55, 0.08), 0.65);
-                if (vType == 2.0) fleshCol = mix(fleshCol, vec3(0.45, 0.18, 0.08), 0.65);
+                if (vType == 1.0) fleshCol = mix(fleshCol, vec3(0.75, 0.20, 0.0), 0.7); // Puker: acidic lava flesh
+                if (vType == 2.0) fleshCol = mix(fleshCol, vec3(0.90, 0.35, 0.0), 0.85); // Thrower: cracked volcanic crust
+                if (vType == 3.0) fleshCol = mix(fleshCol, vec3(1.00, 0.45, 0.0), 0.95); // Mutant: white-hot volcanic core
 
                 // --- Procedural Skin Detail ---
                 float skinTex = skinNoise(pos * 2.8 + vSeed);
                 fleshCol *= 0.85 + skinTex * 0.3; // Mottled skin
 
-                // Vein network (dark blue-purple under skin)
+                // Vein network (viscous dark red blood channels under skin)
                 float veinMask = veins(pos * 1.5 + vSeed);
-                fleshCol = mix(fleshCol, vec3(0.08, 0.02, 0.12), veinMask * 0.4);
+                fleshCol = mix(fleshCol, vec3(0.12, 0.01, 0.0), veinMask * 0.5);
+  
+                // Bioluminescent glowing pulsing lava veins
+                float veinGlow = smoothstep(0.80, 1.0, veins(pos * 2.2 + vSeed)) * (0.3 + 0.7 * sin(uTime * 5.0 + vSeed * 4.0));
+                vec3 veinCol = vec3(1.0, 0.38, 0.0);
+                fleshCol += veinCol * veinGlow * 1.5;
 
                 // Wound patches (dark red cavities)
                 float woundNoise = skinNoise(pos * 1.2 + vSeed * 3.0);
                 float woundMask = smoothstep(0.75, 0.85, woundNoise);
-                fleshCol = mix(fleshCol, vec3(0.2, 0.0, 0.0), woundMask * 0.6);
+                fleshCol = mix(fleshCol, vec3(0.18, 0.0, 0.0), woundMask * 0.6);
+  
+                // Grotesque peeling skin exposing raw, superheated, bubbling lava muscle tissue
+                float skinPeel = skinNoise(pos * 3.5 + vSeed * 1.5);
+                if (skinPeel > 0.70) {
+                    float magmaBubble = sin(pos.y * 25.0 - uTime * 6.0) * cos(pos.x * 20.0 + uTime * 4.0);
+                    vec3 moltenCore = mix(vec3(0.35, 0.02, 0.0), vec3(1.0, 0.4, 0.0), smoothstep(-0.5, 0.5, magmaBubble));
+                    fleshCol = mix(fleshCol, moltenCore * 2.0, 0.90);
+                }
 
                 // Subsurface scattering approx (warm glow on thin areas)
                 float sss = pow(clamp(dot(rd, keyLight), 0.0, 1.0), 4.0) * 0.15;
                 fleshCol += vec3(0.3, 0.05, 0.02) * sss;
+  
+                // Dynamic volcanic biological swarm morphing coloration
+                float baseScale = (vType == 3.0) ? 1.35 : 1.0;
+                float morph = (vType == 3.0) ? clamp((vScale - baseScale) / (baseScale * 1.65), 0.0, 1.0) : 0.0;
+
+                // Hantavirus hemophilic capillary bleeding (severe hemorrhagic leakage)
+                if (morph > 0.01) {
+                    float capillaries = smoothstep(0.68, 0.75, skinNoise(pos * 6.5 + vSeed)) * (0.4 + 0.6 * sin(uTime * 11.0 + vSeed));
+                    fleshCol = mix(fleshCol, vec3(0.68, 0.01, 0.02) * 1.6, capillaries * morph);
+                }
+
+                if (morph > 0.02) {
+                    vec3 phageCol = mix(vec3(0.14, 0.17, 0.16), vec3(0.08, 0.08, 0.09), smoothstep(0.0, 1.0, pos.y));
+                    fleshCol = mix(fleshCol, phageCol, morph);
+                }
 
                 vec3 col = fleshCol;
-                if(res.y > 2.5) col = vec3(0.9, 1.0, 0.15); // Glowing Eye
-
-                col *= dif;
+                float customDif = dif;
+                if(res.y > 2.5 && res.y < 3.5) {
+                    if (morph > 0.02) {
+                        col = vec3(0.15, 1.25, 0.25) * (1.8 + sin(uTime * 4.0));
+                    } else {
+                        col = vec3(1.5, 0.7, 0.1) * (1.5 + sin(uTime * 15.0));
+                    }
+                    customDif += 1.0;
+                } else if (res.y > 3.5) {
+                    if (morph > 0.02) {
+                        col = vec3(0.06, 0.06, 0.07);
+                    } else {
+                        col = vec3(0.65, 0.55, 0.48);
+                        float boneStain = skinNoise(pos * 5.0 + vSeed);
+                        if (boneStain > 0.68) {
+                            col = mix(col, vec3(0.35, 0.02, 0.01), 0.75);
+                        }
+                        if (pos.y > 1.45) {
+                            col += vec3(0.8, 0.2, 0.0) * 0.3 * (0.5 + 0.5 * sin(uTime * 8.0));
+                        }
+                    }
+                }
+  
+                col *= customDif;
 
                 // Specular (wet flesh sheen)
                 vec3 halfV = normalize(keyLight - rd);
@@ -3394,6 +4549,22 @@
                 float hurt = smoothstep(0.0, 0.5, uTime - vHurtTime) * (1.0 - smoothstep(0.5, 0.8, uTime - vHurtTime));
                 col = mix(col, vec3(1.0, 0.0, 0.0), hurt);
                 
+                // Holographic multi-shader scanning grid lines and chromatic aberrations
+                if (uHoloGlitches > 0.01 && morph > 0.01) {
+                    // Pulsating holographic scan line mesh overlay
+                    float scanline = sin(vUv.y * 360.0 + uTime * 45.0) * 0.45 + 0.55;
+                    vec3 holoColor = mix(vec3(0.0, 0.95, 1.0), vec3(0.9, 0.0, 1.0), sin(uTime * 8.0 + pos.y * 5.0) * 0.5 + 0.5);
+                    col = mix(col, holoColor * scanline * 2.2, uHoloGlitches * morph * 0.85);
+
+                    // Flickering digital grid glitch cells
+                    float gridCell = step(0.985, sin(vUv.x * 200.0) * sin(vUv.y * 200.0 + uTime * 10.0));
+                    col = mix(col, vec3(0.0, 1.8, 1.8), gridCell * uHoloGlitches * morph);
+
+                    // Color dropout chromatic glitch lines
+                    float dropout = step(0.988, sin(uTime * 12.0 + vUv.y * 120.0));
+                    col = mix(col, vec3(0.0), dropout * uHoloGlitches * morph);
+                }
+
                 // Neural Scan Highlight
                 if (uScanActive > 0.5) {
                     float pulse = 0.5 + 0.5 * sin(uTime * 10.0);
@@ -3407,12 +4578,13 @@
                     alphaTest: 0.5
                 });
 
-                zombieMeshes.normal = new THREE.InstancedMesh(zombiePlaneGeo, zombieSDFMat, CONFIG.maxZombies);
-                zombieMeshes.puker = new THREE.InstancedMesh(zombiePlaneGeo, zombieSDFMat, CONFIG.maxZombies);
-                zombieMeshes.thrower = new THREE.InstancedMesh(zombiePlaneGeo, zombieSDFMat, CONFIG.maxZombies);
+                zombieMeshes.normal = new THREE.InstancedMesh(zombiePlaneGeo.clone(), zombieSDFMat, CONFIG.maxZombies);
+                zombieMeshes.puker = new THREE.InstancedMesh(zombiePlaneGeo.clone(), zombieSDFMat, CONFIG.maxZombies);
+                zombieMeshes.thrower = new THREE.InstancedMesh(zombiePlaneGeo.clone(), zombieSDFMat, CONFIG.maxZombies);
+                zombieMeshes.mutant = new THREE.InstancedMesh(zombiePlaneGeo.clone(), zombieSDFMat, CONFIG.maxZombies);
 
                 // Assign attributes for instanced shader control
-                [zombieMeshes.normal, zombieMeshes.puker, zombieMeshes.thrower].forEach((mesh, idx) => {
+                [zombieMeshes.normal, zombieMeshes.puker, zombieMeshes.thrower, zombieMeshes.mutant].forEach((mesh, idx) => {
                     mesh.geometry.setAttribute('aAttackStart', new THREE.InstancedBufferAttribute(new Float32Array(CONFIG.maxZombies).fill(-10.0), 1));
                     mesh.geometry.setAttribute('aHurtTime', new THREE.InstancedBufferAttribute(new Float32Array(CONFIG.maxZombies).fill(-10.0), 1));
                     mesh.geometry.setAttribute('aType', new THREE.InstancedBufferAttribute(new Float32Array(CONFIG.maxZombies).fill(idx), 1));
@@ -3443,6 +4615,7 @@
                     uniform float uTime;
                     uniform float uDamage;
                     uniform float uInert;
+                    uniform vec3 uHiveColor;
 
                     const float MAX_DIST = 40.0;
                     const float SURF_DIST = 0.001;
@@ -3480,38 +4653,90 @@
                         return v;
                     }
 
-                    float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
-                        vec3 pa = p - a, ba = b - a;
-                        float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-                        return length(pa - ba * h) - r;
-                    }
-
                     float getDist(vec3 p) {
+                        // Scale spatial coordinates to make the shape 1.5 times larger in world space
+                        vec3 pOrig = p;
+                        p = pOrig / 1.5;
+                        
                         float t = uTime * 0.8;
                         float globalPulse = sin(uTime * 2.0) * 0.05;
+                        
+                        // Central squirming core blobs
                         vec3 p1 = p + vec3(sin(t), cos(t * 0.5), sin(t * 0.7)) * 1.2;
                         vec3 p2 = p + vec3(sin(t + 2.1), cos(t * 0.4 + 2.1), sin(t * 0.8 + 2.1)) * 1.2;
                         vec3 p3 = p + vec3(sin(t + 4.2), cos(t * 0.6 + 4.2), sin(t * 0.9 + 4.2)) * 1.2;
-                        float d1 = length(p1) - (0.7 + globalPulse);
-                        float d2 = length(p2) - (0.65 + globalPulse);
-                        float d3 = length(p3) - (0.75 + globalPulse);
+                        
+                        float d1 = length(p1) - (0.8 + globalPulse);
+                        float d2 = length(p2) - (0.75 + globalPulse);
+                        float d3 = length(p3) - (0.85 + globalPulse);
+                        
                         float d = smin(d1, d2, 1.0);
                         d = smin(d, d3, 1.0);
-                        float strings = fbm(p * 2.5 + vec3(0, uTime * 0.2, 0)) * 0.25;
+                        
+                        // Visceral stringy details on the body
+                        float strings = fbm(p * 2.5 + vec3(0, uTime * 0.2, 0)) * 0.28;
                         d -= strings;
-                        // Limbs removed to distinguish from the Watcher orb
-
-                        for(int j=0; j<6; j++) {
-                            float fj = float(j);
-                            float dropY = mod(uTime * (1.2 + fj * 0.3), 5.0) - 2.5;
-                            vec3 dropPos = vec3(sin(fj*1.5)*0.8, -dropY, cos(fj*1.5)*0.8);
-                            float drop = length(p - dropPos) - (0.12 - abs(dropY)*0.03);
-                            float trail = length(p.xz - dropPos.xz) - (0.02 * (1.0 - clamp(p.y - dropPos.y, 0.0, 1.0)));
-                            float bloodColumn = max(trail, p.y - dropPos.y); 
-                            d = smin(d, drop, 0.3);
-                            d = smin(d, bloodColumn, 0.2);
+                        
+                        // --- MULTIPLE WRITHING TENDRILS ---
+                        // We add 8 squirming tendrils that reach outwards and downwards, anchoring the nest to the ground!
+                        float tendrilsD = 1000.0;
+                        for (int k = 0; k < 8; k++) {
+                            float fk = float(k);
+                            // Radial angle around the vertical axis
+                            float angle = fk * 0.785; // 2 * PI / 8
+                            
+                            // Tendril direction: pointing outwards and downwards
+                            vec3 tDir = vec3(cos(angle), -0.7, sin(angle));
+                            tDir = normalize(tDir);
+                            
+                            // Transform point along the tendril direction
+                            float distAlong = dot(p, tDir);
+                            vec3 tPerp = p - distAlong * tDir;
+                            
+                            // Writhe/wiggle displacement using time and distance along the tendril
+                            float wiggleAmp = 0.25 * smoothstep(0.0, 3.0, distAlong);
+                            vec3 wiggleOffset = vec3(
+                                sin(distAlong * 3.0 - uTime * 4.0 + fk * 1.5) * wiggleAmp,
+                                cos(distAlong * 2.5 - uTime * 3.5 + fk * 2.0) * wiggleAmp * 0.5,
+                                cos(distAlong * 3.0 - uTime * 4.0 + fk * 1.5) * wiggleAmp
+                            );
+                            
+                            // Tapering radius along the length of the tendril
+                            float tRadius = mix(0.28, 0.05, clamp(distAlong / 4.5, 0.0, 1.0));
+                            
+                            // Distance function for this squirming tendril capsule
+                            float tDist = length(tPerp - wiggleOffset) - tRadius;
+                            // Limit tendril length
+                            float tLen = max(distAlong - 4.5, -distAlong);
+                            float individualTendril = max(tDist, tLen);
+                            
+                            tendrilsD = smin(tendrilsD, individualTendril, 0.3);
                         }
-                        return d;
+                        d = smin(d, tendrilsD, 0.4); // Smooth blend tendrils to core
+
+                        // --- INTENSE GORE: BLOOD CHUNKS & DRIPPING COAT ---
+                        // 8 thick blood dripping columns with variable drip speeds
+                        for(int j=0; j<8; j++) {
+                            float fj = float(j);
+                            float dropSpeed = 1.5 + fj * 0.4;
+                            float dropY = mod(uTime * dropSpeed, 6.0) - 3.0;
+                            // Set coordinates for drips
+                            vec3 dropPos = vec3(sin(fj * 1.3) * 1.2, -dropY, cos(fj * 1.3) * 1.2);
+                            
+                            // Dripping visceral droplet shape
+                            float drop = length(p - dropPos) - (0.16 - abs(dropY) * 0.04);
+                            float trail = length(p.xz - dropPos.xz) - (0.03 * (1.0 - clamp(p.y - dropPos.y, 0.0, 1.0)));
+                            float bloodColumn = max(trail, p.y - dropPos.y);
+                            
+                            d = smin(d, drop, 0.35);
+                            d = smin(d, bloodColumn, 0.25);
+                        }
+                        
+                        // Apply fine-scale surface pustules/bubbles (boils) for extra gross gore aesthetic
+                        float boils = sin(p.x * 12.0) * sin(p.y * 15.0) * sin(p.z * 12.0) * 0.035;
+                        d += boils;
+                        
+                        return d * 1.5;
                     }
 
                     vec3 getNormal(vec3 p) {
@@ -3544,21 +4769,49 @@
                         if(dO < MAX_DIST) {
                             vec3 p = ro + rd * dO;
                             vec3 n = getNormal(p);
-                            vec3 lightPos = vec3(4, 6, -4);
+                            vec3 lightPos = vec3(5.0, 8.0, -5.0);
                             vec3 l = normalize(lightPos - p);
                             float dif = clamp(dot(n, l), 0.0, 1.0);
-                            float spec = pow(clamp(dot(reflect(-l, n), -rd), 0.0, 1.0), 20.0);
+                            
+                            // High specular for an extremely wet, slimy, gory look
+                            float spec = pow(clamp(dot(reflect(-l, n), -rd), 0.0, 1.0), 35.0);
                             float fresnel = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 4.0);
-                            float detail = fbm(p * 5.0 + uTime * 0.1);
-                            vec3 meatColor = mix(vec3(0.5, 0.02, 0.02), vec3(0.1, 0.01, 0.01), detail);
-                            vec3 highlightColor = vec3(1.0, 0.2, 0.2);
-                            color = meatColor * (dif + 0.1);
-                            color += highlightColor * spec * 0.7;
-                            color += vec3(0.8, 0.0, 0.0) * fresnel * 0.6;
-                            float veins = smoothstep(0.45, 0.5, fbm(p * 12.0));
-                            color = mix(color, vec3(0.05, 0.0, 0.0), veins * 0.7);
-                            color *= smoothstep(-0.2, 1.0, dif);
-                            color = mix(color, vec3(0.01, 0.0, 0.0), 1.0 - exp(-0.005 * dO * dO));
+                            
+                            // Fractal noises for various color channels
+                            float detail = fbm(p * 4.0 + uTime * 0.08);
+                            float necroticNoise = fbm(p * 8.0 - vec3(0.0, uTime * 0.05, 0.0));
+                            float fattyNoise = fbm(p * 2.0 + vec3(uTime * 0.03, 0.0, 0.0));
+                            float veinPattern = smoothstep(0.4, 0.55, fbm(p * 10.0 + vec3(0.0, uTime * 0.1, 0.0)));
+                            
+                            // Dynamic color mapping based on uHiveColor (supports red and purple biome variations)
+                            float isPurple = step(0.5, uHiveColor.z); // 1.0 if purple, 0.0 if red
+                            vec3 baseColor = mix(vec3(1.0, 0.1, 0.1), vec3(0.65, 0.1, 0.95), isPurple);
+                            
+                            // Varying shades of biological tissues
+                            vec3 colNecrotic = baseColor * mix(0.03, 0.08, necroticNoise);  // Decay zones (near black-burgundy)
+                            vec3 colDeepBlood = baseColor * mix(0.2, 0.38, detail);         // Deep venous muscle tissue
+                            vec3 colCrimson = baseColor * mix(0.7, 0.95, sin(uTime * 1.5 + p.y) * 0.1 + 0.9); // Arterial wet red
+                            vec3 colFatty = mix(vec3(0.75, 0.45, 0.4), vec3(0.45, 0.3, 0.65), isPurple);      // Fatty yellow-pink zones
+                            vec3 colVeinGlow = mix(vec3(1.0, 0.25, 0.05), vec3(0.85, 0.15, 1.0), isPurple);   // Glowing vein trails
+                            
+                            // Combine shades based on procedural features
+                            // Fatty tissue on raised ridges, necrotic tissue in crevices, crimson everywhere else
+                            vec3 meatColor = mix(colDeepBlood, colCrimson, detail);
+                            meatColor = mix(meatColor, colFatty, smoothstep(0.55, 0.75, fattyNoise));
+                            meatColor = mix(meatColor, colNecrotic, smoothstep(0.48, 0.72, necroticNoise));
+                            
+                            // Wet specular highlights + Fresnel organic rim glow
+                            color = meatColor * (dif + 0.12);
+                            color += mix(colCrimson, vec3(1.0), 0.5) * spec * 0.9; // Shiny wet bloody reflection
+                            color += baseColor * fresnel * 0.7; // Visceral edge glow
+                            
+                            // Dynamic glowing vein map crawling through the tendril flesh
+                            float pulseVein = 0.5 + 0.5 * sin(uTime * 3.5 + p.x * 2.0 + p.y * 3.0);
+                            color = mix(color, colVeinGlow * (1.0 + pulseVein * 0.5), veinPattern * 0.75);
+                            
+                            // Depth-based shadow/fog inside the structure
+                            color *= smoothstep(-0.25, 1.0, dif);
+                            color = mix(color, baseColor * 0.05, 1.0 - exp(-0.005 * dO * dO));
                         } else {
                             color += vec3(0.05, 0.0, 0.0) * fbm(vec3(uv * 2.0, uTime * 0.1));
                             alpha = 0.02;
@@ -3577,16 +4830,24 @@
                     }
                 `;
 
-                const hiveGeo = new THREE.PlaneGeometry(25, 25);
+                const hiveGeo = new THREE.PlaneGeometry(35, 35);
 
-                SPAWN_NODE_POSITIONS.forEach((pos, idx) => {
+                // Reset/populate spawn positions based on map
+                const activePositions = [...SPAWN_NODE_POSITIONS];
+                if (currentMapId === 'desert') {
+                    // Add a special 4th hive for 3-armed developed mutants
+                    activePositions.push({ x: 25, z: -40, isVariable: true });
+                }
+
+                activePositions.forEach((pos, idx) => {
                     const hiveMat = new THREE.ShaderMaterial({
                         vertexShader: hiveVert,
                         fragmentShader: hiveFrag,
                         uniforms: {
                             uTime: { value: 0 },
                             uDamage: { value: 0.0 },
-                            uInert: { value: 1.0 }
+                            uInert: { value: 1.0 },
+                            uHiveColor: { value: pos.isVariable ? new THREE.Vector3(0.6, 0.1, 0.9) : new THREE.Vector3(1.0, 0.2, 0.2) }
                         },
                         transparent: true,
                         side: THREE.DoubleSide
@@ -3594,36 +4855,39 @@
 
                     const hiveMesh = new THREE.Mesh(hiveGeo, hiveMat);
                     const hiveH = TerrainGen.getHeight(pos.x, pos.z);
-                    hiveMesh.position.set(pos.x, hiveH + 5, pos.z);
+                    hiveMesh.position.set(pos.x, hiveH + 6, pos.z);
                     scene.add(hiveMesh);
 
                     // Green glow light
                     // hiveLight removed as requested
-                    const isActive = idx === 0; // Only spawn one hive for Objective 1
+                    const isActive = (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') ? true : (idx === 0);
                     hiveMesh.visible = isActive;
                     spawnNodes.push({
                         x: pos.x, z: pos.z, hp: 500, maxHP: 500,
                         mesh: hiveMesh, light: null, mat: hiveMat,
                         spawnTimer: Math.random() * 2, active: isActive,
-                        respawnTimer: 0, idx: idx
+                        respawnTimer: 0, idx: idx, isVariable: !!pos.isVariable
                     });
                 });
 
-                // --- START OBJECTIVE 1 ---
-                // Move here so spawnNodes is populated
-                currentObjective = new Objective1(scene, player, activeCamera, spawnNodes, () => {
-                    objectivePhase = 2;
-                    // Activate all remaining hives for Objective 2
-                    spawnNodes.forEach(node => {
-                        node.active = true;
-                        if (node.mesh) node.mesh.visible = true;
-                    });
+                // --- START OBJECTIVE 1 (Campaign Only) ---
+                if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
+                    currentObjective = null;
+                } else {
+                    currentObjective = new Objective1(scene, player, activeCamera, spawnNodes, () => {
+                        objectivePhase = 2;
+                        // Activate all remaining hives for Objective 2
+                        spawnNodes.forEach(node => {
+                            node.active = true;
+                            if (node.mesh) node.mesh.visible = true;
+                        });
 
-                    currentObjective = new Objective2(scene, player, activeCamera, spawnNodes, () => {
-                        objectivePhase = 3; // Finished
-                        NeuralConsole.log("ALL_OBJECTIVES_COMPLETED. STAND_BY_FOR_EXTRACTION.", 'sys');
+                        currentObjective = new Objective2(scene, player, activeCamera, spawnNodes, () => {
+                            objectivePhase = 3; // Finished
+                            NeuralConsole.log("ALL_OBJECTIVES_COMPLETED. STAND_BY_FOR_EXTRACTION.", 'sys');
+                        });
                     });
-                });
+                }
 
                 updateFlowField(0, 0);
 
@@ -3792,7 +5056,9 @@
 
         document.addEventListener('mousemove', (e) => {
             if (isFPSMode && document.pointerLockElement === document.body && !isPaused) {
-                const sensitivity = isADS ? 0.0009 : 0.0015;
+                const activeWeapon = inventory[currentWeaponIdx];
+                const baseSens = activeWeapon.id === 'ar' ? 0.0004 : 0.0008; // Ultra-fine control for deep M4 zoom
+                const sensitivity = isADS ? baseSens : 0.0015;
                 // Rotate Player Yaw (left/right)
                 player.rotation.y -= e.movementX * sensitivity;
                 // Rotate Camera Pitch (up/down) — clamped
@@ -4052,7 +5318,7 @@
         window.addEventListener('mousedown', e => {
             if (Date.now() - touchesInfo.lastTouch < 1000) return;
             if (e.target.closest('#ui-layer') || e.target.closest('#pause-overlay')) return;
-            if (isPaused) return;
+            if (isPaused || window.escapismCutscene) return;
 
             if (e.button === 0 && playerHealth > 0 && player) {
                 mouseHeld = true;
@@ -4105,7 +5371,7 @@
         };
 
         function fireWeapon() {
-            if (!player || isPaused) return;
+            if (!player || isPaused || window.escapismCutscene) return;
 
             const weapon = inventory[currentWeaponIdx];
             SFX.triggerFire(weapon.id);
@@ -4159,17 +5425,23 @@
                     const toZombie = new THREE.Vector3(dx, 0, dz).normalize();
                     const dot = meleeDir.dot(toZombie);
                     if (dot < Math.cos(meleeFOV / 2)) continue;
-
                     if (weapon.isAbsorb) {
                         // TENTACLE: Absorb zombie for points + healing
                         const absorbPoints = zHP[zi] * 10;
                         totalKills++;
+                        if (window.PyramidManager) {
+                            window.PyramidManager.registerKill(zPosX[zi], 1.0, zPosZ[zi]);
+                        }
                         zState[zi] = 0;
                         activeZombies--;
+                        // Dynamic Fireball explosion every 10 kills!
+                        if (totalKills % 10 === 0) {
+                            triggerZombieFireball(zPosX[zi], 1.0, zPosZ[zi]);
+                        }
                         // Bonus score
                         survivalTime += absorbPoints * 0.01;
                         // Heal player
-                        playerHealth = Math.min(playerHealth + 5, CONFIG.playerHealth || 100);
+                        playerHealth = Math.min(playerHealth + 5, CONFIG.playerHealth || 200);
                         if (player) player.health = playerHealth;
                         // Absorb particles
                         for (let p = 0; p < 12; p++) {
@@ -4183,10 +5455,14 @@
                             );
                         }
                         // Update hurt time
-                        const hurtTimeAttr = zombieMeshes.normal.geometry.attributes.aHurtTime;
-                        if (hurtTimeAttr && zi < hurtTimeAttr.count) {
-                            hurtTimeAttr.setX(zi, clock.elapsedTime);
-                            hurtTimeAttr.needsUpdate = true;
+                        const zTypeLabel = zType[zi];
+                        const targetMesh = zTypeLabel === 0 ? zombieMeshes.normal : (zTypeLabel === 1 ? zombieMeshes.puker : (zTypeLabel === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                        if (targetMesh) {
+                            const hurtTimeAttr = targetMesh.geometry.attributes.aHurtTime;
+                            if (hurtTimeAttr && zi < hurtTimeAttr.count) {
+                                hurtTimeAttr.setX(zi, clock.elapsedTime);
+                                hurtTimeAttr.needsUpdate = true;
+                            }
                         }
                         break; // Tentacle grabs one at a time
                     } else {
@@ -4201,16 +5477,27 @@
                             );
                         }
                         // Update hurt time
-                        const hurtTimeAttr2 = zombieMeshes.normal.geometry.attributes.aHurtTime;
-                        if (hurtTimeAttr2 && zi < hurtTimeAttr2.count) {
-                            hurtTimeAttr2.setX(zi, clock.elapsedTime);
-                            hurtTimeAttr2.needsUpdate = true;
+                        const zTypeLabel2 = zType[zi];
+                        const targetMesh2 = zTypeLabel2 === 0 ? zombieMeshes.normal : (zTypeLabel2 === 1 ? zombieMeshes.puker : (zTypeLabel2 === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                        if (targetMesh2) {
+                            const hurtTimeAttr2 = targetMesh2.geometry.attributes.aHurtTime;
+                            if (hurtTimeAttr2 && zi < hurtTimeAttr2.count) {
+                                hurtTimeAttr2.setX(zi, clock.elapsedTime);
+                                hurtTimeAttr2.needsUpdate = true;
+                            }
                         }
                         if (zHP[zi] <= 0) {
                             zState[zi] = 0;
                             activeZombies--;
                             totalKills++;
+                            if (window.PyramidManager) {
+                                window.PyramidManager.registerKill(zPosX[zi], 1.0, zPosZ[zi]);
+                            }
                             killFlashTimer = 0.06;
+                            // Dynamic Fireball explosion every 10 kills!
+                            if (totalKills % 10 === 0) {
+                                triggerZombieFireball(zPosX[zi], 1.0, zPosZ[zi]);
+                            }
                         }
                     }
                 }
@@ -4286,16 +5573,27 @@
                     const dot = flatFlameDir.dot(toZ);
                     if (dot < Math.cos(flameFOV / 2)) continue;
                     zHP[zi] = Math.max(0, zHP[zi] - weapon.damage);
-                    const hurtTimeAttr3 = zombieMeshes.normal.geometry.attributes.aHurtTime;
-                    if (hurtTimeAttr3 && zi < hurtTimeAttr3.count) {
-                        hurtTimeAttr3.setX(zi, clock.elapsedTime);
-                        hurtTimeAttr3.needsUpdate = true;
+                    const zTypeLabel3 = zType[zi];
+                    const targetMesh3 = zTypeLabel3 === 0 ? zombieMeshes.normal : (zTypeLabel3 === 1 ? zombieMeshes.puker : (zTypeLabel3 === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                    if (targetMesh3) {
+                        const hurtTimeAttr3 = targetMesh3.geometry.attributes.aHurtTime;
+                        if (hurtTimeAttr3 && zi < hurtTimeAttr3.count) {
+                            hurtTimeAttr3.setX(zi, clock.elapsedTime);
+                            hurtTimeAttr3.needsUpdate = true;
+                        }
                     }
                     if (zHP[zi] <= 0) {
                         zState[zi] = 0;
                         activeZombies--;
                         totalKills++;
+                        if (window.PyramidManager) {
+                            window.PyramidManager.registerKill(zPosX[zi], 1.0, zPosZ[zi]);
+                        }
                         killFlashTimer = 0.06;
+                        // Dynamic Fireball explosion every 10 kills!
+                        if (totalKills % 10 === 0) {
+                            triggerZombieFireball(zPosX[zi], 1.0, zPosZ[zi]);
+                        }
                     }
                 }
 
@@ -4341,7 +5639,7 @@
 
             // Trigger internal mechanical animations if the weapon is procedural
             if (isFPSMode && fpsViewmodel && fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.fire === 'function') {
-                fpsViewmodel.weaponMesh.fire();
+                fpsViewmodel.weaponMesh.fire(isADS);
             } else if (player._lastFiredRight && player.rightWeaponMesh && typeof player.rightWeaponMesh.fire === 'function') {
                 player.rightWeaponMesh.fire();
             } else if (!player._lastFiredRight && player.leftWeaponMesh && typeof player.leftWeaponMesh.fire === 'function') {
@@ -4357,7 +5655,8 @@
             if (muzzleFlashLight) {
                 const wColor = new THREE.Color(weapon.color);
                 muzzleFlashLight.color.copy(wColor);
-                muzzleFlashLight.intensity = flashIntensity[weapon.id] || 8.0;
+                const adsLightMul = isADS ? 1.8 : 1.0; // Boost light in ADS for gorgeous hand-lighting!
+                muzzleFlashLight.intensity = (flashIntensity[weapon.id] || 8.0) * adsLightMul;
                 muzzleFlashLight.position.copy(spawnPos);
             }
 
@@ -4455,7 +5754,7 @@
 
             // --- MULTI-AXIS RECOIL SYSTEM ---
             const rc = recoilCfg[weapon.id] || recoilCfg.pistol;
-            const adsMul = isADS ? 0.0 : 1.0; // ADS removes recoil entirely (Real Machine Precision)
+            const adsMul = isADS ? 0.12 : 1.0; // ADS gives a baby recoil (12% kick) for crisp tactile feel
             recoilOffset = rc.pitchKick * adsMul;
             recoilRotation = -rc.pitchKick * 0.6 * adsMul;
             recoilYaw = (Math.random() - 0.5) * rc.yawDrift * 2 * adsMul;
@@ -4465,11 +5764,11 @@
             currentSpread = Math.min(baseSpread + 0.35, currentSpread + rc.bloomRate * baseSpread);
             spreadRecoveryRate = rc.spreadRecovery;
 
-            // FPS viewmodel recoil
+            // FPS viewmodel recoil (stored in separate accumulators to allow clean ADS sliding!)
             if (isFPSMode && fpsViewmodel) {
-                fpsViewmodel.position.z += rc.zPush * adsMul;
-                fpsViewmodel.rotation.x += rc.pitchKick * 0.8 * adsMul;
-                fpsViewmodel.rotation.y += recoilYaw * 0.5;
+                fpsViewmodel.recoilZ = (fpsViewmodel.recoilZ || 0) + rc.zPush * adsMul;
+                fpsViewmodel.recoilPitch = (fpsViewmodel.recoilPitch || 0) + rc.pitchKick * 0.8 * adsMul;
+                fpsViewmodel.recoilYaw = (fpsViewmodel.recoilYaw || 0) + recoilYaw * 0.5;
             }
 
             // Screen shake scaled by weapon power
@@ -4546,6 +5845,8 @@
         // --- MAIN GAME LOOP ---
         const clock = new THREE.Clock();
         let timeSincePathUpdate = 0;
+        let playerShockwaveVelX = 0;
+        let playerShockwaveVelZ = 0;
 
         // --- AI TRANSLATOR WORKER ---
         const aiTranslator = new Worker('./translator.js');
@@ -4555,6 +5856,8 @@
             hordeWorkerBusy = false;
             const data = e.data;
             const uTime = clock.elapsedTime;
+            window.currentNightmareBossIndex = data.currentNightmareBossIndex;
+            window.nightmareBossTimer = data.nightmareBossTimer;
 
             // 1. Sync State Back
             zPosX.set(data.zPosX);
@@ -4569,20 +5872,36 @@
             zombieMeshes.normal.instanceMatrix.array.set(data.normalMatrixArray);
             zombieMeshes.puker.instanceMatrix.array.set(data.pukerMatrixArray);
             zombieMeshes.thrower.instanceMatrix.array.set(data.throwerMatrixArray);
+            zombieMeshes.mutant.instanceMatrix.array.set(data.mutantMatrixArray);
 
             zombieMeshes.normal.count = data.nIdx;
             zombieMeshes.puker.count = data.pIdx;
             zombieMeshes.thrower.count = data.tIdx;
+            zombieMeshes.mutant.count = data.mIdx;
 
             zombieMeshes.normal.instanceMatrix.needsUpdate = true;
             zombieMeshes.puker.instanceMatrix.needsUpdate = true;
             zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
+            zombieMeshes.mutant.instanceMatrix.needsUpdate = true;
 
             // 3. Process Events
             data.triggerAudio.forEach(evt => {
                 if (evt.type === 'ZOMBIE_ATTACK' && window.SFX) SFX.triggerZombieAttack();
                 if (evt.type === 'SLIME_ATTACK' && window.SFX) SFX.triggerSlime();
             });
+
+            if (data.triggerShockwave && data.currentNightmareBossIndex >= 0) {
+                const bx = zPosX[data.currentNightmareBossIndex];
+                const bz = zPosZ[data.currentNightmareBossIndex];
+                const dx = player.position.x - bx;
+                const dz = player.position.z - bz;
+                const len = Math.sqrt(dx * dx + dz * dz) || 1;
+                playerShockwaveVelX = (dx / len) * 28.0;
+                playerShockwaveVelZ = (dz / len) * 28.0;
+                if (window.VirusSimulation) {
+                    window.VirusSimulation.glitchTimer += 0.8;
+                }
+            }
 
             data.enemyProjectiles.forEach(ep => {
                 if (ep.type === 'rock') {
@@ -4761,21 +6080,25 @@
             }
         };
 
+        const activeSporeParticles = [];
+
         function animate() {
             requestAnimationFrame(animate);
             const rawDelta = Math.min(clock.getDelta(), 0.1);
-            
+
             // --- TACTICAL BULLET-TIME (ADS) ---
             const targetTimeScale = isADS ? 0.65 : 1.0;
             TIME_SCALE += (targetTimeScale - TIME_SCALE) * rawDelta * 10.0;
-            
+
             const delta = rawDelta * TIME_SCALE;
             lastDelta = delta;
 
             if (!player || !zombieMeshes.normal) return;
 
-            if (isPaused || gameOver) {
+            if (isPaused || gameOver || window.escapismCutscene) {
                 renderer.render(scene, activeCamera);
+                // Still render the easter egg overlay during cutscene
+                if (window.easterEgg && window.escapismCutscene) window.easterEgg.update(renderer, delta, clock.elapsedTime);
                 return;
             }
 
@@ -4784,11 +6107,62 @@
                 currentObjective.update(delta, clock.elapsedTime);
             }
 
+            if (window.fogClouds) {
+                window.fogClouds.update(clock.elapsedTime);
+            }
+
+            // Trailing blobs of flesh shedding off the walking boss
+            if (activeSporeParticles.length < 50 && window.currentNightmareBossIndex >= 0 && window.nightmareBossTimer > 0.1) {
+                const bx = zPosX[window.currentNightmareBossIndex];
+                const bz = zPosZ[window.currentNightmareBossIndex];
+                const by = TerrainGen.getMeshHeight(bx, bz) + 1.2;
+                
+                const sGeo = new THREE.SphereGeometry(0.04 + Math.random() * 0.08, 4, 3);
+                const sMat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(0x7a0c05).lerp(new THREE.Color(0x280502), Math.random()),
+                    roughness: 0.9,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                const sMesh = new THREE.Mesh(sGeo, sMat);
+                sMesh.scale.set(1.2 + Math.random() * 0.8, 0.4 + Math.random() * 0.6, 0.8 + Math.random() * 0.6);
+                sMesh.position.set(
+                    bx + (Math.random() - 0.5) * 2.2,
+                    by + (Math.random() - 0.5) * 1.6,
+                    bz + (Math.random() - 0.5) * 2.2
+                );
+                scene.add(sMesh);
+                activeSporeParticles.push({
+                    mesh: sMesh,
+                    velY: 0.8 + Math.random() * 0.9,
+                    velX: (Math.random() - 0.5) * 0.5,
+                    velZ: (Math.random() - 0.5) * 0.5,
+                    life: 2.0 + Math.random() * 2.0
+                });
+            }
+
+            // Update floating spore particles
+            for (let spi = activeSporeParticles.length - 1; spi >= 0; spi--) {
+                const sp = activeSporeParticles[spi];
+                sp.life -= delta;
+                sp.mesh.position.y += sp.velY * delta;
+                sp.mesh.position.x += sp.velX * delta;
+                sp.mesh.position.z += sp.velZ * delta;
+                sp.mesh.material.opacity = Math.max(0.0, sp.life / 4.0);
+                if (sp.life <= 0) {
+                    scene.remove(sp.mesh);
+                    sp.mesh.geometry.dispose();
+                    sp.mesh.material.dispose();
+                    activeSporeParticles.splice(spi, 1);
+                }
+            }
+
             // Hydrogen Scoop Health Regen Upgrade
-            if (window.isHydrogenScoopBuilt && playerHealth > 0 && playerHealth < 100) {
+            if (window.isHydrogenScoopBuilt && playerHealth > 0 && playerHealth < 200) {
                 healthRegenTimer += delta;
                 if (healthRegenTimer >= 1.0) {
-                    playerHealth = Math.min(100, playerHealth + 2); // 2 HP per second
+                    playerHealth = Math.min(200, playerHealth + 2); // 2 HP per second
                     healthRegenTimer = 0;
                 }
             }
@@ -4825,9 +6199,26 @@
             if (typeof TWEEN !== 'undefined') TWEEN.update();
 
 
-            // Update SDF Zombie Shader Time
+            // Update SDF Zombie Shader Time and Holographic Virus parameters
             zombieSDFMat.uniforms.uTime.value = uTime;
             zombieSDFMat.uniforms.uDarkness.value = MainMenu.active ? 1.0 : 0.0;
+
+            if (window.VirusSimulation) {
+                const bIdx = window.currentNightmareBossIndex !== undefined ? window.currentNightmareBossIndex : -1;
+                const bTimer = window.nightmareBossTimer !== undefined ? window.nightmareBossTimer : 0.0;
+                window.VirusSimulation.update(bIdx, bTimer, delta, uTime);
+
+                const glitch = window.VirusSimulation.getGlitchFactor(uTime);
+                zombieSDFMat.uniforms.uHoloGlitches.value = glitch;
+                zombieSDFMat.uniforms.uViralShedding.value = bTimer * 1.5;
+                zombieSDFMat.uniforms.uHoloMorph.value = bTimer;
+
+                // Apply glitchy chromatic aberration / visual shakes to the camera when boss is active
+                if (glitch > 0.05) {
+                    activeCamera.position.x += (Math.random() - 0.5) * glitch * 0.12;
+                    activeCamera.position.y += (Math.random() - 0.5) * glitch * 0.12;
+                }
+            }
 
             // Update Hive Shader Time and Billboard
             spawnNodes.forEach(node => {
@@ -4914,6 +6305,18 @@
                 isGrounded = false;
             }
 
+            // Apply pushback velocities from boss shockwaves
+            if (Math.abs(playerShockwaveVelX) > 0.05 || Math.abs(playerShockwaveVelZ) > 0.05) {
+                const nextPX = player.position.x + playerShockwaveVelX * delta;
+                const nextPZ = player.position.z + playerShockwaveVelZ * delta;
+                if (mapManager.getCostAt(nextPX, nextPZ) !== 255) {
+                    player.position.x = nextPX;
+                    player.position.z = nextPZ;
+                }
+                playerShockwaveVelX *= Math.exp(-6.0 * delta);
+                playerShockwaveVelZ *= Math.exp(-6.0 * delta);
+            }
+
             if (moveX !== 0 || moveZ !== 0) {
                 const moveVec = new THREE.Vector3(moveX, 0, moveZ).normalize().multiplyScalar(CONFIG.playerSpeed * delta * sprintSpeed * (player.speedMultiplier || 1.0));
 
@@ -4948,12 +6351,13 @@
                 const camForward = new THREE.Vector3(0, 0, 0.5).applyQuaternion(player.quaternion);
                 cameraFPS.position.set(
                     player.position.x + camForward.x,
-                    player.position.y + 1.5 + cBob,
+                    player.position.y + 2.4 + cBob,
                     player.position.z + camForward.z
                 );
 
-                // ADS FOV Zoom
-                const targetFOV = isADS ? 22 : 32;
+                // ADS FOV Zoom (Assault Rifle gets a deep, precision-magnified 14-degree optical zoom!)
+                const activeWeapon = inventory[currentWeaponIdx];
+                const targetFOV = isADS ? (activeWeapon.id === 'ar' ? 14 : 20) : 32;
                 cameraFPS.fov += (targetFOV - cameraFPS.fov) * delta * 10.0;
                 cameraFPS.updateProjectionMatrix();
 
@@ -4979,9 +6383,8 @@
             if (window.companionOrb) window.companionOrb.update(delta, uTime);
 
             // Update Water Shader
-            if (window.waterMat) {
-                window.waterMat.uniforms.uTime.value = uTime;
-                window.waterMat.uniforms.uPlayerPos.value.copy(player.position);
+            if (window.toxicWater) {
+                window.toxicWater.update(uTime, player.position);
             }
 
             // Muzzle Flash Decay
@@ -5009,7 +6412,7 @@
                 const elT = clock.elapsedTime;
 
                 // Movement bob — more aggressive with lateral tilt
-                const stabilityMul = isADS ? 0.35 : 1.0;
+                const stabilityMul = isADS ? 0.0 : 1.0;
                 const bobX = Math.sin(weaponBobPhase) * 0.025 * moveIntensity * stabilityMul;
                 const bobY = Math.abs(Math.cos(weaponBobPhase * 2.0)) * 0.02 * moveIntensity * stabilityMul;
                 const bobTilt = Math.sin(weaponBobPhase) * 0.008 * moveIntensity * stabilityMul; // Lateral tilt during walk
@@ -5020,45 +6423,152 @@
                 const idleY = Math.sin(elT * 0.8) * Math.cos(elT * 0.5) * 0.002 * idleIntensity * stabilityMul;
                 const idleRot = Math.sin(elT * 0.6) * 0.003 * idleIntensity * stabilityMul;
 
-                // Recoil recovery — weapon-specific damping
+                // Recoil recovery
                 const weapon = inventory[currentWeaponIdx];
                 const rc = recoilCfg[weapon.id] || recoilCfg.pistol;
                 const recoveryFactor = Math.pow(0.001, delta * (rc.recovery / 15));
-                fpsViewmodel.position.z *= recoveryFactor;
-                fpsViewmodel.rotation.x *= recoveryFactor;
-                fpsViewmodel.rotation.y *= Math.pow(0.001, delta * 1.5); // Yaw recoil recovery
+                fpsViewmodel.recoilZ = (fpsViewmodel.recoilZ || 0) * recoveryFactor;
+                fpsViewmodel.recoilPitch = (fpsViewmodel.recoilPitch || 0) * recoveryFactor;
+                fpsViewmodel.recoilYaw = (fpsViewmodel.recoilYaw || 0) * Math.pow(0.001, delta * 1.5); // Yaw recoil recovery
 
-                // ADS position — weapon pulls toward center of screen
+                // ADS position — weapon pulls toward center of screen and slides closer to the player's face on Z!
                 const adsCfg = fpsViewmodel.adsConfig || { x: 0.05, y: -0.05 };
                 const adsTargetX = isADS ? -adsCfg.x : 0.05;
-                const adsTargetY = isADS ? -adsCfg.y : -0.05;
+                const adsTargetY = isADS ? (-adsCfg.y - 0.05) : -0.05; // Lowered gun slightly in ADS mode so sights are comfortably centered
+
+                // Dynamic forward slide on Z brings the optics window right up to the camera face!
+                const adsTargetZ = isADS ? (weapon.id === 'ar' ? 0.38 : 0.46) : 0.0;
+
                 const adsLerp = isADS ? 12.0 : 8.0;
 
                 // Combine Bob + Idle Sway + ADS
                 const finalX = bobX + idleX;
                 const finalY = bobY + idleY;
-                fpsViewmodel.position.x += (finalX + adsTargetX - fpsViewmodel.position.x) * adsLerp * delta;
-                fpsViewmodel.position.y += (finalY + adsTargetY - fpsViewmodel.position.y) * adsLerp * delta;
+
+                // Initialize target buffers if not existing
+                if (fpsViewmodel.targetX === undefined) fpsViewmodel.targetX = fpsViewmodel.position.x;
+                if (fpsViewmodel.targetY === undefined) fpsViewmodel.targetY = fpsViewmodel.position.y;
+                if (fpsViewmodel.targetZ === undefined) fpsViewmodel.targetZ = fpsViewmodel.position.z;
+
+                fpsViewmodel.targetX += (finalX + adsTargetX - fpsViewmodel.targetX) * adsLerp * delta;
+                fpsViewmodel.targetY += (finalY + adsTargetY - fpsViewmodel.targetY) * adsLerp * delta;
+                fpsViewmodel.targetZ += (adsTargetZ - fpsViewmodel.targetZ) * adsLerp * delta;
+
+                // Apply target coordinates combined with the separate recoil offsets!
+                fpsViewmodel.position.x = fpsViewmodel.targetX;
+                fpsViewmodel.position.y = fpsViewmodel.targetY;
+                fpsViewmodel.position.z = fpsViewmodel.targetZ + fpsViewmodel.recoilZ;
+
+                // Combined rotations (recoil impulses on Pitch/Yaw, bob/sway tilts on Roll)
+                fpsViewmodel.rotation.x = fpsViewmodel.recoilPitch;
+                fpsViewmodel.rotation.y = fpsViewmodel.recoilYaw;
                 fpsViewmodel.rotation.z = bobTilt + idleRot;
 
-                // Update holographic sight opacity
+                // Update holographic sight uniforms & morphing reticle
+                if (fpsViewmodel.holoMaterial) {
+                    const targetADS = isADS ? 1.0 : 0.08; // subtle projection in hipfire, full glow in ADS
+                    fpsViewmodel.holoMaterial.uniforms.uADS.value += (targetADS - fpsViewmodel.holoMaterial.uniforms.uADS.value) * delta * 15.0;
+                    fpsViewmodel.holoMaterial.uniforms.uTime.value = uTime;
+
+                    // Increment reticle type index every 3.5 seconds!
+                    if (fpsViewmodel.reticleTimer === undefined) fpsViewmodel.reticleTimer = 0;
+                    if (fpsViewmodel.reticleMode === undefined) fpsViewmodel.reticleMode = 0;
+                    if (fpsViewmodel.reticleGlitch === undefined) fpsViewmodel.reticleGlitch = 0;
+
+                    fpsViewmodel.reticleTimer += delta;
+                    if (fpsViewmodel.reticleTimer > 3.5) {
+                        fpsViewmodel.reticleTimer = 0;
+                        fpsViewmodel.reticleMode = (fpsViewmodel.reticleMode + 1) % 4; // 4 distinct states
+                        fpsViewmodel.reticleGlitch = 1.0; // Trigger cyber-glitch transition
+                    }
+                    if (fpsViewmodel.reticleGlitch > 0) {
+                        fpsViewmodel.reticleGlitch -= delta * 3.0; // quickly decay glitch
+                    }
+
+                    if (fpsViewmodel.holoMaterial.uniforms.uMode) {
+                        fpsViewmodel.holoMaterial.uniforms.uMode.value = fpsViewmodel.reticleMode;
+                    }
+                    if (fpsViewmodel.holoMaterial.uniforms.uGlitch) {
+                        fpsViewmodel.holoMaterial.uniforms.uGlitch.value = Math.max(0, fpsViewmodel.reticleGlitch);
+                    }
+                }
                 if (fpsViewmodel.adsRing) {
                     const targetOpacity = isADS ? 0.8 : 0.0;
                     fpsViewmodel.adsRing.opacity += (targetOpacity - fpsViewmodel.adsRing.opacity) * delta * 15.0;
+                }
+
+                // Animate floating holographic side rings for the Assault Rifle
+                if (fpsViewmodel.sideHoloL && fpsViewmodel.sideHoloR) {
+                    fpsViewmodel.sideHoloL.rotation.z += delta * 2.0;
+                    fpsViewmodel.sideHoloR.rotation.z -= delta * 2.5;
+
+                    const targetSideOpacity = isADS ? 0.75 : 0.20;
+                    fpsViewmodel.sideHoloL.material.opacity += (targetSideOpacity - fpsViewmodel.sideHoloL.material.opacity) * delta * 12.0;
+                    fpsViewmodel.sideHoloR.material.opacity += (targetSideOpacity - fpsViewmodel.sideHoloR.material.opacity) * delta * 12.0;
+
+                    const sideScale = 1.0 + 0.12 * Math.sin(uTime * 8.0) * (isADS ? 1.0 : 0.0);
+                    fpsViewmodel.sideHoloL.scale.setScalar(sideScale);
+                    fpsViewmodel.sideHoloR.scale.setScalar(sideScale);
                 }
 
                 // Update synaptic armor on viewmodel
                 if (fpsViewmodel.synapticMaterials) {
                     fpsViewmodel.synapticMaterials.forEach(m => {
                         m.uniforms.uTime.value = uTime;
-                        m.uniforms.uHealthPct.value = playerHealth / 100;
+                        m.uniforms.uHealthPct.value = playerHealth / 200;
                         m.uniforms.uDamagePulse.value = player.armorMat ? player.armorMat.uniforms.uDamagePulse.value : 0;
                     });
                 }
 
-                // Update procedural weapon internal states
+                // Update FPS wrist micro-display
+                if (fpsViewmodel.wristHUDMaterial) {
+                    fpsViewmodel.wristHUDMaterial.uniforms.uTime.value = uTime;
+                    fpsViewmodel.wristHUDMaterial.uniforms.uHealthPct.value = playerHealth / 200;
+                }
+
+                // Update FPS status LEDs (health-reactive)
+                const fpsHPct = playerHealth / 200;
+                const fpsLedColor = fpsHPct > 0.6 ? 0x00ff44 : (fpsHPct > 0.3 ? 0xffaa00 : 0xff2200);
+                const fpsLedPulse = 0.7 + Math.sin(uTime * 4.0) * 0.3;
+                if (fpsViewmodel.fpsStatusLED) {
+                    fpsViewmodel.fpsStatusLED.material.color.setHex(fpsLedColor);
+                    fpsViewmodel.fpsStatusLED.scale.setScalar(fpsLedPulse);
+                }
+                if (fpsViewmodel.fpsShoulderLED) {
+                    fpsViewmodel.fpsShoulderLED.material.color.setHex(fpsLedColor);
+                    fpsViewmodel.fpsShoulderLED.scale.setScalar(fpsLedPulse);
+                }
+
+                // Global weapon mesh sync for manipulator tip binding
+                window.activeWeaponMesh = fpsViewmodel.weaponMesh;
+
+                // Update procedural weapon internal states FIRST (bolt cycling, etc.)
                 if (fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.update === 'function') {
                     fpsViewmodel.weaponMesh.update(delta);
+                }
+
+                // Force-propagate world matrices BEFORE manipulator reads grip anchors
+                // This eliminates the 1-frame lag that causes finger whipping!
+                fpsViewmodel.updateMatrixWorld(true);
+
+                // Update SDF Manipulator Arm position, rotation, and scale dynamically to grip each weapon model perfectly!
+                if (fpsViewmodel.manipulator && typeof fpsViewmodel.manipulator.update === 'function') {
+                    const manipCfg = {
+                        pistol: { px: 0.46, py: -0.22, pz: -1.25, rx: -Math.PI / 2, ry: 0, rz: -0.05, s: 0.38 },
+                        ar: { px: 0.37, py: -0.20, pz: -0.92, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                        shotgun: { px: 0.40, py: -0.22, pz: -1.02, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                        railgun: { px: 0.37, py: -0.18, pz: -0.92, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                        flare: { px: 0.37, py: -0.22, pz: -0.82, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                        singular: { px: 0.37, py: -0.18, pz: -0.92, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                        flame: { px: 0.37, py: -0.22, pz: -0.82, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                    };
+                    const mc = manipCfg[weapon.id] || { px: 0.28, py: -0.20, pz: -0.6, rx: -Math.PI / 2, ry: 0, rz: -0.15, s: 0.55 };
+
+                    fpsViewmodel.manipulator.position.set(mc.px, mc.py, mc.pz);
+                    fpsViewmodel.manipulator.rotation.set(mc.rx, mc.ry, mc.rz);
+                    fpsViewmodel.manipulator.scale.set(mc.s, mc.s, mc.s);
+
+                    fpsViewmodel.manipulator.update(uTime, delta, mouseHeld, isADS);
                 }
             } else if (player) {
                 // Update ISO weapons
@@ -5078,7 +6588,7 @@
                 const moveSpreadPenalty = (moveX !== 0 || moveZ !== 0) ? 4 : 0;
                 const bloomPx = Math.min(20, currentSpread * 80 + moveSpreadPenalty);
                 crosshairEl.style.setProperty('--spread', bloomPx + 'px');
-                
+
                 // Hide crosshair when in ADS for "Real ADS" feel
                 const targetOpacity = isADS ? '0' : '1';
                 crosshairEl.style.opacity = targetOpacity;
@@ -5199,7 +6709,8 @@
                 node.spawnTimer += delta;
                 if (node.spawnTimer > spawnRate && spawnedZombies < CONFIG.maxZombies) {
                     node.spawnTimer = 0;
-                    if (spawnZombie(node.x, node.z)) {
+                    const forced = node.isVariable ? 3 : -1;
+                    if (spawnZombie(node.x, node.z, forced)) {
                         // Handled by SDFGUI
                     }
                 }
@@ -5244,7 +6755,8 @@
                         gridSize: CONFIG.gridSize,
                         cellSize: CONFIG.cellSize,
                         zombieSpeed: CONFIG.zombieSpeed,
-                        maxZombies: CONFIG.maxZombies
+                        maxZombies: CONFIG.maxZombies,
+                        mapId: window.GAME_START_CONFIG ? window.GAME_START_CONFIG.mapId : 'forest'
                     },
                     zState, zPosX, zPosZ, zRotY, zType, zBehavior, zSpeedMul, zStateTimer, zCooldown, zHP
                 });
@@ -5452,7 +6964,7 @@
                     if (!node.active || objectivePhase < 2) continue;
                     const ndx = node.x - b.mesh.position.x;
                     const ndz = node.z - b.mesh.position.z;
-                    if (ndx * ndx + ndz * ndz < 10.0) {
+                    if (ndx * ndx + ndz * ndz < 25.0) {
                         node.hp -= b.damage;
 
                         // Hitmarkers & Damage Numbers
@@ -5510,6 +7022,17 @@
                         zHP[j] = Math.max(0, zHP[j] - finalDmg);
                         hitCrosshair();
 
+                        // Visual flash on hit
+                        const zTypeLabelBullet = zType[j];
+                        const targetMeshBullet = zTypeLabelBullet === 0 ? zombieMeshes.normal : (zTypeLabelBullet === 1 ? zombieMeshes.puker : (zTypeLabelBullet === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                        if (targetMeshBullet) {
+                            const hurtTimeAttrBullet = targetMeshBullet.geometry.attributes.aHurtTime;
+                            if (hurtTimeAttrBullet && j < hurtTimeAttrBullet.count) {
+                                hurtTimeAttrBullet.setX(j, clock.elapsedTime);
+                                hurtTimeAttrBullet.needsUpdate = true;
+                            }
+                        }
+
                         const hitX = b.mesh.position.x;
                         const hitY = b.mesh.position.y || 1.0;
                         const hitZ = b.mesh.position.z;
@@ -5535,6 +7058,9 @@
                             zState[j] = 0;
                             activeZombies--;
                             totalKills++;
+                            if (window.PyramidManager) {
+                                window.PyramidManager.registerKill(zPosX[j], 1.0, zPosZ[j]);
+                            }
 
                             // Hitmarker — KILL confirmed
                             showHitmarker(true);
@@ -5545,9 +7071,14 @@
                                 const zTypeLabel = zType[j] === 0 ? 'normal' : (zType[j] === 1 ? 'puker' : 'thrower');
                                 window.goreSystem.spawnDeath(new THREE.Vector3(hitX, hitY, hitZ), zTypeLabel);
                             }
-                            
+
                             if (isFPSMode) screenShakeIntensity = Math.max(screenShakeIntensity, 0.015);
                             killFlashTimer = 0.05;
+
+                            // Dynamic Fireball explosion every 10 kills!
+                            if (totalKills % 10 === 0) {
+                                triggerZombieFireball(zPosX[j], 1.0, zPosZ[j]);
+                            }
 
                             // --- AR PENETRATION: bullet continues through killed target ---
                             if (b.weaponId === 'ar' && b.life <= 0) {
@@ -5586,25 +7117,38 @@
             // 6. Weapon Drops Logic
             for (let i = weaponDrops.length - 1; i >= 0; i--) {
                 const drop = weaponDrops[i];
-                drop.mesh.rotation.y += delta;
+                drop.mesh.rotation.y += delta * 2.0; // Spin pickups dynamically
 
                 const dx = player.position.x - drop.mesh.position.x;
                 const dz = player.position.z - drop.mesh.position.z;
                 if (dx * dx + dz * dz < 2.25) {
                     const wId = drop.type;
-                    const wCfg = weaponsCfg[wId];
 
-                    let existing = inventory.find(w => w.id === wId);
-                    if (existing) {
-                        existing.ammo += wCfg.maxAmmo;
+                    if (wId === 'health') {
+                        playerHealth = Math.min(CONFIG.playerHealth || 200, playerHealth + 50);
+                        if (player) player.health = playerHealth;
+                        NeuralConsole.log(`0x00B1: HEALTH_PACK_ACQUIRED: [+50 HP].`, 'sys');
+                    } else if (wId === 'ammo') {
+                        inventory.forEach(w => {
+                            if (w.maxAmmo) w.ammo = Math.min(w.ammo + Math.floor(w.maxAmmo / 2), w.maxAmmo * 2);
+                        });
+                        updateWeaponUI();
+                        NeuralConsole.log(`0x00B2: AMMUNITION_RESTORED.`, 'sys');
                     } else {
-                        inventory.push({ ...wCfg, ammo: wCfg.maxAmmo });
+                        const wCfg = weaponsCfg[wId];
+
+                        let existing = inventory.find(w => w.id === wId);
+                        if (existing) {
+                            existing.ammo += wCfg.maxAmmo;
+                        } else {
+                            inventory.push({ ...wCfg, ammo: wCfg.maxAmmo });
+                        }
+
+                        currentWeaponIdx = inventory.findIndex(w => w.id === wId);
+                        updateWeaponUI();
+
+                        NeuralConsole.log(`0x00A1: NEW_HARDWARE_INTERFACE: [${wCfg.name.toUpperCase()}]. SYNCING...`, 'res');
                     }
-
-                    currentWeaponIdx = inventory.findIndex(w => w.id === wId);
-                    updateWeaponUI();
-
-                    NeuralConsole.log(`0x00A1: NEW_HARDWARE_INTERFACE: [${wCfg.name.toUpperCase()}]. SYNCING...`, 'res');
 
                     scene.remove(drop.mesh);
                     weaponDrops.splice(i, 1);
@@ -5621,7 +7165,11 @@
                 let objCount = '0/0';
                 let objProg = 0;
 
-                if (currentObjective) {
+                if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
+                    objName = window.GAME_START_CONFIG.mapId === 'desert' ? 'DESERT EXPANSE SURVIVAL' : 'HIVE SWARM SURVIVAL';
+                    objCount = 'INFINITE';
+                    objProg = 0.5 + Math.sin(clock.elapsedTime * 0.5) * 0.1; // Pulsing middle bar
+                } else if (currentObjective) {
                     if (objectivePhase === 1) {
                         objName = 'HYDROGEN SCOOP ASSEMBLY';
                         objProg = (currentObjective.partsCollected || 0) / 3;
@@ -5655,6 +7203,27 @@
                     objectiveProgress: objProg,
                     objectiveCount: objCount
                 });
+            }
+
+            if (window.PyramidManager) {
+                window.PyramidManager.update(delta, uTime);
+            }
+
+            // Full-screen simulation Glitch Tearing filter FX
+            if (window.VirusSimulation) {
+                const gf = window.VirusSimulation.getGlitchFactor(clock.elapsedTime);
+                const dom = renderer.domElement;
+                if (gf > 0.04) {
+                    const skew = (Math.random() - 0.5) * gf * 18.0;
+                    const shiftX = (Math.random() - 0.5) * gf * 24.0;
+                    const shiftY = (Math.random() - 0.5) * gf * 24.0;
+                    const hue = Math.floor((Math.random() - 0.5) * gf * 140);
+                    dom.style.transform = `skewX(${skew}deg) translate(${shiftX}px, ${shiftY}px)`;
+                    dom.style.filter = `hue-rotate(${hue}deg) brightness(${1.0 + gf * 0.45}) contrast(${1.0 + gf * 0.55}) saturate(${1.0 + gf * 0.3})`;
+                } else {
+                    dom.style.transform = '';
+                    dom.style.filter = '';
+                }
             }
 
             renderer.render(scene, activeCamera);

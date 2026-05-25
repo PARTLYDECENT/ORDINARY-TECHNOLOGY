@@ -1,7 +1,10 @@
 // translator.js
 // Dedicated Web Worker to offload Horde AI, Flowfield following, and Matrix computation from the main thread.
+self.importScripts('./behaviours.js', './brains.js');
 
 // --- Terrain FBM Map Logic (Copied from terrain.js for independent worker execution) ---
+let currentMapId = 'forest';
+
 const TerrainGen = {
     _glsl_mod289: function (x) { return x - Math.floor(x * (1.0 / 289.0)) * 289.0; },
     _glsl_permute: function (x) { return this._glsl_mod289(((x * 34.0) + 1.0) * x); },
@@ -67,7 +70,22 @@ const TerrainGen = {
             m2 * (a0_z * x12_z + h_z * x12_w)
         );
     },
+    getDesertDuneHeight: function (x, z) {
+        let waveX = Math.sin(x * 0.007 + Math.sin(z * 0.003) * 2.0);
+        let duneHeight = Math.pow(Math.abs(waveX * 0.5 + 0.5), 1.6) * 11.0 - 2.5;
+        let waveY = Math.cos(z * 0.005 + Math.cos(x * 0.004) * 1.5);
+        duneHeight += waveY * 2.5;
+        let ripple = this.__snoise(x * 0.08, z * 0.08) * 0.4;
+        return duneHeight + ripple;
+    },
     getHeight: function (x, z) {
+        if (currentMapId === 'desert') {
+            return this.getDesertDuneHeight(x, z);
+        }
+        if (currentMapId === 'facility') {
+            return 0.0; // Facility map is visually flat
+        }
+
         let v = 0.0;
         let a = 0.5;
         let px = x * 0.005;
@@ -119,6 +137,17 @@ function getSpatialGridKey(x, z) {
     return `${Math.floor(x / s)}_${Math.floor(z / s)}`;
 }
 
+// --- Player Tracking for Intercept Paths ---
+let lastPlayerX = 0;
+let lastPlayerZ = 0;
+let playerVelX = 0;
+let playerVelZ = 0;
+let playerSpeed = 0;
+
+// --- Single Active Nightmare Boss System ---
+let currentNightmareBossIndex = -1;
+let nightmareBossTimer = 0.0;
+
 // --- Worker Message Listener ---
 self.onmessage = function (e) {
     const data = e.data;
@@ -127,9 +156,28 @@ self.onmessage = function (e) {
     const elapsedTime = data.elapsedTime;
     const px = data.playerPos.x;
     const pz = data.playerPos.z;
+    const config = data.config || {};
+
+    if (lastPlayerX !== 0 || lastPlayerZ !== 0) {
+        const invDt = 1.0 / (delta || 0.016);
+        playerVelX = (px - lastPlayerX) * invDt;
+        playerVelZ = (pz - lastPlayerZ) * invDt;
+        playerSpeed = Math.sqrt(playerVelX * playerVelX + playerVelZ * playerVelZ);
+        if (playerSpeed > 30.0) { // Clamp teleports/spikes
+            playerVelX = 0; playerVelZ = 0; playerSpeed = 0;
+        }
+    }
+    lastPlayerX = px;
+    lastPlayerZ = pz;
+
+    // Build dynamic config flags for brain awareness
+    config.isRunning = playerSpeed > 3.2;
+
     const vfX = data.vectorFieldX;
     const vfZ = data.vectorFieldZ;
-    const config = data.config;
+    if (config.mapId) {
+        currentMapId = config.mapId;
+    }
 
     // Arrays representing state
     const zState = data.zState;
@@ -143,13 +191,45 @@ self.onmessage = function (e) {
     const zCooldown = data.zCooldown;
     const zHP = data.zHP;
 
+    // --- Single Nightmare Boss Election System ---
+    let currentBossAlive = false;
+    if (currentNightmareBossIndex >= 0 && currentNightmareBossIndex < data.spawnedZombies) {
+        if (zState[currentNightmareBossIndex] === 1 && zHP[currentNightmareBossIndex] > 0) {
+            currentBossAlive = true;
+        }
+    }
+    if (!currentBossAlive) {
+        currentNightmareBossIndex = -1;
+        nightmareBossTimer = 0.0;
+        let candidates = [];
+        for (let j = 0; j < data.spawnedZombies; j++) {
+            if (zState[j] === 1 && zHP[j] > 0) {
+                if (zType[j] === 3) candidates.push(j);
+            }
+        }
+        if (candidates.length === 0) {
+            for (let j = 0; j < data.spawnedZombies; j++) {
+                if (zState[j] === 1 && zHP[j] > 0) candidates.push(j);
+            }
+        }
+        if (candidates.length > 0) {
+            currentNightmareBossIndex = candidates[0];
+        }
+    }
+    if (currentNightmareBossIndex >= 0) {
+        nightmareBossTimer = Math.min(1.0, nightmareBossTimer + delta * 0.45);
+    } else {
+        nightmareBossTimer = 0.0;
+    }
+
     // Output objects
     let frameDamage = 0;
+    let triggerShockwave = false;
     const enemyProjectiles = [];
     const triggerAudio = [];
 
     // Track instances for matrix population
-    let nIdx = 0, pIdx = 0, tIdx = 0;
+    let nIdx = 0, pIdx = 0, tIdx = 0, mIdx = 0;
 
     gridCells.clear();
 
@@ -181,6 +261,7 @@ self.onmessage = function (e) {
     const normalMatrixArray = new Float32Array(config.maxZombies * 16);
     const pukerMatrixArray = new Float32Array(config.maxZombies * 16);
     const throwerMatrixArray = new Float32Array(config.maxZombies * 16);
+    const mutantMatrixArray = new Float32Array(config.maxZombies * 16);
 
     for (let i = 0; i < data.spawnedZombies; i++) {
         if (zState[i] === 0) continue;
@@ -212,11 +293,170 @@ self.onmessage = function (e) {
 
         const type = zType[i];
         const behavior = zBehavior[i];
-        let speedMul = zSpeedMul[i];
         zStateTimer[i] += delta;
 
-        // --- TYPE-SPECIFIC BEHAVIOR ---
-        if (type === 1) { // PUKER
+        // 1. HORDE INTELLECT & DECISION BRAIN
+        const brain = ZombieBrain.think(
+            i, zx, zz, px, pz, distToPlayer, delta, elapsedTime, config,
+            zHP[i], type, behavior, zStateTimer[i]
+        );
+        zBehavior[i] = brain.behavior;
+        zStateTimer[i] = brain.stateTimer;
+        let speedMul = zSpeedMul[i];
+
+        // --- EVOLVED SWARM BEHAVIOR: DYNAMIC BIOLOGICAL MORPHING ---
+        // Exactly one elected zombie undergoes the horrifying procedural nightmare morph at a time
+        const isBoss = (i === currentNightmareBossIndex);
+        const morph = (isBoss && type === 3) ? nightmareBossTimer : 0.0;
+
+        // Glitch Infection Aura: Find if this normal zombie is within the boss's glitched simulation range (18 units)
+        let isGlitchedSwarmed = false;
+        let glitchSwarmFactor = 0.0;
+        if (currentNightmareBossIndex >= 0 && !isBoss) {
+            const bx = zPosX[currentNightmareBossIndex];
+            const bz = zPosZ[currentNightmareBossIndex];
+            const dx = zx - bx;
+            const dz = zz - bz;
+            const distToBoss = Math.sqrt(dx * dx + dz * dz) || 1;
+            if (distToBoss < 18.0) {
+                isGlitchedSwarmed = true;
+                glitchSwarmFactor = (1.0 - (distToBoss / 18.0)) * nightmareBossTimer;
+            }
+        }
+ 
+        // Reach scale based on physical size growth
+        const baseReach = (type === 3) ? 1.6 : 1.5;
+        // The Boss expands its reach significantly as scythes and tendrils lash out
+        const reachFactor = isBoss ? 1.75 : 0.0;
+        const reach = baseReach * (1.0 + morph * reachFactor);
+ 
+        // Apply swarming organic movement (weaving slither path when morphed)
+        if (isBoss && morph > 0.05) {
+            // Boss has wilder, faster wriggling slither movements
+            const slitherSpeed = 10.0;
+            const slitherAmp = 0.68;
+            const slither = Math.sin(elapsedTime * slitherSpeed + i) * slitherAmp * morph;
+            zx += perpX * slither * delta;
+            zz += perpZ * slither * delta;
+            
+            // Boss rushes at the player even faster in morphed state
+            speedMul *= (1.0 + morph * 1.5);
+            
+            // Boss Ability: Holographic Quantum Teleport / Phase Shift
+            if (morph > 0.6) {
+                if (!self.bossPhaseTimer) self.bossPhaseTimer = 0.0;
+                self.bossPhaseTimer += delta;
+                if (self.bossPhaseTimer > 3.0 && distToPlayer > 10.0) {
+                    self.bossPhaseTimer = 0.0;
+                    zx += dirPX * 7.5;
+                    zz += dirPZ * 7.5;
+                    const pky = TerrainGen.getMeshHeight(zx, zz) + 0.05;
+                    enemyProjectiles.push({ type: 'puke', x: zx, y: pky, z: zz, life: 4.0 });
+                    triggerAudio.push({ type: 'SLIME_ATTACK' });
+                }
+            }
+
+            // Boss Ability: Toxic Containment Puddle Bursts around the player
+            if (morph > 0.5) {
+                zCooldown[i] += delta;
+                if (zCooldown[i] > 2.5) {
+                    zCooldown[i] = 0;
+                    for (let k = 0; k < 5; k++) {
+                        const angle = (k / 5) * Math.PI * 2 + elapsedTime;
+                        const r = 3.5;
+                        const pkX = px + Math.cos(angle) * r;
+                        const pkZ = pz + Math.sin(angle) * r;
+                        const pky = TerrainGen.getMeshHeight(pkX, pkZ) + 0.05;
+                        enemyProjectiles.push({ type: 'puke', x: pkX, y: pky, z: pkZ, life: 4.5 });
+                    }
+                    triggerAudio.push({ type: 'SLIME_ATTACK' });
+                }
+            }
+        }
+
+        // Apply Glitch Infection Aura parameters on nearby shamblers
+        if (isGlitchedSwarmed) {
+            // Thrashing, slithering movements
+            const slitherSpeed = 16.0;
+            const slitherAmp = 0.45;
+            const slither = Math.sin(elapsedTime * slitherSpeed + i) * slitherAmp * glitchSwarmFactor;
+            zx += perpX * slither * delta;
+            zz += perpZ * slither * delta;
+            
+            // Glitch Speed Boost
+            speedMul *= (1.0 + glitchSwarmFactor * 0.9);
+        }
+ 
+        // Propagate alert pheromones to surrounding shambling horde members
+        ZombieBrain.propagateHiveAlert(i, zx, zz, getNearby, zBehavior, zStateTimer);
+
+        // 2. TYPE-SPECIFIC STEERING & ATTACK BEHAVIORS
+        if (type === 3) {
+            // Relentless charge/lunge AI for developed mutants
+            speedMul *= 1.35; // 35% speed increase
+            
+            const seekSteer = ZombieBehaviours.seek(zx, zz, brain.tx, brain.tz, data.vectorFieldX || new Uint8Array(0), config, px, pz);
+            vx = seekSteer.vx;
+            vz = seekSteer.vz;
+
+            // Never shamble; upgrade to charge immediately
+            if (zBehavior[i] === 0) {
+                zBehavior[i] = 1;
+                zStateTimer[i] = 0;
+            }
+
+            switch (zBehavior[i]) {
+                case 1: // CHARGE
+                    speedMul *= 2.5;
+                    break;
+                case 2: // LUNGE
+                    speedMul *= 5.0;
+                    if (zStateTimer[i] > 0.3) { zBehavior[i] = 4; zStateTimer[i] = 0; }
+                    if (distToPlayer < reach) {
+                        frameDamage += 35 + morph * 25; // Developed mutant heavy slam!
+                        triggerAudio.push({ type: 'ZOMBIE_ATTACK' });
+                        zBehavior[i] = 4; zStateTimer[i] = 0;
+                        if (isBoss && morph > 0.5) {
+                            triggerShockwave = true;
+                            for (let k = 0; k < 8; k++) {
+                                const angle = (k / 8) * Math.PI * 2 + elapsedTime;
+                                const spX = zx + Math.cos(angle) * 0.8;
+                                const spZ = zz + Math.sin(angle) * 0.8;
+                                const spy = TerrainGen.getMeshHeight(spX, spZ) + 1.2;
+                                enemyProjectiles.push({
+                                    type: 'rock',
+                                    x: spX,
+                                    y: spy,
+                                    z: spZ,
+                                    dir: { x: Math.cos(angle), y: 0.1, z: Math.sin(angle) },
+                                    speed: 14.0,
+                                    life: 2.8
+                                });
+                            }
+                        }
+                    }
+                    break;
+                case 3: // FLANK (Developed flanking charge)
+                    const flankS = (i % 2 === 0) ? 1 : -1;
+                    vx = perpX * flankS * 0.85 + dirPX * 0.15;
+                    vz = perpZ * flankS * 0.85 + dirPZ * 0.15;
+                    speedMul *= 1.8;
+                    if (zStateTimer[i] > 1.5 + (i % 3)) { zBehavior[i] = 1; zStateTimer[i] = 0; }
+                    break;
+                case 4: // RECOVER
+                    vx *= 0.1; vz *= 0.1; speedMul = 0.2;
+                    if (zStateTimer[i] > 0.8) { zBehavior[i] = 1; zStateTimer[i] = 0; } // back to charge!
+                    break;
+            }
+            if (distToPlayer < reach && zBehavior[i] !== 2) {
+                frameDamage += (10 + morph * 15) * delta; // heavy standard attack
+            }
+
+            // Force clamp speed for Hantavirus Phage Boss to keep walk creepy and menacing
+            if (isBoss) {
+                speedMul = 0.55;
+            }
+        } else if (type === 1) { // PUKER
             if (distToPlayer < 12) {
                 const fs = (i % 2 === 0) ? 1 : -1;
                 vx = perpX * fs * 0.7 + dirPX * (distToPlayer < 6 ? -0.4 : 0.3);
@@ -226,8 +466,10 @@ self.onmessage = function (e) {
             zCooldown[i] += delta;
             if (zCooldown[i] > 3.0 && distToPlayer < 12) {
                 zCooldown[i] = 0;
-                const pukeX = zx + dirPX * distToPlayer * 0.4;
-                const pukeZ = zz + dirPZ * distToPlayer * 0.4;
+                // Predictive lead aiming (trap player where they are running)
+                const pred = ZombieBehaviours.predictTarget(px, pz, playerVelX, playerVelZ, playerSpeed, 0.55);
+                const pukeX = zx + (pred.x - zx) * 0.4;
+                const pukeZ = zz + (pred.z - zz) * 0.4;
                 const py = TerrainGen.getMeshHeight(pukeX, pukeZ) + 0.05;
                 enemyProjectiles.push({ type: 'puke', x: pukeX, y: py, z: pukeZ, life: 5.0 });
                 triggerAudio.push({ type: 'SLIME_ATTACK' });
@@ -246,68 +488,59 @@ self.onmessage = function (e) {
             zCooldown[i] += delta;
             if (zCooldown[i] > 3.5 && distToPlayer < 20 && distToPlayer > 5) {
                 zCooldown[i] = 0;
-                const dir = { x: dirPX, y: 0.3, z: dirPZ };
+                // Predictive rock throws (high accuracy prediction at 0.75s lead)
+                const pred = ZombieBehaviours.predictTarget(px, pz, playerVelX, playerVelZ, playerSpeed, 0.75);
+                const toPredX = pred.x - zx;
+                const toPredZ = pred.z - zz;
+                const dPred = Math.sqrt(toPredX * toPredX + toPredZ * toPredZ) || 1;
+                const dir = { x: toPredX / dPred, y: 0.3, z: toPredZ / dPred };
                 enemyProjectiles.push({ type: 'rock', x: zx, y: 1.5, z: zz, dir: dir, speed: 12.0, life: 3.0 });
             }
         } else {
-            // NORMAL ZOMBIE STATE MACHINE
-            switch (behavior) {
-                case 0:
-                    if (distToPlayer < 18) { zBehavior[i] = 1; zStateTimer[i] = 0; }
-                    if (i % 10 < 3 && distToPlayer < 25 && distToPlayer > 8) { zBehavior[i] = 3; zStateTimer[i] = 0; }
+            // NORMAL ZOMBIE PATH COGNITION (Obstacle-avoidance seek steering)
+            const seekSteer = ZombieBehaviours.seek(zx, zz, brain.tx, brain.tz, data.vectorFieldX || new Uint8Array(0), config, px, pz);
+            vx = seekSteer.vx;
+            vz = seekSteer.vz;
+
+            switch (zBehavior[i]) {
+                case 0: // SHAMBLE
+                    vx = Math.sin(i * 4.5 + elapsedTime) * 0.25;
+                    vz = Math.cos(i * 2.8 + elapsedTime) * 0.25;
+                    speedMul *= 0.35;
                     break;
-                case 1:
-                    vx = dirPX; vz = dirPZ; speedMul *= 2.5;
-                    if (distToPlayer < 3.0) { zBehavior[i] = 2; zStateTimer[i] = 0; }
-                    if (distToPlayer > 28) { zBehavior[i] = 0; zStateTimer[i] = 0; }
+                case 1: // CHARGE
+                    speedMul *= 2.5;
                     break;
-                case 2:
-                    vx = dirPX; vz = dirPZ; speedMul *= 5.0;
+                case 2: // LUNGE
+                    speedMul *= 5.0;
                     if (zStateTimer[i] > 0.3) { zBehavior[i] = 4; zStateTimer[i] = 0; }
-                    if (distToPlayer < 1.5) {
-                        frameDamage += 25;
+                    if (distToPlayer < reach) {
+                        frameDamage += 25 + morph * 15;
                         triggerAudio.push({ type: 'ZOMBIE_ATTACK' });
                         zBehavior[i] = 4; zStateTimer[i] = 0;
                     }
                     break;
-                case 3:
+                case 3: // FLANK
                     const flankS = (i % 2 === 0) ? 1 : -1;
-                    vx = perpX * flankS * 0.8 + dirPX * 0.2;
-                    vz = perpZ * flankS * 0.8 + dirPZ * 0.2;
+                    vx = perpX * flankS * 0.85 + dirPX * 0.15;
+                    vz = perpZ * flankS * 0.85 + dirPZ * 0.15;
                     speedMul *= 1.6;
                     if (zStateTimer[i] > 1.5 + (i % 3)) { zBehavior[i] = 1; zStateTimer[i] = 0; }
-                    if (distToPlayer > 32) { zBehavior[i] = 0; zStateTimer[i] = 0; }
                     break;
-                case 4:
+                case 4: // RECOVER
                     vx *= 0.1; vz *= 0.1; speedMul = 0.2;
                     if (zStateTimer[i] > 0.8) { zBehavior[i] = 0; zStateTimer[i] = 0; }
                     break;
             }
-            if (distToPlayer < 1.5 && behavior !== 2) {
-                frameDamage += 5 * delta;
+            if (distToPlayer < reach && zBehavior[i] !== 2) {
+                frameDamage += (5 + morph * 8) * delta;
             }
         }
 
-        // Separation (boids)
-        let sepX = 0, sepZ = 0, sepCount = 0;
-        const nearby = getNearby(zx, zz);
-        for (let n = 0; n < nearby.length; n++) {
-            const j = nearby[n];
-            if (i === j) continue;
-            const dx = zx - zPosX[j];
-            const dz = zz - zPosZ[j];
-            const dSq = dx * dx + dz * dz;
-            if (dSq < 1.2 && dSq > 0.001) {
-                const inv = 1.0 / (Math.sqrt(dSq) + 0.1);
-                sepX += dx * inv; sepZ += dz * inv;
-                sepCount++;
-            }
-        }
-        if (sepCount > 0) {
-            vx += sepX * 1.2; vz += sepZ * 1.2;
-            const len = Math.sqrt(vx * vx + vz * vz);
-            if (len > 0) { vx /= len; vz /= len; }
-        }
+        // 3. FLOCKING SEPARATION & PACK COHESION
+        const flockSteer = ZombieBehaviours.flock(i, zx, zz, vx, vz, getNearby, zPosX, zPosZ);
+        vx = flockSteer.vx;
+        vz = flockSteer.vz;
 
         // Apply movement
         zx += vx * config.zombieSpeed * speedMul * delta;
@@ -318,9 +551,6 @@ self.onmessage = function (e) {
         zPosX[i] = zx;
         zPosZ[i] = zz;
 
-        // Determine target mesh properties
-        const zh = TerrainGen.getMeshHeight(zx, zz);
-
         let faceX = vx, faceZ = vz;
         if (faceX === 0 && faceZ === 0) { faceX = dirPX; faceZ = dirPZ; }
         if (faceX !== 0 || faceZ !== 0) {
@@ -330,16 +560,22 @@ self.onmessage = function (e) {
         }
 
         // --- Calculate 4x4 Matrix for GPU ---
-        // Basic translation + Y-axis rotation matrix
+        // Basic translation + Y-axis rotation matrix with dynamic morphing scale
         const cosY = Math.cos(zRotY[i]);
         const sinY = Math.sin(zRotY[i]);
+        const baseScale = type === 3 ? 1.35 : 1.0;
+        const scaleMultiplier = isBoss ? 1.65 : (isGlitchedSwarmed ? 0.78 * glitchSwarmFactor : 0.0);
+        const scale = baseScale * (1.0 + (isBoss ? morph : glitchSwarmFactor) * scaleMultiplier);
+
+        // Determine target mesh properties sitting perfectly on ground level
+        let zh = TerrainGen.getMeshHeight(zx, zz);
 
         // Structure matches THREE.Matrix4 .elements (Column-major order)
         // [ m11, m21, m31, m41, m12, m22, m32, m42, m13, m23, m33, m43, m14, m24, m34, m44 ]
         const matrix = [
-            cosY, 0, -sinY, 0,
-            0, 1, 0, 0,
-            sinY, 0, cosY, 0,
+            cosY * scale, 0, -sinY * scale, 0,
+            0, scale, 0, 0,
+            sinY * scale, 0, cosY * scale, 0,
             zx, zh, zz, 1
         ];
 
@@ -356,16 +592,23 @@ self.onmessage = function (e) {
             offset = tIdx * 16;
             throwerMatrixArray.set(matrix, offset);
             tIdx++;
+        } else if (type === 3) {
+            offset = mIdx * 16;
+            mutantMatrixArray.set(matrix, offset);
+            mIdx++;
         }
     }
 
     // Send the results back
     self.postMessage({
         zPosX, zPosZ, zRotY, zBehavior, zStateTimer, zCooldown, zSpeedMul,
-        normalMatrixArray, pukerMatrixArray, throwerMatrixArray,
-        nIdx, pIdx, tIdx,
+        normalMatrixArray, pukerMatrixArray, throwerMatrixArray, mutantMatrixArray,
+        nIdx, pIdx, tIdx, mIdx,
         frameDamage,
         enemyProjectiles,
-        triggerAudio
+        triggerAudio,
+        currentNightmareBossIndex,
+        nightmareBossTimer,
+        triggerShockwave
     });
 };

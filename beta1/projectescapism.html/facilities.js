@@ -263,7 +263,11 @@ const FacilityGen = {
                     float skyDif = clamp(0.5 + 0.5 * dot(n, vec3(0.0, 1.0, 0.0)), 0.0, 1.0);
                     vec3 ambient = skyDif * vec3(0.08, 0.1, 0.15) * ao; 
                     
-                    vec3 col = albedo * (dif * shadow * vec3(1.0, 0.9, 0.8) + ambient);
+                    vec3 viewDir = normalize(vCameraPosLocal - p);
+                    vec3 halfDir = normalize(lightDir + viewDir);
+                    float spec = pow(max(dot(n, halfDir), 0.0), 32.0) * 0.2 * ao;
+                    
+                    vec3 col = albedo * (dif * shadow * vec3(1.0, 0.9, 0.8) + ambient) + spec * shadow * vec3(1.0, 0.9, 0.8);
                     
                     pc_fragColor = vec4(col, 1.0);
                     
@@ -324,6 +328,24 @@ const FacilityGen = {
                 // Faint orange caution lights instead of cyan neon
                 float light = step(0.95, sin(vLocalPosOut.y * 5.0 + vLocalPosOut.x * 2.0));
                 totalEmissiveRadiance = vec3(1.0, 0.4, 0.0) * light * 0.5;
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <normal_fragment_maps>`,
+                `#include <normal_fragment_maps>
+                vec2 bp = vWorldPosOut.xz * 5.0 + vWorldPosOut.y * 5.0;
+                float h1 = snoise(vec3(bp, vWorldPosOut.y));
+                float h2 = snoise(vec3(bp + vec2(0.1, 0.0), vWorldPosOut.y));
+                float h3 = snoise(vec3(bp + vec2(0.0, 0.1), vWorldPosOut.y));
+                vec3 detailNormal = normalize(vec3(h1 - h2, 1.0, h1 - h3));
+                normal = normalize(normal + detailNormal * 0.6);
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <roughnessmap_fragment>`,
+                `#include <roughnessmap_fragment>
+                float leakR = smoothstep(0.7, 1.0, snoise(vec3(vWorldPosOut.xz * 0.5, vWorldPosOut.y * 0.1)));
+                roughnessFactor = mix(0.9, 0.3, leakR); // Leaks are wet/glossy
                 `
             );
         };
@@ -387,6 +409,28 @@ const FacilityGen = {
                 float hborder = smoothstep(0.45, 0.5, hp2);
                 float pulse = 0.5; // Static for performance
                 totalEmissiveRadiance = vec3(0.0, 0.3, 0.8) * hborder * pulse * 1.2;
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <normal_fragment_maps>`,
+                `#include <normal_fragment_maps>
+                vec2 gridCenterN = floor(vWorldPosOut.xz * 1.5) + 0.5;
+                vec2 hpN = (vWorldPosOut.xz * 1.5) - gridCenterN;
+                float distN = hexDist(hpN);
+                float borderN = smoothstep(0.4, 0.5, distN);
+                // Create a bevel effect on the hexagons
+                vec3 hexNormal = vec3(hpN.x * borderN, 1.0, hpN.y * borderN);
+                normal = normalize(normal + hexNormal * 0.5);
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <roughnessmap_fragment>`,
+                `#include <roughnessmap_fragment>
+                vec2 gridCenterR = floor(vWorldPosOut.xz * 1.5) + 0.5;
+                vec2 hpR = (vWorldPosOut.xz * 1.5) - gridCenterR;
+                float distR = hexDist(hpR);
+                float borderR = smoothstep(0.45, 0.5, distR);
+                roughnessFactor = mix(0.3, 0.8, borderR); // Borders are rougher
                 `
             );
         };

@@ -33,11 +33,28 @@ const MenuBG = {
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.z = 5;
 
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: this.canvas,
-            antialias: true,
-            alpha: true
-        });
+        try {
+            this.renderer = new THREE.WebGLRenderer({
+                canvas: this.canvas,
+                antialias: true,
+                alpha: true
+            });
+        } catch (e) {
+            console.warn("MenuBG: WebGLRenderer context creation failed. Retrying with basic options...", e);
+            try {
+                this.renderer = new THREE.WebGLRenderer({
+                    canvas: this.canvas,
+                    antialias: false,
+                    alpha: true
+                });
+            } catch (e2) {
+                console.error("MenuBG: WebGL context creation failed entirely.", e2);
+                if (typeof showWebGLFallbackOverlay === 'function') {
+                    showWebGLFallbackOverlay(e2.message || e2);
+                }
+                return;
+            }
+        }
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 

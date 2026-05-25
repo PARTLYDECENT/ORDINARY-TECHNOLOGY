@@ -131,173 +131,252 @@ class HoloBanner {
                 return v;
             }
 
-            // --- DNA FLOW 1: Stable Double Helix ---
-            vec2 dnaFlowStable(vec2 p, float t) {
-                float d = 1000.0;
-                float bestDepth = 0.5;
-                float PI = 3.14159265;
-                float radius = 22.0; // Increased for wrap
-                float twist = 0.04;
-                float rot = t * 2.5;
-
-                for (int i = 0; i < 2; i++) {
-                    float phase = float(i) * PI;
-                    float angle = p.x * twist + rot + phase;
-                    float y = cos(angle) * radius;
-                    float z = sin(angle);
-                    float dist = abs(p.y - y) - (2.5 + z * 1.0);
-                    if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
-                }
-
-                // Rungs
-                float rungSpacing = 36.0;
-                float rx = mod(p.x + t * 40.0, rungSpacing) - rungSpacing * 0.5;
-                if (abs(rx) < 1.8) {
-                    float a0 = p.x * twist + rot;
-                    float y0 = cos(a0) * radius;
-                    float y1 = cos(a0 + PI) * radius;
-                    if (p.y > min(y0, y1) && p.y < max(y0, y1)) {
-                        float rd = abs(rx) - 1.0;
-                        if (rd < d) { d = rd; bestDepth = 0.5; }
-                    }
-                }
-                return vec2(d, bestDepth);
+            // --- 3D SDF DNA HELIX ---
+            float sdDNASingle(vec3 p, float twist, float phase, float radius, float rStrand) {
+                float angle = p.x * twist + phase;
+                vec2 pRot = mat2(cos(angle), sin(angle), -sin(angle), cos(angle)) * p.yz;
+                return length(pRot - vec2(radius, 0.0)) - rStrand;
             }
 
-            // --- DNA FLOW 2: Mutated Multi-Strand Vortex ---
-            vec2 dnaFlowMutant(vec2 p, float t) {
-                float d = 1000.0;
-                float bestDepth = 0.5;
-                float PI = 3.14159265;
-                
-                for (int i = 0; i < 4; i++) {
-                    float phase = float(i) * (PI * 0.5);
-                    float twist = 0.07 + sin(t * 0.4) * 0.02;
-                    float radius = 24.0 + sin(p.x * 0.02 + t) * 6.0; // Increased
-                    float angle = p.x * twist + t * 4.5 + phase;
-                    
-                    float y = cos(angle) * radius;
-                    float z = sin(angle);
-                    y += noise(vec2(p.x * 0.1, t)) * 8.0;
-                    
-                    float dist = abs(p.y - y) - (2.0 + z * 0.8);
-                    if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
-                }
-                return vec2(d, bestDepth);
+            float sdDNARungs(vec3 p, float twist, float radius, float rungSpacing, float rRung) {
+                float rx = mod(p.x, rungSpacing) - rungSpacing * 0.5;
+                float xRung = p.x - rx;
+                float angle = xRung * twist;
+                vec3 dir = vec3(0.0, cos(angle), sin(angle));
+                vec3 c = vec3(xRung, 0.0, 0.0);
+                float t = clamp(dot(p - c, dir), -radius, radius);
+                vec3 closest = c + t * dir;
+                return length(p - closest) - rRung;
             }
 
-            // --- DNA FLOW 3: Decaying / Dissolving Strands ---
-            vec2 dnaFlowDecay(vec2 p, float t) {
-                float d = 1000.0;
-                float bestDepth = 0.5;
-                float PI = 3.14159265;
-                
+            // Stable double helix
+            float mapDNAStable(vec3 p, float t) {
+                float rot = t * 1.5;
                 float twist = 0.035;
-                float rot = t * 1.8;
-                float radius = 20.0; // Increased
+                float radius = 13.0;
+                float rStrand = 1.8;
+                float rRung = 0.6;
+                float rungSpacing = 28.0;
 
-                for (int i = 0; i < 2; i++) {
-                    float phase = float(i) * PI;
-                    float angle = p.x * twist + rot + phase;
-                    float y = cos(angle) * radius;
-                    float z = sin(angle);
-                    
-                    float dissolve = noise(vec2(p.x * 0.04, t * 2.2));
-                    if (dissolve > 0.55) {
-                        float dist = length(vec2(p.x, p.y - y)) - (2.5 + z * 1.5);
-                        float chunk = sin(p.x * 0.15 + t * 6.0);
-                        if (chunk > 0.0) {
-                            if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
-                        }
-                    } else {
-                        float dist = abs(p.y - y) - (2.5 + z * 0.8);
-                        if (dist < d) { d = dist; bestDepth = z * 0.5 + 0.5; }
-                    }
+                vec3 sp = p + vec3(t * 30.0, 0.0, 0.0);
+                float s1 = sdDNASingle(sp, twist, rot, radius, rStrand);
+                float s2 = sdDNASingle(sp, twist, rot + 3.14159265, radius, rStrand);
+                float rungs = sdDNARungs(sp, twist, radius, rungSpacing, rRung);
+                
+                return min(min(s1, s2), rungs);
+            }
+
+            // Mutated 4-strand vortex
+            float mapDNAMutant(vec3 p, float t) {
+                float rot = t * 2.8;
+                float twist = 0.05 + sin(t * 0.5) * 0.015;
+                float radius = 15.0 + sin(p.x * 0.02 + t * 2.0) * 3.5;
+                float rStrand = 1.5;
+                float rRung = 0.5;
+                float rungSpacing = 18.0;
+
+                vec3 sp = p + vec3(t * 40.0, 0.0, 0.0);
+                sp.y += sin(sp.x * 0.025 + t * 3.0) * 5.0;
+                sp.z += cos(sp.x * 0.020 + t * 2.5) * 4.0;
+
+                float s1 = sdDNASingle(sp, twist, rot, radius, rStrand);
+                float s2 = sdDNASingle(sp, twist, rot + 1.570796, radius, rStrand);
+                float s3 = sdDNASingle(sp, twist, rot + 3.141592, radius, rStrand);
+                float s4 = sdDNASingle(sp, twist, rot + 4.712388, radius, rStrand);
+                
+                float rungs1 = sdDNARungs(sp, twist, radius, rungSpacing, rRung);
+                float rungs2 = sdDNARungs(sp + vec3(rungSpacing * 0.5, 0.0, 0.0), twist, radius, rungSpacing, rRung);
+
+                return min(min(min(min(s1, s2), s3), s4), min(rungs1, rungs2));
+            }
+
+            // Decaying / dissolving strands
+            float mapDNADecay(vec3 p, float t) {
+                float rot = t * 1.0;
+                float twist = 0.035;
+                float radius = 12.0;
+                float rStrand = 1.8;
+                float rRung = 0.6;
+                float rungSpacing = 32.0;
+
+                vec3 sp = p + vec3(t * 20.0, 0.0, 0.0);
+                float s1 = sdDNASingle(sp, twist, rot, radius, rStrand);
+                float s2 = sdDNASingle(sp, twist, rot + 3.14159265, radius, rStrand);
+                float rungs = sdDNARungs(sp, twist, radius, rungSpacing, rRung);
+                
+                float d = min(min(s1, s2), rungs);
+
+                float dissolve = noise(sp.xy * 0.025 + t * 1.2);
+                if (dissolve > 0.5) {
+                    d += (dissolve - 0.5) * 20.0;
                 }
-                return vec2(d, bestDepth);
+                
+                d += noise(sp.xz * 0.4 + t * 6.0) * 0.4;
+                return d;
+            }
+
+            float mapDNA(vec3 p, float t, float cycle) {
+                float dStable = mapDNAStable(p, t);
+                float dMutant = mapDNAMutant(p, t);
+                float dDecay = mapDNADecay(p, t);
+
+                if (cycle < 1.0) {
+                    return mix(dStable, dMutant, smoothstep(0.8, 1.0, cycle));
+                } else if (cycle < 2.0) {
+                    return mix(dMutant, dDecay, smoothstep(1.8, 2.0, cycle));
+                } else {
+                    return mix(dDecay, dStable, smoothstep(2.8, 3.0, cycle));
+                }
+            }
+
+            vec3 calcNormal(vec3 p, float t, float cycle) {
+                vec2 eps = vec2(0.1, 0.0);
+                return normalize(vec3(
+                    mapDNA(p + eps.xyy, t, cycle) - mapDNA(p - eps.xyy, t, cycle),
+                    mapDNA(p + eps.yxy, t, cycle) - mapDNA(p - eps.yxy, t, cycle),
+                    mapDNA(p + eps.yyx, t, cycle) - mapDNA(p - eps.yyx, t, cycle)
+                ));
             }
 
             void main() {
                 vec2 px = (vUv - 0.5) * uResolution;
                 float t = uTime;
 
+                // --- Curved Visor Warping ---
+                float radius = uResolution.x * 1.5;
+                float angle = px.x / radius;
+                
+                float visorZ = radius * (cos(angle) - 1.0);
+                float visorX = radius * sin(angle);
+                float visorY = px.y - visorZ * 0.06;
+
                 // --- Banner mask ---
                 float bannerCenterY = (uBannerY - 0.5) * uResolution.y;
                 float halfH = uBannerH * 0.5;
-                float distFromBanner = abs(px.y - bannerCenterY) - halfH;
+                float distFromBanner = abs(visorY - bannerCenterY) - halfH;
 
                 float bannerMask = 1.0 - smoothstep(-2.0, 2.0, distFromBanner);
                 if (bannerMask < 0.001) { discard; }
 
-                float localY = (px.y - bannerCenterY + halfH) / (halfH * 2.0);
+                float localY = (visorY - bannerCenterY + halfH) / (halfH * 2.0);
                 float localX = vUv.x;
 
-                // --- DNA Coordinates (Wrapping around banner height) ---
-                // We increase the radius so it goes "outside" the banner strip visually
-                vec2 dnaP = vec2(px.x, (localY - 0.5) * uBannerH * 2.2); 
-
-                // --- DNA Transitions ---
                 float cycle = mod(t * 0.1, 3.0);
-                vec2 dna;
-                if (cycle < 1.0) {
-                    dna = mix(dnaFlowStable(dnaP, t), dnaFlowMutant(dnaP, t), smoothstep(0.8, 1.0, cycle));
-                } else if (cycle < 2.0) {
-                    dna = mix(dnaFlowMutant(dnaP, t), dnaFlowDecay(dnaP, t), smoothstep(1.8, 2.0, cycle));
-                } else {
-                    dna = mix(dnaFlowDecay(dnaP, t), dnaFlowStable(dnaP, t), smoothstep(2.8, 3.0, cycle));
+
+                // --- 3D DNA Raymarching ---
+                vec3 ro = vec3(visorX, visorY - bannerCenterY, visorZ - 25.0);
+                vec3 rd = vec3(0.0, 0.0, 1.0);
+                
+                float td = 0.0;
+                float maxD = 55.0;
+                float d = 0.0;
+                vec3 p;
+                int hit = 0;
+                float minDist = 1000.0;
+
+                for(int i = 0; i < 28; i++) {
+                    p = ro + rd * td;
+                    
+                    vec3 bentP = p;
+                    float theta = bentP.x / radius;
+                    bentP.z -= radius * (cos(theta) - 1.0);
+                    
+                    d = mapDNA(bentP, t, cycle);
+                    minDist = min(minDist, d);
+                    
+                    if (d < 0.05) {
+                        hit = 1;
+                        break;
+                    }
+                    td += d * 0.85;
+                    if (td > maxD) break;
                 }
 
-                float dDna = dna.x;
-                float depth = dna.y; // 0 (back) to 1 (front)
-
-                // ==============================
-                // LAYERED RENDERING (3D WRAP)
-                // ==============================
-                
-                // 1. Base substrate (The Black Strip)
+                // --- Render Layers ---
                 vec3 finalColor = vec3(0.002, 0.0, 0.0);
                 float alpha = bannerMask * 0.95;
                 
-                // Subtle scanlines
-                finalColor += sin(localY * 120.0 + t * 5.0) * 0.015;
+                finalColor += sin(visorY * 3.0 + t * 4.0) * 0.008;
+                finalColor += sin(visorY * 120.0 - t * 2.0) * 0.012;
 
-                // 2. DNA BACK STRANDS (Depth < 0.5)
-                float backGlow = (1.0 - smoothstep(0.0, 12.0, dDna)) * step(depth, 0.5);
-                if (backGlow > 0.0) {
-                    vec3 backCol = mix(vec3(0.3, 0.0, 0.0), vec3(0.8, 0.2, 0.1), depth * 2.0);
-                    // Dimmer and more blurred for back
-                    finalColor = mix(finalColor, backCol, backGlow * 0.4);
-                }
+                // Glass specular diagonal sweeping reflection
+                vec2 visorNormal = vec2(sin(angle), cos(angle));
+                vec3 lightDir = normalize(vec3(0.5, 0.8, -1.0));
+                vec3 viewDir = vec3(0.0, 0.0, -1.0);
+                vec3 cylNormal = vec3(visorNormal.x, 0.0, visorNormal.y);
+                
+                float refSweep = sin(px.x * 0.0025 - px.y * 0.004 + t * 0.6) * 0.5 + 0.5;
+                float glassSpec = pow(max(0.0, dot(cylNormal, normalize(lightDir + viewDir))), 40.0) * refSweep;
+                finalColor += vec3(0.8, 0.85, 1.0) * glassSpec * 0.25;
 
-                // 3. TEXT LAYER (In the middle of the "wrap")
-                vec2 textUv = vec2(fract(localX + t * uScrollSpeed), localY);
-                vec4 textSample = texture2D(uTextTex, textUv);
-                if (textSample.a > 0.05) {
-                    vec3 txtCol = mix(vec3(0.7, 0.0, 0.0), vec3(1.0, 0.95, 0.95), textSample.a);
-                    // Add glitch
-                    if (hash12(vec2(t, floor(localY * 15.0))) > 0.98) {
-                        txtCol = vec3(1.0, 1.0, 1.0);
-                        textUv.x += 0.01;
-                    }
-                    finalColor = mix(finalColor, txtCol, textSample.a * 0.9);
-                    alpha = max(alpha, bannerMask * textSample.a);
-                }
-
-                // 4. DNA FRONT STRANDS (Depth >= 0.5)
-                float frontGlow = (1.0 - smoothstep(0.0, 8.0, dDna)) * step(0.5, depth);
-                float frontCore = (1.0 - smoothstep(0.0, 1.8, dDna)) * step(0.5, depth);
-                if (frontGlow > 0.0) {
-                    vec3 frontCol = mix(vec3(0.8, 0.1, 0.0), vec3(1.0, 0.4, 0.2), (depth - 0.5) * 2.0);
-                    frontCol = mix(frontCol, vec3(1.0, 1.0, 0.9), frontCore);
+                // 2. DNA BACK STRANDS (td > 25.0)
+                if (hit == 1 && td > 25.0) {
+                    vec3 bentP = p;
+                    float theta = bentP.x / radius;
+                    bentP.z -= radius * (cos(theta) - 1.0);
                     
-                    // Brighter and sharper for front
-                    finalColor = mix(finalColor, frontCol, frontGlow * 0.9);
-                    alpha = max(alpha, bannerMask * frontGlow);
+                    vec3 N = calcNormal(bentP, t, cycle);
+                    float diff = max(0.0, dot(N, lightDir));
+                    float depthFade = smoothstep(55.0, 25.0, td);
+                    
+                    vec3 backCol = mix(vec3(0.25, 0.0, 0.02), vec3(0.7, 0.1, 0.08), diff);
+                    finalColor = mix(finalColor, backCol, depthFade * 0.5);
                 }
 
-                // 5. EDGE POLISH
-                float edge = smoothstep(halfH - 1.0, halfH, abs(px.y - bannerCenterY));
-                finalColor = mix(finalColor, vec3(1.0, 0.0, 0.0), edge * 0.5 * bannerMask);
+                // 3. TEXT LAYER (Cylindrical Refraction & Chromatic Aberration)
+                float refractAmt = 0.04 * sin(angle);
+                vec2 textUv = vec2(fract(localX + t * uScrollSpeed + refractAmt), localY);
+                
+                float abAmt = 0.008 * sin(angle);
+                vec4 rCol = texture2D(uTextTex, vec2(fract(textUv.x + abAmt), textUv.y));
+                vec4 gCol = texture2D(uTextTex, vec2(fract(textUv.x),         textUv.y));
+                vec4 bCol = texture2D(uTextTex, vec2(fract(textUv.x - abAmt), textUv.y));
+                
+                float textAlpha = max(max(rCol.a, gCol.a), bCol.a);
+                if (textAlpha > 0.05) {
+                    vec3 txtCol = vec3(rCol.a, gCol.a, bCol.a);
+                    txtCol = mix(txtCol * vec3(0.8, 0.1, 0.1), vec3(1.0, 0.95, 0.95), textAlpha);
+                    
+                    if (hash12(vec2(t * 1.5, floor(localY * 18.0))) > 0.98) {
+                        txtCol = vec3(1.0, 1.0, 1.0);
+                    }
+                    
+                    finalColor = mix(finalColor, txtCol, textAlpha * 0.85);
+                    alpha = max(alpha, bannerMask * textAlpha);
+                }
+
+                // 4. DNA FRONT STRANDS (td <= 25.0)
+                if (hit == 1 && td <= 25.0) {
+                    vec3 bentP = p;
+                    float theta = bentP.x / radius;
+                    bentP.z -= radius * (cos(theta) - 1.0);
+                    
+                    vec3 N = calcNormal(bentP, t, cycle);
+                    vec3 H = normalize(lightDir + viewDir);
+                    float diff = max(0.0, dot(N, lightDir));
+                    float spec = pow(max(0.0, dot(N, H)), 24.0);
+                    float rim = pow(1.0 - max(0.0, dot(N, viewDir)), 3.5);
+                    
+                    vec3 frontCol = mix(vec3(0.65, 0.05, 0.0), vec3(1.0, 0.35, 0.15), diff);
+                    frontCol += vec3(1.0, 0.9, 0.85) * spec * 0.7;
+                    frontCol += vec3(1.0, 0.15, 0.3) * rim * 0.55;
+                    frontCol += vec3(1.0, 0.8, 0.4) * (sin(bentP.x * 0.08 - t * 5.0) * 0.15 + 0.15);
+                    
+                    float frontAlpha = 0.92;
+                    finalColor = mix(finalColor, frontCol, frontAlpha);
+                    alpha = max(alpha, bannerMask * frontAlpha);
+                } else if (hit == 0) {
+                    float glowIntensity = 1.0 - smoothstep(0.0, 15.0, minDist);
+                    if (glowIntensity > 0.0) {
+                        vec3 glowCol = vec3(0.45, 0.02, 0.05) * glowIntensity * 0.35;
+                        finalColor += glowCol;
+                        alpha = max(alpha, bannerMask * glowIntensity * 0.3);
+                    }
+                }
+
+                // 5. EDGE POLISH (curved border)
+                float edge = smoothstep(halfH - 1.5, halfH, abs(visorY - bannerCenterY));
+                finalColor = mix(finalColor, vec3(1.0, 0.1, 0.1), edge * 0.65 * bannerMask);
 
                 gl_FragColor = vec4(finalColor, alpha);
             }
@@ -312,7 +391,7 @@ class HoloBanner {
                 uTextTex: { value: this.textTexture },
                 uBannerY: { value: this.bannerY },
                 uBannerH: { value: this.bannerHeight },
-                uScrollSpeed: { value: 0.04 } // text scroll rate
+                uScrollSpeed: { value: 0.04 }
             },
             transparent: true,
             depthTest: false,

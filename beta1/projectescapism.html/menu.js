@@ -36,7 +36,8 @@ const MainMenu = {
     ],
 
     mapData: [
-        { id: 'survival', name: 'SURVIVAL', desc: 'Infinite waves. No extraction. Survive.', difficulty: 'ENDLESS', color: '#ffffff', fog: 0x110000 }
+        { id: 'survival', name: 'SURVIVAL', desc: 'Infinite waves. No extraction. Survive.', difficulty: 'ENDLESS', color: '#ffffff', fog: 0x110000 },
+        { id: 'desert', name: 'DESOLATION', desc: 'Vast flat desert. Nowhere to hide.', difficulty: 'EXTREME', color: '#d4a800', fog: 0x221a11 }
     ],
     selectedMap: 0,
 
@@ -111,9 +112,8 @@ const MainMenu = {
         if (this.subMenuActive) {
             if (this.subMenuActive === 'maps') {
                 const startX = this.width * 0.08;
-                const startY = this.height * 0.18;
                 for (let i = 0; i < this.mapData.length; i++) {
-                    const cy = startY + 60 + i * 50;
+                    const cy = this.height * 0.1 + 45 + i * 50;
                     if (e.clientX > startX && e.clientX < startX + 400 && e.clientY > cy - 15 && e.clientY < cy + 25) {
                         this.selectedMap = i;
                         this.triggerDeploy('survival');
@@ -122,9 +122,8 @@ const MainMenu = {
                 }
             } else if (this.subMenuActive === 'mods') {
                 const startX = this.width * 0.08;
-                const startY = this.height * 0.18;
                 for (let i = 0; i < this.modData.length; i++) {
-                    const cy = startY + 60 + i * 50;
+                    const cy = this.height * 0.1 + 45 + i * 50;
                     if (e.clientX > startX && e.clientX < startX + 400 && e.clientY > cy - 15 && e.clientY < cy + 25) {
                         this.selectedMod = i;
                         return;

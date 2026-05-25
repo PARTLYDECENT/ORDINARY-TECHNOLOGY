@@ -241,6 +241,31 @@ class SDFGUI {
                 return d;
             }
 
+            // --- 3D Normal Extraction Functions from 2D SDFs ---
+            vec3 getHealthBarNormal(vec2 p) {
+                float eps = 0.5;
+                float dx = fluidHealthBar(p + vec2(eps, 0.0)) - fluidHealthBar(p - vec2(eps, 0.0));
+                float dy = fluidHealthBar(p + vec2(0.0, eps)) - fluidHealthBar(p - vec2(0.0, eps));
+                vec2 grad = vec2(dx, dy) / (2.0 * eps);
+                return normalize(vec3(-grad, 0.45));
+            }
+
+            vec3 getObjectiveBarNormal(vec2 p) {
+                float eps = 0.5;
+                float dx = fluidObjectiveBar(p + vec2(eps, 0.0)) - fluidObjectiveBar(p - vec2(eps, 0.0));
+                float dy = fluidObjectiveBar(p + vec2(0.0, eps)) - fluidObjectiveBar(p - vec2(0.0, eps));
+                vec2 grad = vec2(dx, dy) / (2.0 * eps);
+                return normalize(vec3(-grad, 0.45));
+            }
+
+            vec3 getCrosshairNormal(vec2 p) {
+                float eps = 0.5;
+                float dx = organicCrosshair(p + vec2(eps, 0.0)) - organicCrosshair(p - vec2(eps, 0.0));
+                float dy = organicCrosshair(p + vec2(0.0, eps)) - organicCrosshair(p - vec2(0.0, eps));
+                vec2 grad = vec2(dx, dy) / (2.0 * eps);
+                return normalize(vec3(-grad, 0.5));
+            }
+
             void main() {
                 vec2 px = (vUv - 0.5) * uResolution;
                 vec3 finalColor = vec3(0.0);
@@ -285,19 +310,29 @@ class SDFGUI {
                     alpha = max(max(textData.a, textR.a * 0.5), textB.a * 0.5);
                 }
 
-                // --- 2. Morphing Crosshair ---
+                // --- 2. Morphing Crosshair (Metallic Hologram Sheen) ---
                 float dCross = organicCrosshair(px);
                 float crossGlow = 1.0 - smoothstep(0.0, 10.0, dCross);
                 float crossCore = 1.0 - smoothstep(0.0, 1.5, dCross);
                 
                 if (crossGlow > 0.0) {
-                    // Toxic green/cyan
-                    vec3 crossColor = mix(vec3(0.0, 0.4, 0.3), vec3(0.2, 1.0, 0.8), crossCore);
-                    finalColor = mix(finalColor, crossColor, crossGlow * 0.85);
+                    vec3 N = getCrosshairNormal(px);
+                    vec3 L = normalize(vec3(0.0, 1.0, -1.0));
+                    float diff = max(0.0, dot(N, L));
+                    
+                    vec3 crossColor = mix(vec3(0.0, 0.45, 0.35), vec3(0.2, 1.0, 0.85), crossCore);
+                    vec3 litColor = crossColor * (0.6 + 0.4 * diff);
+                    
+                    vec3 V = vec3(0.0, 0.0, -1.0);
+                    vec3 H = normalize(L + V);
+                    float spec = pow(max(0.0, dot(N, H)), 16.0);
+                    litColor += vec3(0.8, 1.0, 0.9) * spec * 0.35;
+                    
+                    finalColor = mix(finalColor, litColor, crossGlow * 0.85);
                     alpha = max(alpha, crossGlow * 0.85);
                 }
 
-                // --- 3. Fluid Health Bar (Bottom Center) ---
+                // --- 3. Fluid Health Bar (Bottom Center - Volumetric Wet Sacs) ---
                 vec2 hbPos = vec2(px.x, px.y + uResolution.y * 0.45);
                 float dHb = fluidHealthBar(hbPos);
                 
@@ -305,19 +340,31 @@ class SDFGUI {
                 float hbCore = 1.0 - smoothstep(0.0, 2.0, dHb);
 
                 if (hbGlow > 0.0) {
-                    // Pulsing fleshy red/purple
-                    vec3 fleshColor = mix(vec3(0.4, 0.0, 0.2), vec3(1.0, 0.1, 0.3), hbCore);
-                    fleshColor += fbm(px * 0.05 + uTime) * vec3(0.3, 0.0, 0.1); // fleshy texture
+                    vec3 N = getHealthBarNormal(hbPos);
+                    vec3 L = normalize(vec3(0.4, 0.6, -1.0));
+                    vec3 V = vec3(0.0, 0.0, -1.0);
+                    vec3 H = normalize(L + V);
+                    
+                    float diff = max(0.0, dot(N, L));
+                    float spec = pow(max(0.0, dot(N, H)), 32.0);
+                    float rim = pow(1.0 - max(0.0, dot(N, V)), 3.0);
+                    
+                    vec3 fleshColor = mix(vec3(0.35, 0.0, 0.1), vec3(1.0, 0.15, 0.3), hbCore);
+                    fleshColor += fbm(px * 0.05 + uTime) * vec3(0.2, 0.0, 0.05);
                     
                     if (uHealthPct < 0.3) {
                         fleshColor = mix(fleshColor, vec3(1.0, 0.0, 0.0), sin(uTime * 15.0) * 0.5 + 0.5);
                     }
                     
-                    finalColor = mix(finalColor, fleshColor, hbGlow * 0.9);
-                    alpha = max(alpha, hbGlow * 0.9);
+                    vec3 litColor = fleshColor * (0.35 + 0.65 * diff);
+                    litColor += vec3(1.0, 0.92, 0.92) * spec * 0.65;
+                    litColor += vec3(0.95, 0.2, 0.4) * rim * 0.45;
+                    
+                    finalColor = mix(finalColor, litColor, hbGlow * 0.95);
+                    alpha = max(alpha, hbGlow * 0.95);
                 }
 
-                // --- 4. Fluid Objective Bar (Top Center) ---
+                // --- 4. Fluid Objective Bar (Top Center - Glowing 3D Glass Nodes) ---
                 vec2 obPos = vec2(px.x, px.y - uResolution.y * 0.45 + 20.0);
                 float dOb = fluidObjectiveBar(obPos);
                 
@@ -325,11 +372,24 @@ class SDFGUI {
                 float obCore = 1.0 - smoothstep(0.0, 2.0, dOb);
 
                 if (obGlow > 0.0) {
-                    // Bio-luminescent blue
-                    vec3 objColor = mix(vec3(0.0, 0.3, 0.6), vec3(0.0, 0.8, 1.0), obCore);
-                    objColor += fbm(px * 0.08 - uTime) * vec3(0.0, 0.2, 0.3);
-                    finalColor = mix(finalColor, objColor, obGlow * 0.9);
-                    alpha = max(alpha, obGlow * 0.9);
+                    vec3 N = getObjectiveBarNormal(obPos);
+                    vec3 L = normalize(vec3(-0.4, 0.6, -1.0));
+                    vec3 V = vec3(0.0, 0.0, -1.0);
+                    vec3 H = normalize(L + V);
+                    
+                    float diff = max(0.0, dot(N, L));
+                    float spec = pow(max(0.0, dot(N, H)), 48.0);
+                    float rim = pow(1.0 - max(0.0, dot(N, V)), 3.5);
+                    
+                    vec3 objColor = mix(vec3(0.0, 0.15, 0.45), vec3(0.1, 0.85, 1.0), obCore);
+                    objColor += fbm(px * 0.08 - uTime) * vec3(0.0, 0.15, 0.25);
+                    
+                    vec3 litColor = objColor * (0.4 + 0.6 * diff);
+                    litColor += vec3(0.8, 0.95, 1.0) * spec * 0.7;
+                    litColor += vec3(0.05, 0.65, 1.0) * rim * 0.5;
+                    
+                    finalColor = mix(finalColor, litColor, obGlow * 0.95);
+                    alpha = max(alpha, obGlow * 0.95);
                 }
 
                 // --- 5. Hitmarker (Violent Organic Splatter & Reconstitution) ---

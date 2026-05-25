@@ -104,7 +104,23 @@ const TerrainGen = {
         );
     },
 
+    getDesertDuneHeight: function (x, z) {
+        let waveX = Math.sin(x * 0.007 + Math.sin(z * 0.003) * 2.0);
+        let duneHeight = Math.pow(Math.abs(waveX * 0.5 + 0.5), 1.6) * 11.0 - 2.5;
+        let waveY = Math.cos(z * 0.005 + Math.cos(x * 0.004) * 1.5);
+        duneHeight += waveY * 2.5;
+        let ripple = this.__snoise(x * 0.08, z * 0.08) * 0.4;
+        return duneHeight + ripple;
+    },
+
     getHeight: function (x, z) {
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'desert') {
+            return this.getDesertDuneHeight(x, z);
+        }
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'facility') {
+            return 0.0; // Facility map is visually flat
+        }
+
         // Match the FBM and Magnitude in GLSL EXACTLY
         let v = 0.0;
         let a = 0.5;
@@ -213,6 +229,7 @@ float getBiomeNoise(vec2 pos) {
     if (uMapType == 1) return 0.0; // Toxic
     if (uMapType == 2) return 0.0; // Toxic
     if (uMapType == 3) return 1.0; // Wasteland
+    if (uMapType == 4) return 1.0; // Desert
     
     // Higher frequency for more randomization
     float n = snoise(pos * 0.0012) * 0.5 + 0.5; 
@@ -221,6 +238,20 @@ float getBiomeNoise(vec2 pos) {
 }
 
 float getTerrainHeight(vec2 pos) {
+    if (uMapType == 3) {
+        // Facility (or Desert if using mt=3) is flat
+        return 0.0;
+    }
+    if (uMapType == 4) {
+        // Blending rolling sand dunes mathematically
+        float waveX = sin(pos.x * 0.007 + sin(pos.y * 0.003) * 2.0);
+        float duneHeight = pow(abs(waveX * 0.5 + 0.5), 1.6) * 11.0 - 2.5;
+        float waveY = cos(pos.y * 0.005 + cos(pos.x * 0.004) * 1.5);
+        duneHeight += waveY * 2.5;
+        float ripple = snoise(pos * 0.08) * 0.4;
+        return duneHeight + ripple;
+    }
+    
     float b = fbm(pos * 0.005);
     float base = sign(b) * pow(abs(b), 1.2) * 20.0;
     float detail = snoise(pos * 0.03) * 2.5;
@@ -325,49 +356,72 @@ float getTerrainHeight(vec2 pos) {
                 vec3 colForest = textureNoTile(texForest, uv);
                 vec3 colWaste = textureNoTile(texWaste, uv);
                 
+                // Mute and normalize colors to realistic albedos (darker, less saturated)
+                colToxic = mix(colToxic, vec3(0.1, 0.12, 0.08), 0.7); // Muddy marsh
+                colForest = mix(colForest, vec3(0.08, 0.1, 0.06), 0.7); // Dark forest loam
+                colWaste = mix(colWaste, vec3(0.12, 0.11, 0.1), 0.8); // Dry dirt/sand
+                
                 float slope = 1.0 - vNormal.y; 
                 float cliff = smoothstep(0.3, 0.6, slope);
                 
                 vec3 groundCol;
-                // Randomized blending between Toxic and Wasteland (Green removed)
-                float blend = smoothstep(0.4, 0.6, biomen);
+                // Realistic biome blending
+                float blend = smoothstep(0.3, 0.7, biomen);
                 groundCol = mix(colToxic, colWaste, blend);
                 
                 // Add localized patches for variety
                 float patches = snoise(vWorldPosRaw * 0.02);
-                groundCol = mix(groundCol, colWaste * 0.6, smoothstep(0.5, 0.8, patches));
+                groundCol = mix(groundCol, colWaste * 0.8, smoothstep(0.5, 0.8, patches));
                 
-                // Rock/Cliff blending
-                vec3 rockCol = colWaste * 0.4;
+                // Realistic rock cliff blending
+                vec3 rockCol = vec3(0.15, 0.15, 0.16) * textureNoTile(texWaste, uv * 0.5);
                 groundCol = mix(groundCol, rockCol, cliff);
                 
-                // Ambient occlusion / cavity effect from world height
-                groundCol *= 0.7 + 0.3 * smoothstep(-15.0, 30.0, vHeight);
-                
-                // Holographic Grid Overlay
-                vec2 gridUV = fract(vWorldPosRaw * 0.4); 
-                float gridLine = (smoothstep(0.92, 1.0, gridUV.x) + smoothstep(0.08, 0.0, gridUV.x)) *
-                                 (smoothstep(0.92, 1.0, gridUV.y) + smoothstep(0.08, 0.0, gridUV.y));
-                float distToPlayer = length(vWorldPosRaw - uPlayerPos);
-                float wave = sin(distToPlayer * 0.15 - uTime * 3.0) * 0.5 + 0.5;
-                float edgeGlow = smoothstep(150.0, 350.0, vDistToCam);
-                vec3 gridCol = vec3(0.0, 0.85, 1.0) * gridLine * (0.15 + wave * 0.85) * (1.0 - edgeGlow);
-                
-                groundCol += gridCol;
+                // Ambient occlusion / cavity effect from world height and noise
+                float macroAO = smoothstep(-15.0, 30.0, vHeight);
+                float microAO = smoothstep(0.0, 1.0, snoise(vWorldPosRaw * 0.5) * 0.5 + 0.5);
+                groundCol *= 0.5 + 0.5 * macroAO * microAO;
                 
                 // Void Holes
                 float voidMask = snoise(vWorldPosRaw * 0.002);
                 if (voidMask < -0.5) discard; 
 
-                // bioluminescent veins in toxic
-                if(biomen < 0.3) {
-                   float vein = snoise(vWorldPosRaw * 0.1 + uTime * 0.2);
-                   if(vein > 0.75) groundCol += vec3(0.0, 1.0, 0.4) * (vein - 0.75) * 2.0;
-                }
-
                 diffuseColor.rgb = groundCol;
                 `
             );
+            
+            // --- PBR Enhancements ---
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <roughnessmap_fragment>`,
+                `#include <roughnessmap_fragment>
+                float r_biome = getBiomeNoise(vWorldPosRaw);
+                float r_slope = 1.0 - vNormal.y;
+                float r_cliff = smoothstep(0.3, 0.6, r_slope);
+                
+                // Dirt and rock are very rough in real life
+                float targetRoughness = mix(0.7, 0.95, smoothstep(0.4, 0.6, r_biome)); 
+                targetRoughness = mix(targetRoughness, 0.85, r_cliff);
+                
+                roughnessFactor = targetRoughness;
+                `
+            );
+            
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <normal_fragment_maps>`,
+                `#include <normal_fragment_maps>
+                // Procedural bump mapping for high-frequency detail
+                vec2 bp = vWorldPosRaw * 2.0;
+                float h1 = snoise(bp);
+                float h2 = snoise(bp + vec2(0.1, 0.0));
+                float h3 = snoise(bp + vec2(0.0, 0.1));
+                
+                vec3 detailNormal = normalize(vec3(h1 - h2, 0.5, h1 - h3));
+                
+                // Blend with existing normal
+                normal = normalize(normal + detailNormal * 0.4);
+                `
+            );
+
             terrainMat.userData.shader = shader;
         };
 
@@ -399,6 +453,7 @@ float getTerrainHeight(vec2 pos) {
                 if (window.GAME_START_CONFIG.mapId === 'forest') mt = 1;
                 else if (window.GAME_START_CONFIG.mapId === 'toxic') mt = 2;
                 else if (window.GAME_START_CONFIG.mapId === 'facility') mt = 3;
+                else if (window.GAME_START_CONFIG.mapId === 'desert') mt = 4; // Flat desert
                 this.mat.userData.shader.uniforms.uMapType.value = mt;
             }
         }

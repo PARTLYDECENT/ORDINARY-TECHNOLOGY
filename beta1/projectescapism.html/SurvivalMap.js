@@ -180,13 +180,18 @@ class SurvivalMapManager {
 
         // 1. Procedural SDF Bunker Generation
         for(let i=0; i<2; i++) { // 2 bunkers per chunk
-            // Random position leaving margin
-            const bx = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
-            const bz = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+            let bx, bz, wx, wz, gh;
+            let attempts = 0;
+            do {
+                bx = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+                bz = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+                wx = bx * this.config.cellSize + worldOffsetX;
+                wz = bz * this.config.cellSize + worldOffsetZ;
+                gh = TerrainGen.getMeshHeight(wx, wz);
+                attempts++;
+            } while (gh <= -1.8 && attempts < 15);
 
-            const wx = bx * this.config.cellSize + worldOffsetX;
-            const wz = bz * this.config.cellSize + worldOffsetZ;
-            const gh = TerrainGen.getMeshHeight(wx, wz);
+            if (gh <= -1.8) continue; // Skip if we couldn't find a dry spot
 
             dummy.position.set(bx * this.config.cellSize, gh, bz * this.config.cellSize);
             dummy.rotation.set(0, Math.random() > 0.5 ? 0 : Math.PI / 2, 0); // Rotate 0 or 90 degrees
@@ -227,24 +232,32 @@ class SurvivalMapManager {
                     const tx = lx * this.config.cellSize + this.config.cellSize/2 + worldOffsetX;
                     const tz = lz * this.config.cellSize + this.config.cellSize/2 + worldOffsetZ;
                     const gh = TerrainGen.getMeshHeight(tx, tz);
-                    dummy.position.set(lx * this.config.cellSize + this.config.cellSize/2, gh, lz * this.config.cellSize + this.config.cellSize/2);
-                    dummy.rotation.y = Math.random() * Math.PI * 2;
-                    const s = 0.8 + Math.random() * 0.4;
-                    dummy.scale.set(s * 2, s * 4, s * 2);
-                    dummy.updateMatrix();
-                    trees.setMatrixAt(tCount++, dummy.matrix);
-                    costField[i] = 10;
+                    
+                    // Cull if placed below shoreline water level (-1.8)
+                    if (gh > -1.8) {
+                        dummy.position.set(lx * this.config.cellSize + this.config.cellSize/2, gh, lz * this.config.cellSize + this.config.cellSize/2);
+                        dummy.rotation.y = Math.random() * Math.PI * 2;
+                        const s = 0.8 + Math.random() * 0.4;
+                        dummy.scale.set(s * 2, s * 4, s * 2);
+                        dummy.updateMatrix();
+                        trees.setMatrixAt(tCount++, dummy.matrix);
+                        costField[i] = 10;
+                    }
                 } else if (rand < pTree + pBarrel && brlCount < 50) { // Barrels
                     const bx = lx * this.config.cellSize + 1;
                     const bz = lz * this.config.cellSize + 1;
                     const gh = TerrainGen.getHeight(bx + worldOffsetX, bz + worldOffsetZ);
-                    dummy.position.set(bx, gh + 0.4, bz);
-                    dummy.rotation.set(0, Math.random()*6.28, 0);
-                    if (Math.random() < 0.2) dummy.rotation.x = 1.57; // Tipped over
-                    dummy.scale.setScalar(0.9 + Math.random()*0.2);
-                    dummy.updateMatrix();
-                    barrels.setMatrixAt(brlCount++, dummy.matrix);
-                    costField[i] = 50;
+                    
+                    // Cull if placed below shoreline water level (-1.8)
+                    if (gh > -1.8) {
+                        dummy.position.set(bx, gh + 0.4, bz);
+                        dummy.rotation.set(0, Math.random()*6.28, 0);
+                        if (Math.random() < 0.2) dummy.rotation.x = 1.57; // Tipped over
+                        dummy.scale.setScalar(0.9 + Math.random()*0.2);
+                        dummy.updateMatrix();
+                        barrels.setMatrixAt(brlCount++, dummy.matrix);
+                        costField[i] = 50;
+                    }
                 } else if (rand < pTree + pBarrel + 0.005 && ammoCount < 15) { // Ammo drops
                     const ax = lx * this.config.cellSize + worldOffsetX;
                     const az = lz * this.config.cellSize + worldOffsetZ;
@@ -255,9 +268,9 @@ class SurvivalMapManager {
         }
 
         // 2. Structured Industrial Infrastructure: SUBSTATIONS & LONG RUNS
-        const isHub = (cx % 4 === 0 && cz % 4 === 0);
-        const isPipeX = (cz % 4 === 0);
-        const isPipeZ = (cx % 4 === 0);
+        const isHub = (cx === 0 && cz === 0);
+        const isPipeX = (cz === 0);
+        const isPipeZ = (cx === 0);
 
         // --- SUBSTATION HUB GEN ---
         if (isHub) {
@@ -294,47 +307,55 @@ class SurvivalMapManager {
         // --- CONTINUOUS PIPELINE RUNS ---
         if (isPipeX || isPipeZ) {
             const pipeHeight = 4.0;
-            const step = 2.0;
-            const segments = Math.floor(this.chunkSize / step);
-            
-            for (let s = 0; s < segments; s++) {
-                let px, pz;
-                if (isPipeX) {
-                    px = s * step;
-                    pz = this.chunkSize / 2;
-                } else {
-                    px = this.chunkSize / 2;
-                    pz = s * step;
-                }
+            const baseTerrainH = TerrainGen.getMeshHeight(this.chunkSize / 2 + worldOffsetX, this.chunkSize / 2 + worldOffsetZ);
 
-                const wx = px + worldOffsetX;
-                const wz = pz + worldOffsetZ;
-                const terrainH = TerrainGen.getMeshHeight(wx, wz);
-
-                // Main Pipeline Segment
-                dummy.position.set(px, terrainH + pipeHeight, pz);
-                dummy.rotation.set(0, 0, 0);
-                if (isPipeX) dummy.rotation.z = Math.PI / 2;
-                else dummy.rotation.x = Math.PI / 2;
-                
-                dummy.scale.set(3.0, 2.1, 3.0); // Thick industrial pipes
+            if (isPipeX && pipeCount < 800) {
+                // Single massive smooth pipeline along X
+                dummy.position.set(this.chunkSize / 2, baseTerrainH + pipeHeight, this.chunkSize / 2);
+                dummy.rotation.set(0, 0, Math.PI / 2);
+                dummy.scale.set(3.0, this.chunkSize, 3.0);
                 dummy.updateMatrix();
                 pipes.setMatrixAt(pipeCount++, dummy.matrix);
 
-                // Structural Supports
-                if (s % 10 === 0 && pCount < 1000) {
-                    dummy.position.set(px, terrainH, pz);
-                    dummy.rotation.set(0, 0, 0);
-                    dummy.scale.set(0.2, pipeHeight / (this.config.cellSize * 1.8), 0.2);
-                    dummy.updateMatrix();
-                    pillars.setMatrixAt(pCount++, dummy.matrix);
+                // Anchored supports along the line
+                for (let x = 8; x < this.chunkSize; x += 16) {
+                    if (pCount >= 1000) break;
+                    const wx = x + worldOffsetX;
+                    const wz = this.chunkSize / 2 + worldOffsetZ;
+                    const terrainH = TerrainGen.getMeshHeight(wx, wz);
+                    const pHeight = (baseTerrainH + pipeHeight) - terrainH;
+                    if (pHeight > 0.1) {
+                        dummy.position.set(x, terrainH, this.chunkSize / 2);
+                        dummy.rotation.set(0, 0, 0);
+                        dummy.scale.set(0.2, pHeight / (this.config.cellSize * 1.8), 0.2);
+                        dummy.updateMatrix();
+                        pillars.setMatrixAt(pCount++, dummy.matrix);
+                    }
                 }
+            }
 
-                // Frequent Steam at long runs
-                if (Math.random() < 0.05 && steamCount < 150) {
-                    dummy.position.set(px, terrainH + pipeHeight, pz);
-                    dummy.updateMatrix();
-                    steam.setMatrixAt(steamCount++, dummy.matrix);
+            if (isPipeZ && pipeCount < 800) {
+                // Single massive smooth pipeline along Z
+                dummy.position.set(this.chunkSize / 2, baseTerrainH + pipeHeight, this.chunkSize / 2);
+                dummy.rotation.set(Math.PI / 2, 0, 0);
+                dummy.scale.set(3.0, this.chunkSize, 3.0);
+                dummy.updateMatrix();
+                pipes.setMatrixAt(pipeCount++, dummy.matrix);
+
+                // Anchored supports along the line
+                for (let z = 8; z < this.chunkSize; z += 16) {
+                    if (pCount >= 1000) break;
+                    const wx = this.chunkSize / 2 + worldOffsetX;
+                    const wz = z + worldOffsetZ;
+                    const terrainH = TerrainGen.getMeshHeight(wx, wz);
+                    const pHeight = (baseTerrainH + pipeHeight) - terrainH;
+                    if (pHeight > 0.1) {
+                        dummy.position.set(this.chunkSize / 2, terrainH, z);
+                        dummy.rotation.set(0, 0, 0);
+                        dummy.scale.set(0.2, pHeight / (this.config.cellSize * 1.8), 0.2);
+                        dummy.updateMatrix();
+                        pillars.setMatrixAt(pCount++, dummy.matrix);
+                    }
                 }
             }
         }
@@ -389,6 +410,8 @@ class SurvivalMapManager {
         if (typeof Shotgun === 'undefined') return;
         
         const gh = TerrainGen.getHeight(x, z);
+        if (gh <= -1.8) return; // Cull if under water shoreline!
+        
         const dropMesh = new Shotgun();
         dropMesh.scale.set(0.6, 0.6, 0.6);
         if (dropMesh.muzzleLight) dropMesh.remove(dropMesh.muzzleLight);

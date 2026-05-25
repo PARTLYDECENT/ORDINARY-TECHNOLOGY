@@ -56,7 +56,7 @@ class TitanPlayer extends THREE.Group {
     }
 
     setupMaterials() {
-        // --- SYNAPTIC ARMOR SHADER (ORGANIC RECONSTRUCTION) ---
+        // --- ENHANCED HAZMAT ARMOR SHADER (PBR-LAYERED REALISM) ---
         this.armorMat = new THREE.ShaderMaterial({
             uniforms: {
                 uTime: { value: 0 },
@@ -71,10 +71,12 @@ class TitanPlayer extends THREE.Group {
                 varying vec3 vModelPos;
                 varying vec3 vViewPos;
                 varying vec2 vUv;
+                varying vec3 vWorldNormal;
                 
                 void main() {
                     vUv = uv;
                     vNormal = normalize(normalMatrix * normal);
+                    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
                     vModelPos = position;
                     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                     vViewPos = -mvPosition.xyz;
@@ -86,6 +88,7 @@ class TitanPlayer extends THREE.Group {
                 varying vec3 vModelPos;
                 varying vec3 vViewPos;
                 varying vec2 vUv;
+                varying vec3 vWorldNormal;
                 
                 uniform float uTime;
                 uniform float uHealthPct;
@@ -94,80 +97,117 @@ class TitanPlayer extends THREE.Group {
                 uniform vec3 uColorBlack;
                 uniform vec3 uColorPulse;
 
-                // --- Math Foundations ---
                 float hash12(vec2 p) {
-                    vec3 p3  = fract(vec3(p.xyx) * .1031);
+                    vec3 p3 = fract(vec3(p.xyx) * .1031);
                     p3 += dot(p3, p3.yzx + 33.33);
                     return fract((p3.x + p3.y) * p3.z);
                 }
-
-                float noise(in vec2 p) {
-                    vec2 i = floor(p);
-                    vec2 f = fract(p);
-                    vec2 u = f*f*(3.0-2.0*f);
-                    return mix( mix( hash12( i + vec2(0.0,0.0) ), 
-                                     hash12( i + vec2(1.0,0.0) ), u.x),
-                                mix( hash12( i + vec2(0.0,1.0) ), 
-                                     hash12( i + vec2(1.0,1.0) ), u.x), u.y);
+                float hash13(vec3 p3) {
+                    p3 = fract(p3 * .1031);
+                    p3 += dot(p3, p3.zyx + 31.32);
+                    return fract((p3.x + p3.y) * p3.z);
                 }
-
+                float noise(in vec2 p) {
+                    vec2 i = floor(p); vec2 f = fract(p);
+                    vec2 u = f*f*(3.0-2.0*f);
+                    return mix(mix(hash12(i+vec2(0,0)),hash12(i+vec2(1,0)),u.x),
+                               mix(hash12(i+vec2(0,1)),hash12(i+vec2(1,1)),u.x),u.y);
+                }
                 float fbm(vec2 x) {
-                    float v = 0.0;
-                    float a = 0.5;
-                    vec2 shift = vec2(100.0);
-                    mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
-                    for (int i = 0; i < 4; ++i) {
-                        v += a * noise(x);
-                        x = rot * x * 2.0 + shift;
-                        a *= 0.5;
-                    }
+                    float v = 0.0; float a = 0.5;
+                    mat2 rot = mat2(cos(0.5),sin(0.5),-sin(0.5),cos(0.5));
+                    for (int i = 0; i < 5; ++i) { v += a*noise(x); x = rot*x*2.0+vec2(100.0); a *= 0.5; }
                     return v;
                 }
-
                 float smin(float a, float b, float k) {
-                    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-                    return mix(b, a, h) - k * h * (1.0 - h);
+                    float h = clamp(0.5+0.5*(b-a)/k,0.0,1.0);
+                    return mix(b,a,h)-k*h*(1.0-h);
+                }
+
+                // Panel seam lines — sharp dark grooves along grid edges
+                float panelSeams(vec3 p) {
+                    vec3 g = abs(fract(p * 1.2) - 0.5);
+                    float seamX = smoothstep(0.02, 0.0, g.x) * smoothstep(0.48, 0.35, g.y);
+                    float seamY = smoothstep(0.02, 0.0, g.y) * smoothstep(0.48, 0.35, g.x);
+                    float seamZ = smoothstep(0.02, 0.0, g.z) * smoothstep(0.48, 0.35, g.y);
+                    return max(seamX, max(seamY, seamZ)) * 0.7;
+                }
+
+                // Micro-scratches — directional linear marks
+                float scratches(vec3 p) {
+                    float s1 = noise(p.xy * 40.0 + vec2(3.7, 1.2));
+                    float s2 = noise(p.yz * 35.0 + vec2(7.1, 2.8));
+                    float scratch = smoothstep(0.55, 0.58, s1) * 0.4 + smoothstep(0.57, 0.60, s2) * 0.3;
+                    return scratch;
+                }
+
+                // Dirt/grime in crevices — AO-like darkening
+                float dirtLayer(vec3 p, vec3 n) {
+                    float cavity = 1.0 - max(0.0, n.y) * 0.5; // More dirt on downward/side faces
+                    float grime = fbm(p.xz * 3.0 + p.y * 2.0) * cavity;
+                    return smoothstep(0.3, 0.7, grime) * 0.35;
                 }
 
                 void main() {
                     vec3 n = normalize(vNormal);
                     vec3 viewDir = normalize(vViewPos);
                     
-                    // --- SYNAPTIC PATTERN ---
-                    // Organic veins that pulse with neural activity
+                    // --- SYNAPTIC PATTERN (preserved) ---
                     float neuralT = uTime * (0.5 + (1.0 - uHealthPct) * 2.0);
                     float pattern = fbm(vModelPos.xy * 2.0 + neuralT * 0.2);
                     pattern = smin(pattern, fbm(vModelPos.yz * 1.5 - neuralT * 0.1), 0.5);
                     
-                    // Diagonal "Hazard" stripes integration (Procedural)
+                    // Hazard stripes with soft decal edges
                     float stripe = fract((vModelPos.x + vModelPos.y + vModelPos.z) * 1.5 - uTime * 0.1);
-                    float stripeMask = step(0.5, stripe);
+                    float stripeMask = smoothstep(0.46, 0.54, stripe); // Soft edge instead of hard step
                     
-                    // Mix synaptic noise into stripes
                     float bioMask = smoothstep(0.4, 0.6, pattern + (1.0 - uHealthPct) * 0.3);
                     vec3 baseCol = mix(uColorYellow, uColorBlack, stripeMask);
                     
-                    // "Bruising" effect where health is low
+                    // Bruising at low health
                     vec3 bruiseCol = mix(vec3(0.1, 0.0, 0.05), vec3(0.4, 0.0, 0.1), pattern);
                     baseCol = mix(baseCol, bruiseCol, bioMask * (1.0 - uHealthPct));
+
+                    // --- PANEL SEAM LINES ---
+                    float seams = panelSeams(vModelPos);
+                    baseCol *= (1.0 - seams); // Dark inset grooves
+
+                    // --- SCRATCHES & WEAR ---
+                    float scratchVal = scratches(vModelPos);
+                    vec3 scratchHighlight = mix(baseCol, vec3(0.7, 0.65, 0.55), scratchVal);
+                    baseCol = mix(baseCol, scratchHighlight, 0.6);
+
+                    // --- DIRT/GRIME ACCUMULATION ---
+                    float dirt = dirtLayer(vModelPos, vWorldNormal);
+                    baseCol = mix(baseCol, vec3(0.06, 0.04, 0.03), dirt);
 
                     // --- DAMAGE MELTING ---
                     float damageEffect = uDamagePulse * fbm(vModelPos.xz * 10.0 + uTime * 20.0);
                     baseCol = mix(baseCol, uColorPulse, damageEffect);
 
-                    // --- LIGHTING ---
+                    // --- PBR-STYLE LIGHTING ---
                     vec3 l = normalize(vec3(0.5, 1.0, 0.5));
-                    float diff = max(0.2, dot(n, l));
+                    float diff = max(0.15, dot(n, l));
                     
-                    // Edge Glow (Fresnel)
-                    float fresnel = pow(1.0 - max(0.0, dot(n, viewDir)), 3.0);
+                    // Specular highlight (Blinn-Phong)
+                    vec3 halfDir = normalize(l + viewDir);
+                    float spec = pow(max(0.0, dot(n, halfDir)), 64.0);
+                    float wetness = 0.3 + scratchVal * 0.5; // Scratches catch more specular
+                    vec3 specColor = vec3(0.9, 0.85, 0.7) * spec * wetness;
+
+                    // Fresnel edge glow
+                    float fresnel = pow(1.0 - max(0.0, dot(n, viewDir)), 3.5);
                     vec3 glowColor = mix(uColorYellow, uColorPulse, 1.0 - uHealthPct);
                     
-                    vec3 finalCol = baseCol * diff + (glowColor * fresnel * 0.8);
+                    // Rim light — subtle environmental bounce
+                    float rimLight = pow(1.0 - max(0.0, dot(n, viewDir)), 5.0);
+                    vec3 rimCol = vec3(0.15, 0.2, 0.3) * rimLight;
+
+                    vec3 finalCol = baseCol * diff + specColor + glowColor * fresnel * 0.6 + rimCol;
                     
-                    // Occasional "reconstruction" flicker
+                    // Reconstruction flicker
                     float flicker = step(0.98, hash12(vec2(uTime, 0.0)));
-                    finalCol += flicker * 0.2 * (1.0 - uHealthPct);
+                    finalCol += flicker * 0.15 * (1.0 - uHealthPct);
                     
                     gl_FragColor = vec4(finalCol, 1.0);
                 }
@@ -185,6 +225,29 @@ class TitanPlayer extends THREE.Group {
             emissive: new THREE.Color(0.0, 0.6, 1.0),
             emissiveIntensity: 3.5
         });
+
+        // 3D DNA Helix Swirl Materials (Glowing Bio-Tech Aesthetics)
+        this.strandAMat = new THREE.MeshStandardMaterial({
+            color: 0xff3300,
+            emissive: new THREE.Color(1.0, 0.1, 0.0),
+            emissiveIntensity: 3.0,
+            transparent: true,
+            opacity: 0.9
+        });
+        this.strandBMat = new THREE.MeshStandardMaterial({
+            color: 0xcc00ff,
+            emissive: new THREE.Color(0.66, 0.0, 1.0),
+            emissiveIntensity: 3.0,
+            transparent: true,
+            opacity: 0.9
+        });
+        this.rungMat = new THREE.MeshStandardMaterial({
+            color: 0xffaa00,
+            emissive: new THREE.Color(1.0, 0.4, 0.0),
+            emissiveIntensity: 2.0,
+            transparent: true,
+            opacity: 0.85
+        });
     }
 
     buildGeometry() {
@@ -192,6 +255,13 @@ class TitanPlayer extends THREE.Group {
         const frameMat = this.frameMat;
         const accentMat = this.accentMat;
         const energyMat = this.energyMat;
+
+        // Shared detail materials
+        const hydraulicMat = new THREE.MeshStandardMaterial({ color: 0x444c55, metalness: 0.95, roughness: 0.15 });
+        const rubberSealMat = new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.0, roughness: 0.95 });
+        const cableDetailMat = new THREE.MeshStandardMaterial({ color: 0x111820, metalness: 0.4, roughness: 0.6 });
+        const edgeBevelMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85, roughness: 0.3 });
+        this.statusLEDs = [];
 
         // --- ROOT OFFSET ---
         // In Babylon it was droidRoot.position.y = 6.6;
@@ -224,13 +294,92 @@ class TitanPlayer extends THREE.Group {
         this.chestLight = new THREE.PointLight(0xff2200, 1.5, 6);
         this.chestCore.add(this.chestLight);
 
-        // Vents
+        // --- 3D DNA HELIX SWIRL (DYNAMIC BIO-TECTONIC AESTHETICS) ---
+        this.dnaGroup = new THREE.Group();
+        this.chestCore.add(this.dnaGroup);
+
+        this.dnaBeadsA = [];
+        this.dnaBeadsB = [];
+        this.dnaRungs = [];
+
+        const numSteps = 16;
+        const helixRadius = 0.68;
+        const zStart = -0.28;
+        const zEnd = 0.28;
+        const totalTurns = 2.5 * Math.PI * 2; // 2.5 turns
+
+        this.dnaBeadGeo = new THREE.SphereGeometry(0.045, 8, 8);
+        this.dnaRungGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 8);
+        this.dnaRungGeo.rotateZ(Math.PI / 2); // Orient along X-axis
+
+        for (let i = 0; i < numSteps; i++) {
+            const t = i / (numSteps - 1);
+            const z = zStart + t * (zEnd - zStart);
+            const angle = t * totalTurns;
+
+            // Strand A position
+            const xA = helixRadius * Math.cos(angle);
+            const yA = helixRadius * Math.sin(angle);
+
+            // Strand B position (180 deg phase shift)
+            const xB = helixRadius * Math.cos(angle + Math.PI);
+            const yB = helixRadius * Math.sin(angle + Math.PI);
+
+            // Create Bead A
+            const beadA = new THREE.Mesh(this.dnaBeadGeo, this.strandAMat);
+            beadA.position.set(xA, yA, z);
+            this.dnaGroup.add(beadA);
+            this.dnaBeadsA.push(beadA);
+
+            // Create Bead B
+            const beadB = new THREE.Mesh(this.dnaBeadGeo, this.strandBMat);
+            beadB.position.set(xB, yB, z);
+            this.dnaGroup.add(beadB);
+            this.dnaBeadsB.push(beadB);
+
+            // Create Rung
+            const rung = new THREE.Mesh(this.dnaRungGeo, this.rungMat);
+            rung.position.set(0, 0, z);
+            rung.rotation.z = angle;
+            rung.scale.set(helixRadius * 2, 1, 1);
+            this.dnaGroup.add(rung);
+            this.dnaRungs.push(rung);
+        }
+
+        // Vents (enhanced with grille slats)
         for (let i = 0; i < 5; i++) {
             const vent = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.3), accentMat);
             vent.position.set(0, 0.8 - (i * 0.25), -0.8);
             vent.rotation.x = 0.2;
             this.torso.add(vent);
+            // Grille slat detail inside each vent
+            for (let s = 0; s < 4; s++) {
+                const slat = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.08, 0.22), frameMat);
+                slat.position.set(-0.45 + s * 0.3, 0.8 - (i * 0.25), -0.82);
+                slat.rotation.x = 0.3;
+                this.torso.add(slat);
+            }
         }
+
+        // Torso armor edge bevels
+        const bevelGeo = new THREE.BoxGeometry(0.06, 2.7, 0.06);
+        for (let side of [-1, 1]) {
+            const bevel = new THREE.Mesh(bevelGeo, edgeBevelMat);
+            bevel.position.set(1.22 * side, 0, 0.74);
+            this.torso.add(bevel);
+        }
+        const topBevel = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.06, 0.06), edgeBevelMat);
+        topBevel.position.set(0, 1.32, 0.74);
+        this.torso.add(topBevel);
+
+        // Volumetric glow ring around chest core
+        const glowRingGeo = new THREE.TorusGeometry(0.62, 0.04, 8, 32);
+        this.chestGlowRing = new THREE.Mesh(glowRingGeo, new THREE.MeshStandardMaterial({
+            color: 0x00aaff, emissive: 0x0066cc, emissiveIntensity: 2.5,
+            transparent: true, opacity: 0.6
+        }));
+        this.chestGlowRing.rotation.x = Math.PI / 2;
+        this.chestCore.add(this.chestGlowRing);
 
         // Spine
         this.spineRoot = new THREE.Group();
@@ -248,6 +397,15 @@ class TitanPlayer extends THREE.Group {
             const vertArmor = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 0.8), accentMat);
             vertArmor.position.set(0, 0, 0.1);
             vertGroup.add(vertArmor);
+
+            // Hydraulic lines between vertebrae
+            for (let side of [-1, 1]) {
+                const hydLine = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.04, 0.04, 0.42, 8), hydraulicMat
+                );
+                hydLine.position.set(0.3 * side, -0.22, -0.25);
+                vertGroup.add(hydLine);
+            }
         }
 
         // Pelvis
@@ -359,9 +517,27 @@ class TitanPlayer extends THREE.Group {
                 shoulder.add(pauldron);
             }
 
+            // Status LED on shoulder pauldron
+            const shoulderLED = new THREE.Mesh(
+                new THREE.SphereGeometry(0.06, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+            );
+            shoulderLED.position.set(0.2 * sign, 0.55, 0.3);
+            shoulder.add(shoulderLED);
+            this.statusLEDs.push(shoulderLED);
+
             const bicepFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.6, 16), frameMat);
             bicepFrame.position.y = -0.8;
             shoulder.add(bicepFrame);
+
+            // Cable bundles running shoulder to elbow
+            for (let c = 0; c < 2; c++) {
+                const cable = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), cableDetailMat
+                );
+                cable.position.set(0.12 * sign + c * 0.06 * sign, -0.8, -0.12);
+                shoulder.add(cable);
+            }
 
             const elbow = new THREE.Group();
             elbow.position.y = -1.6;
@@ -370,11 +546,35 @@ class TitanPlayer extends THREE.Group {
             elbowJoint.rotation.z = Math.PI / 2;
             elbow.add(elbowJoint);
 
+            // Rubber gasket seal at elbow joint
+            const elbowSeal = new THREE.Mesh(
+                new THREE.TorusGeometry(0.32, 0.03, 8, 16), rubberSealMat
+            );
+            elbowSeal.rotation.x = Math.PI / 2;
+            elbow.add(elbowSeal);
+
+            // Forearm status LED
+            const forearmLED = new THREE.Mesh(
+                new THREE.SphereGeometry(0.04, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+            );
+            forearmLED.position.set(0.15 * sign, -0.8, 0.15);
+            elbow.add(forearmLED);
+            this.statusLEDs.push(forearmLED);
+
             const hand = new THREE.Group();
             hand.position.y = -1.7;
             elbow.add(hand);
             const palm = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), frameMat);
             hand.add(palm);
+
+            // Wrist seal ring
+            const wristSeal = new THREE.Mesh(
+                new THREE.TorusGeometry(0.22, 0.035, 8, 16), rubberSealMat
+            );
+            wristSeal.rotation.x = Math.PI / 2;
+            wristSeal.position.y = 0.15;
+            hand.add(wristSeal);
 
             return { root, shoulder, elbow, hand };
         };
@@ -404,6 +604,30 @@ class TitanPlayer extends THREE.Group {
             if (this.armorMat.uniforms.uDamagePulse.value > 0) {
                 this.armorMat.uniforms.uDamagePulse.value *= Math.pow(0.01, dt * 2.0);
             }
+        }
+
+        // --- STATUS LED COLOR (health-reactive) ---
+        const hPct = this.health / this.maxHealth;
+        const ledColor = hPct > 0.6 ? 0x00ff44 : (hPct > 0.3 ? 0xffaa00 : 0xff2200);
+        if (this.statusLEDs) {
+            const ledBrightness = 0.7 + Math.sin(this.t * 4.0) * 0.3;
+            this.statusLEDs.forEach(led => {
+                led.material.color.setHex(ledColor);
+                led.scale.setScalar(ledBrightness);
+            });
+        }
+
+        // --- CHEST GLOW RING PULSE ---
+        if (this.chestGlowRing) {
+            const glowPulse = 1.5 + Math.sin(this.t * 3.0) * 1.0 + (1.0 - hPct) * 2.0;
+            this.chestGlowRing.material.emissiveIntensity = glowPulse;
+            this.chestGlowRing.material.opacity = 0.4 + Math.sin(this.t * 2.5) * 0.15;
+        }
+
+        // --- BREATHING ANIMATION ---
+        if (this.torso) {
+            const breathCycle = Math.sin(this.t * 1.9) * 0.008; // ~0.3Hz
+            this.torso.scale.set(1.0 - breathCycle * 0.5, 1.0 + breathCycle, 1.0 - breathCycle * 0.5);
         }
 
         // Ability Cooldown & Active Durations
@@ -450,6 +674,39 @@ class TitanPlayer extends THREE.Group {
                 this.chestLight.intensity = this.energyMat.emissiveIntensity * 0.5;
                 // Shift light color from blue to red as health drops
                 this.chestLight.color.setRGB(1.0 - healthFactor, healthFactor * 0.6, healthFactor);
+            }
+
+            // Animate 3D DNA Helix (Rotation & dynamic physical/emissive wave)
+            if (this.dnaGroup) {
+                // Continuous rotation of the helix
+                this.dnaGroup.rotation.z += dt * 2.5;
+
+                // Wave propagation speed increases as health drops
+                const waveSpeed = 6.0 + (1.0 - healthFactor) * 12.0;
+
+                // Synchronized global emissive pulse
+                const pulse = Math.sin(this.t * pulseSpeed);
+                if (this.strandAMat) this.strandAMat.emissiveIntensity = 3.0 + pulse * 1.5;
+                if (this.strandBMat) this.strandBMat.emissiveIntensity = 3.0 + pulse * 1.5;
+                if (this.rungMat) this.rungMat.emissiveIntensity = 2.0 + pulse * 1.0;
+
+                // Individual scale/wave animation along Z
+                const helixRadius = 0.68;
+                for (let i = 0; i < this.dnaBeadsA.length; i++) {
+                    const beadA = this.dnaBeadsA[i];
+                    const beadB = this.dnaBeadsB[i];
+                    const rung = this.dnaRungs[i];
+
+                    const zOffset = beadA.position.z * 12.0;
+                    const waveVal = Math.sin(this.t * waveSpeed + zOffset);
+                    const scaleFactor = 1.0 + 0.3 * waveVal;
+
+                    beadA.scale.setScalar(scaleFactor);
+                    beadB.scale.setScalar(scaleFactor);
+
+                    // Rung scale connects the pulsing beads seamlessly
+                    rung.scale.set(helixRadius * 2 * (1.0 + 0.08 * waveVal), scaleFactor * 0.8, scaleFactor * 0.8);
+                }
             }
         }
 
@@ -676,6 +933,13 @@ class TitanPlayer extends THREE.Group {
         if (this.frameMat) this.frameMat.dispose();
         if (this.accentMat) this.accentMat.dispose();
         if (this.energyMat) this.energyMat.dispose();
+
+        // Dispose of DNA Helix materials and geometries explicitly to prevent WebGL leaks
+        if (this.strandAMat) this.strandAMat.dispose();
+        if (this.strandBMat) this.strandBMat.dispose();
+        if (this.rungMat) this.rungMat.dispose();
+        if (this.dnaBeadGeo) this.dnaBeadGeo.dispose();
+        if (this.dnaRungGeo) this.dnaRungGeo.dispose();
 
         this.traverse(obj => {
             if (obj.isMesh) {

@@ -42,7 +42,7 @@ const ObjectFactory = {
 
     _createRockGeo: function () {
         const parts = [];
-        const base = new THREE.DodecahedronGeometry(0.4, 0);
+        const base = new THREE.IcosahedronGeometry(0.4, 3); // High poly for displacement
         base.translate(0, 0.2, 0);
         if (base.attributes.uv) base.deleteAttribute('uv');
         parts.push(base);
@@ -81,7 +81,7 @@ const ObjectFactory = {
 
     _createBarrelGeo: function () {
         const parts = [];
-        const body = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 12);
+        const body = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 32);
         if (body.attributes.uv) body.deleteAttribute('uv');
         parts.push(body);
 
@@ -127,7 +127,7 @@ const ObjectFactory = {
 
     _createThrownRockGeo: function () {
         const parts = [];
-        const base = new THREE.DodecahedronGeometry(0.2, 0);
+        const base = new THREE.IcosahedronGeometry(0.2, 2);
         if (base.attributes.uv) base.deleteAttribute('uv');
         parts.push(base);
         for (let i = 0; i < 2; i++) {
@@ -203,10 +203,29 @@ const ObjectFactory = {
                 `#include <color_fragment>`,
                 `#include <color_fragment>
                 float bump = snoise(vWorldPosOut * 4.0);
-                diffuseColor.rgb *= 0.6 + bump * 0.4;
+                float microBump = snoise(vWorldPosOut * 20.0);
+                diffuseColor.rgb *= 0.5 + bump * 0.4 + microBump * 0.1;
                 if (vLocalPosOut.y < 0.2 && bump > 0.5) {
-                    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.2, 0.1), 0.5); // Mossy base
+                    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.25, 0.1), 0.6); // Mossy base
                 }
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <normal_fragment_maps>`,
+                `#include <normal_fragment_maps>
+                vec2 bp = vWorldPosOut.xz * 10.0;
+                float h1 = snoise(vec3(bp, vWorldPosOut.y));
+                float h2 = snoise(vec3(bp + vec2(0.1, 0.0), vWorldPosOut.y));
+                float h3 = snoise(vec3(bp + vec2(0.0, 0.1), vWorldPosOut.y));
+                vec3 detailNormal = normalize(vec3(h1 - h2, 1.0, h1 - h3));
+                normal = normalize(normal + detailNormal * 0.8);
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <roughnessmap_fragment>`,
+                `#include <roughnessmap_fragment>
+                float mossMask = step(0.5, snoise(vWorldPosOut * 4.0)) * step(vLocalPosOut.y, 0.2);
+                roughnessFactor = mix(0.85, 0.95, mossMask); // Moss is rougher
                 `
             );
         };
@@ -298,8 +317,8 @@ const ObjectFactory = {
     },
 
     getBarrelMat: function () {
-        // We use emissive: white and color it inside the shader instead of setting emissive property
-        const mat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4, metalness: 0.6, emissive: 0xffffff, emissiveIntensity: 1.0 });
+        // Realistic rusted metal, no emissive glow
+        const mat = new THREE.MeshStandardMaterial({ color: 0x8a1b22, roughness: 0.6, metalness: 0.8 });
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uTime = { value: 0 };
             mat.userData.shader = shader;
@@ -335,19 +354,29 @@ const ObjectFactory = {
                 `#include <color_fragment>`,
                 `#include <color_fragment>
                 float rust = snoise(vWorldPosOut * 4.0);
-                diffuseColor.rgb *= 0.6 + rust * 0.4;
+                float scratch = snoise(vWorldPosOut * 50.0);
+                diffuseColor.rgb = mix(diffuseColor.rgb * (0.8 + scratch * 0.2), vec3(0.35, 0.15, 0.05), smoothstep(0.4, 0.8, rust));
                 `
             );
             shader.fragmentShader = shader.fragmentShader.replace(
-                `#include <emissivemap_fragment>`,
-                `#include <emissivemap_fragment>
-                float isTop = smoothstep(0.35, 0.45, vLocalPosOut.y);
-                float isSlimeLine = smoothstep(0.8, 0.95, snoise(vWorldPosOut * 5.0 + uTime * 0.5));
-                float sludge = isTop * isSlimeLine;
-                totalEmissiveRadiance = vec3(0.0); // Reset base emissive
-                if (sludge > 0.0) {
-                    totalEmissiveRadiance = vec3(0.1, 1.0, 0.2) * sludge * (1.5 + sin(uTime * 4.0) * 0.5);
-                }
+                `#include <roughnessmap_fragment>`,
+                `#include <roughnessmap_fragment>
+                float r_rust = snoise(vWorldPosOut * 4.0);
+                float isSlimeLineR = smoothstep(0.8, 0.95, snoise(vWorldPosOut * 5.0 + uTime * 0.5)) * smoothstep(0.35, 0.45, vLocalPosOut.y);
+                roughnessFactor = mix(0.4, 0.9, smoothstep(0.4, 0.8, r_rust)); // Rust is rough
+                roughnessFactor = mix(roughnessFactor, 0.1, isSlimeLineR); // Slime is glossy
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <normal_fragment_maps>`,
+                `#include <normal_fragment_maps>
+                vec2 bp2 = vWorldPosOut.xy * 8.0;
+                float hr1 = snoise(vec3(bp2, vWorldPosOut.z));
+                float hr2 = snoise(vec3(bp2 + vec2(0.1, 0.0), vWorldPosOut.z));
+                float hr3 = snoise(vec3(bp2 + vec2(0.0, 0.1), vWorldPosOut.z));
+                vec3 rustNormal = normalize(vec3(hr1 - hr2, 1.0, hr1 - hr3));
+                float normalMask = smoothstep(0.4, 0.8, snoise(vWorldPosOut * 4.0));
+                normal = normalize(normal + rustNormal * 0.6 * normalMask);
                 `
             );
         };
@@ -406,12 +435,20 @@ const ObjectFactory = {
                 `#include <common>`,
                 `#include <common>
                 uniform float uTime;
+                varying vec3 vWorldPosition;
+                `
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <worldpos_vertex>`,
+                `#include <worldpos_vertex>
+                vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
                 `
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <common>`,
                 `#include <common>
                 uniform float uTime;
+                varying vec3 vWorldPosition;
                 `
             );
             shader.fragmentShader = shader.fragmentShader.replace(
@@ -419,6 +456,21 @@ const ObjectFactory = {
                 `#include <emissivemap_fragment>
                 float pulse = (sin(uTime * 3.0) * 0.5 + 0.5);
                 totalEmissiveRadiance *= 0.5 + pulse * 1.5;
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <roughnessmap_fragment>`,
+                `#include <roughnessmap_fragment>
+                roughnessFactor = 0.2; // High tech smooth plastic/metal
+                `
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <normal_fragment_maps>`,
+                `#include <normal_fragment_maps>
+                // Hexagon/grid pattern for crate
+                vec2 hex = fract(vWorldPosition.xz * 15.0);
+                float hx = smoothstep(0.4, 0.5, length(hex - 0.5));
+                normal = normalize(normal + vec3(0.0, 1.0, 0.0) * hx * 0.15);
                 `
             );
             mat.userData.shader = shader;

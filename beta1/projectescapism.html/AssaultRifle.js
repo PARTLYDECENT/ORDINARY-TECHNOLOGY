@@ -1,56 +1,56 @@
 /**
- * AssaultRifle — Upgraded High-Fidelity Procedural M4/SCAR-Style Tactical Rifle
- * Features: Dual-tone FDE polymer & anodized black metal styling, hollow receiver chamber
- * with golden dummy round, reciprocating side bolt handle, physical ground-bouncing
- * shell ejection, smoke particles, and Web Audio spatialised casing impact SFX.
+ * AssaultRifle — High-Fidelity Procedural M4/SCAR-Style Rifle
+ * Features: Sleek skinnier chassis, physical guide rails containing the side action,
+ * hollow upper receiver with ejection port, rotating multi-lug bolt locking action,
+ * reciprocating tactical side charging handle, multi-rail system, collapsible stock,
+ * barrel heat, and procedural audio.
  */
 class AssaultRifle extends THREE.Group {
     constructor() {
         super();
         this.name = "procedural_assault_rifle";
 
-        // Animation states
+        // Recoil & physical animation states
         this.boltZ = 0;
         this.gunPitch = 0;
         this.gunZ = 0;
+        this.gunX = 0;
         this.triggerRot = 0;
         this.lightIntensity = 0;
         this.chargingHandleZ = 0;
-        this.dustCoverRot = 0; 
+        this.dustCoverRot = 0;
+        this.flashScale = 0;
+        this.heatLevel = 0;
+        this.shotCount = 0;
 
         // Particle pools
         this.shells = [];
+        this.smokeParticles = [];
+        this._recoilTarget = { pitch: 0, z: 0, x: 0 };
+        this._recoilVel = { pitch: 0, z: 0, x: 0 };
 
-        // --- MATERIA DESIGN SYSTEM MATERIALS ---
-        // Anodized gunmetal/black receiver
+        // Materials — Tactical milspec finish
         this.receiverMat = new THREE.MeshStandardMaterial({
-            color: 0x141619, roughness: 0.3, metalness: 0.85
+            color: 0x181c22, roughness: 0.4, metalness: 0.8
         });
-        // Picatinny rails and heatguards
         this.railMat = new THREE.MeshStandardMaterial({
-            color: 0x1c1f24, roughness: 0.45, metalness: 0.75
+            color: 0x20252d, roughness: 0.5, metalness: 0.7
         });
-        // Parkerized heavy steel barrel
         this.barrelMat = new THREE.MeshStandardMaterial({
-            color: 0x22262d, roughness: 0.4, metalness: 0.9
+            color: 0x22262d, roughness: 0.35, metalness: 0.9
         });
-        // Flat Dark Earth (FDE) tactical polymer accents
-        this.fdeMat = new THREE.MeshStandardMaterial({
-            color: 0x7d6c55, roughness: 0.8, metalness: 0.05
-        });
-        // Durable black polymer
         this.polyMat = new THREE.MeshStandardMaterial({
-            color: 0x090a0d, roughness: 0.75, metalness: 0.1
+            color: 0x0c0d0f, roughness: 0.8, metalness: 0.1
         });
-        // Polished chrome bolt carrier group
-        this.boltMat = new THREE.MeshStandardMaterial({
-            color: 0xeef2f6, roughness: 0.08, metalness: 0.98
+        this.magMat = new THREE.MeshStandardMaterial({
+            color: 0x12151a, roughness: 0.45, metalness: 0.6
         });
-        // Polished gold cartridge brass
-        this.bulletMat = new THREE.MeshStandardMaterial({
-            color: 0xd4af37, metalness: 0.9, roughness: 0.15
+        this.brassMat = new THREE.MeshStandardMaterial({
+            color: 0xbfa34e, metalness: 0.9, roughness: 0.15
         });
-        // Tactical blue LED accent
+        this.chromeMat = new THREE.MeshStandardMaterial({
+            color: 0xe0e6ed, metalness: 1.0, roughness: 0.05
+        });
         this.accentMat = new THREE.MeshStandardMaterial({
             color: 0x00aaff, emissive: 0x00aaff, emissiveIntensity: 0.4, roughness: 0.3, metalness: 0.9
         });
@@ -61,533 +61,627 @@ class AssaultRifle extends THREE.Group {
     }
 
     buildRifle() {
-        // === UPPER RECEIVER ASSEMBLY ===
+        // === SOLID RECOIL GROUP ===
+        // The entire gun chassis is inside this group so it recoils realistically as a single solid unit!
+        this.recoilGroup = new THREE.Group();
+        this.add(this.recoilGroup);
+
+        // === UPPER RECEIVER (Sleek skinnier hollow design) ===
         this.upperGroup = new THREE.Group();
-        this.add(this.upperGroup);
+        this.recoilGroup.add(this.upperGroup);
 
-        // Main upper receiver body
-        const upperGeo = new THREE.BoxGeometry(0.28, 0.26, 1.5);
-        const upper = new THREE.Mesh(upperGeo, this.receiverMat);
-        upper.position.set(0, 0.2, -0.1);
-        upper.castShadow = true;
-        this.upperGroup.add(upper);
-
-        // Receiver side details (layered metal look)
-        const leftPlate = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 1.3), this.receiverMat);
-        leftPlate.position.set(-0.145, 0.2, -0.1);
-        this.upperGroup.add(leftPlate);
-
-        // Hollow Chamber Cavity Box (Behind ejection port)
-        const chamberCav = new THREE.Mesh(
-            new THREE.BoxGeometry(0.16, 0.14, 0.45),
-            new THREE.MeshStandardMaterial({ color: 0x070707, roughness: 0.95, metalness: 0.0 })
+        // Left Side Wall (Solid, sleek thickness)
+        const leftWall = new THREE.Mesh(
+            new THREE.BoxGeometry(0.02, 0.20, 1.5),
+            this.receiverMat
         );
-        chamberCav.position.set(0.06, 0.2, 0.05);
-        this.upperGroup.add(chamberCav);
+        leftWall.position.set(-0.06, 0.2, -0.1);
+        leftWall.castShadow = true;
+        this.upperGroup.add(leftWall);
 
-        // Chambered Golden dummy round (visible when bolt is retracted)
-        this.chamberRound = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.026, 0.026, 0.16, 8),
-            this.bulletMat
+        // Top Wall (Rail Base)
+        const topWall = new THREE.Mesh(
+            new THREE.BoxGeometry(0.14, 0.03, 1.5),
+            this.receiverMat
         );
-        this.chamberRound.rotation.x = Math.PI / 2;
-        this.chamberRound.position.set(0.06, 0.2, 0.02);
-        this.upperGroup.add(this.chamberRound);
+        topWall.position.set(0, 0.29, -0.1);
+        this.upperGroup.add(topWall);
 
-        // Flat top Picatinny rail
-        const topRailGeo = new THREE.BoxGeometry(0.22, 0.04, 1.4);
-        const topRail = new THREE.Mesh(topRailGeo, this.railMat);
-        topRail.position.set(0, 0.35, -0.15);
+        // Bottom Wall (Lower interface)
+        const bottomWall = new THREE.Mesh(
+            new THREE.BoxGeometry(0.14, 0.03, 1.5),
+            this.receiverMat
+        );
+        bottomWall.position.set(0, 0.11, -0.1);
+        this.upperGroup.add(bottomWall);
+
+        // Right Rear Wall (after ejection port)
+        const rightRearWall = new THREE.Mesh(
+            new THREE.BoxGeometry(0.02, 0.15, 0.6),
+            this.receiverMat
+        );
+        rightRearWall.position.set(0.06, 0.2, 0.35);
+        this.upperGroup.add(rightRearWall);
+
+        // Right Front Wall (before ejection port)
+        const rightFrontWall = new THREE.Mesh(
+            new THREE.BoxGeometry(0.02, 0.15, 0.5),
+            this.receiverMat
+        );
+        rightFrontWall.position.set(0.06, 0.2, -0.6);
+        this.upperGroup.add(rightFrontWall);
+
+        // --- PHYSICAL GUIDE RAILS ON THE LEFT RECEIVER BODY ---
+        // These horizontal bars "contain" the reciprocating side charging handle
+        const upperGuideRail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.015, 0.01, 0.7),
+            this.railMat
+        );
+        upperGuideRail.position.set(-0.07, 0.24, 0.0);
+        this.upperGroup.add(upperGuideRail);
+
+        const lowerGuideRail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.015, 0.01, 0.7),
+            this.railMat
+        );
+        lowerGuideRail.position.set(-0.07, 0.18, 0.0);
+        this.upperGroup.add(lowerGuideRail);
+
+        // Flat top rail (Sleeker Picatinny)
+        const topRail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.10, 0.03, 1.4),
+            this.railMat
+        );
+        topRail.position.set(0, 0.32, -0.15);
         this.upperGroup.add(topRail);
 
-        // Rail teeth notches
+        // Top Rail Picatinny Notches
         for (let i = 0; i < 18; i++) {
             const tooth = new THREE.Mesh(
-                new THREE.BoxGeometry(0.23, 0.015, 0.02),
+                new THREE.BoxGeometry(0.11, 0.01, 0.015),
                 this.railMat
             );
-            tooth.position.set(0, 0.365, -0.8 + i * 0.075);
+            tooth.position.set(0, 0.335, -0.8 + i * 0.075);
             this.upperGroup.add(tooth);
         }
 
-        // FDE Polymer ejection port dust cover (opens on first fire)
-        this.dustCover = new THREE.Mesh(
-            new THREE.BoxGeometry(0.02, 0.1, 0.32),
-            this.fdeMat
-        );
-        this.dustCover.position.set(0.145, 0.22, -0.05);
-        this.upperGroup.add(this.dustCover);
+        // Ejection Port Cover Hinge Group (downward/outward flip)
+        this.dustCoverHinge = new THREE.Group();
+        this.dustCoverHinge.position.set(0.07, 0.12, -0.15); // hinge at bottom edge of ejection port
+        this.upperGroup.add(this.dustCoverHinge);
 
-        // Forward assist knob
+        this.dustCover = new THREE.Mesh(
+            new THREE.BoxGeometry(0.01, 0.08, 0.38),
+            this.receiverMat
+        );
+        this.dustCover.position.set(0, 0.04, 0); // offset so it pivots along bottom edge
+        this.dustCoverHinge.add(this.dustCover);
+
+        // Forward Assist Knob
         const fwdAssist = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.03, 0.03, 0.06, 8),
+            new THREE.CylinderGeometry(0.02, 0.02, 0.05, 8),
             this.receiverMat
         );
         fwdAssist.rotation.z = Math.PI / 2;
-        fwdAssist.position.set(0.17, 0.28, 0.2);
+        fwdAssist.position.set(0.09, 0.22, 0.25);
         this.upperGroup.add(fwdAssist);
 
-        // === BOLT CARRIER GROUP (Chrome & Reciprocating Charging Handle) ===
+        // === BOLT CARRIER GROUP (Sleek cylindrical design, guided inside upper) ===
         this.boltGroup = new THREE.Group();
+        this.boltGroup.position.set(0, 0.2, 0);
         this.upperGroup.add(this.boltGroup);
 
-        // Chrome bolt body
-        const boltGeo = new THREE.BoxGeometry(0.14, 0.1, 0.58);
-        const bolt = new THREE.Mesh(boltGeo, this.boltMat);
-        bolt.position.set(0.05, 0.2, 0.1);
-        this.boltGroup.add(bolt);
+        // Sleek skinnier bolt carrier cylinder
+        const boltCarrier = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.035, 0.035, 0.45, 12),
+            this.chromeMat
+        );
+        boltCarrier.rotation.x = Math.PI / 2;
+        boltCarrier.position.set(0, 0, 0.05);
+        this.boltGroup.add(boltCarrier);
 
-        // Reciprocating bolt handle (protrudes from ejection port)
-        const chHandleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.16, 8);
-        this.chHandle = new THREE.Mesh(chHandleGeo, this.receiverMat);
-        this.chHandle.rotation.z = Math.PI / 2;
-        this.chHandle.position.set(0.18, 0.22, 0.2);
-        this.boltGroup.add(this.chHandle);
-
-        // === BARREL ASSEMBLY ===
-        const barrelGeo = new THREE.CylinderGeometry(0.045, 0.045, 2.6, 16);
-        const barrel = new THREE.Mesh(barrelGeo, this.barrelMat);
-        barrel.rotation.x = Math.PI / 2;
-        barrel.position.set(0, 0.22, -2.1);
-        barrel.castShadow = true;
-        this.add(barrel);
-
-        // Gas tube
-        const gasTubeGeo = new THREE.CylinderGeometry(0.012, 0.012, 1.4, 8);
-        const gasTube = new THREE.Mesh(gasTubeGeo, this.barrelMat);
-        gasTube.rotation.x = Math.PI / 2;
-        gasTube.position.set(0, 0.32, -1.4);
-        this.add(gasTube);
-
-        // Gas block
-        const gasBlock = new THREE.Mesh(
-            new THREE.BoxGeometry(0.12, 0.18, 0.08),
+        // Bolt Gas Key (top detail)
+        const gasKey = new THREE.Mesh(
+            new THREE.BoxGeometry(0.015, 0.02, 0.12),
             this.receiverMat
         );
-        gasBlock.position.set(0, 0.3, -2.2);
-        this.add(gasBlock);
+        gasKey.position.set(0, 0.045, -0.05);
+        this.boltGroup.add(gasKey);
+
+        // Reciprocating Tactical Side Charging Handle (Left side, rides within horizontal guide rails!)
+        const handleRod = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.008, 0.008, 0.08, 8),
+            this.receiverMat
+        );
+        handleRod.rotation.z = Math.PI / 2;
+        handleRod.position.set(-0.06, 0.01, 0.0);
+        this.boltGroup.add(handleRod);
+
+        const handleKnob = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.015, 0.012, 0.04, 8),
+            this.polyMat
+        );
+        handleKnob.rotation.z = Math.PI / 2;
+        handleKnob.position.set(-0.1, 0.01, 0.0);
+        this.boltGroup.add(handleKnob);
+
+        // Bolt head / locking lugs (front mechanism)
+        this.boltHeadMesh = new THREE.Group();
+        this.boltHeadMesh.position.set(0, 0, -0.18);
+        this.boltGroup.add(this.boltHeadMesh);
+
+        const boltFace = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.03, 0.03, 0.05, 8),
+            this.chromeMat
+        );
+        boltFace.rotation.x = Math.PI / 2;
+        this.boltHeadMesh.add(boltFace);
+
+        // Detailed locking lugs (like a 7-lug gear)
+        for (let i = 0; i < 7; i++) {
+            const lug = new THREE.Mesh(
+                new THREE.BoxGeometry(0.01, 0.008, 0.04),
+                this.chromeMat
+            );
+            lug.position.set(
+                Math.sin(i * Math.PI * 2 / 7) * 0.033,
+                Math.cos(i * Math.PI * 2 / 7) * 0.033,
+                0
+            );
+            lug.rotation.z = -i * Math.PI * 2 / 7;
+            this.boltHeadMesh.add(lug);
+        }
+
+        // === BARREL ASSEMBLY (Skinnier, realistic proportions) ===
+        const barrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.022, 0.022, 2.6, 16),
+            this.barrelMat
+        );
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.2, -2.1);
+        barrel.castShadow = true;
+        this.recoilGroup.add(barrel);
+
+        // Gas tube
+        const gasTube = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.006, 0.006, 1.4, 8),
+            this.barrelMat
+        );
+        gasTube.rotation.x = Math.PI / 2;
+        gasTube.position.set(0, 0.25, -1.4);
+        this.recoilGroup.add(gasTube);
+
+        // Gas block / front sight base
+        const gasBlock = new THREE.Mesh(
+            new THREE.BoxGeometry(0.06, 0.10, 0.06),
+            this.receiverMat
+        );
+        gasBlock.position.set(0, 0.24, -2.2);
+        this.recoilGroup.add(gasBlock);
 
         // Front sight post
         const fSightPost = new THREE.Mesh(
-            new THREE.BoxGeometry(0.02, 0.14, 0.02),
+            new THREE.BoxGeometry(0.015, 0.08, 0.015),
             this.receiverMat
         );
-        fSightPost.position.set(0, 0.44, -2.2);
-        this.add(fSightPost);
+        fSightPost.position.set(0, 0.32, -2.2);
+        this.recoilGroup.add(fSightPost);
 
-        // Tactical muzzle brake with porting holes
-        const muzzleGeo = new THREE.CylinderGeometry(0.06, 0.055, 0.2, 12);
-        const muzzle = new THREE.Mesh(muzzleGeo, this.barrelMat);
+        // Muzzle brake / flash hider
+        const muzzle = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.03, 0.028, 0.14, 12),
+            this.barrelMat
+        );
         muzzle.rotation.x = Math.PI / 2;
-        muzzle.position.set(0, 0.22, -3.5);
-        this.add(muzzle);
+        muzzle.position.set(0, 0.2, -3.5);
+        this.recoilGroup.add(muzzle);
 
-        // Muzzle brake gas slots
+        // Muzzle brake slots
         for (let i = 0; i < 4; i++) {
             const slot = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.015, 0.03),
+                new THREE.BoxGeometry(0.04, 0.008, 0.02),
                 new THREE.MeshBasicMaterial({ color: 0x000000 })
             );
-            slot.position.set(0, 0.22 + (i < 2 ? 0.04 : -0.04), -3.42 - i * 0.04);
+            slot.position.set(0, 0.2 + (i < 2 ? 0.02 : -0.02), -3.42 - i * 0.03);
             slot.rotation.z = (i % 2) * Math.PI / 2;
-            this.add(slot);
+            this.recoilGroup.add(slot);
         }
 
-        // === HANDGUARD / RAIL SYSTEM (FDE Polymer & Anodized Rails) ===
+        // === HANDGUARD / RAIL SYSTEM (Sleek and skinnier) ===
         const handguardGroup = new THREE.Group();
-        this.add(handguardGroup);
+        this.recoilGroup.add(handguardGroup);
 
-        // Main tactical handguard tube
-        const hgGeo = new THREE.BoxGeometry(0.3, 0.28, 1.4);
-        const hg = new THREE.Mesh(hgGeo, this.fdeMat);
+        // Main handguard tube
+        const hg = new THREE.Mesh(
+            new THREE.BoxGeometry(0.16, 0.18, 1.4),
+            this.railMat
+        );
         hg.position.set(0, 0.16, -1.55);
         handguardGroup.add(hg);
 
-        // Picatinny rails (left & right)
+        // Side rails (left & right)
         for (let side of [-1, 1]) {
             const sideRail = new THREE.Mesh(
-                new THREE.BoxGeometry(0.04, 0.06, 1.3),
+                new THREE.BoxGeometry(0.02, 0.04, 1.3),
                 this.railMat
             );
-            sideRail.position.set(0.17 * side, 0.16, -1.55);
+            sideRail.position.set(0.09 * side, 0.16, -1.55);
             handguardGroup.add(sideRail);
+
+            // Side Picatinny Teeth Notches
+            for (let i = 0; i < 15; i++) {
+                const tooth = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.01, 0.05, 0.015),
+                    this.railMat
+                );
+                tooth.position.set(0.10 * side, 0.16, -2.1 + i * 0.08);
+                tooth.rotation.z = Math.PI / 2;
+                handguardGroup.add(tooth);
+            }
         }
 
-        // Bottom Picatinny rail
+        // Bottom rail
         const bottomRail = new THREE.Mesh(
-            new THREE.BoxGeometry(0.12, 0.04, 1.3),
+            new THREE.BoxGeometry(0.08, 0.02, 1.3),
             this.railMat
         );
-        bottomRail.position.set(0, 0.0, -1.55);
+        bottomRail.position.set(0, 0.06, -1.55);
         handguardGroup.add(bottomRail);
 
-        // Handguard ventilation slots
+        // Bottom Picatinny Teeth Notches
+        for (let i = 0; i < 15; i++) {
+            const tooth = new THREE.Mesh(
+                new THREE.BoxGeometry(0.09, 0.01, 0.015),
+                this.railMat
+            );
+            tooth.position.set(0, 0.045, -2.1 + i * 0.08);
+            handguardGroup.add(tooth);
+        }
+
+        // Ventilation cutouts
         for (let i = 0; i < 5; i++) {
             for (let side of [-1, 1]) {
                 const vent = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.05, 0.08, 0.12),
+                    new THREE.BoxGeometry(0.03, 0.05, 0.08),
                     new THREE.MeshBasicMaterial({ color: 0x050505 })
                 );
-                vent.position.set(0.15 * side, 0.16, -1.0 - i * 0.25);
+                vent.position.set(0.08 * side, 0.16, -1.0 - i * 0.25);
                 handguardGroup.add(vent);
             }
         }
 
-        // PEQ-15 Tactical Laser Box (Mounted on top rail)
-        const peqBox = new THREE.Mesh(
-            new THREE.BoxGeometry(0.12, 0.08, 0.24),
-            this.fdeMat
-        );
-        peqBox.position.set(0, 0.41, -1.1);
-        this.add(peqBox);
-
-        const peqLens = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.02, 0.02, 0.02, 8),
-            new THREE.MeshBasicMaterial({ color: 0x00aaff })
-        );
-        peqLens.rotation.x = Math.PI / 2;
-        peqLens.position.set(0.03, 0.41, -1.22);
-        this.add(peqLens);
-
-        // Angled Tactical Foregrip (Bottom rail)
-        const foregripGeo = new THREE.BoxGeometry(0.1, 0.24, 0.18);
-        const foregrip = new THREE.Mesh(foregripGeo, this.fdeMat);
-        foregrip.position.set(0, -0.15, -1.4);
-        foregrip.rotation.x = -Math.PI * 0.12;
-        this.add(foregrip);
-
-        // === LOWER RECEIVER ===
+        // === LOWER RECEIVER (Sleek skinnier profile) ===
         const lowerGroup = new THREE.Group();
-        this.add(lowerGroup);
+        this.recoilGroup.add(lowerGroup);
 
-        const lowerGeo = new THREE.BoxGeometry(0.26, 0.18, 0.9);
-        const lower = new THREE.Mesh(lowerGeo, this.receiverMat);
+        const lower = new THREE.Mesh(
+            new THREE.BoxGeometry(0.14, 0.14, 0.9),
+            this.receiverMat
+        );
         lower.position.set(0, 0.02, 0.15);
         lower.castShadow = true;
         lowerGroup.add(lower);
 
         // Magazine well flare
-        const magWellGeo = new THREE.BoxGeometry(0.22, 0.06, 0.3);
-        const magWell = new THREE.Mesh(magWellGeo, this.receiverMat);
-        magWell.position.set(0, -0.07, 0.0);
+        const magWell = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.04, 0.3),
+            this.receiverMat
+        );
+        magWell.position.set(0, -0.06, 0.0);
         lowerGroup.add(magWell);
 
         // Trigger guard
         const guardOuter = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.22, 0.28),
+            new THREE.BoxGeometry(0.04, 0.16, 0.22),
             this.receiverMat
         );
-        guardOuter.position.set(0, -0.15, 0.18);
+        guardOuter.position.set(0, -0.12, 0.18);
         lowerGroup.add(guardOuter);
 
         const guardInner = new THREE.Mesh(
-            new THREE.BoxGeometry(0.07, 0.16, 0.22),
+            new THREE.BoxGeometry(0.045, 0.12, 0.18),
             new THREE.MeshBasicMaterial({ color: 0x000000 })
         );
-        guardInner.position.set(0, -0.13, 0.18);
+        guardInner.position.set(0, -0.11, 0.18);
         lowerGroup.add(guardInner);
 
         // Trigger
         this.triggerMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.03, 0.12, 0.03),
-            new THREE.MeshStandardMaterial({ color: 0x0b0c0e })
+            new THREE.BoxGeometry(0.015, 0.08, 0.02),
+            new THREE.MeshStandardMaterial({ color: 0x111111 })
         );
-        this.triggerMesh.position.set(0, -0.1, 0.15);
+        this.triggerMesh.position.set(0, -0.09, 0.15);
         lowerGroup.add(this.triggerMesh);
 
         // Selector switch
         const selector = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.025, 0.025, 0.04, 8),
+            new THREE.CylinderGeometry(0.015, 0.015, 0.03, 8),
             this.receiverMat
         );
         selector.rotation.z = Math.PI / 2;
-        selector.position.set(-0.15, 0.06, 0.3);
+        selector.position.set(-0.08, 0.06, 0.3);
         lowerGroup.add(selector);
 
         // Mag release button
         const magRelease = new THREE.Mesh(
-            new THREE.BoxGeometry(0.04, 0.06, 0.04),
+            new THREE.BoxGeometry(0.02, 0.04, 0.02),
             this.receiverMat
         );
-        magRelease.position.set(0.14, 0.0, 0.05);
+        magRelease.position.set(0.08, 0.0, 0.05);
         lowerGroup.add(magRelease);
 
-        // === PISTOL GRIP (FDE Polymer) ===
-        const gripGeo = new THREE.BoxGeometry(0.22, 0.9, 0.4);
-        const grip = new THREE.Mesh(gripGeo, this.fdeMat);
+        // === PISTOL GRIP (Sleeker and skinnier) ===
+        const grip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.9, 0.25),
+            this.polyMat
+        );
         grip.position.set(0, -0.55, 0.42);
         grip.rotation.x = Math.PI * 0.12;
         grip.castShadow = true;
-        this.add(grip);
+        this.recoilGroup.add(grip);
 
-        // Grip ridges
+        // Grip texture ridges
         for (let i = 0; i < 6; i++) {
             const ridge = new THREE.Mesh(
-                new THREE.BoxGeometry(0.24, 0.015, 0.38),
-                this.fdeMat
+                new THREE.BoxGeometry(0.13, 0.015, 0.23),
+                this.polyMat
             );
             ridge.position.set(0, -0.3 - i * 0.1, 0.42);
             ridge.rotation.x = Math.PI * 0.12;
-            this.add(ridge);
+            this.recoilGroup.add(ridge);
         }
 
-        // Grip cap
+        // Grip bottom cap
         const gripCap = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.04, 0.3),
+            new THREE.BoxGeometry(0.10, 0.03, 0.2),
             this.receiverMat
         );
         gripCap.position.set(0, -1.0, 0.52);
         gripCap.rotation.x = Math.PI * 0.12;
-        this.add(gripCap);
+        this.recoilGroup.add(gripCap);
 
-        // === MAGAZINE (FDE Polymer PMAG Style) ===
+        // === MAGAZINE (Proportionally skinnier) ===
         this.magGroup = new THREE.Group();
-        this.add(this.magGroup);
+        this.recoilGroup.add(this.magGroup);
 
-        const magBodyGeo = new THREE.BoxGeometry(0.16, 0.9, 0.3);
-        const magBody = new THREE.Mesh(magBodyGeo, this.fdeMat);
+        const magBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.9, 0.22),
+            this.magMat
+        );
         magBody.position.set(0, -0.55, 0.0);
         magBody.rotation.x = Math.PI * 0.02;
         this.magGroup.add(magBody);
 
-        // Black floor plate
+        // Mag floor plate
         const magFloor = new THREE.Mesh(
-            new THREE.BoxGeometry(0.17, 0.03, 0.32),
+            new THREE.BoxGeometry(0.09, 0.03, 0.24),
             this.receiverMat
         );
         magFloor.position.set(0, -1.0, 0.0);
         this.magGroup.add(magFloor);
 
-        // Bullets visible inside mag witness slots
+        // Mag witness holes
         for (let i = 0; i < 3; i++) {
-            const bulletInMag = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.015, 0.015, 0.05, 8),
-                this.bulletMat
+            const hole = new THREE.Mesh(
+                new THREE.BoxGeometry(0.01, 0.03, 0.03),
+                new THREE.MeshBasicMaterial({ color: 0x000000 })
             );
-            bulletInMag.rotation.x = Math.PI / 2;
-            bulletInMag.position.set(-0.065, -0.35 - i * 0.2, 0.0);
-            this.magGroup.add(bulletInMag);
+            hole.position.set(-0.05, -0.3 - i * 0.2, 0.0);
+            this.magGroup.add(hole);
         }
 
-        // === COLLAPSIBLE STOCK (FDE Stock on Black Buffer Tube) ===
+        // === COLLAPSIBLE STOCK (Sleeker and skinnier) ===
         const stockGroup = new THREE.Group();
-        this.add(stockGroup);
+        this.recoilGroup.add(stockGroup);
 
-        // Black metal buffer tube
-        const bufferGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.0, 12);
-        const buffer = new THREE.Mesh(bufferGeo, this.receiverMat);
+        // Buffer tube
+        const buffer = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.035, 0.035, 1.0, 12),
+            this.receiverMat
+        );
         buffer.rotation.x = Math.PI / 2;
         buffer.position.set(0, 0.18, 1.1);
         stockGroup.add(buffer);
 
-        // FDE stock body
-        const stockBodyGeo = new THREE.BoxGeometry(0.2, 0.28, 0.5);
-        const stockBody = new THREE.Mesh(stockBodyGeo, this.fdeMat);
+        // Stock body
+        const stockBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.2, 0.45),
+            this.polyMat
+        );
         stockBody.position.set(0, 0.16, 1.4);
         stockGroup.add(stockBody);
 
-        // Black rubber buttpad
+        // Buttpad (rubber)
         const buttpad = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.26, 0.04),
-            new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.95 })
+            new THREE.BoxGeometry(0.09, 0.18, 0.03),
+            new THREE.MeshStandardMaterial({ color: 0x1d1e22, roughness: 0.95 })
         );
-        buttpad.position.set(0, 0.16, 1.66);
+        buttpad.position.set(0, 0.16, 1.63);
         stockGroup.add(buttpad);
 
-        // FDE cheek riser
+        // Cheek weld riser
         const cheekWeld = new THREE.Mesh(
-            new THREE.BoxGeometry(0.16, 0.06, 0.3),
-            this.fdeMat
+            new THREE.BoxGeometry(0.08, 0.04, 0.28),
+            this.polyMat
         );
-        cheekWeld.position.set(0, 0.32, 1.35);
+        cheekWeld.position.set(0, 0.28, 1.35);
         stockGroup.add(cheekWeld);
 
         // QD sling mount
         const slingMount = new THREE.Mesh(
-            new THREE.TorusGeometry(0.03, 0.008, 8, 16),
+            new THREE.TorusGeometry(0.02, 0.005, 8, 16),
             this.receiverMat
         );
-        slingMount.position.set(-0.12, 0.1, 1.55);
+        slingMount.position.set(-0.06, 0.1, 1.55);
         stockGroup.add(slingMount);
 
-        // === OPTIC ASSEMBLY ===
-        const sightBase = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.1, 0.18),
-            this.receiverMat
-        );
-        sightBase.position.set(0, 0.4, -0.15);
-        this.add(sightBase);
+        // === HOLOGRAPHIC SIGHT REMOVED TO MAKE ROOM FOR THE SUPER-EXOTIC CUSTOM SHADER HOLOSIGHT ===
 
-        const sightWindow = new THREE.Mesh(
-            new THREE.BoxGeometry(0.14, 0.14, 0.12),
-            new THREE.MeshStandardMaterial({
-                color: 0x112233, transparent: true, opacity: 0.3, roughness: 0.1, metalness: 0.9
-            })
-        );
-        sightWindow.position.set(0, 0.48, -0.15);
-        this.add(sightWindow);
+        // === MUZZLE LIGHT ===
+        this.muzzleLight = new THREE.PointLight(0xffaa44, 0, 8);
+        this.muzzleLight.position.set(0, 0.2, -3.6);
+        this.recoilGroup.add(this.muzzleLight);
 
-        // Aim Reticle
-        const reticle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.008, 8, 8),
-            this.sightDotMat
-        );
-        reticle.position.set(0, 0.48, -0.15);
-        this.add(reticle);
+        // === MUZZLE FLASH MESH ===
+        this.flashGroup = new THREE.Group();
+        this.flashGroup.position.set(0, 0.2, -3.6);
+        this.recoilGroup.add(this.flashGroup);
+        const flashMat = new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
+        const flashCoreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false });
+        
+        // Central cone
+        const coneGeo = new THREE.ConeGeometry(0.05, 0.5, 6);
+        const cone = new THREE.Mesh(coneGeo, flashMat);
+        cone.rotation.x = Math.PI / 2;
+        cone.position.z = -0.25;
+        this.flashGroup.add(cone);
+        
+        // Core glow sphere
+        const coreGeo = new THREE.SphereGeometry(0.04, 8, 8);
+        this.flashCore = new THREE.Mesh(coreGeo, flashCoreMat);
+        this.flashGroup.add(this.flashCore);
+        
+        // Side petals (star pattern)
+        for (let i = 0; i < 4; i++) {
+            const petal = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.3), flashMat);
+            petal.rotation.z = i * Math.PI / 4;
+            petal.rotation.y = Math.PI / 2;
+            petal.position.z = -0.1;
+            this.flashGroup.add(petal);
+        }
+        this.flashGroup.visible = false;
+        this.flashMat = flashMat;
+        this.flashCoreMat = flashCoreMat;
 
-        // === MUZZLE DYNAMIC POINTLIGHT ===
-        this.muzzleLight = new THREE.PointLight(0x00aaff, 0, 6);
-        this.muzzleLight.position.set(0, 0.22, -3.6);
-        this.add(this.muzzleLight);
+        // === BARREL HEAT MATERIAL REF ===
+        this.barrelMesh = barrel;
+        this.barrelOrigColor = new THREE.Color(0x22262d);
 
-        // === BLUE LED STRIP ===
+        // === ACCENT STRIP (Blue LED on handguard) ===
         const ledStrip = new THREE.Mesh(
-            new THREE.BoxGeometry(0.02, 0.02, 1.0),
+            new THREE.BoxGeometry(0.01, 0.01, 1.0),
             this.accentMat
         );
-        ledStrip.position.set(0.16, 0.0, -1.55);
-        this.add(ledStrip);
+        ledStrip.position.set(0.095, 0.0, -1.55);
+        this.recoilGroup.add(ledStrip);
     }
 
-    fire() {
-        // High-speed visual action values
-        this.boltZ = 0.48; // bolt slams back exposing gold dummy cartridge
-        this.gunPitch = 0.22; // Snappy visual muzzle climb
-        this.gunZ = 0.16; // Mechanical gun receiver recoil back
+    fire(isADS) {
+        this.shotCount++;
+        // Progressive recoil - kicks harder the longer you hold fire
+        const burstMult = Math.min(1.8, 1.0 + this.shotCount * 0.04);
+
+        if (isADS) {
+            // ADS: Minimal mechanical animation — rock-solid aim, no visual jolt
+            this.boltZ = 0.07; // Subtle bolt reciprocation (barely visible)
+            // Zero out chassis recoil impulses completely
+            this._recoilTarget.pitch = 0;
+            this._recoilTarget.z = 0;
+            this._recoilTarget.x = 0;
+            this._recoilVel.pitch = 0;
+            this._recoilVel.z = 0;
+            this._recoilVel.x = 0;
+        } else {
+            // Hipfire: Full mechanical recoil
+            this.boltZ = 0.35;
+            this._recoilTarget.pitch = (0.12 + Math.random() * 0.06) * burstMult;
+            this._recoilTarget.z = (0.08 + Math.random() * 0.04) * burstMult;
+            this._recoilTarget.x = (Math.random() - 0.5) * 0.04 * burstMult;
+            this._recoilVel.pitch = 8;
+            this._recoilVel.z = 6;
+            this._recoilVel.x = 3;
+        }
+        
         this.triggerRot = 0.25;
-        this.lightIntensity = 3.0;
+        this.lightIntensity = isADS ? 1.5 : 3.5;
+        this.flashScale = isADS ? (0.4 + Math.random() * 0.2) : (1.0 + Math.random() * 0.4);
+        this.heatLevel = Math.min(1.0, this.heatLevel + 0.06);
 
         if (!this.hasFired) {
             this.hasFired = true;
-            this.dustCoverRot = -Math.PI * 0.55; // Open dust cover smoothly past 90 degrees
+            this.dustCoverRot = -Math.PI * 0.65; // open downward/outward hinged cover
         }
 
-        // Spawn physical ground-bouncing shell
-        this.spawnShell();
-        
-        // Spawn a warm-grey mechanical smoke puff from the opening Ejection Port
-        this.spawnPortSmoke();
+        // Show muzzle flash with random rotation
+        this.flashGroup.visible = true;
+        this.flashGroup.rotation.z = Math.random() * Math.PI * 2;
+        this.flashGroup.scale.setScalar(this.flashScale);
 
-        // Synth Web Audio firing shot
+        // Skip shell/smoke spawning in ADS to eliminate rightward visual jolt
+        if (!isADS) {
+            this.spawnShell();
+            this.spawnEjectionSmoke();
+        }
         this.playProceduralShot();
     }
 
-    spawnPortSmoke() {
-        if (typeof window.emitParticle !== 'function') return;
-
-        // Calculate ejection port position in world space
-        const portPos = new THREE.Vector3(0.16, 0.22, -0.05);
-        portPos.applyMatrix4(this.matrixWorld);
-
-        // Eject warm gunpowder gas sideways/upward
-        const rightDir = new THREE.Vector3(1, 0.15, -0.2).applyQuaternion(this.quaternion).normalize();
-        for (let i = 0; i < 2; i++) {
-            window.emitParticle(
-                portPos.x, portPos.y, portPos.z,
-                rightDir.x * (1.2 + Math.random()) + (Math.random() - 0.5) * 0.2,
-                rightDir.y * 1.2 + 0.4 + Math.random() * 0.4,
-                rightDir.z * (1.2 + Math.random()) + (Math.random() - 0.5) * 0.2,
-                0.32, 0.29, 0.27, // warm grey gas
-                5 + Math.random() * 3, // size
-                0.3 + Math.random() * 0.2 // life
-            );
-        }
-    }
-
     spawnShell() {
-        const shellGeo = new THREE.CylinderGeometry(0.025, 0.02, 0.14, 8);
+        const shellGeo = new THREE.CylinderGeometry(0.012, 0.01, 0.08, 8);
         const shell = new THREE.Mesh(shellGeo, this.brassMat);
+        shell.castShadow = true;
 
-        // Ejection port starting coordinates
-        const worldPos = new THREE.Vector3(0.16, 0.22, -0.05);
-        worldPos.applyMatrix4(this.matrixWorld);
+        // Spawns from the center of our new hollow ejection port on the right side
+        const worldPos = new THREE.Vector3(0.08, 0.20, -0.15);
+        worldPos.applyMatrix4(this.recoilGroup.matrixWorld);
         shell.position.copy(worldPos);
-        shell.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        shell.rotation.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28);
 
-        // Find the absolute Scene root node so the shell is isolated from player movement
-        let rootScene = window.scene;
-        if (!rootScene && this.parent) {
-            let curr = this.parent;
-            while (curr.parent) {
-                curr = curr.parent;
-            }
-            if (curr.type === "Scene") rootScene = curr;
-        }
+        const target = this.parent || window.scene;
+        if (target) target.add(shell);
 
-        if (rootScene) {
-            rootScene.add(shell);
-        } else if (this.parent) {
-            this.parent.add(shell);
-        }
-
-        // Calculate ejection velocity relative to current weapon orientation
-        const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(this.quaternion).normalize();
-        const upDir = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion).normalize();
-        const fwdDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.quaternion).normalize();
-
-        const speedRight = 4.2 + Math.random() * 1.8;
-        const speedUp = 2.4 + Math.random() * 1.2;
-        const speedFwd = -1.0 + (Math.random() - 0.5) * 0.5; // slight backward inertia
-
-        const vx = rightDir.x * speedRight + upDir.x * speedUp + fwdDir.x * speedFwd;
-        const vy = rightDir.y * speedRight + upDir.y * speedUp + fwdDir.y * speedFwd;
-        const vz = rightDir.z * speedRight + upDir.z * speedUp + fwdDir.z * speedFwd;
+        // Eject outward (right) and slightly upward/backward
+        const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(this.getWorldQuaternion(new THREE.Quaternion()));
+        const upDir = new THREE.Vector3(0, 1, 0).applyQuaternion(this.getWorldQuaternion(new THREE.Quaternion()));
+        const ejectSpeed = 3.5 + Math.random() * 2;
+        const upSpeed = 2.0 + Math.random() * 1.5;
 
         this.shells.push({
             mesh: shell,
-            vx: vx,
-            vy: vy,
-            vz: vz,
-            rx: (Math.random() - 0.5) * 22,
-            ry: (Math.random() - 0.5) * 22,
-            rz: (Math.random() - 0.5) * 22,
-            life: 1.4 // Casing lingers a bit longer to roll
+            vx: rightDir.x * ejectSpeed + upDir.x * upSpeed,
+            vy: rightDir.y * ejectSpeed + upDir.y * upSpeed + 1.2,
+            vz: rightDir.z * ejectSpeed + upDir.z * upSpeed,
+            rx: (Math.random() - 0.5) * 15,
+            ry: (Math.random() - 0.5) * 15,
+            rz: (Math.random() - 0.5) * 15,
+            life: 2.0,
+            bounced: false,
+            bouncesLeft: 2
         });
     }
 
-    playCasingClink(pos) {
-        try {
-            if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const ctx = window.audioCtx;
-            if (ctx.state === 'suspended') ctx.resume();
-
-            // Spatialised volume check relative to active camera
-            let volume = 0.22;
-            if (window.camera) {
-                const dist = pos.distanceTo(window.camera.position);
-                volume = Math.max(0.01, 0.22 * (1.0 - Math.min(dist / 18.0, 1.0)));
-            }
-
-            const t = ctx.currentTime;
-            const osc1 = ctx.createOscillator();
-            const osc2 = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-
-            // High metallic ringing resonance
-            osc1.type = 'triangle';
-            osc1.frequency.setValueAtTime(2600 + Math.random() * 400, t);
-
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(3400 + Math.random() * 400, t);
-
-            gainNode.gain.setValueAtTime(volume, t);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.07 + Math.random() * 0.05);
-
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'bandpass';
-            filter.frequency.setValueAtTime(3000, t);
-            filter.Q.setValueAtTime(2.2, t);
-
-            osc1.connect(filter);
-            osc2.connect(filter);
-            filter.connect(gainNode);
-            gainNode.connect(ctx.destination);
-
-            osc1.start(t); osc1.stop(t + 0.16);
-            osc2.start(t); osc2.stop(t + 0.16);
-        } catch (e) {
-            // Audio execution safe fallback
+    spawnEjectionSmoke() {
+        const target = this.parent || window.scene;
+        if (!target) return;
+        const smokeMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3, depthWrite: false });
+        for (let i = 0; i < 3; i++) {
+            const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.01 + Math.random() * 0.02, 4, 4), smokeMat.clone());
+            const wp = new THREE.Vector3(0.08, 0.20, -0.15);
+            wp.applyMatrix4(this.recoilGroup.matrixWorld);
+            smoke.position.copy(wp);
+            target.add(smoke);
+            this.smokeParticles.push({
+                mesh: smoke,
+                vx: (Math.random() - 0.3) * 0.5,
+                vy: 0.3 + Math.random() * 0.4,
+                vz: (Math.random() - 0.5) * 0.3,
+                life: 0.5 + Math.random() * 0.3
+            });
         }
+    }
+
+    _playShellClink() {
+        if (!window.audioCtx) return;
+        const ctx = window.audioCtx;
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(3000 + Math.random() * 3000, t);
+        o.frequency.exponentialRampToValueAtTime(800, t + 0.03);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.04, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        o.connect(g).connect(ctx.destination);
+        o.start(t); o.stop(t + 0.06);
     }
 
     playProceduralShot() {
@@ -619,7 +713,7 @@ class AssaultRifle extends THREE.Group {
         osc2.connect(g2); g2.connect(ctx.destination);
         osc2.start(t); osc2.stop(t + 0.08);
 
-        // Layer 3: Noise powder burst
+        // Layer 3: Noise burst (powder explosion)
         const bufLen = ctx.sampleRate * 0.03;
         const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
         const data = noiseBuf.getChannelData(0);
@@ -638,7 +732,7 @@ class AssaultRifle extends THREE.Group {
         nGain.connect(ctx.destination);
         noise.start(t); noise.stop(t + 0.04);
 
-        // Layer 4: Metal reciprocating bolt return click
+        // Layer 4: Bolt carrier snap click
         const bolt = ctx.createOscillator();
         bolt.type = 'square';
         bolt.frequency.setValueAtTime(1200, t + 0.04);
@@ -651,90 +745,123 @@ class AssaultRifle extends THREE.Group {
     }
 
     update(dt) {
-        // Reciprocating mechanical action returns
-        this.boltZ += (0 - this.boltZ) * 26 * dt;
-        this.gunPitch += (0 - this.gunPitch) * 20 * dt;
-        this.gunZ += (0 - this.gunZ) * 20 * dt;
-        this.triggerRot += (0 - this.triggerRot) * 22 * dt;
-        this.lightIntensity = Math.max(0, this.lightIntensity - 45 * dt);
+        // Spring-damped recoil system applied to the ENTIRE recoil chassis group!
+        const springK = 120, damp = 12;
+        this._recoilVel.pitch += (-this.gunPitch * springK - this._recoilVel.pitch * damp) * dt;
+        this._recoilVel.z += (-this.gunZ * springK - this._recoilVel.z * damp) * dt;
+        this._recoilVel.x += (-this.gunX * springK - this._recoilVel.x * damp) * dt;
+        this.gunPitch += this._recoilVel.pitch * dt + this._recoilTarget.pitch;
+        this.gunZ += this._recoilVel.z * dt + this._recoilTarget.z;
+        this.gunX += this._recoilVel.x * dt + this._recoilTarget.x;
+        this._recoilTarget.pitch *= 0.85;
+        this._recoilTarget.z *= 0.85;
+        this._recoilTarget.x *= 0.85;
 
+        // Recoil base values are processed for logic, but we no longer slide/pivot the gun chassis
+        // to keep it rock-solid and firmly locked in the player's hands. Only the bolt carrier cycles!
+
+        // Bolt carrier group reciprocation inside receiver
+        this.boltZ += (0 - this.boltZ) * 30 * dt;
         this.boltGroup.position.z = this.boltZ;
-        this.triggerMesh.rotation.x = this.triggerRot;
-        this.muzzleLight.intensity = this.lightIntensity;
 
-        // Dust cover spring open animation
-        if (this.hasFired) {
-            this.dustCover.rotation.x += (this.dustCoverRot - this.dustCover.rotation.x) * 12 * dt;
+        // DEFINED Rotary Lock Action:
+        // As bolt begins to slide back (from 0 to 0.05 z-travel), rotate bolt head to unlock (45 degrees)
+        if (this.boltZ < 0.05) {
+            this.boltHeadMesh.rotation.z = (this.boltZ / 0.05) * (Math.PI / 4);
+        } else {
+            this.boltHeadMesh.rotation.z = Math.PI / 4;
         }
 
-        // Blue LED indicator pulse
+        // Trigger return animation
+        this.triggerRot += (0 - this.triggerRot) * 25 * dt;
+        this.triggerMesh.rotation.x = this.triggerRot;
+
+        // Muzzle light intensity decay
+        this.lightIntensity = Math.max(0, this.lightIntensity - 50 * dt);
+        this.muzzleLight.intensity = this.lightIntensity;
+
+        // Muzzle flash mesh fade
+        this.flashScale *= 0.7;
+        if (this.flashScale < 0.05) {
+            this.flashGroup.visible = false;
+        } else {
+            this.flashGroup.scale.setScalar(this.flashScale);
+            this.flashMat.opacity = this.flashScale;
+            this.flashCoreMat.opacity = Math.min(1, this.flashScale * 2);
+        }
+
+        // Dust cover hinge downward pivot
+        if (this.hasFired) {
+            this.dustCoverHinge.rotation.z += (this.dustCoverRot - this.dustCoverHinge.rotation.z) * 10 * dt;
+        }
+
+        // Barrel heat glow visual cooling
+        this.heatLevel = Math.max(0, this.heatLevel - 0.008 * dt);
+        if (this.barrelMesh) {
+            const h = this.heatLevel;
+            const heatColor = this.barrelOrigColor.clone().lerp(new THREE.Color(0.6, 0.15, 0.0), h * 0.4);
+            this.barrelMat.color.copy(heatColor);
+            this.barrelMat.emissive.setRGB(h * 0.3, h * 0.05, 0);
+            this.barrelMat.emissiveIntensity = h;
+        }
+
+        // Reset progressive recoil burst factor when not firing
+        this.shotCount = Math.max(0, this.shotCount - 3 * dt);
+
+        // Ambient LED strip pulse on handguard
         if (this.accentMat) {
             this.accentMat.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.005) * 0.15;
         }
 
-        // Realistic 3D ground-bouncing shell physics simulation
+        // Shell physics with double floor bounces and sound trigger
         for (let i = this.shells.length - 1; i >= 0; i--) {
             const s = this.shells[i];
-            
-            // Apply real-world gravity
-            s.vy -= 9.81 * dt;
-            
+            s.vy -= 9.8 * dt;
             s.mesh.position.x += s.vx * dt;
             s.mesh.position.y += s.vy * dt;
             s.mesh.position.z += s.vz * dt;
-            
             s.mesh.rotation.x += s.rx * dt;
             s.mesh.rotation.y += s.ry * dt;
             s.mesh.rotation.z += s.rz * dt;
-
-            // Spawn wispy hot gunpowder smoke trails from casing in flight
-            if (s.life > 0.9 && typeof window.emitParticle === 'function' && Math.random() < 0.28) {
-                window.emitParticle(
-                    s.mesh.position.x, s.mesh.position.y, s.mesh.position.z,
-                    (Math.random() - 0.5) * 0.1, 0.3 + Math.random() * 0.2, (Math.random() - 0.5) * 0.1,
-                    0.55, 0.55, 0.55, // light grey wispy smoke
-                    1.2 + Math.random() * 1.2,
-                    0.25 + Math.random() * 0.2
-                );
+            
+            // Floor bounce simulation
+            if (s.mesh.position.y < 0.05 && s.bouncesLeft > 0) {
+                s.mesh.position.y = 0.05;
+                s.vy = Math.abs(s.vy) * 0.3;
+                s.vx *= 0.5;
+                s.vz *= 0.5;
+                s.rx *= 0.4; s.ry *= 0.4; s.rz *= 0.4;
+                s.bouncesLeft--;
+                this._playShellClink();
             }
-
-            // High-fidelity terrain collision tracking
-            let groundY = -2.0; 
-            if (window.TerrainGen && typeof window.TerrainGen.getHeight === 'function') {
-                groundY = window.TerrainGen.getHeight(s.mesh.position.x, s.mesh.position.z);
-            }
-
-            if (s.mesh.position.y <= groundY) {
-                s.mesh.position.y = groundY;
-                
-                // If the impact has high speed, bounce!
-                if (s.vy < -0.6) {
-                    s.vy = -s.vy * 0.48; // Bouncing coefficient of restitution
-                    s.vx *= 0.55;        // Ground friction dampening
-                    s.vz *= 0.55;
-                    
-                    // Trigger spin tumble variation on collision
-                    s.rx = (Math.random() - 0.5) * 12;
-                    s.ry = (Math.random() - 0.5) * 12;
-                    s.rz = (Math.random() - 0.5) * 12;
-
-                    // Play spatialized metallic clink
-                    this.playCasingClink(s.mesh.position);
-                } else {
-                    // Slide and roll to a clean halt
-                    s.vy = 0;
-                    s.vx *= 0.85 * (1 - dt * 6);
-                    s.vz *= 0.85 * (1 - dt * 6);
-                    s.rx *= 0.8 * (1 - dt * 6);
-                    s.ry *= 0.8 * (1 - dt * 6);
-                    s.rz *= 0.8 * (1 - dt * 6);
-                }
-            }
-
+            
             s.life -= dt;
+            // Smooth transparency fade-out before disposal
+            if (s.life < 0.3) {
+                s.mesh.material.opacity = s.life / 0.3;
+                s.mesh.material.transparent = true;
+            }
             if (s.life <= 0) {
                 if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
+                s.mesh.geometry.dispose();
                 this.shells.splice(i, 1);
+            }
+        }
+
+        // Gas/smoke venting particles from ejection port
+        for (let i = this.smokeParticles.length - 1; i >= 0; i--) {
+            const sp = this.smokeParticles[i];
+            sp.mesh.position.x += sp.vx * dt;
+            sp.mesh.position.y += sp.vy * dt;
+            sp.mesh.position.z += sp.vz * dt;
+            sp.mesh.scale.multiplyScalar(1 + 2 * dt);
+            sp.life -= dt;
+            sp.mesh.material.opacity = Math.max(0, sp.life * 0.6);
+            if (sp.life <= 0) {
+                if (sp.mesh.parent) sp.mesh.parent.remove(sp.mesh);
+                sp.mesh.geometry.dispose();
+                sp.mesh.material.dispose();
+                this.smokeParticles.splice(i, 1);
             }
         }
     }

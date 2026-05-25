@@ -184,12 +184,18 @@ const CampaignMapManager = (function () {
 
             // 1. Procedural SDF Bunker Generation
             for(let i=0; i<2; i++) { // 2 bunkers per chunk
-                const bx = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
-                const bz = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+                let bx, bz, wx, wz, gh;
+                let attempts = 0;
+                do {
+                    bx = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+                    bz = Math.floor(Math.random() * (this.config.gridSize - 16)) + 8;
+                    wx = bx * this.config.cellSize + worldOffsetX;
+                    wz = bz * this.config.cellSize + worldOffsetZ;
+                    gh = TerrainGen.getMeshHeight(wx, wz);
+                    attempts++;
+                } while (gh <= -1.8 && attempts < 15);
 
-                const wx = bx * this.config.cellSize + worldOffsetX;
-                const wz = bz * this.config.cellSize + worldOffsetZ;
-                const gh = TerrainGen.getMeshHeight(wx, wz);
+                if (gh <= -1.8) continue; // Skip if we couldn't find a dry spot
 
                 dummy.position.set(bx * this.config.cellSize, gh, bz * this.config.cellSize);
                 dummy.rotation.set(0, Math.random() > 0.5 ? 0 : Math.PI / 2, 0); 
@@ -212,7 +218,7 @@ const CampaignMapManager = (function () {
                 const lx = i % this.config.gridSize;
                 const lz = Math.floor(i / this.config.gridSize);
 
-            if (costField[i] !== 255) {
+                if (costField[i] !== 255) {
                     const rand = Math.random();
                     let pTree = 0.02, pBarrel = 0.00375;
 
@@ -228,81 +234,91 @@ const CampaignMapManager = (function () {
                         const tx = lx * this.config.cellSize + this.config.cellSize / 2 + worldOffsetX;
                         const tz = lz * this.config.cellSize + this.config.cellSize / 2 + worldOffsetZ;
                         const gh = TerrainGen.getMeshHeight(tx, tz);
-                        dummy.position.set(lx * this.config.cellSize + this.config.cellSize / 2, gh, lz * this.config.cellSize + this.config.cellSize / 2);
-                        dummy.rotation.y = Math.random() * Math.PI * 2;
-                        const s = 0.8 + Math.random() * 0.4;
-                        dummy.scale.set(s * 2, s * 4, s * 2);
-                        dummy.updateMatrix();
-                        trees.setMatrixAt(tCount++, dummy.matrix);
-                        costField[i] = 10;
+                        
+                        // Cull if placed below shoreline water level (-1.8)
+                        if (gh > -1.8) {
+                            dummy.position.set(lx * this.config.cellSize + this.config.cellSize / 2, gh, lz * this.config.cellSize + this.config.cellSize / 2);
+                            dummy.rotation.y = Math.random() * Math.PI * 2;
+                            const s = 0.8 + Math.random() * 0.4;
+                            dummy.scale.set(s * 2, s * 4, s * 2);
+                            dummy.updateMatrix();
+                            trees.setMatrixAt(tCount++, dummy.matrix);
+                            costField[i] = 10;
+                        }
                     } else if (rand < pTree + pBarrel && brlCount < 50) { // Barrels
                         const bx = lx * this.config.cellSize + 1;
                         const bz = lz * this.config.cellSize + 1;
                         const gh = TerrainGen.getHeight(bx + worldOffsetX, bz + worldOffsetZ);
-                        dummy.position.set(bx, gh + 0.4, bz);
-                        dummy.rotation.set(0, Math.random() * 6.28, 0);
-                        if (Math.random() < 0.2) dummy.rotation.x = 1.57; // Tipped over
-                        dummy.scale.setScalar(0.9 + Math.random() * 0.2);
-                        dummy.updateMatrix();
-                        barrels.setMatrixAt(brlCount++, dummy.matrix);
-                        costField[i] = 50;
+                        
+                        // Cull if placed below shoreline water level (-1.8)
+                        if (gh > -1.8) {
+                            dummy.position.set(bx, gh + 0.4, bz);
+                            dummy.rotation.set(0, Math.random() * 6.28, 0);
+                            if (Math.random() < 0.2) dummy.rotation.x = 1.57; // Tipped over
+                            dummy.scale.setScalar(0.9 + Math.random() * 0.2);
+                            dummy.updateMatrix();
+                            barrels.setMatrixAt(brlCount++, dummy.matrix);
+                            costField[i] = 50;
+                        }
                     }
                 }
             }
 
-            // 2. Continuous Industrial Pipe Network (Hazard Orange)
-            for (let i = 0; i < 8; i++) {
-                const startX = Math.random() * this.chunkSize;
-                const startZ = Math.random() * this.chunkSize;
-                const dir = Math.random() > 0.5 ? 'x' : 'z';
-                const length = 20 + Math.floor(Math.random() * 30);
-                const pipeHeightOffset = 1.5 + Math.random() * 3.5;
-                const pipeSpacing = 1.0; 
+            // 2. Structured Continuous Pipelines across the entire map
+            const isPipeX = (cz === 0);
+            const isPipeZ = (cx === 0);
 
-                // Sample terrain once at start to keep pipe perfectly level
-                const baseTerrainH = TerrainGen.getMeshHeight(startX + worldOffsetX, startZ + worldOffsetZ);
+            if (isPipeX || isPipeZ) {
+                const pipeHeight = 4.0;
+                const baseTerrainH = TerrainGen.getMeshHeight(this.chunkSize / 2 + worldOffsetX, this.chunkSize / 2 + worldOffsetZ);
 
-                for (let l = 0; l < length; l++) {
-                    if (pipeCount >= 800) break;
-                    const px = dir === 'x' ? startX + l * pipeSpacing : startX;
-                    const pz = dir === 'z' ? startZ + l * pipeSpacing : startZ;
-
-                    if (px < 0 || px >= this.chunkSize || pz < 0 || pz >= this.chunkSize) continue;
-
-                    dummy.position.set(px, baseTerrainH + pipeHeightOffset, pz);
-
-                    // Orientation
-                    dummy.rotation.set(0, 0, 0);
-                    if (dir === 'x') {
-                        dummy.rotation.z = Math.PI / 2;
-                    } else {
-                        dummy.rotation.x = Math.PI / 2;
-                    }
-
-                    dummy.scale.set(1.05, 1.05, 1.05); // Ensure overlap for continuity
+                if (isPipeX && pipeCount < 800) {
+                    // Single massive smooth pipeline along X
+                    dummy.position.set(this.chunkSize / 2, baseTerrainH + pipeHeight, this.chunkSize / 2);
+                    dummy.rotation.set(0, 0, Math.PI / 2);
+                    dummy.scale.set(3.0, this.chunkSize, 3.0);
                     dummy.updateMatrix();
                     pipes.setMatrixAt(pipeCount++, dummy.matrix);
 
-                    // Add Pipe Supports (Pillars) reaching to the ground
-                    if (l % 10 === 0 && pCount < 1000) {
-                        const currentTerrainH = TerrainGen.getMeshHeight(px + worldOffsetX, pz + worldOffsetZ);
-                        const pHeight = (baseTerrainH + pipeHeightOffset) - currentTerrainH;
+                    // Anchored supports along the line
+                    for (let x = 8; x < this.chunkSize; x += 16) {
+                        if (pCount >= 1000) break;
+                        const wx = x + worldOffsetX;
+                        const wz = this.chunkSize / 2 + worldOffsetZ;
+                        const terrainH = TerrainGen.getMeshHeight(wx, wz);
+                        const pHeight = (baseTerrainH + pipeHeight) - terrainH;
                         if (pHeight > 0.1) {
-                            dummy.position.set(px, currentTerrainH, pz);
+                            dummy.position.set(x, terrainH, this.chunkSize / 2);
                             dummy.rotation.set(0, 0, 0);
-                            dummy.scale.set(0.12, pHeight / (this.config.cellSize * 1.8), 0.12);
+                            dummy.scale.set(0.2, pHeight / (this.config.cellSize * 1.8), 0.2);
                             dummy.updateMatrix();
                             pillars.setMatrixAt(pCount++, dummy.matrix);
                         }
                     }
+                }
 
-                    // Random Steam Emission
-                    if (Math.random() < 0.03 && steamCount < 150) {
-                        dummy.position.set(px, baseTerrainH + pipeHeightOffset, pz);
-                        dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
-                        dummy.scale.setScalar(0.5 + Math.random() * 0.7);
-                        dummy.updateMatrix();
-                        steam.setMatrixAt(steamCount++, dummy.matrix);
+                if (isPipeZ && pipeCount < 800) {
+                    // Single massive smooth pipeline along Z
+                    dummy.position.set(this.chunkSize / 2, baseTerrainH + pipeHeight, this.chunkSize / 2);
+                    dummy.rotation.set(Math.PI / 2, 0, 0);
+                    dummy.scale.set(3.0, this.chunkSize, 3.0);
+                    dummy.updateMatrix();
+                    pipes.setMatrixAt(pipeCount++, dummy.matrix);
+
+                    // Anchored supports along the line
+                    for (let z = 8; z < this.chunkSize; z += 16) {
+                        if (pCount >= 1000) break;
+                        const wx = this.chunkSize / 2 + worldOffsetX;
+                        const wz = z + worldOffsetZ;
+                        const terrainH = TerrainGen.getMeshHeight(wx, wz);
+                        const pHeight = (baseTerrainH + pipeHeight) - terrainH;
+                        if (pHeight > 0.1) {
+                            dummy.position.set(this.chunkSize / 2, terrainH, z);
+                            dummy.rotation.set(0, 0, 0);
+                            dummy.scale.set(0.2, pHeight / (this.config.cellSize * 1.8), 0.2);
+                            dummy.updateMatrix();
+                            pillars.setMatrixAt(pCount++, dummy.matrix);
+                        }
                     }
                 }
             }
