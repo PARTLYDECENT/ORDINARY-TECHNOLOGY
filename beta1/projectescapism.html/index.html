@@ -39,6 +39,7 @@
     <script src="./CampaignMap.js"></script>
     <script src="./SurvivalMap.js"></script>
     <script src="./DesertMap.js"></script>
+    <script src="./EndgameMap.js"></script>
     <script src="./pyramid.js"></script>
     <script src="./spires.js"></script>
     <script src="./CampaignTutorial.js"></script>
@@ -68,6 +69,7 @@
     <script src="./gore.js"></script>
     <script src="./Pickups.js"></script>
     <script src="./virus1.js"></script>
+    <script src="./animations/animation1.js"></script>
 
     <style>
         body {
@@ -2505,7 +2507,7 @@
                 this.mapId = mapId;
                 this.hazards = [];
                 this.spawnTimer = 0;
-                this.maxHazards = 15;
+                this.maxHazards = (mapId === 'endgame') ? 0 : 15;
             }
 
             update(delta, playerPos) {
@@ -3819,6 +3821,16 @@
 
                         scene.fog.color.setHex(0xffc896);
                         scene.fog.density = 0.008; // gorgeous warm dust horizon haze
+                    } else if (cfg.mapId === 'endgame') {
+                        // Dark cosmic purple/violet stardust lighting
+                        ambientLight.color.setHex(0x100820);
+                        ambientLight.intensity = 0.5;
+                        dirLight.color.setHex(0x502090);
+                        dirLight.intensity = 1.5;
+                        dirLight.position.set(50, 200, 50);
+
+                        scene.fog.color.setHex(0x050010);
+                        scene.fog.density = 0.005; // gorgeous thin stardust space haze
                     } else if (cfg.fogColor !== undefined) {
                         scene.fog.color.setHex(cfg.fogColor);
                         // scene.background update removed for skybox
@@ -3871,6 +3883,8 @@
                         if (window.PyramidManager) {
                             window.PyramidManager.init(scene);
                         }
+                    } else if (currentMapId === 'endgame') {
+                        mapManager = new EndgameMapManager(scene, CONFIG);
                     } else {
                         mapManager = new SurvivalMapManager(scene, CONFIG);
                     }
@@ -3921,6 +3935,7 @@
             varying float vType;
             varying float vSeed;
             varying float vScale;
+            varying float vSqueezeRatio;
             
             #include <common>
             void main() {
@@ -3930,9 +3945,12 @@
                 vType = aType;
                 vSeed = aSeed;
                 
-                // Extract dynamic instanced scale from the first column of the instanceMatrix
-                float instScale = length(vec3(instanceMatrix[0][0], instanceMatrix[0][1], instanceMatrix[0][2]));
+                // Extract dynamic instanced scale and squeeze ratio from instanceMatrix
+                float scaleX = length(vec3(instanceMatrix[0][0], instanceMatrix[0][1], instanceMatrix[0][2]));
+                float scaleY = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
+                float instScale = scaleX;
                 vScale = instScale;
+                vSqueezeRatio = scaleX / scaleY;
                 
                 // INSTANCED BILLBOARDING logic:
                 // Extract instance translation from instanceMatrix
@@ -3965,12 +3983,16 @@
             varying float vType;
             varying float vSeed;
             varying float vScale;
+            varying float vSqueezeRatio;
             uniform float uTime;
             uniform float uDarkness;
             uniform float uScanActive;
             uniform float uHoloGlitches;
             uniform float uViralShedding;
             uniform float uHoloMorph;
+
+            // Forward declaration for procedural limb melting
+            float skinNoise(vec3 p);
 
             // --- Math & SDF Utilities (Based on BobBoss) ---
             float hash11(float p) {
@@ -4328,13 +4350,36 @@
                     clawsR = min(clawsR, claw);
                 }
 
-                float zombie = smin(torso, head, 0.08);
-                zombie = smin(zombie, legL, 0.06);
-                zombie = smin(zombie, legR, 0.06);
-                zombie = smin(zombie, armL, 0.05);
-                zombie = smin(zombie, armR, 0.05);
+                // Detect grab and procedural limb melting via squeeze ratio
+                float grabProg = (vSqueezeRatio < 0.98) ? clamp((1.0 - vSqueezeRatio) / 0.52, 0.0, 1.0) : 0.0;
+
+                float legL_m = legL;
+                float legR_m = legR;
+                float armL_m = armL;
+                float armR_m = armR;
+                float arm3_m = arm3;
+                float head_m = head;
+
+                if (grabProg > 0.01) {
+                    // Limbs melt and erode from the extremities inward using high-frequency noise
+                    float meltNoise = skinNoise(p * 12.0 + vec3(vSeed)) * grabProg * 0.55;
+                    
+                    // Limbs dissolve and disappear completely as grab progress increases.
+                    legL_m += meltNoise * 2.2 + grabProg * 1.5;
+                    legR_m += meltNoise * 2.2 + grabProg * 1.5;
+                    armL_m += meltNoise * 2.5 + grabProg * 1.8;
+                    armR_m += meltNoise * 2.5 + grabProg * 1.8;
+                    arm3_m += meltNoise * 2.5 + grabProg * 1.8;
+                    head_m += meltNoise * 0.9 + grabProg * 0.45;
+                }
+
+                float zombie = smin(torso, head_m, 0.08);
+                zombie = smin(zombie, legL_m, 0.06);
+                zombie = smin(zombie, legR_m, 0.06);
+                zombie = smin(zombie, armL_m, 0.05);
+                zombie = smin(zombie, armR_m, 0.05);
                 if (vType == 3.0) {
-                    zombie = smin(zombie, arm3, 0.05);
+                    zombie = smin(zombie, arm3_m, 0.05);
                 }
 
                 // Bone structures collection
@@ -4544,6 +4589,21 @@
                 vec3 halfV = normalize(keyLight - rd);
                 float spec = pow(max(0.0, dot(nor, halfV)), 32.0) * 0.3;
                 col += vec3(0.8, 0.7, 0.5) * spec;
+
+                // Volumetric procedural flayed real blood overlay
+                if (vSqueezeRatio < 0.98) {
+                    float grabProg = clamp((1.0 - vSqueezeRatio) / 0.52, 0.0, 1.0);
+                    
+                    // Bubbling, high-gloss dripping blood texture
+                    float bloodFlow = sin(pos.y * 38.0 - uTime * 14.0) * cos(pos.x * 32.0 + uTime * 10.0);
+                    vec3 realBlood = mix(vec3(0.24, 0.005, 0.008), vec3(0.78, 0.01, 0.012), smoothstep(-0.4, 0.4, bloodFlow));
+                    
+                    col = mix(col, realBlood, grabProg * 0.92);
+                    
+                    // Boost specular wet sheen on bloody surfaces
+                    float specBlood = pow(max(0.0, dot(nor, halfV)), 10.0) * 0.75 * grabProg;
+                    col += vec3(0.85, 0.02, 0.02) * specBlood;
+                }
                 
                 // Flash on hurt
                 float hurt = smoothstep(0.0, 0.5, uTime - vHurtTime) * (1.0 - smoothstep(0.5, 0.8, uTime - vHurtTime));
@@ -5012,7 +5072,7 @@
                     cameraFPS.rotation.set(0, 0, 0); // Reset pitch
                     document.body.requestPointerLock();
 
-                    player.visible = false;
+                    if (player) player.visible = false;
                     if (fpsViewmodel) fpsViewmodel.visible = true;
 
                     // Center crosshair in FPS mode
@@ -5026,7 +5086,7 @@
                     cameraFPS.rotation.set(0, 0, 0); // Reset pitch on exit too
                     document.exitPointerLock();
 
-                    player.visible = true;
+                    if (player) player.visible = true;
                     if (fpsViewmodel) fpsViewmodel.visible = false;
                 }
             }
@@ -5879,6 +5939,9 @@
             zombieMeshes.thrower.count = data.tIdx;
             zombieMeshes.mutant.count = data.mIdx;
 
+            if (window.GrabAnimationManager && typeof window.GrabAnimationManager.syncGrabbedZombiePos === 'function') {
+                window.GrabAnimationManager.syncGrabbedZombiePos();
+            }
             zombieMeshes.normal.instanceMatrix.needsUpdate = true;
             zombieMeshes.puker.instanceMatrix.needsUpdate = true;
             zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
@@ -6800,7 +6863,7 @@
             }
 
             // Hazard water damage logic
-            if (player.position.y <= -1.8) { // Give a little buffer below -2.0 mesh for wading
+            if (player.position.y <= -1.8 && !(window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'endgame')) { // Give a little buffer below -2.0 mesh for wading
                 frameDamage += 15 * delta; // Damage over time
 
                 // Extra visual cue for being in toxic water
@@ -7158,6 +7221,9 @@
             // --- UPDATE GPU PARTICLE SYSTEM ---
             updateParticles(delta);
             if (window.goreSystem) window.goreSystem.update(delta);
+            if (window.GrabAnimationManager && typeof window.GrabAnimationManager.update === 'function') {
+                window.GrabAnimationManager.update(delta);
+            }
 
             // --- GUI STATE PUSH ---
             if (typeof gui !== 'undefined') {
@@ -7166,7 +7232,8 @@
                 let objProg = 0;
 
                 if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
-                    objName = window.GAME_START_CONFIG.mapId === 'desert' ? 'DESERT EXPANSE SURVIVAL' : 'HIVE SWARM SURVIVAL';
+                    objName = window.GAME_START_CONFIG.mapId === 'desert' ? 'DESERT EXPANSE SURVIVAL' : 
+                              (window.GAME_START_CONFIG.mapId === 'endgame' ? 'THE FINAL COSMIC VOID' : 'HIVE SWARM SURVIVAL');
                     objCount = 'INFINITE';
                     objProg = 0.5 + Math.sin(clock.elapsedTime * 0.5) * 0.1; // Pulsing middle bar
                 } else if (currentObjective) {

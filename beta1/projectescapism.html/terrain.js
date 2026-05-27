@@ -117,8 +117,8 @@ const TerrainGen = {
         if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'desert') {
             return this.getDesertDuneHeight(x, z);
         }
-        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'facility') {
-            return 0.0; // Facility map is visually flat
+        if (window.GAME_START_CONFIG && (window.GAME_START_CONFIG.mapId === 'facility' || window.GAME_START_CONFIG.mapId === 'endgame')) {
+            return 0.0; // Flat empty plane
         }
 
         // Match the FBM and Magnitude in GLSL EXACTLY
@@ -238,8 +238,8 @@ float getBiomeNoise(vec2 pos) {
 }
 
 float getTerrainHeight(vec2 pos) {
-    if (uMapType == 3) {
-        // Facility (or Desert if using mt=3) is flat
+    if (uMapType == 3 || uMapType == 5) {
+        // Facility and Endgame is flat
         return 0.0;
     }
     if (uMapType == 4) {
@@ -349,44 +349,63 @@ float getTerrainHeight(vec2 pos) {
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <map_fragment>`,
                 `#include <map_fragment>
-                float biomen = getBiomeNoise(vWorldPosRaw);
-                vec2 uv = vWorldPosRaw * 3.0;
-                
-                vec3 colToxic = textureNoTile(texToxic, uv);
-                vec3 colForest = textureNoTile(texForest, uv);
-                vec3 colWaste = textureNoTile(texWaste, uv);
-                
-                // Mute and normalize colors to realistic albedos (darker, less saturated)
-                colToxic = mix(colToxic, vec3(0.1, 0.12, 0.08), 0.7); // Muddy marsh
-                colForest = mix(colForest, vec3(0.08, 0.1, 0.06), 0.7); // Dark forest loam
-                colWaste = mix(colWaste, vec3(0.12, 0.11, 0.1), 0.8); // Dry dirt/sand
-                
-                float slope = 1.0 - vNormal.y; 
-                float cliff = smoothstep(0.3, 0.6, slope);
-                
-                vec3 groundCol;
-                // Realistic biome blending
-                float blend = smoothstep(0.3, 0.7, biomen);
-                groundCol = mix(colToxic, colWaste, blend);
-                
-                // Add localized patches for variety
-                float patches = snoise(vWorldPosRaw * 0.02);
-                groundCol = mix(groundCol, colWaste * 0.8, smoothstep(0.5, 0.8, patches));
-                
-                // Realistic rock cliff blending
-                vec3 rockCol = vec3(0.15, 0.15, 0.16) * textureNoTile(texWaste, uv * 0.5);
-                groundCol = mix(groundCol, rockCol, cliff);
-                
-                // Ambient occlusion / cavity effect from world height and noise
-                float macroAO = smoothstep(-15.0, 30.0, vHeight);
-                float microAO = smoothstep(0.0, 1.0, snoise(vWorldPosRaw * 0.5) * 0.5 + 0.5);
-                groundCol *= 0.5 + 0.5 * macroAO * microAO;
-                
-                // Void Holes
-                float voidMask = snoise(vWorldPosRaw * 0.002);
-                if (voidMask < -0.5) discard; 
+                if (uMapType == 5) {
+                    // Draw a premium cyber-gothic black reflective obsidian glass floor
+                    vec2 gridUv = fract(vWorldPosRaw * 0.1);
+                    float gridX = smoothstep(0.015, 0.0, abs(gridUv.x - 0.5));
+                    float gridY = smoothstep(0.015, 0.0, abs(gridUv.y - 0.5));
+                    float grid = max(gridX, gridY);
+                    
+                    // Dark glossy purple base with neon purple grid lines pulsing
+                    vec3 baseCol = vec3(0.02, 0.005, 0.04);
+                    vec3 gridCol = vec3(0.65, 0.1, 0.95) * (0.8 + 0.2 * sin(uTime * 2.5));
+                    
+                    // Add subtle floor star sparkles
+                    float floorStars = fract(sin(dot(floor(vWorldPosRaw * 1.5), vec2(12.9898, 78.233))) * 43758.5453);
+                    float sparkle = smoothstep(0.9985, 1.0, floorStars) * (0.5 + 0.5 * sin(uTime * 3.0 + floorStars * 15.0));
+                    
+                    diffuseColor.rgb = baseCol + gridCol * grid + vec3(1.0) * sparkle;
+                    // No standard diffuse terrain blending
+                } else {
+                    float biomen = getBiomeNoise(vWorldPosRaw);
+                    vec2 uv = vWorldPosRaw * 3.0;
+                    
+                    vec3 colToxic = textureNoTile(texToxic, uv);
+                    vec3 colForest = textureNoTile(texForest, uv);
+                    vec3 colWaste = textureNoTile(texWaste, uv);
+                    
+                    // Mute and normalize colors to realistic albedos (darker, less saturated)
+                    colToxic = mix(colToxic, vec3(0.1, 0.12, 0.08), 0.7); // Muddy marsh
+                    colForest = mix(colForest, vec3(0.08, 0.1, 0.06), 0.7); // Dark forest loam
+                    colWaste = mix(colWaste, vec3(0.12, 0.11, 0.1), 0.8); // Dry dirt/sand
+                    
+                    float slope = 1.0 - vNormal.y; 
+                    float cliff = smoothstep(0.3, 0.6, slope);
+                    
+                    vec3 groundCol;
+                    // Realistic biome blending
+                    float blend = smoothstep(0.3, 0.7, biomen);
+                    groundCol = mix(colToxic, colWaste, blend);
+                    
+                    // Add localized patches for variety
+                    float patches = snoise(vWorldPosRaw * 0.02);
+                    groundCol = mix(groundCol, colWaste * 0.8, smoothstep(0.5, 0.8, patches));
+                    
+                    // Realistic rock cliff blending
+                    vec3 rockCol = vec3(0.15, 0.15, 0.16) * textureNoTile(texWaste, uv * 0.5);
+                    groundCol = mix(groundCol, rockCol, cliff);
+                    
+                    // Ambient occlusion / cavity effect from world height and noise
+                    float macroAO = smoothstep(-15.0, 30.0, vHeight);
+                    float microAO = smoothstep(0.0, 1.0, snoise(vWorldPosRaw * 0.5) * 0.5 + 0.5);
+                    groundCol *= 0.5 + 0.5 * macroAO * microAO;
+                    
+                    // Void Holes
+                    float voidMask = snoise(vWorldPosRaw * 0.002);
+                    if (voidMask < -0.5) discard; 
 
-                diffuseColor.rgb = groundCol;
+                    diffuseColor.rgb = groundCol;
+                }
                 `
             );
             
@@ -403,6 +422,7 @@ float getTerrainHeight(vec2 pos) {
                 targetRoughness = mix(targetRoughness, 0.85, r_cliff);
                 
                 roughnessFactor = targetRoughness;
+                if (uMapType == 5) roughnessFactor = 0.08;
                 `
             );
             
@@ -417,8 +437,10 @@ float getTerrainHeight(vec2 pos) {
                 
                 vec3 detailNormal = normalize(vec3(h1 - h2, 0.5, h1 - h3));
                 
-                // Blend with existing normal
-                normal = normalize(normal + detailNormal * 0.4);
+                // Blend with existing normal if not the glass endgame plane
+                if (uMapType != 5) {
+                    normal = normalize(normal + detailNormal * 0.4);
+                }
                 `
             );
 
@@ -454,6 +476,7 @@ float getTerrainHeight(vec2 pos) {
                 else if (window.GAME_START_CONFIG.mapId === 'toxic') mt = 2;
                 else if (window.GAME_START_CONFIG.mapId === 'facility') mt = 3;
                 else if (window.GAME_START_CONFIG.mapId === 'desert') mt = 4; // Flat desert
+                else if (window.GAME_START_CONFIG.mapId === 'endgame') mt = 5; // Flat obsidian void
                 this.mat.userData.shader.uniforms.uMapType.value = mt;
             }
         }

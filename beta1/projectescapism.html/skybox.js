@@ -18,7 +18,8 @@ class BackroomsSkybox {
                 uMie: { value: 0.005 },
                 uMieDirectionalG: { value: 0.8 },
                 cameraPosition: { value: new THREE.Vector3() },
-                uIsDesert: { value: (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'desert') ? 1.0 : 0.0 }
+                uIsDesert: { value: (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'desert') ? 1.0 : 0.0 },
+                uIsEndgame: { value: (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'endgame') ? 1.0 : 0.0 }
             },
             vertexShader: `
                 varying vec3 vWorldPosition;
@@ -32,6 +33,7 @@ class BackroomsSkybox {
                 uniform float uTime;
                 uniform vec3 uSunPos;
                 uniform float uIsDesert;
+                uniform float uIsEndgame;
                 varying vec3 vWorldPosition;
 
                 // Simple 3D Noise for stars/clouds
@@ -81,13 +83,27 @@ class BackroomsSkybox {
                     vec3 zenithColor = mix(vec3(0.15, 0.35, 0.65), vec3(0.95, 0.40, 0.10), uIsDesert);
                     vec3 horizonColor = mix(vec3(0.75, 0.85, 0.95), vec3(1.0, 0.70, 0.25), uIsDesert);
 
+                    if (uIsEndgame > 0.5) {
+                        zenithColor = vec3(0.02, 0.0, 0.06);
+                        horizonColor = vec3(0.08, 0.01, 0.18);
+                    }
+
                     vec3 skyColor = mix(horizonColor, zenithColor, pow(zenithAngle, 0.7));
 
                     // Sun glow / Mie scattering - upgraded to blindingly bright and glaring in the desert
                     float sunDot = max(0.0, dot(viewDir, sunDir));
                     float sunSize = mix(256.0, 48.0, uIsDesert); // white hot core
+                    if (uIsEndgame > 0.5) {
+                        sunSize = 96.0;
+                    }
                     float sunGlow = pow(sunDot, sunSize) * mix(10.0, 65.0, uIsDesert);
+                    if (uIsEndgame > 0.5) {
+                        sunGlow = pow(sunDot, sunSize) * 30.0;
+                    }
                     float sunHalo = pow(sunDot, mix(32.0, 6.0, uIsDesert)) * mix(1.5, 12.0, uIsDesert);
+                    if (uIsEndgame > 0.5) {
+                        sunHalo = pow(sunDot, 12.0) * 4.5;
+                    }
                     
                     // Rotating sunburst godrays/shafts
                     float rays = 0.0;
@@ -103,6 +119,9 @@ class BackroomsSkybox {
                     float starNoise = hash(viewDir * 500.0);
                     float starMask = smoothstep(0.998, 1.0, starNoise);
                     float starVisibility = 1.0 - smoothstep(-0.2, 0.1, sunDir.y); // Stars appear when sun sets
+                    if (uIsEndgame > 0.5) {
+                        starVisibility = 1.0;
+                    }
                     float twinkle = sin(uTime * 3.0 + starNoise * 10.0) * 0.5 + 0.5;
                     skyColor += vec3(1.0) * starMask * twinkle * starVisibility;
 
@@ -111,13 +130,21 @@ class BackroomsSkybox {
                     float cloudDensity = fbm(cloudPos * 2.5);
                     cloudDensity = smoothstep(0.45, 0.85, cloudDensity);
                     vec3 cloudColor = mix(vec3(0.95, 0.95, 1.0), vec3(1.0, 0.80, 0.60), uIsDesert);
+                    if (uIsEndgame > 0.5) {
+                        cloudColor = mix(vec3(0.5, 0.05, 0.8), vec3(0.0, 0.6, 0.95), sin(uTime * 0.4 + viewDir.x * 4.0) * 0.5 + 0.5);
+                    }
                     
                     // Edge lighting on clouds from sun
                     float cloudShadow = fbm(cloudPos * 2.5 + sunDir * 0.05);
                     vec3 litCloudColor = mix(cloudColor * 0.6, vec3(1.0, 0.95, 0.9), smoothstep(0.4, 0.8, cloudShadow));
+                    if (uIsEndgame > 0.5) {
+                        litCloudColor = mix(cloudColor * 0.35, vec3(0.85, 0.15, 0.9), smoothstep(0.3, 0.8, cloudShadow));
+                    }
                     
                     // Attenuate cloud lighting near horizon
-                    litCloudColor *= mix(vec3(0.9, 0.6, 0.5), vec3(1.0), smoothstep(0.0, 0.3, viewDir.y));
+                    if (uIsEndgame < 0.5) {
+                        litCloudColor *= mix(vec3(0.9, 0.6, 0.5), vec3(1.0), smoothstep(0.0, 0.3, viewDir.y));
+                    }
 
                     skyColor = mix(skyColor, litCloudColor, cloudDensity * 0.9);
 

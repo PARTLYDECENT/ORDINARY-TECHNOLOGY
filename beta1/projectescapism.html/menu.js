@@ -37,7 +37,8 @@ const MainMenu = {
 
     mapData: [
         { id: 'survival', name: 'SURVIVAL', desc: 'Infinite waves. No extraction. Survive.', difficulty: 'ENDLESS', color: '#ffffff', fog: 0x110000 },
-        { id: 'desert', name: 'DESOLATION', desc: 'Vast flat desert. Nowhere to hide.', difficulty: 'EXTREME', color: '#d4a800', fog: 0x221a11 }
+        { id: 'desert', name: 'DESOLATION', desc: 'Vast flat desert. Nowhere to hide.', difficulty: 'EXTREME', color: '#d4a800', fog: 0x221a11 },
+        { id: 'endgame', name: 'ENDGAME', desc: 'The final cosmic void. A flat empty glass plane under a majestic nebula.', difficulty: 'APOCALYPSE', color: '#a020f0', fog: 0x050010 }
     ],
     selectedMap: 0,
 

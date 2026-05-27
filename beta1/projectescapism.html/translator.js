@@ -82,8 +82,8 @@ const TerrainGen = {
         if (currentMapId === 'desert') {
             return this.getDesertDuneHeight(x, z);
         }
-        if (currentMapId === 'facility') {
-            return 0.0; // Facility map is visually flat
+        if (currentMapId === 'facility' || currentMapId === 'endgame') {
+            return 0.0; // Flat empty plane
         }
 
         let v = 0.0;
@@ -269,6 +269,34 @@ self.onmessage = function (e) {
         let zx = zPosX[i];
         let zz = zPosZ[i];
 
+        const type = zType[i];
+
+        if (zState[i] === 3) {
+            // Grabbed/held state: skip movement & steering physics.
+            // Map the matrix exactly as set by the main thread.
+            const cosY = Math.cos(zRotY[i]);
+            const sinY = Math.sin(zRotY[i]);
+            const scale = type === 3 ? 1.35 : 1.0;
+            let zh = TerrainGen.getMeshHeight(zx, zz);
+            const matrix = [
+                cosY * scale, 0, -sinY * scale, 0,
+                0, scale, 0, 0,
+                sinY * scale, 0, cosY * scale, 0,
+                zx, zh, zz, 1
+            ];
+            let offset = 0;
+            if (type === 0) {
+                offset = nIdx * 16; normalMatrixArray.set(matrix, offset); nIdx++;
+            } else if (type === 1) {
+                offset = pIdx * 16; pukerMatrixArray.set(matrix, offset); pIdx++;
+            } else if (type === 2) {
+                offset = tIdx * 16; throwerMatrixArray.set(matrix, offset); tIdx++;
+            } else if (type === 3) {
+                offset = mIdx * 16; mutantMatrixArray.set(matrix, offset); mIdx++;
+            }
+            continue;
+        }
+
         const mid = Math.floor(config.gridSize / 2);
         const lx = Math.floor((zx - px) / config.cellSize) + mid;
         const lz = Math.floor((zz - pz) / config.cellSize) + mid;
@@ -291,7 +319,6 @@ self.onmessage = function (e) {
         const perpX = -dirPZ;
         const perpZ = dirPX;
 
-        const type = zType[i];
         const behavior = zBehavior[i];
         zStateTimer[i] += delta;
 

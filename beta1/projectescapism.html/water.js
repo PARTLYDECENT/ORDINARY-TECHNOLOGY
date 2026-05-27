@@ -264,6 +264,11 @@ class ToxicWater {
                 rate: 1 + Math.floor(Math.random() * 4) // Bubbles per frame
             });
         }
+
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'endgame') {
+            this.mesh.visible = false;
+            this.bubblesMesh.visible = false;
+        }
     }
 
     update(uTime, playerPos) {
