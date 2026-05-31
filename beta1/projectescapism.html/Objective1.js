@@ -103,8 +103,49 @@ class Objective1 {
             group.add(ring);
         }
 
+        // Giant, high-visibility vertical beacon beam stretching to the sky!
+        const beamGeo = new THREE.CylinderGeometry(0.12, 0.35, 200, 16, 1, true);
+        beamGeo.translate(0, 100, 0); // Center translation so it projects upwards
+        const beamMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.35,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        group.add(beam);
+
+        // Glowing core aura
+        const auraGeo = new THREE.SphereGeometry(1.4, 16, 16);
+        const auraMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.18,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const aura = new THREE.Mesh(auraGeo, auraMat);
+        group.add(aura);
+
+        // 3D Floating Downward Arrow pointer directly above the part
+        const arrowGeo = new THREE.ConeGeometry(0.3, 0.8, 4);
+        arrowGeo.rotateX(Math.PI); // Point downwards
+        arrowGeo.translate(0, 2.2, 0); // Position high above the core
+        const arrowMat = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 1.5,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+        arrow.userData.isArrow = true;
+        group.add(arrow);
+
         // Add a point light
-        const light = new THREE.PointLight(0x00ffff, 1, 5);
+        const light = new THREE.PointLight(0x00ffff, 2.5, 8);
         group.add(light);
         
         return group;
@@ -126,10 +167,13 @@ class Objective1 {
         div.style.zIndex = '9999';
 
         div.innerHTML = `
-            <div style="font-size: 20px; margin-bottom: 2px; animation: pulse 1s infinite alternate;">⬢</div>
-            <div style="background: rgba(0, 20, 30, 0.9); padding: 4px 10px; border: 1px solid #00ffff; border-radius: 2px; letter-spacing: 1px; font-weight: bold; white-space: nowrap;">
-                <span style="opacity: 0.7; font-size: 8px; display: block; margin-bottom: 2px;">COMPONENT</span>
-                ${name.toUpperCase()}
+            <div class="marker-arrow" style="font-size: 20px; margin-bottom: 2px; display: none; text-shadow: 0 0 8px #00ffff; transition: transform 0.1s ease;">➤</div>
+            <div class="marker-panel" style="display: flex; flex-direction: column; align-items: center; transition: all 0.2s ease;">
+                <div style="font-size: 20px; margin-bottom: 2px; animation: pulse 1s infinite alternate;">⬢</div>
+                <div style="background: rgba(0, 20, 30, 0.9); padding: 4px 10px; border: 1px solid #00ffff; border-radius: 2px; letter-spacing: 1px; font-weight: bold; white-space: nowrap;">
+                    <span style="opacity: 0.7; font-size: 8px; display: block; margin-bottom: 2px;">COMPONENT</span>
+                    ${name.toUpperCase()}
+                </div>
             </div>
             <div class="marker-dist" style="font-size: 10px; margin-top: 4px; font-weight: bold; color: #fff; text-shadow: 0 0 5px #00ffff;">0m</div>
             <style>
@@ -143,8 +187,9 @@ class Objective1 {
         return div;
     }
 
-    update(delta, elapsedTime) {
+    update(delta, elapsedTime, activeCamera) {
         if (!this.active) return;
+        const camera = activeCamera || this.camera;
 
         this.parts.forEach(part => {
             if (part.collected) {
@@ -161,22 +206,81 @@ class Objective1 {
                     child.rotation.y += delta * child.userData.rotSpeed;
                     child.rotation.z += delta * child.userData.rotSpeed * 0.5;
                 }
+                if (child.userData.isArrow) {
+                    child.rotation.y += delta * 2.0;
+                }
             });
 
             // Distance check for collection
             const dist = this.player.position.distanceTo(part.pos);
             
-            // Update UI Marker
-            const vec = part.pos.clone().project(this.camera);
-            if (vec.z > 1) {
-                part.marker.style.display = 'none';
+            // Screen-edge clamping and pointer rotation math
+            const camPos = part.pos.clone().applyMatrix4(camera.matrixWorldInverse);
+            const isBehind = camPos.z > 0;
+            
+            let vec = part.pos.clone().project(camera);
+            if (isBehind) {
+                vec.x = -vec.x;
+                vec.y = -vec.y;
+            }
+            
+            const borderMargin = 0.08; // 8% margin from the edge
+            const limitX = 1.0 - borderMargin;
+            const limitY = 1.0 - borderMargin;
+            
+            const isOffscreen = isBehind || vec.x < -limitX || vec.x > limitX || vec.y < -limitY || vec.y > limitY;
+            
+            let x = 0;
+            let y = 0;
+            let arrowAngle = 0;
+            
+            if (isOffscreen) {
+                // Determine clamp scale
+                const scaleX = Math.abs(limitX / (vec.x || 0.0001));
+                const scaleY = Math.abs(limitY / (vec.y || 0.0001));
+                const scale = Math.min(scaleX, scaleY);
+                
+                const clampedX = vec.x * scale;
+                const clampedY = vec.y * scale;
+                
+                x = (clampedX * 0.5 + 0.5) * window.innerWidth;
+                y = (-clampedY * 0.5 + 0.5) * window.innerHeight;
+                
+                // Angle pointing outwards from screen center
+                arrowAngle = Math.atan2(-clampedY, clampedX);
             } else {
-                part.marker.style.display = 'flex';
-                const x = (vec.x * 0.5 + 0.5) * window.innerWidth;
-                const y = (-vec.y * 0.5 + 0.5) * window.innerHeight;
-                part.marker.style.left = `${x}px`;
-                part.marker.style.top = `${y}px`;
-                part.marker.querySelector('.marker-dist').textContent = `${Math.round(dist)}m`;
+                x = (vec.x * 0.5 + 0.5) * window.innerWidth;
+                y = (-vec.y * 0.5 + 0.5) * window.innerHeight;
+            }
+            
+            // Update UI Marker styling
+            part.marker.style.display = 'flex';
+            part.marker.style.left = `${x}px`;
+            part.marker.style.top = `${y}px`;
+            part.marker.querySelector('.marker-dist').textContent = `${Math.round(dist)}m`;
+            
+            const arrow = part.marker.querySelector('.marker-arrow');
+            const panel = part.marker.querySelector('.marker-panel');
+            
+            if (isOffscreen) {
+                part.marker.classList.add('offscreen');
+                if (arrow) {
+                    arrow.style.display = 'block';
+                    arrow.style.transform = `rotate(${arrowAngle}rad)`;
+                }
+                if (panel) {
+                    panel.style.transform = 'scale(0.8)';
+                    panel.style.opacity = '0.8';
+                }
+            } else {
+                part.marker.classList.remove('offscreen');
+                if (arrow) {
+                    arrow.style.display = 'none';
+                }
+                if (panel) {
+                    panel.style.transform = 'none';
+                    panel.style.opacity = '1';
+                }
             }
 
             // Collect

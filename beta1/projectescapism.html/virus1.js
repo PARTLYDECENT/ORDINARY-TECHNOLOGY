@@ -27,74 +27,12 @@ class VirusSimulation {
     }
 
     initSynth() {
-        if (this.audioCtx) return;
-        try {
-            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
-            this.droneFilter = this.audioCtx.createBiquadFilter();
-            this.droneFilter.type = "lowpass";
-            this.droneFilter.frequency.setValueAtTime(140, this.audioCtx.currentTime);
-            this.droneFilter.Q.setValueAtTime(5.0, this.audioCtx.currentTime);
-
-            this.droneOsc1 = this.audioCtx.createOscillator();
-            this.droneOsc1.type = "triangle";
-            this.droneOsc1.frequency.setValueAtTime(55, this.audioCtx.currentTime);
-            
-            this.droneOsc2 = this.audioCtx.createOscillator();
-            this.droneOsc2.type = "sawtooth";
-            this.droneOsc2.frequency.setValueAtTime(55.5, this.audioCtx.currentTime);
-
-            const droneGain = this.audioCtx.createGain();
-            droneGain.gain.setValueAtTime(0.2, this.audioCtx.currentTime);
-
-            this.droneOsc1.connect(this.droneFilter);
-            this.droneOsc2.connect(this.droneFilter);
-            this.droneFilter.connect(droneGain);
-            droneGain.connect(this.audioCtx.destination);
-
-            this.synthOsc = this.audioCtx.createOscillator();
-            this.synthOsc.type = "sine";
-            this.synthOsc.frequency.setValueAtTime(440, this.audioCtx.currentTime);
-
-            this.synthGain = this.audioCtx.createGain();
-            this.synthGain.gain.setValueAtTime(0, this.audioCtx.currentTime);
-
-            const synthFilter = this.audioCtx.createBiquadFilter();
-            synthFilter.type = "bandpass";
-            synthFilter.frequency.setValueAtTime(800, this.audioCtx.currentTime);
-            synthFilter.Q.setValueAtTime(12.0, this.audioCtx.currentTime);
-
-            this.synthOsc.connect(synthFilter);
-            synthFilter.connect(this.synthGain);
-            this.synthGain.connect(this.audioCtx.destination);
-
-            this.droneOsc1.start();
-            this.droneOsc2.start();
-            this.synthOsc.start();
-
-            this.audioActive = true;
-
-            // Modulate drone frequency continuously with walk cycle speed
-            setInterval(() => {
-                if (!this.audioActive) return;
-                const walkFreqMod = Math.sin(Date.now() * 0.006) * 15.0;
-                const currentCutoff = 130 + walkFreqMod + this.morphProgress * 120;
-                this.droneFilter.frequency.setTargetAtTime(currentCutoff, this.audioCtx.currentTime, 0.1);
-                this.droneOsc1.frequency.setTargetAtTime(55 + this.morphProgress * 5.0, this.audioCtx.currentTime, 0.2);
-            }, 80);
-
-        } catch(e) {
-            console.warn("Web Audio initialization skipped: ", e);
-        }
+        // Drone synth completely disabled — user requested no background humming/noise!
+        this.audioActive = false;
     }
 
     playInteractionSound(pitch = 500, dur = 0.15) {
-        if (!this.audioCtx || !this.audioActive) return;
-        const now = this.audioCtx.currentTime;
-        this.synthOsc.frequency.setValueAtTime(pitch, now);
-        this.synthOsc.frequency.exponentialRampToValueAtTime(pitch * 0.2, now + dur);
-        this.synthGain.gain.setValueAtTime(0.2, now);
-        this.synthGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        // Disabled along with synth engine
     }
 
     update(activeIdx, morphProgress, deltaTime, elapsedTime) {

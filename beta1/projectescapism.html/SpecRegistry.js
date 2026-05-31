@@ -14,6 +14,7 @@ class SpecRegistry {
         // Find zombies within range and pull them toward pos
         for (let i = 0; i < spawnedZombies; i++) {
             if (zState[i] === 0) continue;
+            if (window.RealityPhaseShifter && window.zombieDimensions && window.zombieDimensions[i] !== window.RealityPhaseShifter.activeDimension) continue;
             const dx = zPosX[i] - pos.x;
             const dz = zPosZ[i] - pos.z;
             const distSq = dx*dx + dz*dz;
@@ -29,6 +30,7 @@ class SpecRegistry {
     static applyAOE(pos, radius, damage) {
         for (let i = 0; i < spawnedZombies; i++) {
             if (zState[i] === 0) continue;
+            if (window.RealityPhaseShifter && window.zombieDimensions && window.zombieDimensions[i] !== window.RealityPhaseShifter.activeDimension) continue;
             const dx = zPosX[i] - pos.x;
             const dz = zPosZ[i] - pos.z;
             const distSq = dx*dx + dz*dz;

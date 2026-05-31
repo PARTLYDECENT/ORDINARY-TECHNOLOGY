@@ -33,11 +33,7 @@ const SFX = {
         CYC_1: 'assets/sfx/cyclical_sound_%231-1775516903403.mp3',
         CYC_2: 'assets/sfx/cyclical_sound_%232-1775516909572.mp3',
         CYC_3: 'assets/sfx/cyclical_sound_%233-1775516911600.mp3',
-        CYC_4: 'assets/sfx/cyclical_sound_%234-1775516914661.mp3',
-        
-        BGM_1: 'assets/sfx/dark_technology_in_2_%231-1775517703061.mp3',
-        BGM_2: 'assets/sfx/dark_technology_in_2_%231-1775517952984.mp3',
-        BGM_3: 'assets/sfx/dark_technology_in_2_%231-1775517955793.mp3'
+        CYC_4: 'assets/sfx/cyclical_sound_%234-1775516914661.mp3'
     },
 
     async init() {
@@ -101,12 +97,22 @@ const SFX = {
     },
 
     triggerZombieDie() {
-        this.play('ZOMBIE_DIE', { volume: 0.4 });
+        if (window.ABYSS_MODE) {
+            const variants = ['CYC_1', 'CYC_2', 'CYC_3', 'CYC_4'];
+            this.play(variants[Math.floor(Math.random() * variants.length)], { volume: 0.45 });
+        } else {
+            this.play('ZOMBIE_DIE', { volume: 0.4 });
+        }
     },
 
     triggerZombieAttack() {
-        const variants = ['ZOMBIE_ATTACK_1', 'ZOMBIE_ATTACK_2', 'ZOMBIE_ATTACK_3', 'ZOMBIE_ATTACK_4'];
-        this.play(variants[Math.floor(Math.random() * variants.length)], { volume: 0.3 });
+        if (window.ABYSS_MODE) {
+            const variants = ['WATER_1', 'WATER_2', 'WATER_3', 'WATER_4'];
+            this.play(variants[Math.floor(Math.random() * variants.length)], { volume: 0.35 });
+        } else {
+            const variants = ['ZOMBIE_ATTACK_1', 'ZOMBIE_ATTACK_2', 'ZOMBIE_ATTACK_3', 'ZOMBIE_ATTACK_4'];
+            this.play(variants[Math.floor(Math.random() * variants.length)], { volume: 0.3 });
+        }
     },
 
     triggerPlayerDie() {
@@ -227,41 +233,26 @@ const SFX = {
         this.play(variants[Math.floor(Math.random() * variants.length)], { volume: 0.3, pitch: 1.5 });
     },
 
-    // --- BGM Sequencing Logic ---
+    // --- BGM: Single track from assets/MUSIC/bg.mp3, looped infinitely ---
     startBGM() {
-        if (!this.isInitialized) return;
-        
-        const playlist = ['BGM_1', 'BGM_2', 'BGM_3'];
-        
-        const playNextTrack = () => {
-            const trackKey = playlist[this.bgmIndex];
-            const buffer = this.buffers.get(trackKey);
-            
-            if (!buffer) {
-                // If it failed to load, retry loop after a short wait
-                setTimeout(playNextTrack, 1000);
-                return;
-            }
-            
-            this.bgmSource = this.audioCtx.createBufferSource();
-            this.bgmSource.buffer = buffer;
-            
-            const gainNode = this.audioCtx.createGain();
-            gainNode.gain.value = 0.25; // Keep BGM soft compared to SFX
-            
-            this.bgmSource.connect(gainNode);
-            gainNode.connect(this.audioCtx.destination);
-            
-            this.bgmSource.onended = () => {
-                this.bgmIndex = (this.bgmIndex + 1) % playlist.length;
-                playNextTrack(); // Sequence perfectly without overlapping
-            };
-            
-            this.bgmSource.start(0);
-        };
-        
-        // Start the infinite loop sequence
-        playNextTrack();
+        if (this.bgmAudio) return; // Already playing
+        try {
+            this.bgmAudio = new Audio('assets/MUSIC/bg.mp3');
+            this.bgmAudio.loop = true;
+            this.bgmAudio.volume = 0.25; // Keep BGM soft compared to SFX
+            this.bgmAudio.play().catch(e => console.warn('[BGM] Autoplay blocked, will retry on interaction:', e));
+            console.log('[BGM] Playing assets/MUSIC/bg.mp3 on loop');
+        } catch (e) {
+            console.warn('[BGM] Failed to start bg.mp3:', e);
+        }
+    },
+
+    stopBGM() {
+        if (this.bgmAudio) {
+            this.bgmAudio.pause();
+            this.bgmAudio.currentTime = 0;
+            this.bgmAudio = null;
+        }
     }
 };
 

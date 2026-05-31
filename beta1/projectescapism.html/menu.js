@@ -38,7 +38,8 @@ const MainMenu = {
     mapData: [
         { id: 'survival', name: 'SURVIVAL', desc: 'Infinite waves. No extraction. Survive.', difficulty: 'ENDLESS', color: '#ffffff', fog: 0x110000 },
         { id: 'desert', name: 'DESOLATION', desc: 'Vast flat desert. Nowhere to hide.', difficulty: 'EXTREME', color: '#d4a800', fog: 0x221a11 },
-        { id: 'endgame', name: 'ENDGAME', desc: 'The final cosmic void. A flat empty glass plane under a majestic nebula.', difficulty: 'APOCALYPSE', color: '#a020f0', fog: 0x050010 }
+        { id: 'endgame', name: 'ENDGAME', desc: 'The final cosmic void. A flat empty glass plane under a majestic nebula.', difficulty: 'APOCALYPSE', color: '#a020f0', fog: 0x050010 },
+        { id: 'abyss', name: 'WATER WORLD', desc: 'Procedural floating wooden rafts on an endless waving blue ocean. Watch your step!', difficulty: 'TROPICAL', color: '#0284c7', fog: 0xbae6fd }
     ],
     selectedMap: 0,
 
@@ -87,6 +88,12 @@ const MainMenu = {
 
         // Kill the shader background
         if (window.MenuBG) { window.MenuBG.stop(); window.MenuBG = null; }
+
+        // Start menu music
+        this.menuMusic = new Audio('assets/MUSIC/menu.mp3');
+        this.menuMusic.loop = true;
+        this.menuMusic.volume = 0.3;
+        this.menuMusic.play().catch(e => console.warn('[Menu Music] Autoplay blocked:', e));
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -186,12 +193,23 @@ const MainMenu = {
         this.deployMode = mode;
         this.fadeOut = true;
         this.fadeOutAlpha = 0;
-        if (window.SFX) window.SFX.startBGM();
+        // Fade out menu music when deploying
+        if (this.menuMusic) {
+            this.menuMusic.pause();
+            this.menuMusic.currentTime = 0;
+            this.menuMusic = null;
+        }
     },
 
     stop: function () {
         this.active = false;
         if (window.MenuBG) window.MenuBG.stop();
+        // Kill menu music if still playing
+        if (this.menuMusic) {
+            this.menuMusic.pause();
+            this.menuMusic.currentTime = 0;
+            this.menuMusic = null;
+        }
         const menuEl = document.getElementById('main-menu');
         if (menuEl) menuEl.style.display = 'none';
         const borderEl = document.getElementById('cinematic-border');

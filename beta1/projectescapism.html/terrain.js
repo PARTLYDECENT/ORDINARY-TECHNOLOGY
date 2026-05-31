@@ -120,6 +120,9 @@ const TerrainGen = {
         if (window.GAME_START_CONFIG && (window.GAME_START_CONFIG.mapId === 'facility' || window.GAME_START_CONFIG.mapId === 'endgame')) {
             return 0.0; // Flat empty plane
         }
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'abyss') {
+            return -8.0; // Deep seafloor
+        }
 
         // Match the FBM and Magnitude in GLSL EXACTLY
         let v = 0.0;
@@ -146,6 +149,58 @@ const TerrainGen = {
 
     // Calculates the actual linear height on the triangle face to prevent clipping/sinking
     getMeshHeight: function (x, z) {
+        if (window.ABYSS_MODE) {
+            const getRaftHash = (cx, cz) => {
+                let h = Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453123;
+                return h - Math.floor(h);
+            };
+            const cs = 6.25;
+            const cx = Math.floor(x / cs);
+            const cz = Math.floor(z / cs);
+            const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.35);
+            const centerX = (cx + 0.5) * cs;
+            const centerZ = (cz + 0.5) * cs;
+            const raftHalf = 2.25;
+
+            if (isRaft) {
+                if (Math.abs(x - centerX) <= raftHalf && Math.abs(z - centerZ) <= raftHalf) {
+                    return 0.2;
+                }
+            }
+
+            const raftRight = getRaftHash(cx + 1, cz) < 0.35;
+            if (isRaft && raftRight) {
+                const nextCenterX = (cx + 1.5) * cs;
+                if (x >= centerX && x <= nextCenterX && Math.abs(z - centerZ) <= 0.85) {
+                    return 0.2;
+                }
+            }
+
+            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.35);
+            if (raftLeft && isRaft) {
+                const prevCenterX = (cx - 0.5) * cs;
+                if (x >= prevCenterX && x <= centerX && Math.abs(z - centerZ) <= 0.85) {
+                    return 0.2;
+                }
+            }
+
+            const raftDown = getRaftHash(cx, cz + 1) < 0.35;
+            if (isRaft && raftDown) {
+                const nextCenterZ = (cz + 1.5) * cs;
+                if (z >= centerZ && z <= nextCenterZ && Math.abs(x - centerX) <= 0.85) {
+                    return 0.2;
+                }
+            }
+
+            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.35);
+            if (raftUp && isRaft) {
+                const prevCenterZ = (cz - 0.5) * cs;
+                if (z >= prevCenterZ && z <= centerZ && Math.abs(x - centerX) <= 0.85) {
+                    return 0.2;
+                }
+            }
+            return -8.0; // Water level
+        }
         const s = 6.25; // Grid spacing in segments
         const x0 = Math.floor(x / s) * s;
         const z0 = Math.floor(z / s) * s;
@@ -482,3 +537,6 @@ float getTerrainHeight(vec2 pos) {
         }
     }
 };
+
+window.TerrainGen = TerrainGen;
+

@@ -85,6 +85,9 @@ const TerrainGen = {
         if (currentMapId === 'facility' || currentMapId === 'endgame') {
             return 0.0; // Flat empty plane
         }
+        if (currentMapId === 'abyss') {
+            return -8.0; // Deep seafloor
+        }
 
         let v = 0.0;
         let a = 0.5;
@@ -108,6 +111,58 @@ const TerrainGen = {
         return base + detail;
     },
     getMeshHeight: function (x, z) {
+        if (typeof currentMapId !== 'undefined' && currentMapId === 'abyss') {
+            const getRaftHash = (cx, cz) => {
+                let h = Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453123;
+                return h - Math.floor(h);
+            };
+            const cs = 6.25;
+            const cx = Math.floor(x / cs);
+            const cz = Math.floor(z / cs);
+            const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.35);
+            const centerX = (cx + 0.5) * cs;
+            const centerZ = (cz + 0.5) * cs;
+            const raftHalf = 2.25;
+
+            if (isRaft) {
+                if (Math.abs(x - centerX) <= raftHalf && Math.abs(z - centerZ) <= raftHalf) {
+                    return 0.2;
+                }
+            }
+
+            const raftRight = getRaftHash(cx + 1, cz) < 0.35;
+            if (isRaft && raftRight) {
+                const nextCenterX = (cx + 1.5) * cs;
+                if (x >= centerX && x <= nextCenterX && Math.abs(z - centerZ) <= 0.85) {
+                    return 0.2;
+                }
+            }
+
+            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.35);
+            if (raftLeft && isRaft) {
+                const prevCenterX = (cx - 0.5) * cs;
+                if (x >= prevCenterX && x <= centerX && Math.abs(z - centerZ) <= 0.85) {
+                    return 0.2;
+                }
+            }
+
+            const raftDown = getRaftHash(cx, cz + 1) < 0.35;
+            if (isRaft && raftDown) {
+                const nextCenterZ = (cz + 1.5) * cs;
+                if (z >= centerZ && z <= nextCenterZ && Math.abs(x - centerX) <= 0.85) {
+                    return 0.2;
+                }
+            }
+
+            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.35);
+            if (raftUp && isRaft) {
+                const prevCenterZ = (cz - 0.5) * cs;
+                if (z >= prevCenterZ && z <= centerZ && Math.abs(x - centerX) <= 0.85) {
+                    return 0.2;
+                }
+            }
+            return -8.0; // Water level
+        }
         const s = 6.25;
         const x0 = Math.floor(x / s) * s;
         const z0 = Math.floor(z / s) * s;
@@ -596,6 +651,17 @@ self.onmessage = function (e) {
 
         // Determine target mesh properties sitting perfectly on ground level
         let zh = TerrainGen.getMeshHeight(zx, zz);
+
+        // In abyss (Water World) mode, Aqua-Sentinels float at the ocean surface or hover over rafts
+        if (currentMapId === 'abyss') {
+            if (zh > -2.0) {
+                // Hovering gracefully over floating raft decks
+                zh = 0.55 + Math.sin(elapsedTime * 3.0 + i) * 0.08;
+            } else {
+                // Floating buoyant at the ocean surface level
+                zh = -0.35 + Math.sin(elapsedTime * 2.2 + i * 1.7) * 0.15;
+            }
+        }
 
         // Structure matches THREE.Matrix4 .elements (Column-major order)
         // [ m11, m21, m31, m41, m12, m22, m32, m42, m13, m23, m33, m43, m14, m24, m34, m44 ]
