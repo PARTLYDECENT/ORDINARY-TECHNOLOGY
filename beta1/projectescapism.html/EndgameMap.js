@@ -54,10 +54,20 @@ const EndgameMapManager = (function () {
             this.threatMesh = null;
             this.threatInitialized = false;
             this.nextChargeTimer = 6.0; // Randomly send one charging sentry every 6-12 seconds
+
+            // Final Boss: Hatman initialization
+            if (window.Hatman) {
+                window.hatmanBoss = new window.Hatman(this.scene, this.config);
+            }
         }
 
         update(playerPosition, delta = 0, activeCamera = null) {
             this.time += delta;
+
+            // Update Final Boss
+            if (window.hatmanBoss) {
+                window.hatmanBoss.update(playerPosition, delta, activeCamera);
+            }
 
             // 1. Chunk Management
             const px = Math.floor(playerPosition.x / this.chunkSize);
@@ -877,6 +887,31 @@ const EndgameMapManager = (function () {
             });
 
             this.threatMesh.instanceMatrix.needsUpdate = true;
+        }
+
+        dispose() {
+            if (window.hatmanBoss) {
+                window.hatmanBoss.dispose();
+                window.hatmanBoss = null;
+            }
+
+            if (this.threatMesh) {
+                this.scene.remove(this.threatMesh);
+                this.threatMesh.geometry.dispose();
+                this.threatMesh.material.dispose();
+            }
+
+            for (const rip of this.echoRipples) {
+                this.scene.remove(rip.mesh);
+                rip.mesh.geometry.dispose();
+                rip.mesh.material.dispose();
+            }
+            this.echoRipples = [];
+
+            for (const key of this.chunks.keys()) {
+                this._unloadChunk(key);
+            }
+            this.chunks.clear();
         }
     }
 

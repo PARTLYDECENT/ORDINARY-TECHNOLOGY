@@ -21,6 +21,8 @@ const MainMenu = {
     subMenuActive: null,
     subMenuFade: 0,
     settingsState: { volume: 80, quality: 2, fov: 70, sensitivity: 50 },
+    settingsIndex: 0,
+    itemStates: [],
     fadeOut: false,
     fadeOutAlpha: 0,
     onStart: null,
@@ -39,7 +41,9 @@ const MainMenu = {
         { id: 'survival', name: 'SURVIVAL', desc: 'Infinite waves. No extraction. Survive.', difficulty: 'ENDLESS', color: '#ffffff', fog: 0x110000 },
         { id: 'desert', name: 'DESOLATION', desc: 'Vast flat desert. Nowhere to hide.', difficulty: 'EXTREME', color: '#d4a800', fog: 0x221a11 },
         { id: 'endgame', name: 'ENDGAME', desc: 'The final cosmic void. A flat empty glass plane under a majestic nebula.', difficulty: 'APOCALYPSE', color: '#a020f0', fog: 0x050010 },
-        { id: 'abyss', name: 'WATER WORLD', desc: 'Procedural floating wooden rafts on an endless waving blue ocean. Watch your step!', difficulty: 'TROPICAL', color: '#0284c7', fog: 0xbae6fd }
+        { id: 'abyss', name: 'WATER WORLD', desc: 'Procedural floating wooden rafts on an endless waving blue ocean. Watch your step!', difficulty: 'TROPICAL', color: '#0284c7', fog: 0xbae6fd },
+        { id: 'jungle', name: 'JUNGLE EXPANSE', desc: 'Dense infinite voxel jungle. Blocky stepped cliffs, canopies and water.', difficulty: 'DENSE VOXEL', color: '#10b981', fog: 0x051d0f },
+        { id: 'asynchronousmaze1', name: 'ASYNCHRONOUS MAZE', desc: 'The Backrooms. A yellow-ochre fluorescent labyrinth. Escape the stalker.', difficulty: 'UNSTABLE', color: '#d1cc9e', fog: 0x242416 }
     ],
     selectedMap: 0,
 
@@ -65,7 +69,7 @@ const MainMenu = {
 
     dossierEntries: [
         { title: 'THE INFECTION', content: 'Origin unknown. Converts organic matter in 47 seconds. Destroy all Hive Nodes.' },
-        { title: 'CHASSIS #1997', content: 'Hybrid machine-human combat platform. Humanity\'s last asset.' },
+        { title: 'CHASSIS #1997', content: "Hybrid machine-human combat platform. Humanity's last asset." },
         { title: 'THE HORDE', content: 'Shamblers. Pukers. Throwers. Coordinated by the Hive.' },
         { title: 'OPERATION: SURVIVE', content: 'Kill the horde. Destroy the nodes. They regenerate in 45 seconds.' },
         { title: 'MAYA ENGINE', content: 'Neural Processing Architecture v1.4. 2,500 entities. 60 FPS.' },
@@ -89,10 +93,14 @@ const MainMenu = {
         // Kill the shader background
         if (window.MenuBG) { window.MenuBG.stop(); window.MenuBG = null; }
 
+        // Initialize transition states for menu items
+        this.itemStates = this.menuItems.map(() => ({ xOffset: 0, alpha: 0.35 }));
+        this.settingsIndex = 0;
+
         // Start menu music
         this.menuMusic = new Audio('assets/MUSIC/menu.mp3');
         this.menuMusic.loop = true;
-        this.menuMusic.volume = 0.3;
+        this.menuMusic.volume = 0.3 * (this.settingsState.volume / 100);
         this.menuMusic.play().catch(e => console.warn('[Menu Music] Autoplay blocked:', e));
 
         this.resize();
@@ -137,6 +145,32 @@ const MainMenu = {
                         return;
                     }
                 }
+            } else if (this.subMenuActive === 'settings') {
+                const startX = this.width * 0.08;
+                const startY = this.height * 0.1 + 85;
+                const rowHeight = 40;
+                for (let i = 0; i < 4; i++) {
+                    const rowY = startY + i * rowHeight;
+                    if (e.clientY > rowY - 15 && e.clientY < rowY + 15) {
+                        if (e.clientX > startX + 190 && e.clientX < startX + 225) {
+                            this.adjustSetting(i, -1);
+                            return;
+                        }
+                        if (e.clientX > startX + 265 && e.clientX < startX + 300) {
+                            this.adjustSetting(i, 1);
+                            return;
+                        }
+                    }
+                }
+            } else if (this.subMenuActive === 'dossier') {
+                if (this.dossierBtnBounds) {
+                    const b = this.dossierBtnBounds;
+                    if (e.clientX > b.x && e.clientX < b.x + b.w && e.clientY > b.y && e.clientY < b.y + b.h) {
+                        if (window.SFX) window.SFX.triggerUIConfirm ? window.SFX.triggerUIConfirm() : window.SFX.triggerUI();
+                        this.openDNALab();
+                        return;
+                    }
+                }
             }
 
             const backBtnX = this.width / 2;
@@ -144,6 +178,7 @@ const MainMenu = {
             if (Math.abs(e.clientX - backBtnX) < 100 && Math.abs(e.clientY - backBtnY) < 25) {
                 this.subMenuActive = null;
                 this.subMenuFade = 0;
+                if (window.SFX) window.SFX.triggerUI();
                 return;
             }
             return;
@@ -165,19 +200,82 @@ const MainMenu = {
 
     handleKey: function (e) {
         if (!this.active || this.fadeOut) return;
+        
         if (this.subMenuActive) {
-            if (e.key === 'Escape' || e.key === 'Backspace') { this.subMenuActive = null; this.subMenuFade = 0; }
+            if (e.key === 'Escape' || e.key === 'Backspace') { 
+                this.subMenuActive = null; 
+                this.subMenuFade = 0; 
+                if (window.SFX) window.SFX.triggerUI();
+                return; 
+            }
+            
+            if (this.subMenuActive === 'maps') {
+                if (e.key === 'ArrowUp' || e.key === 'w') {
+                    this.selectedMap = (this.selectedMap - 1 + this.mapData.length) % this.mapData.length;
+                    if (window.SFX) window.SFX.triggerUI();
+                } else if (e.key === 'ArrowDown' || e.key === 's') {
+                    this.selectedMap = (this.selectedMap + 1) % this.mapData.length;
+                    if (window.SFX) window.SFX.triggerUI();
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                    this.triggerDeploy('survival');
+                }
+            } else if (this.subMenuActive === 'mods') {
+                if (e.key === 'ArrowUp' || e.key === 'w') {
+                    this.selectedMod = (this.selectedMod - 1 + this.modData.length) % this.modData.length;
+                    if (window.SFX) window.SFX.triggerUI();
+                } else if (e.key === 'ArrowDown' || e.key === 's') {
+                    this.selectedMod = (this.selectedMod + 1) % this.modData.length;
+                    if (window.SFX) window.SFX.triggerUI();
+                }
+            } else if (this.subMenuActive === 'settings') {
+                if (e.key === 'ArrowUp' || e.key === 'w') {
+                    this.settingsIndex = (this.settingsIndex - 1 + 4) % 4;
+                    if (window.SFX) window.SFX.triggerUI();
+                } else if (e.key === 'ArrowDown' || e.key === 's') {
+                    this.settingsIndex = (this.settingsIndex + 1) % 4;
+                    if (window.SFX) window.SFX.triggerUI();
+                } else if (e.key === 'ArrowLeft' || e.key === 'a') {
+                    this.adjustSetting(this.settingsIndex, -1);
+                } else if (e.key === 'ArrowRight' || e.key === 'd') {
+                    this.adjustSetting(this.settingsIndex, 1);
+                }
+            }
             return;
         }
-        if (e.key === 'ArrowUp' || e.key === 'w') this.selectedIndex = (this.selectedIndex - 1 + this.menuItems.length) % this.menuItems.length;
-        else if (e.key === 'ArrowDown' || e.key === 's') this.selectedIndex = (this.selectedIndex + 1) % this.menuItems.length;
-        else if (e.key === 'Enter' || e.key === ' ') this.selectItem(this.selectedIndex);
+        
+        if (e.key === 'ArrowUp' || e.key === 'w') {
+            this.selectedIndex = (this.selectedIndex - 1 + this.menuItems.length) % this.menuItems.length;
+            if (window.SFX) window.SFX.triggerUI();
+        } else if (e.key === 'ArrowDown' || e.key === 's') {
+            this.selectedIndex = (this.selectedIndex + 1) % this.menuItems.length;
+            if (window.SFX) window.SFX.triggerUI();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+            this.selectItem(this.selectedIndex);
+        }
+    },
+
+    adjustSetting: function (index, dir) {
+        if (window.SFX) window.SFX.triggerUI();
+        if (index === 0) { // Volume
+            this.settingsState.volume = Math.max(0, Math.min(100, this.settingsState.volume + dir * 10));
+            if (window.SFX) window.SFX.setMasterVolume(this.settingsState.volume / 100);
+            if (this.menuMusic) this.menuMusic.volume = 0.3 * (this.settingsState.volume / 100);
+        } else if (index === 1) { // Quality
+            this.settingsState.quality = Math.max(0, Math.min(3, this.settingsState.quality + dir));
+        } else if (index === 2) { // FOV
+            this.settingsState.fov = Math.max(50, Math.min(110, this.settingsState.fov + dir * 5));
+            window.baseGameFOV = this.settingsState.fov;
+        } else if (index === 3) { // Sensitivity
+            this.settingsState.sensitivity = Math.max(10, Math.min(100, this.settingsState.sensitivity + dir * 10));
+            window.pauseSettings = window.pauseSettings || {};
+            window.pauseSettings.mouseSensitivity = this.settingsState.sensitivity / 100;
+        }
     },
 
     selectItem: function (index) {
         const item = this.menuItems[index];
         this.selectedIndex = index;
-        if (window.SFX) window.SFX.triggerUI();
+        if (window.SFX) window.SFX.triggerUIConfirm ? window.SFX.triggerUIConfirm() : window.SFX.triggerUI();
         switch (item.action) {
             case 'start': this.triggerDeploy('campaign'); break;
             case 'maps': this.subMenuActive = 'maps'; this.subMenuFade = 0; break;
@@ -185,7 +283,7 @@ const MainMenu = {
             case 'arsenal': this.subMenuActive = 'arsenal'; this.subMenuFade = 0; break;
             case 'dossier': this.subMenuActive = 'dossier'; this.subMenuFade = 0; break;
             case 'logs': this.subMenuActive = 'logs'; this.subMenuFade = 0; break;
-            case 'settings': this.subMenuActive = 'settings'; this.subMenuFade = 0; break;
+            case 'settings': this.subMenuActive = 'settings'; this.subMenuFade = 0; this.settingsIndex = 0; break;
         }
     },
 
@@ -193,7 +291,6 @@ const MainMenu = {
         this.deployMode = mode;
         this.fadeOut = true;
         this.fadeOutAlpha = 0;
-        // Fade out menu music when deploying
         if (this.menuMusic) {
             this.menuMusic.pause();
             this.menuMusic.currentTime = 0;
@@ -201,10 +298,35 @@ const MainMenu = {
         }
     },
 
+    openDNALab: function () {
+        this.active = false;
+        const menuEl = document.getElementById('main-menu');
+        if (menuEl) menuEl.style.display = 'none';
+        
+        if (window.MenuBG) {
+            window.MenuBG.stop();
+        }
+        
+        if (window.RotaryDNALab) {
+            window.RotaryDNALab.init(() => {
+                const menuEl = document.getElementById('main-menu');
+                if (menuEl) menuEl.style.display = 'block';
+                this.active = true;
+                if (window.MenuBG) {
+                    window.MenuBG.init('main-menu');
+                }
+                this.animate();
+            });
+        } else {
+            console.error("RotaryDNALab not loaded!");
+            this.active = true;
+            if (menuEl) menuEl.style.display = 'block';
+        }
+    },
+
     stop: function () {
         this.active = false;
         if (window.MenuBG) window.MenuBG.stop();
-        // Kill menu music if still playing
         if (this.menuMusic) {
             this.menuMusic.pause();
             this.menuMusic.currentTime = 0;
@@ -241,26 +363,94 @@ const MainMenu = {
             }
         }
 
+        // Smooth transition logic for menu items
+        if (this.itemStates && this.itemStates.length > 0) {
+            for (let i = 0; i < this.menuItems.length; i++) {
+                const isHovered = this.hoveredItem === i;
+                const isSelected = this.selectedIndex === i;
+                const state = this.itemStates[i];
+                if (state) {
+                    const targetX = (isHovered || isSelected) ? 12 : 0;
+                    const targetAlpha = (isHovered || isSelected) ? 1.0 : 0.35;
+                    state.xOffset += (targetX - state.xOffset) * 0.15;
+                    state.alpha += (targetAlpha - state.alpha) * 0.15;
+                }
+            }
+        }
+
         this.updateHover();
         this.draw();
         requestAnimationFrame(() => this.animate());
     },
 
     updateHover: function () {
-        if (this.subMenuActive) { this.hoveredItem = -1; return; }
-        const menuX = this.width / 2;
-        const menuStartY = this.height * 0.38;
-        const itemH = 48;
-        let newHover = -1;
-        for (let i = 0; i < this.menuItems.length; i++) {
-            const itemY = menuStartY + i * itemH;
-            if (this.mouseX > menuX - 150 && this.mouseX < menuX + 150 &&
-                this.mouseY > itemY - 10 && this.mouseY < itemY + itemH - 10) {
-                newHover = i;
+        let cursorStyle = 'default';
+        
+        if (this.subMenuActive) {
+            this.hoveredItem = -1;
+            
+            // Check back button hover
+            const backBtnX = this.width / 2;
+            const backBtnY = this.height - 60;
+            if (Math.abs(this.mouseX - backBtnX) < 100 && Math.abs(this.mouseY - backBtnY) < 25) {
+                cursorStyle = 'pointer';
             }
+            
+            // Check sub-menu item hover
+            if (this.subMenuActive === 'maps') {
+                const startX = this.width * 0.08;
+                for (let i = 0; i < this.mapData.length; i++) {
+                    const cy = this.height * 0.1 + 45 + i * 50;
+                    if (this.mouseX > startX && this.mouseX < startX + 400 && this.mouseY > cy - 15 && this.mouseY < cy + 25) {
+                        cursorStyle = 'pointer';
+                    }
+                }
+            } else if (this.subMenuActive === 'mods') {
+                const startX = this.width * 0.08;
+                for (let i = 0; i < this.modData.length; i++) {
+                    const cy = this.height * 0.1 + 45 + i * 50;
+                    if (this.mouseX > startX && this.mouseX < startX + 400 && this.mouseY > cy - 15 && this.mouseY < cy + 25) {
+                        cursorStyle = 'pointer';
+                    }
+                }
+            } else if (this.subMenuActive === 'settings') {
+                const startX = this.width * 0.08;
+                const startY = this.height * 0.1 + 85;
+                const rowHeight = 40;
+                for (let i = 0; i < 4; i++) {
+                    const rowY = startY + i * rowHeight;
+                    if (this.mouseY > rowY - 15 && this.mouseY < rowY + 15) {
+                        if (this.mouseX > startX + 190 && this.mouseX < startX + 300) {
+                            cursorStyle = 'pointer';
+                        }
+                    }
+                }
+            } else if (this.subMenuActive === 'dossier') {
+                if (this.dossierBtnBounds) {
+                    const b = this.dossierBtnBounds;
+                    if (this.mouseX > b.x && this.mouseX < b.x + b.w && this.mouseY > b.y && this.mouseY < b.y + b.h) {
+                        cursorStyle = 'pointer';
+                    }
+                }
+            }
+        } else {
+            const menuX = this.width / 2;
+            const menuStartY = this.height * 0.38;
+            const itemH = 48;
+            let newHover = -1;
+            for (let i = 0; i < this.menuItems.length; i++) {
+                const itemY = menuStartY + i * itemH;
+                if (this.mouseX > menuX - 150 && this.mouseX < menuX + 150 &&
+                    this.mouseY > itemY - 10 && this.mouseY < itemY + itemH - 10) {
+                    newHover = i;
+                    cursorStyle = 'pointer';
+                }
+            }
+            if (newHover !== -1 && newHover !== this.hoveredItem && window.SFX) window.SFX.triggerUI();
+            this.hoveredItem = newHover;
         }
-        if (newHover !== -1 && newHover !== this.hoveredItem && window.SFX) window.SFX.triggerUI();
-        this.hoveredItem = newHover;
+        
+        if (this.canvas) this.canvas.style.cursor = cursorStyle;
     },
 
     draw: function () {
@@ -268,9 +458,16 @@ const MainMenu = {
         const w = this.width;
         const h = this.height;
 
-        // Pure black
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, w, h);
+
+        // Scanlines overlay (Subtle grid decal removed for endless black void aesthetic)
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.01)';
+        for (let y = 0; y < h; y += 4) {
+            ctx.fillRect(0, y, w, 1);
+        }
+        ctx.restore();
 
         if (this.subMenuActive) {
             this.drawSubMenu(ctx, w, h);
@@ -292,7 +489,7 @@ const MainMenu = {
             ctx.restore();
         }
 
-        // Fade out
+        // Fade out transition
         if (this.fadeOut) {
             ctx.fillStyle = `rgba(0, 0, 0, ${this.fadeOutAlpha})`;
             ctx.fillRect(0, 0, w, h);
@@ -314,17 +511,27 @@ const MainMenu = {
         ctx.globalAlpha = Math.min(1, this.logoScale * 2);
         ctx.textAlign = 'center';
 
-        // Title
         const s = this.logoScale;
+        
+        // Subtle glitch chromatic aberration reflection effect
+        const isGlitch = Math.random() < 0.015;
+        const glitchOffset = isGlitch ? (Math.random() - 0.5) * 6 : 0;
+
         ctx.font = `300 ${Math.floor(14 * s)}px "Courier New", monospace`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.fillText('PROJECT', w / 2, h * 0.2);
+
+        if (isGlitch) {
+            ctx.font = `300 ${Math.floor(48 * s)}px "Courier New", monospace`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.fillText('ESCAPISM', w / 2 + glitchOffset, h * 0.2 + 50 * s);
+        }
 
         ctx.font = `300 ${Math.floor(48 * s)}px "Courier New", monospace`;
         ctx.fillStyle = '#ffffff';
         ctx.fillText('ESCAPISM', w / 2, h * 0.2 + 50 * s);
 
-        // Thin line
+        // Thin split segment line
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.fillRect(w / 2 - 80 * s, h * 0.2 + 60 * s, 160 * s, 1);
 
@@ -346,20 +553,21 @@ const MainMenu = {
             const itemAlpha = Math.min(1, Math.max(0, (this.menuFadeIn - delay) * 5));
             if (itemAlpha <= 0) continue;
 
-            const isHovered = this.hoveredItem === i;
-            const isSelected = this.selectedIndex === i;
+            const state = this.itemStates[i];
+            if (!state) continue;
 
-            ctx.globalAlpha = itemAlpha;
+            ctx.globalAlpha = itemAlpha * state.alpha;
+            ctx.font = '14px "Courier New", monospace';
+            ctx.fillStyle = '#ffffff';
 
-            if (isHovered || isSelected) {
-                ctx.font = '16px "Courier New", monospace';
-                ctx.fillStyle = '#ffffff';
-            } else {
-                ctx.font = '14px "Courier New", monospace';
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            if (state.xOffset > 1) {
+                ctx.save();
+                ctx.fillStyle = `rgba(255, 255, 255, ${state.alpha * 0.35})`;
+                ctx.fillText('◈', w / 2 - 80 - state.xOffset, y + 20);
+                ctx.restore();
             }
 
-            ctx.fillText(item.label, w / 2, y + 20);
+            ctx.fillText(item.label, w / 2 + state.xOffset, y + 20);
         }
 
         ctx.restore();
@@ -369,7 +577,6 @@ const MainMenu = {
         ctx.save();
         ctx.globalAlpha = this.subMenuFade;
 
-        // Black bg
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, w, h);
 
@@ -380,11 +587,18 @@ const MainMenu = {
         else if (this.subMenuActive === 'mods') this.drawModsMenu(ctx, w, h);
         else if (this.subMenuActive === 'logs') this.drawLogsMenu(ctx, w, h);
 
-        // Back
+        // Back action button indicator
         ctx.font = '12px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.fillText('[ ESC ]', w / 2, h - 60);
+        
+        // Highlight ESC button on hover
+        const backBtnX = w / 2;
+        const backBtnY = h - 60;
+        if (Math.abs(this.mouseX - backBtnX) < 100 && Math.abs(this.mouseY - backBtnY) < 25) {
+            ctx.fillStyle = '#ffffff';
+        }
+        ctx.fillText('[ ESC ]', backBtnX, backBtnY);
 
         ctx.restore();
     },
@@ -436,6 +650,48 @@ const MainMenu = {
             this.wrapText(ctx, entry.content, x, y + 18, w * 0.7, 16);
             y += 55;
         });
+
+        // Add clickable button "LONG TERM TEST TRIALS"
+        const btnX = x;
+        const btnY = y + 15;
+        const btnW = 280;
+        const btnH = 38;
+        
+        ctx.save();
+        // Check hover
+        const isHovered = (this.mouseX > btnX && this.mouseX < btnX + btnW && this.mouseY > btnY && this.mouseY < btnY + btnH);
+        
+        ctx.strokeStyle = isHovered ? '#00ffcc' : 'rgba(255, 255, 255, 0.2)';
+        ctx.fillStyle = isHovered ? 'rgba(0, 255, 200, 0.08)' : 'rgba(0, 0, 0, 0.3)';
+        ctx.lineWidth = 1;
+        
+        // Draw button background and border
+        ctx.fillRect(btnX, btnY, btnW, btnH);
+        ctx.strokeRect(btnX, btnY, btnW, btnH);
+        
+        // Draw text
+        ctx.font = '11px "Courier New", monospace';
+        ctx.fillStyle = isHovered ? '#00ffcc' : '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.fillText('LONG TERM TEST TRIALS', btnX + btnW / 2, btnY + btnH / 2 + 4);
+        
+        // Technical decorative corners for cyber-retro feel
+        if (isHovered) {
+            ctx.fillStyle = '#00ffcc';
+            ctx.fillRect(btnX - 2, btnY - 2, 6, 2);
+            ctx.fillRect(btnX - 2, btnY - 2, 2, 6);
+            ctx.fillRect(btnX + btnW - 4, btnY - 2, 6, 2);
+            ctx.fillRect(btnX + btnW, btnY - 2, 2, 6);
+            ctx.fillRect(btnX - 2, btnY + btnH, 6, 2);
+            ctx.fillRect(btnX - 2, btnY + btnH - 4, 2, 6);
+            ctx.fillRect(btnX + btnW - 4, btnY + btnH, 6, 2);
+            ctx.fillRect(btnX + btnW, btnY + btnH - 4, 2, 6);
+        }
+        
+        ctx.restore();
+        
+        // Store bounds for click detection
+        this.dossierBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
     },
 
     drawSettingsMenu: function (ctx, w, h) {
@@ -458,12 +714,33 @@ const MainMenu = {
             { label: 'SENSITIVITY', value: this.settingsState.sensitivity + '%' },
         ];
 
-        settings.forEach((s) => {
+        this.settingsIndex = this.settingsIndex || 0;
+
+        settings.forEach((s, i) => {
+            const isSelected = this.settingsIndex === i;
+            
+            if (isSelected) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px "Courier New", monospace';
+                ctx.fillText('◈', x - 15, y);
+            }
+
             ctx.font = '12px "Courier New", monospace';
-            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)';
             ctx.fillText(s.label, x, y);
+            
+            // Draw Interactive arrows
+            ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255,255,255,0.3)';
+            ctx.fillText('<', x + 195, y);
+            
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(s.value, x + 200, y);
+            ctx.textAlign = 'center';
+            ctx.fillText(s.value, x + 240, y);
+            
+            ctx.textAlign = 'left';
+            ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255,255,255,0.3)';
+            ctx.fillText('>', x + 280, y);
+            
             y += 40;
         });
     },
@@ -541,7 +818,6 @@ const MainMenu = {
         });
     },
 
-    // Utility
     wrapText: function (ctx, text, x, y, maxWidth, lineHeight) {
         const words = text.split(' ');
         let line = '';

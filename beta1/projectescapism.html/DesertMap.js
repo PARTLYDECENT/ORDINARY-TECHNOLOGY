@@ -271,9 +271,9 @@ const DesertMapManager = (function () {
                 }
             }
 
-            // Spawn 3-4 procedural 4D spires per chunk to distort the horizon
+            // Spawn 3-4 procedural 4D spires per chunk to distort the horizon (disabled in desolation)
             if (window.ProceduralSpire) {
-                const numSpires = 3;
+                const numSpires = 0;
                 for (let s = 0; s < numSpires; s++) {
                     const lx = 4 + Math.random() * (this.config.gridSize - 8);
                     const lz = 4 + Math.random() * (this.config.gridSize - 8);

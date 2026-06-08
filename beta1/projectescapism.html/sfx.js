@@ -8,6 +8,13 @@ const SFX = {
     isInitialized: false,
     bgmSource: null,
     bgmIndex: 0,
+    masterVolume: 0.8,
+    setMasterVolume(val) {
+        this.masterVolume = val;
+        if (this.bgmAudio) {
+            this.bgmAudio.volume = 0.25 * val;
+        }
+    },
 
     sounds: {
         PISTOL: 'assets/sfx/pistol.mp3',
@@ -72,7 +79,8 @@ const SFX = {
         source.buffer = buffer;
 
         const gainNode = this.audioCtx.createGain();
-        gainNode.gain.value = options.volume !== undefined ? options.volume : 0.5;
+        const baseVol = options.volume !== undefined ? options.volume : 0.5;
+        gainNode.gain.value = baseVol * this.masterVolume;
         
         if (options.pitch) {
             source.playbackRate.value = options.pitch;
@@ -135,9 +143,9 @@ const SFX = {
         // 1. Create a Master Gain Node
         const masterGain = this.audioCtx.createGain();
         masterGain.gain.setValueAtTime(0.0, now);
-        masterGain.gain.linearRampToValueAtTime(0.48, now + 0.15); // sharp, painful screech attack!
-        masterGain.gain.setValueAtTime(0.48, now + duration - 0.45);
-        masterGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        masterGain.gain.linearRampToValueAtTime(0.48 * this.masterVolume, now + 0.15); // sharp, painful screech attack!
+        masterGain.gain.setValueAtTime(0.48 * this.masterVolume, now + duration - 0.45);
+        masterGain.gain.exponentialRampToValueAtTime(0.01 * this.masterVolume, now + duration);
         
         // 2. Desperate high-frequency detuned Sawtooth vocal scream
         const osc1 = this.audioCtx.createOscillator();
@@ -185,8 +193,8 @@ const SFX = {
         bandpass.Q.value = 6.5; // razor-sharp resonant screech squeal!
         
         const noiseGain = this.audioCtx.createGain();
-        noiseGain.gain.setValueAtTime(0.09, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.02, now + duration);
+        noiseGain.gain.setValueAtTime(0.09 * this.masterVolume, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.02 * this.masterVolume, now + duration);
         
         noiseSource.connect(bandpass);
         bandpass.connect(noiseGain);
@@ -233,13 +241,17 @@ const SFX = {
         this.play(variants[Math.floor(Math.random() * variants.length)], { volume: 0.3, pitch: 1.5 });
     },
 
+    triggerUIConfirm() {
+        this.play('CYC_2', { volume: 0.45, pitch: 1.8 });
+    },
+
     // --- BGM: Single track from assets/MUSIC/bg.mp3, looped infinitely ---
     startBGM() {
         if (this.bgmAudio) return; // Already playing
         try {
             this.bgmAudio = new Audio('assets/MUSIC/bg.mp3');
             this.bgmAudio.loop = true;
-            this.bgmAudio.volume = 0.25; // Keep BGM soft compared to SFX
+            this.bgmAudio.volume = 0.25 * this.masterVolume; // Keep BGM soft compared to SFX
             this.bgmAudio.play().catch(e => console.warn('[BGM] Autoplay blocked, will retry on interaction:', e));
             console.log('[BGM] Playing assets/MUSIC/bg.mp3 on loop');
         } catch (e) {

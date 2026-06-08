@@ -22,7 +22,12 @@ const AbyssMapManager = (function () {
             this.scene = scene;
             this.config = config;
             this.chunks = new Map();
-            this.chunkSize = config.gridSize * config.cellSize;
+            
+            // Custom high-quality layout parameters to prevent overlaps and make slots vast!
+            this.cellSize = 12.0; 
+            this.gridSize = 12;
+            this.chunkSize = this.gridSize * this.cellSize; 
+
             this.activeChunks = new Set();
             this.viewRadius = 1;
             this.time = 0;
@@ -46,6 +51,9 @@ const AbyssMapManager = (function () {
 
             // --- SEA SPRAY PARTICLE SYSTEM ---
             this._initSeaSpray();
+
+            // --- BIOLUMINESCENT SPORES SYSTEM ---
+            this._initBioluminescentSpores();
         }
 
         // ===================== MATERIAL FACTORIES =====================
@@ -143,9 +151,9 @@ const AbyssMapManager = (function () {
         }
 
         _createOceanMaterial() {
-            // Gorgeous animated waving blue ocean shader
+            // Grotesque, bubbling and waving toxic sludge ocean shader
             const mat = new THREE.MeshStandardMaterial({
-                color: 0x082f49, roughness: 0.15, metalness: 0.85,
+                color: 0x071109, roughness: 0.25, metalness: 0.75,
                 transparent: true, opacity: 0.95
             });
             mat.onBeforeCompile = (shader) => {
@@ -157,7 +165,8 @@ const AbyssMapManager = (function () {
                     uniform float uTime;
                     varying vec3 vWorldPos;
                     float wave(vec2 p, float speed) {
-                        return sin(p.x * 0.15 + uTime * speed) * cos(p.y * 0.18 + uTime * speed * 0.8) * 0.25;
+                        // More choppy, violent waves
+                        return sin(p.x * 0.12 + uTime * speed) * cos(p.y * 0.15 - uTime * speed * 1.1) * 0.4;
                     }`
                 );
                 shader.vertexShader = shader.vertexShader.replace(
@@ -165,7 +174,8 @@ const AbyssMapManager = (function () {
                     `#include <begin_vertex>
                     vec4 wp = modelMatrix * vec4(position, 1.0);
                     vWorldPos = wp.xyz;
-                    transformed.y += wave(wp.xz, 1.5) + wave(wp.xz * 2.5 + 3.0, 2.2) * 0.3;`
+                    // Displace along Z (local out-of-plane, which becomes world Y height after rotation)
+                    transformed.z += wave(wp.xz, 1.8) + wave(wp.xz * 3.2 + vec2(4.0), 2.5) * 0.25;`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     `#include <common>`,
@@ -177,12 +187,33 @@ const AbyssMapManager = (function () {
                 shader.fragmentShader = shader.fragmentShader.replace(
                     `#include <color_fragment>`,
                     `#include <color_fragment>
-                    // Ocean sparkles and foam lines
-                    float foam = smoothstep(0.45, 0.55, sin(vWorldPos.x * 1.5 + uTime) * cos(vWorldPos.z * 1.2 - uTime * 0.8));
-                    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.7, 0.9, 1.0), foam * 0.35);
-                    // Specular sunlight sparkle
-                    float sparkle = smoothstep(0.985, 1.0, sin(vWorldPos.x * 12.0 + uTime * 3.0) * cos(vWorldPos.z * 10.0 - uTime * 2.5));
-                    diffuseColor.rgb += vec3(1.0, 1.0, 1.0) * sparkle * 0.6;`
+                    // Grotesque oil/toxic slime water shader
+                    float t = uTime;
+                    vec2 p = vWorldPos.xz * 0.04;
+                    
+                    // Layered sine wave noise for animated slime movement
+                    float slimeNoise = sin(p.x * 3.0 + t) * cos(p.y * 2.5 - t * 0.7) * 0.5;
+                    slimeNoise += sin(p.x * 7.0 - t * 1.2) * cos(p.y * 8.0 + t) * 0.25;
+                    
+                    // Deep toxic sludge background
+                    vec3 sludgeBase = vec3(0.03, 0.07, 0.04); // dark swamp green
+                    vec3 oilSlick = mix(vec3(0.25, 0.04, 0.35), vec3(0.04, 0.22, 0.08), sin(vWorldPos.x * 0.12 + t) * 0.5 + 0.5); // iridescent oily purple-green
+                    
+                    vec3 finalWater = mix(sludgeBase, oilSlick, 0.4 + slimeNoise * 0.3);
+                    
+                    // Bioluminescent pulsing toxic sludge veins
+                    float vein = smoothstep(0.42, 0.58, sin(vWorldPos.x * 0.7 + t * 0.6) * cos(vWorldPos.z * 0.5 - t * 0.45) + slimeNoise * 0.35);
+                    vec3 veinCol = mix(vec3(0.05, 0.95, 0.15), vec3(0.65, 0.08, 0.08), sin(t * 1.6) * 0.5 + 0.5); // morphs between toxic neon green and visceral dark red
+                    
+                    diffuseColor.rgb = mix(finalWater, veinCol, vein * 0.7);
+                    
+                    // Add dirty floating organic scum
+                    float scum = smoothstep(0.66, 0.74, snoise(vWorldPos.xz * 0.35 + vec2(t * 0.04)));
+                    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.12, 0.06), scum * 0.85); // brown muddy sludge chunks
+                    
+                    // Specular slimy highlight
+                    float slimeShininess = smoothstep(0.97, 1.0, sin(vWorldPos.x * 4.5 + t * 2.2) * cos(vWorldPos.z * 5.5 - t * 1.6));
+                    diffuseColor.rgb += vec3(0.4, 0.8, 0.3) * slimeShininess * 0.5;`
                 );
             };
             return mat;
@@ -232,23 +263,45 @@ const AbyssMapManager = (function () {
         }
 
         _createBridgeGeometry() {
-            // Simple robust wooden log bridge
+            // Curved, snaking rustic rope bridge!
             const parts = [];
-            const log1 = new THREE.CylinderGeometry(0.16, 0.16, 2.0, 8);
-            log1.rotateX(Math.PI / 2);
-            log1.translate(0.2, 0.08, 0);
-            parts.push(log1);
+            
+            // Segment the supporting logs into overlapping curved pieces to form a snaking path
+            const segments = 12;
+            const length = 2.0; 
+            
+            for (let i = 0; i <= segments; i++) {
+                const z = (i / segments) * length - (length / 2.0); // -1.0 to 1.0
+                
+                // Snaking curve horizontal offset (beautiful rustic snake look)
+                const snakeX = Math.sin(z * Math.PI * 1.5) * 0.24;
+                
+                // Left log segment
+                const logL = new THREE.CylinderGeometry(0.15, 0.15, length / segments + 0.06, 8);
+                logL.rotateX(Math.PI / 2);
+                logL.translate(-0.22 + snakeX, 0.08, z);
+                parts.push(logL);
 
-            const log2 = log1.clone();
-            log2.translate(-0.4, 0, 0);
-            parts.push(log2);
+                // Right log segment
+                const logR = new THREE.CylinderGeometry(0.15, 0.15, length / segments + 0.06, 8);
+                logR.rotateX(Math.PI / 2);
+                logR.translate(0.22 + snakeX, 0.08, z);
+                parts.push(logR);
+            }
 
-            // Wooden planks across the logs
-            const stepCount = 5;
+            // Planks across the curved logs
+            const stepCount = 10;
             for (let i = 0; i < stepCount; i++) {
-                const offZ = (i - (stepCount - 1) / 2) * 0.45;
-                const step = new THREE.BoxGeometry(0.8, 0.06, 0.25);
-                step.translate(0, 0.2, offZ);
+                const z = (i / (stepCount - 1)) * 1.8 - 0.9; // -0.9 to 0.9
+                
+                // Same snaking curve offset
+                const snakeX = Math.sin(z * Math.PI * 1.5) * 0.24;
+                
+                const step = new THREE.BoxGeometry(0.85, 0.06, 0.16);
+                // Slight random rotation on each plank to make it look rustic and hand-made
+                const randomRotY = Math.sin(i * 15.7) * 0.12; 
+                step.rotateY(randomRotY);
+                step.translate(snakeX, 0.2, z);
                 parts.push(step);
             }
 
@@ -270,6 +323,38 @@ const AbyssMapManager = (function () {
             this.oceanMesh.position.set(0, -0.15, 0); // perfectly aligned under raft deck heights
             this.oceanMesh.receiveShadow = true;
             this.scene.add(this.oceanMesh);
+        }
+
+        _initBioluminescentSpores() {
+            // Physical floating bioluminescent spore bubbles
+            this.sporeCount = 200;
+            const geo = new THREE.SphereGeometry(0.12, 5, 5);
+            // Neon glowing emissive toxic green material
+            this.sporeMat = new THREE.MeshBasicMaterial({
+                color: 0x39ff14,
+                transparent: true,
+                opacity: 0.85
+            });
+            this.sporesMesh = new THREE.InstancedMesh(geo, this.sporeMat, this.sporeCount);
+            
+            // Randomly position spores in a local grid around player
+            this.sporeData = [];
+            const dummy = new THREE.Object3D();
+            
+            for (let i = 0; i < this.sporeCount; i++) {
+                const rx = (Math.random() - 0.5) * 60.0;
+                const rz = (Math.random() - 0.5) * 60.0;
+                const ry = -0.5 + Math.random() * 0.4; // float near the water surface
+                const speed = 1.2 + Math.random() * 1.8;
+                const phase = Math.random() * Math.PI * 2;
+                
+                this.sporeData.push({ rx, ry, rz, speed, phase });
+                
+                dummy.position.set(rx, ry, rz);
+                dummy.updateMatrix();
+                this.sporesMesh.setMatrixAt(i, dummy.matrix);
+            }
+            this.scene.add(this.sporesMesh);
         }
 
         _initSeaSpray() {
@@ -371,6 +456,27 @@ const AbyssMapManager = (function () {
             if (this.sprayMat) {
                 this.sprayMat.uniforms.uTime.value = this.time;
             }
+
+            // Animate bioluminescent spores following the player
+            if (this.sporesMesh) {
+                const dummy = new THREE.Object3D();
+                for (let i = 0; i < this.sporeCount; i++) {
+                    const data = this.sporeData[i];
+                    // Keep spores locally wrapped around player
+                    let wx = playerPosition.x + data.rx;
+                    let wz = playerPosition.z + data.rz;
+                    
+                    // Bob vertically along with the violent sludge waves
+                    const waveHeight = Math.sin(wx * 0.12 + this.time * 1.8) * Math.cos(wz * 0.15 - this.time * 2.0) * 0.4;
+                    const wy = -0.15 + waveHeight + Math.sin(this.time * data.speed + data.phase) * 0.18;
+                    
+                    dummy.position.set(wx, wy, wz);
+                    dummy.scale.setScalar(0.75 + Math.sin(this.time * data.speed * 2.0 + data.phase) * 0.25); // pulsing effect
+                    dummy.updateMatrix();
+                    this.sporesMesh.setMatrixAt(i, dummy.matrix);
+                }
+                this.sporesMesh.instanceMatrix.needsUpdate = true;
+            }
         }
 
         getCostAt(worldX, worldZ) {
@@ -380,12 +486,12 @@ const AbyssMapManager = (function () {
         }
 
         getMeshHeight(x, z) {
-            const cs = this.config.cellSize;
+            const cs = this.cellSize;
             const cx = Math.floor(x / cs);
             const cz = Math.floor(z / cs);
 
             // Starting platform at (0, 0) always valid
-            const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.35);
+            const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.26);
             const centerX = (cx + 0.5) * cs;
             const centerZ = (cz + 0.5) * cs;
             const raftHalf = 2.25;
@@ -398,7 +504,7 @@ const AbyssMapManager = (function () {
             }
 
             // 2. Check connected horizontal bridges to (cx + 1, cz)
-            const raftRight = getRaftHash(cx + 1, cz) < 0.35;
+            const raftRight = getRaftHash(cx + 1, cz) < 0.26;
             if (isRaft && raftRight) {
                 const nextCenterX = (cx + 1.5) * cs;
                 if (x >= centerX && x <= nextCenterX && Math.abs(z - centerZ) <= 0.85) {
@@ -407,7 +513,7 @@ const AbyssMapManager = (function () {
             }
 
             // Check connected horizontal bridge from (cx - 1, cz)
-            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.35);
+            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.26);
             if (raftLeft && isRaft) {
                 const prevCenterX = (cx - 0.5) * cs;
                 if (x >= prevCenterX && x <= centerX && Math.abs(z - centerZ) <= 0.85) {
@@ -416,7 +522,7 @@ const AbyssMapManager = (function () {
             }
 
             // 3. Check connected vertical bridges to (cx, cz + 1)
-            const raftDown = getRaftHash(cx, cz + 1) < 0.35;
+            const raftDown = getRaftHash(cx, cz + 1) < 0.26;
             if (isRaft && raftDown) {
                 const nextCenterZ = (cz + 1.5) * cs;
                 if (z >= centerZ && z <= nextCenterZ && Math.abs(x - centerX) <= 0.85) {
@@ -425,7 +531,7 @@ const AbyssMapManager = (function () {
             }
 
             // Check connected vertical bridge from (cx, cz - 1)
-            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.35);
+            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.26);
             if (raftUp && isRaft) {
                 const prevCenterZ = (cz - 0.5) * cs;
                 if (z >= prevCenterZ && z <= centerZ && Math.abs(x - centerX) <= 0.85) {
@@ -440,8 +546,8 @@ const AbyssMapManager = (function () {
             const key = `${cx},${cz}`;
             const ox = cx * this.chunkSize;
             const oz = cz * this.chunkSize;
-            const cs = this.config.cellSize;
-            const gs = this.config.gridSize;
+            const cs = this.cellSize;
+            const gs = this.gridSize;
 
             const chunkGroup = new THREE.Group();
             chunkGroup.position.set(ox, 0, oz);
@@ -472,7 +578,7 @@ const AbyssMapManager = (function () {
                 const cellX = Math.floor(wX / cs);
                 const cellZ = Math.floor(wZ / cs);
 
-                const isRaft = (cellX === 0 && cellZ === 0) || (getRaftHash(cellX, cellZ) < 0.35);
+                const isRaft = (cellX === 0 && cellZ === 0) || (getRaftHash(cellX, cellZ) < 0.26);
 
                 if (isRaft) {
                     // Spawn Raft Deck platform
@@ -501,7 +607,7 @@ const AbyssMapManager = (function () {
                     }
 
                     // Check horizontal connection to neighbor (cx + 1) for Bridge walkway spawn
-                    const nextRaftRight = getRaftHash(cellX + 1, cellZ) < 0.35;
+                    const nextRaftRight = getRaftHash(cellX + 1, cellZ) < 0.26;
                     if (nextRaftRight) {
                         dummy.position.set(lx + cs, 0, lz + cs/2);
                         dummy.rotation.set(0, Math.PI / 2, 0); // Align across X axis
@@ -511,7 +617,7 @@ const AbyssMapManager = (function () {
                     }
 
                     // Check vertical connection to neighbor (cz + 1) for Bridge walkway spawn
-                    const nextRaftDown = getRaftHash(cellX, cellZ + 1) < 0.35;
+                    const nextRaftDown = getRaftHash(cellX, cellZ + 1) < 0.26;
                     if (nextRaftDown) {
                         dummy.position.set(lx + cs/2, 0, lz + cs);
                         dummy.rotation.set(0, 0, 0); // Align across Z axis
@@ -544,6 +650,31 @@ const AbyssMapManager = (function () {
                 });
                 this.chunks.delete(key);
             }
+        }
+
+        dispose() {
+            // Remove endless ocean, spray, and spores from scene
+            if (this.oceanMesh) this.scene.remove(this.oceanMesh);
+            if (this.spray) this.scene.remove(this.spray);
+            if (this.sporesMesh) this.scene.remove(this.sporesMesh);
+            
+            // Dispose geometries
+            if (this.oceanMesh && this.oceanMesh.geometry) this.oceanMesh.geometry.dispose();
+            if (this.spray && this.spray.geometry) this.spray.geometry.dispose();
+            if (this.sporesMesh && this.sporesMesh.geometry) this.sporesMesh.geometry.dispose();
+            
+            [this.woodMat, this.barrelMat, this.bridgeMat, this.oceanMat, this.sprayMat, this.sporeMat].forEach(m => {
+                if (m) m.dispose();
+            });
+
+            // Unload all chunks
+            for (const key of this.chunks.keys()) {
+                this._unloadChunk(key);
+            }
+            this.chunks.clear();
+            this.activeChunks.clear();
+            
+            window.ABYSS_MODE = false;
         }
     }
 

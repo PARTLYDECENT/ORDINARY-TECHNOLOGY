@@ -123,6 +123,25 @@ const TerrainGen = {
         if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'abyss') {
             return -8.0; // Deep seafloor
         }
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'jungle') {
+            if (window.mapManager && typeof window.mapManager.getHeight === 'function') {
+                return window.mapManager.getHeight(x, z);
+            }
+            // Fallback before mapManager initializes (matched to JungleMap.js voxel terrain!)
+            const voxelSize = 1.2;
+            let v = 0.0;
+            let a = 0.5;
+            let px = x * 0.006;
+            let pz = z * 0.006;
+            for (let n = 0; n < 3; n++) {
+                v += a * Math.sin(px * 8.0) * Math.cos(pz * 8.0);
+                px *= 2.0;
+                pz *= 2.0;
+                a *= 0.5;
+            }
+            let hVal = Math.floor((v * 0.5 + 0.5) * 7.0) + 2;
+            return hVal * voxelSize;
+        }
 
         // Match the FBM and Magnitude in GLSL EXACTLY
         let v = 0.0;
@@ -149,15 +168,21 @@ const TerrainGen = {
 
     // Calculates the actual linear height on the triangle face to prevent clipping/sinking
     getMeshHeight: function (x, z) {
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'asynchronousmaze1') {
+            return 0.0;
+        }
+        if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'jungle') {
+            return this.getHeight(x, z); // Snap flatly onto block surfaces!
+        }
         if (window.ABYSS_MODE) {
             const getRaftHash = (cx, cz) => {
                 let h = Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453123;
                 return h - Math.floor(h);
             };
-            const cs = 6.25;
+            const cs = 12.0; // matched to AbyssMap.js
             const cx = Math.floor(x / cs);
             const cz = Math.floor(z / cs);
-            const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.35);
+            const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.26);
             const centerX = (cx + 0.5) * cs;
             const centerZ = (cz + 0.5) * cs;
             const raftHalf = 2.25;
@@ -168,7 +193,7 @@ const TerrainGen = {
                 }
             }
 
-            const raftRight = getRaftHash(cx + 1, cz) < 0.35;
+            const raftRight = getRaftHash(cx + 1, cz) < 0.26;
             if (isRaft && raftRight) {
                 const nextCenterX = (cx + 1.5) * cs;
                 if (x >= centerX && x <= nextCenterX && Math.abs(z - centerZ) <= 0.85) {
@@ -176,7 +201,7 @@ const TerrainGen = {
                 }
             }
 
-            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.35);
+            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.26);
             if (raftLeft && isRaft) {
                 const prevCenterX = (cx - 0.5) * cs;
                 if (x >= prevCenterX && x <= centerX && Math.abs(z - centerZ) <= 0.85) {
@@ -184,7 +209,7 @@ const TerrainGen = {
                 }
             }
 
-            const raftDown = getRaftHash(cx, cz + 1) < 0.35;
+            const raftDown = getRaftHash(cx, cz + 1) < 0.26;
             if (isRaft && raftDown) {
                 const nextCenterZ = (cz + 1.5) * cs;
                 if (z >= centerZ && z <= nextCenterZ && Math.abs(x - centerX) <= 0.85) {
@@ -192,7 +217,7 @@ const TerrainGen = {
                 }
             }
 
-            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.35);
+            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.26);
             if (raftUp && isRaft) {
                 const prevCenterZ = (cz - 0.5) * cs;
                 if (z >= prevCenterZ && z <= centerZ && Math.abs(x - centerX) <= 0.85) {
@@ -285,6 +310,7 @@ float getBiomeNoise(vec2 pos) {
     if (uMapType == 2) return 0.0; // Toxic
     if (uMapType == 3) return 1.0; // Wasteland
     if (uMapType == 4) return 1.0; // Desert
+    if (uMapType == 6) return 1.0; // Abyss Seafloor
     
     // Higher frequency for more randomization
     float n = snoise(pos * 0.0012) * 0.5 + 0.5; 
@@ -296,6 +322,17 @@ float getTerrainHeight(vec2 pos) {
     if (uMapType == 3 || uMapType == 5) {
         // Facility and Endgame is flat
         return 0.0;
+    }
+    if (uMapType == 6) {
+        // Abyss Seafloor
+        return -8.0;
+    }
+    if (uMapType == 7) {
+        // Jungle stepped voxel terrain! Snapped to 1.5-unit intervals in the shader!
+        float b = fbm(pos * 0.004);
+        float base = sign(b) * pow(abs(b), 1.2) * 15.0;
+        float stepHeight = floor(base / 1.5) * 1.5;
+        return max(0.0, stepHeight);
     }
     if (uMapType == 4) {
         // Blending rolling sand dunes mathematically
@@ -404,7 +441,28 @@ float getTerrainHeight(vec2 pos) {
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <map_fragment>`,
                 `#include <map_fragment>
-                if (uMapType == 5) {
+                if (uMapType == 7) {
+                    // Minecraft voxel stepped terrain texture & coloring!
+                    vec2 cell = floor(vWorldPosRaw * 2.0); // 0.5-unit voxel coordinate snap
+                    float blockHash = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+                    
+                    // Vibrant pixelated jungle grass color
+                    vec3 grassCol = mix(vec3(0.08, 0.42, 0.10), vec3(0.12, 0.52, 0.16), blockHash * 0.4);
+                    
+                    // Dark brown pixelated dirt color for steep vertical voxel cliffs
+                    float slope = 1.0 - vNormal.y;
+                    float cliff = smoothstep(0.15, 0.45, slope);
+                    vec3 dirtCol = mix(vec3(0.28, 0.18, 0.10), vec3(0.20, 0.12, 0.07), blockHash * 0.35);
+                    
+                    vec3 baseCol = mix(grassCol, dirtCol, cliff);
+                    
+                    // Draw a sharp pixelated 3D voxel border around each 0.5-unit block face
+                    vec2 localUv = fract(vWorldPosRaw * 2.0);
+                    float border = max(smoothstep(0.09, 0.0, localUv.x), smoothstep(0.09, 0.0, 1.0 - localUv.x));
+                    border = max(border, max(smoothstep(0.09, 0.0, localUv.y), smoothstep(0.09, 0.0, 1.0 - localUv.y)));
+                    
+                    diffuseColor.rgb = mix(baseCol, baseCol * 0.60, border * 0.75);
+                } else if (uMapType == 5) {
                     // Draw a premium cyber-gothic black reflective obsidian glass floor
                     vec2 gridUv = fract(vWorldPosRaw * 0.1);
                     float gridX = smoothstep(0.015, 0.0, abs(gridUv.x - 0.5));
@@ -456,14 +514,16 @@ float getTerrainHeight(vec2 pos) {
                     groundCol *= 0.5 + 0.5 * macroAO * microAO;
                     
                     // Void Holes
-                    float voidMask = snoise(vWorldPosRaw * 0.002);
-                    if (voidMask < -0.5) discard; 
+                    if (uMapType != 7 && uMapType != 5 && uMapType != 4) {
+                        float voidMask = snoise(vWorldPosRaw * 0.002);
+                        if (voidMask < -0.5) discard; 
+                    } 
 
                     diffuseColor.rgb = groundCol;
                 }
                 `
             );
-            
+
             // --- PBR Enhancements ---
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <roughnessmap_fragment>`,
@@ -480,7 +540,7 @@ float getTerrainHeight(vec2 pos) {
                 if (uMapType == 5) roughnessFactor = 0.08;
                 `
             );
-            
+
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <normal_fragment_maps>`,
                 `#include <normal_fragment_maps>
@@ -532,6 +592,8 @@ float getTerrainHeight(vec2 pos) {
                 else if (window.GAME_START_CONFIG.mapId === 'facility') mt = 3;
                 else if (window.GAME_START_CONFIG.mapId === 'desert') mt = 4; // Flat desert
                 else if (window.GAME_START_CONFIG.mapId === 'endgame') mt = 5; // Flat obsidian void
+                else if (window.GAME_START_CONFIG.mapId === 'abyss') mt = 6; // Deep sea floor
+                else if (window.GAME_START_CONFIG.mapId === 'jungle') mt = 7; // Jungle stepped voxel
                 this.mat.userData.shader.uniforms.uMapType.value = mt;
             }
         }

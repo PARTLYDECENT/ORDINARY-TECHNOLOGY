@@ -52,7 +52,11 @@ const MenuBG = {
                 if (typeof showWebGLFallbackOverlay === 'function') {
                     showWebGLFallbackOverlay(e2.message || e2);
                 }
-                return;
+                this.renderer = {
+                    setSize: function() {},
+                    setPixelRatio: function() {},
+                    render: function() {}
+                };
             }
         }
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -82,63 +86,107 @@ const MenuBG = {
                 uniform vec2 uMouse;
                 varying vec2 vUv;
 
-                // Hash function for randomness
-                float hash(vec2 p) {
-                    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7).xy)) * 43758.5453);
+                // 3D Distance field function for undulating wave layers
+                float map(vec3 p) {
+                    // Wavy surface deforming along X and Z
+                    float w1 = sin(p.x * 0.5 + uTime * 0.4) * cos(p.z * 0.4 + uTime * 0.3) * 0.6;
+                    float w2 = sin(p.x * 1.3 - uTime * 0.7) * cos(p.z * 1.0 + uTime * 0.5) * 0.15;
+                    float wave = w1 + w2;
+                    
+                    // Periodic swell/amplitude modulation ("sometimes")
+                    float pulse = sin(uTime * 0.25) * 0.5 + 0.5;
+                    wave *= 0.6 + pulse * 0.6;
+                    
+                    return p.y - wave;
+                }
+
+                // Compute normal via central differences
+                vec3 calcNormal(vec3 p) {
+                    const vec2 h = vec2(0.002, 0.0);
+                    return normalize(vec3(
+                        map(p + h.xyy) - map(p - h.xyy),
+                        map(p + h.yxy) - map(p - h.yxy),
+                        map(p + h.yyx) - map(p - h.yyx)
+                    ));
                 }
 
                 void main() {
+                    // Normalize coordinates from -1 to 1
                     vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.y, uResolution.x);
                     
-                    // Perspective transformation
-                    float z = 1.0 / (uv.y + 2.0);
-                    vec2 p = vec2(uv.x * z, z);
+                    // Ray origin (camera) with smooth mouse drift
+                    vec3 ro = vec3(0.0, 1.5, -6.0);
+                    vec2 mouseOffset = (uMouse - 0.5) * 0.4;
+                    ro.x += mouseOffset.x * 3.0;
+                    ro.y += mouseOffset.y * 1.5;
                     
-                    // Scrolling speed
-                    p.y += uTime * 0.15;
-                    p.x += sin(uTime * 0.1) * 0.05;
-
-                    // Grid Logic
-                    vec2 g = fract(p * 8.0);
-                    vec2 id = floor(p * 8.0);
+                    // Ray direction
+                    vec3 rd = normalize(vec3(uv, 1.6));
                     
-                    // Grid lines
-                    float grid = smoothstep(0.02, 0.0, abs(g.x - 0.5)) + smoothstep(0.02, 0.0, abs(g.y - 0.5));
+                    // Slightly tilt the ray downwards to view the waves
+                    float pitch = -0.2;
+                    float cosP = cos(pitch);
+                    float sinP = sin(pitch);
+                    float tempY = rd.y * cosP - rd.z * sinP;
+                    float tempZ = rd.y * sinP + rd.z * cosP;
+                    rd.y = tempY;
+                    rd.z = tempZ;
                     
-                    // Neural Pulses (Refined)
-                    float pulse = sin(id.y * 0.5 - uTime * 4.0) * 0.5 + 0.5;
-                    pulse *= sin(id.x * 0.2 + uTime * 2.0) * 0.5 + 0.5;
-                    pulse = pow(pulse, 3.0); // Sharper pulses
+                    // Raymarch the wave surface
+                    float t = 0.0;
+                    float maxT = 16.0;
+                    bool hit = false;
+                    vec3 p;
                     
-                    // Intersections / Nodes
-                    float node = smoothstep(0.15, 0.0, length(g - 0.5));
+                    for (int i = 0; i < 48; i++) {
+                        p = ro + rd * t;
+                        float h = map(p);
+                        if (h < 0.002) {
+                            hit = true;
+                            break;
+                        }
+                        t += h;
+                        if (t > maxT) break;
+                    }
                     
-                    // Chromatic Aberration Simulation
-                    float r = grid + node * pulse * 2.0;
-                    float g_pulse = sin(id.y * 0.5 - (uTime + 0.02) * 4.0) * 0.5 + 0.5;
-                    float b_pulse = sin(id.y * 0.5 - (uTime + 0.04) * 4.0) * 0.5 + 0.5;
+                    // Ambient backwall tint - extremely subtle deep emerald gradient
+                    vec3 backwallColor = vec3(0.002, 0.008, 0.006);
+                    float glowFactor = exp(-length(uv - vec2(0.0, 0.4)) * 0.7);
+                    vec3 background = backwallColor * (glowFactor * 1.5 + 0.2);
                     
-                    // Color composition
-                    vec3 col = uColor * r * 0.3;
-                    col.r *= 1.2;
-                    col.b *= 0.8;
-                    col += uColor * node * pulse * 2.0;
+                    vec3 col = vec3(0.0);
                     
-                    // Atmosphere / Glow
-                    float glow = exp(-length(uv) * 0.8);
-                    col += uColor * glow * 0.1;
-                    
-                    // Depth fade
-                    col *= smoothstep(-1.0, 1.5, uv.y + 1.0);
+                    if (hit) {
+                        vec3 n = calcNormal(p);
+                        vec3 lightDir = normalize(vec3(1.0, 3.5, -2.0));
+                        
+                        // Fresnel edge reflection for glowing waves
+                        float fre = pow(clamp(1.0 + dot(rd, n), 0.0, 1.0), 4.5);
+                        
+                        // Specular highlights to simulate a glossy black liquid/oil texture
+                        vec3 ref = reflect(rd, n);
+                        float spec = pow(max(0.0, dot(ref, lightDir)), 24.0);
+                        
+                        // Solid black wave body with uColor neon edge highlights
+                        col = vec3(0.001, 0.001, 0.002);
+                        col += uColor * fre * 0.45;
+                        col += vec3(1.0) * spec * 0.2;
+                        
+                        // Fog out into the background in the distance
+                        float fog = smoothstep(0.0, 1.0, t / maxT);
+                        col = mix(col, background, fog);
+                    } else {
+                        col = background;
+                    }
                     
                     // Scanlines
-                    float scanline = sin(gl_FragCoord.y * 1.5) * 0.04;
+                    float scanline = sin(gl_FragCoord.y * 1.5) * 0.015;
                     col -= scanline;
-
+                    
                     // Vignette
                     float vignette = smoothstep(1.5, 0.5, length(uv));
                     col *= vignette;
-
+                    
                     gl_FragColor = vec4(col, 1.0);
                 }
             `,
