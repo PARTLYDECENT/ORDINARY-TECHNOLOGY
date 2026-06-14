@@ -582,14 +582,14 @@ class AssaultRifle extends THREE.Group {
             this._recoilVel.z = 0;
             this._recoilVel.x = 0;
         } else {
-            // Hipfire: Tuned recoil (reduced to 0.1 of original intensity)
+            // Hipfire: Full mechanical recoil
             this.boltZ = 0.35;
-            this._recoilTarget.pitch = (0.12 + Math.random() * 0.06) * burstMult * 0.1;
-            this._recoilTarget.z = (0.08 + Math.random() * 0.04) * burstMult * 0.1;
-            this._recoilTarget.x = (Math.random() - 0.5) * 0.04 * burstMult * 0.1;
-            this._recoilVel.pitch = 8 * 0.1;
-            this._recoilVel.z = 6 * 0.1;
-            this._recoilVel.x = 3 * 0.1;
+            this._recoilTarget.pitch = (0.12 + Math.random() * 0.06) * burstMult;
+            this._recoilTarget.z = (0.08 + Math.random() * 0.04) * burstMult;
+            this._recoilTarget.x = (Math.random() - 0.5) * 0.04 * burstMult;
+            this._recoilVel.pitch = 8;
+            this._recoilVel.z = 6;
+            this._recoilVel.x = 3;
         }
         
         this.triggerRot = 0.25;

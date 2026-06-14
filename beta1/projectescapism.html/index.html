@@ -41,11 +41,16 @@
     <script src="./DesertMap.js"></script>
     <script src="./AsynchronousMazeMap.js"></script>
     <script src="./EndgameMap.js"></script>
+    <script src="./doors.js"></script>
     <script src="./AbyssMap.js"></script>
     <script src="./JungleMap.js"></script>
+    <script src="./NachtMap.js"></script>
+    <script src="./moneyweb.js"></script>
     <script src="./SkyboxJungle.js"></script>
     <script src="./EndgameRealityShear.js"></script>
     <script src="./hatman.js"></script>
+    <script src="./AetherMechBoss.js"></script>
+    <script src="./MechaZombieBoss.js"></script>
     <script src="./externalhorde.js"></script>
     <script src="./pyramid.js"></script>
     <script src="./spires.js"></script>
@@ -71,6 +76,10 @@
     <script src="./skybox.js"></script>
     <script src="./Objective1.js"></script>
     <script src="./Objective2.js"></script>
+    <script src="./ObjectiveTutorial.js"></script>
+    <script src="./ObjectiveDesolation.js"></script>
+    <script src="./ObjectiveMaze.js"></script>
+    <script src="./ObjectiveEndgame.js"></script>
     <script src="./intro.js"></script>
     <script src="./gui.js"></script>
     <script src="./health.js"></script>
@@ -87,7 +96,113 @@
     <script src="./lab_tentacles.js"></script>
     <script src="./lab_breach.js"></script>
     <script src="./lab.js"></script>
+    <script src="./cheatsheet.js"></script>
 
+
+    <script>
+        // --- GOD MODE support: proxy playerHealth to block reductions when enabled ---
+        window.godMode = window.godMode || false;
+        function ensurePlayerHealthProxy() {
+            if (window._playerHealthProxyInstalled) return;
+            let _hp = window.playerHealth || (window.CONFIG && window.CONFIG.playerHealth) || 200;
+            Object.defineProperty(window, 'playerHealth', {
+                configurable: true,
+                get() { return _hp; },
+                set(v) {
+                    if (window.godMode) {
+                        // prevent any write that would lower HP
+                        _hp = Math.max(_hp, v);
+                    } else {
+                        _hp = v;
+                    }
+                    try {
+                        if (window.player) window.player.health = _hp;
+                    } catch (e) {}
+                    const hpText = document.getElementById('pause-health-text');
+                    if (hpText) hpText.textContent = Math.ceil(_hp) + '%';
+                    const hpBar = document.getElementById('pause-health-bar');
+                    if (hpBar) hpBar.style.width = Math.ceil(_hp) + '%';
+                }
+            });
+            window._playerHealthProxyInstalled = true;
+        }
+
+        function toggleGodMode() {
+            window.godMode = !window.godMode;
+            ensurePlayerHealthProxy();
+            const btn = document.getElementById('godmode-btn');
+            if (window.godMode) {
+                // boost health and keep it from decreasing
+                window.playerHealth = Math.max(window.playerHealth || 200, 9999);
+                if (btn) btn.textContent = '[ ON ]';
+            } else {
+                if (btn) btn.textContent = '[ OFF ]';
+                // clamp back to normal max
+                window.playerHealth = Math.min((window.CONFIG && window.CONFIG.playerHealth) || 200, window.playerHealth || 200);
+            }
+            // persist to pauseSettings for session tooling
+            window.pauseSettings = window.pauseSettings || {};
+            window.pauseSettings.godMode = !!window.godMode;
+            // update badge
+            const badge = document.getElementById('god-badge'); if (badge) badge.style.opacity = window.godMode ? '1' : '0';
+            if (btn) btn.setAttribute('aria-pressed', window.godMode ? 'true' : 'false');
+            savePauseSettings();
+            if (window.SFX) window.SFX.triggerUI && window.SFX.triggerUI();
+        }
+
+        function quitToMenu() {
+            // Confirm and reload to simulate quitting to main menu
+            if (confirm('Quit to menu? Unsaved progress will be lost.')) {
+                // try to gracefully stop audio and animations
+                try { if (window.SFX && window.SFX.bgmAudio) window.SFX.bgmAudio.pause(); } catch (e) {}
+                location.reload();
+            }
+        }
+
+        // keyboard shortcut for quick toggling
+        function savePauseSettings() {
+            try { localStorage.setItem('pauseSettings', JSON.stringify(window.pauseSettings || {})); } catch (e) {}
+        }
+
+        function loadPauseSettings() {
+            try {
+                const s = JSON.parse(localStorage.getItem('pauseSettings') || '{}');
+                window.pauseSettings = s || {};
+                if (s && s.godMode) {
+                    window.godMode = true;
+                    ensurePlayerHealthProxy();
+                    const btn = document.getElementById('godmode-btn'); if (btn) btn.textContent = '[ ON ]';
+                    const badge = document.getElementById('god-badge'); if (badge) badge.style.opacity = '1';
+                    window.playerHealth = Math.max(window.playerHealth || 200, 9999);
+                }
+            } catch (e) {}
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // quick dev toggles
+            if (e.code === 'KeyG') {
+                toggleGodMode();
+            }
+            // when paused: resume with R, quit with Q, toggle inventory with I
+            if (typeof isPaused !== 'undefined' && isPaused) {
+                if (e.code === 'KeyR') togglePause();
+                if (e.code === 'KeyQ') quitToMenu();
+                if (e.code === 'KeyI') {
+                    const grid = document.getElementById('inventory-grid'); if (grid) grid.classList.toggle('hidden');
+                }
+            }
+        });
+
+        // load persisted settings
+        loadPauseSettings();
+
+        // initialize pause tab UI when DOM ready
+        function ensureInitPauseTabs() {
+            try { initPauseTabs(); switchPauseTab('overview'); } catch (e) {}
+        }
+        if (document.readyState === 'complete' || document.readyState === 'interactive') ensureInitPauseTabs();
+        else document.addEventListener('DOMContentLoaded', ensureInitPauseTabs);
+    </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;600&family=Share+Tech+Mono&display=swap');
@@ -390,7 +505,7 @@
             height: 100%;
             border: 1px solid rgba(0, 224, 255, 0.2);
             border-radius: 50%;
-            animation: ch-rotate 8s linear infinite;
+            animation: none;
         }
 
         @keyframes ch-rotate {
@@ -1058,6 +1173,105 @@
             cursor: not-allowed;
         }
 
+        /* GOD badge */
+        #god-badge {
+            transition: opacity 0.18s ease;
+            opacity: 0;
+            vertical-align: middle;
+        }
+
+        /* Pause tabs */
+        #pause-tabs .tab-btn { padding: 8px 12px; font-size: 0.75rem; background: rgba(255,255,255,0.02); color: #9be9ff; }
+        .tab-panel { transition: transform 300ms cubic-bezier(.2,.9,.2,1), opacity 250ms ease; transform: translateY(8px); opacity: 0; }
+        .tab-panel:not(.hidden) { transform: translateY(0); opacity: 1; }
+
+        /* small panels inside tabs */
+        #pause-tab-panels .panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.03); }
+
+        /* Sleek Hazmat / Backrooms Theme Overrides (compact, modern) */
+        #pause-overlay {
+            background: linear-gradient(180deg, rgba(6,6,10,0.88), rgba(2,2,2,0.95)) !important;
+            backdrop-filter: blur(6px) saturate(120%) !important;
+            padding: 28px !important;
+        }
+
+        /* hazard accent stripe */
+        #pause-overlay::before {
+            content: '';
+            position: absolute; left: 0; top: 0; height: 6px; width: 100%;
+            background: repeating-linear-gradient(90deg, #c7b800 0 12px, #2b2b2b 12px 24px);
+            opacity: 0.9; z-index: 12; pointer-events: none;
+        }
+
+        #pause-header {
+            font-size: 1.15rem !important; /* smaller, sleek */
+            letter-spacing: 0.18em !important;
+            color: #e8e6d1 !important;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+        }
+
+        .pause-panel {
+            background: linear-gradient(180deg, rgba(8,10,14,0.45), rgba(6,6,8,0.35)) !important;
+            border: 1px solid rgba(199,184,0,0.06) !important;
+            padding: 10px !important;
+            border-radius: 6px !important;
+            font-size: 12px !important;
+        }
+
+        /* compact text, refined labels */
+        #pause-overlay, #pause-overlay * { font-family: Inter, 'Outfit', system-ui, -apple-system, sans-serif !important; }
+        #pause-overlay { font-size: 12px !important; color: #e6e6d9 !important; }
+        #pause-overlay .text-3xl { font-size: 1.05rem !important; }
+
+        .cyber-btn {
+            background: rgba(255,255,255,0.02) !important;
+            border-radius: 6px !important;
+            padding: 8px 14px !important;
+            font-size: 12px !important;
+            color: #fff !important;
+            border: 1px solid rgba(255,255,255,0.04) !important;
+            transition: transform 160ms ease, box-shadow 180ms ease, background 160ms ease;
+        }
+
+        .cyber-btn:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 6px 22px rgba(0,0,0,0.6), 0 0 18px rgba(199,184,0,0.06); }
+
+        /* tab button subtle style */
+        #pause-tabs .tab-btn { background: transparent !important; color: #d7d5b2 !important; border: 1px solid rgba(255,255,255,0.03) !important; }
+        #pause-tabs .tab-btn.active, #pause-tabs .tab-btn:hover { background: rgba(199,184,0,0.06) !important; color: #fff !important; }
+
+        /* reduce paddings in grid columns to make layout sleeker */
+        #pause-overlay .grid { gap: 10px !important; }
+        #pause-overlay .col-span-4, #pause-overlay .col-span-5, #pause-overlay .col-span-3 { padding: 6px !important; }
+
+        /* smaller HUD badges */
+        .pause-panel h3 { font-size: 10px !important; color: #d7d5b2 !important; }
+
+        /* subtle glass separator */
+        #pause-overlay > .w-full { border: none !important; }
+
+        /* sleek health bar tweak */
+        #pause-health-bar { box-shadow: 0 0 12px rgba(199,184,0,0.06) !important; height: 8px !important; border-radius: 4px !important; }
+
+        /* smaller tab panels text */
+        #pause-tab-panels .tab-panel { font-size: 12px !important; }
+
+        /* reduce large canvas opacity for subtlety */
+        #pause-rain-canvas { opacity: 0.08 !important; }
+
+        /* GOD badge styling */
+        #god-badge { color: #c7b800 !important; font-weight: 700 !important; opacity: 0.95 !important; }
+
+        /* Pause-specific button sizing for better UX */
+        #pause-overlay .cyber-btn {
+            padding: 12px 28px !important;
+            font-size: 0.95rem !important;
+            border-radius: 6px !important;
+        }
+
+        #pause-overlay .cyber-btn[aria-label] {
+            outline: none;
+        }
+
         /* Custom range styling for cyber sliders */
         input[type="range"] {
             -webkit-appearance: none;
@@ -1335,6 +1549,7 @@
     <div id="low-health-pulse"></div>
     <div id="abyss-overlay"></div>
     <div id="abyss-depth-indicator">DEPTH: 0.0m</div>
+    <div id="nacht-prompt" style="position: absolute; bottom: 35%; left: 50%; transform: translateX(-50%); font-family: 'Courier New', monospace; font-size: 16px; font-weight: bold; color: #ffffff; text-align: center; text-shadow: 0 0 8px #000000; pointer-events: none; display: none; z-index: 100;"></div>
 
     <div id="neural-console">
         <div id="console-header">
@@ -1378,6 +1593,7 @@
 
     <!-- Pause / Inventory Menu -->
     <div id="pause-overlay"
+        role="dialog" aria-modal="true" aria-hidden="true" tabindex="-1"
         class="hidden absolute inset-0 z-[1000] flex items-center justify-center p-8 transition-opacity duration-300"
         style="pointer-events: auto;">
         <canvas id="pause-rain-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: 0.15;"></canvas>
@@ -1387,12 +1603,79 @@
             <!-- Header -->
             <div class="flex justify-between items-end border-b border-[rgba(255,255,255,0.15)] pb-4">
                 <div>
-                    <h2 class="text-5xl font-black text-white tracking-[0.2em] uppercase">SYSTEM_PAUSED</h2>
+                    <h2 id="pause-header" class="text-5xl font-black text-white tracking-[0.2em] uppercase">SYSTEM_PAUSED <span id="god-badge" class="ml-3 text-sm font-mono text-[#00ff88] opacity-0">GOD</span></h2>
                     <div class="text-[rgba(255,255,255,0.5)] text-xs mt-1 uppercase tracking-widest">MAYA_ENGINE V1.4 // TACTICAL_OVERRIDE_ACTIVE</div>
                 </div>
                 <div class="text-right">
                     <div class="text-[rgba(255,255,255,0.4)] text-[10px] uppercase tracking-widest">Session_Time</div>
                     <div class="text-3xl font-bold text-white tracking-widest" id="pause-timer">00:00</div>
+                </div>
+            </div>
+
+            <!-- Pause Tabs -->
+            <div class="pt-3">
+                <div class="flex items-center gap-3 mb-3" id="pause-tabs">
+                    <button class="cyber-btn tab-btn" data-tab="overview">Overview</button>
+                    <button class="cyber-btn tab-btn" data-tab="controls">Controls</button>
+                    <button class="cyber-btn tab-btn" data-tab="loadout">Loadout</button>
+                    <button class="cyber-btn tab-btn" data-tab="visuals">Visuals</button>
+                    <button class="cyber-btn tab-btn" data-tab="mods">Mods</button>
+                    <button class="cyber-btn tab-btn" data-tab="debug">Debug</button>
+                    <button class="cyber-btn tab-btn" data-tab="cheats">Cheats</button>
+                    <button class="cyber-btn tab-btn" data-tab="map">Map</button>
+                    <button class="cyber-btn tab-btn" data-tab="audio">Audio</button>
+                </div>
+
+                <div id="pause-tab-panels" class="relative w-full h-40 mb-4">
+                    <canvas id="pause-sdf-canvas" width="1600" height="400" style="position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; opacity:0.09; filter: blur(2px);"></canvas>
+                    <div class="tab-panel p-3" data-panel="overview" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Overview: Quick stats, mission hints, and toggles.</div>
+                        <div class="mt-2 flex gap-3">
+                            <div class="panel p-2 bg-white/3 rounded text-xs">Enemies: <span id="panel-enemies">0</span></div>
+                            <div class="panel p-2 bg-white/3 rounded text-xs">Kills: <span id="panel-kills">0</span></div>
+                            <div class="panel p-2 bg-white/3 rounded text-xs">Credits: <span id="panel-credits">0</span></div>
+                        </div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="controls" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Controls: Rebind keys and view hints.</div>
+                        <div class="mt-2 grid grid-cols-3 gap-2 text-xs">
+                            <div class="panel p-2 bg-white/3 rounded">Move: WASD</div>
+                            <div class="panel p-2 bg-white/3 rounded">Fire: Mouse1</div>
+                            <div class="panel p-2 bg-white/3 rounded">Interact: E</div>
+                        </div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="loadout" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Loadout: Swap weapons and perks quickly.</div>
+                        <div id="panel-loadout" class="mt-2 grid grid-cols-4 gap-2 text-xs"></div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="visuals" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Visuals: Toggle post-processing and scanline strength.</div>
+                        <div class="mt-2">
+                            <label class="text-xs">Scanlines <input id="toggle-scanlines" type="checkbox"></label>
+                            <div class="mt-2"><input id="scanline-strength" type="range" min="0" max="100" value="60"></div>
+                        </div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="mods" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Mods: Install and manage runtime mods.</div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="debug" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Debug: Spawn entities, toggle AI debugging overlays.</div>
+                        <div class="mt-2 text-xs"><button id="dbg-spawn" class="cyber-btn">Spawn Test Enemy</button></div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="cheats" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Cheats: Toggle easy modes.</div>
+                        <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+                            <button id="cheat-god" class="cyber-btn">God Mode</button>
+                            <button id="cheat-ammo" class="cyber-btn">Infinite Ammo</button>
+                        </div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="map" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Map: Local map and objectives.</div>
+                    </div>
+                    <div class="tab-panel hidden p-3" data-panel="audio" style="position:relative; z-index:10">
+                        <div class="text-sm text-white/70">Audio: BGM and SFX volumes.</div>
+                        <div class="mt-2 text-xs">BGM <input id="panel-bgm" type="range" min="0" max="100" value="80"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1527,6 +1810,15 @@
                                     <button onclick="setReticleColor('white')" class="reticle-color-btn text-[8px] py-1 border border-white/10 rounded-sm font-bold uppercase transition-all bg-white/5 text-white" id="rc-white">WHITE</button>
                                 </div>
                             </div>
+
+                            <!-- GOD MODE Toggle -->
+                            <div class="border-t border-white/10 pt-4 mt-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-[10px] text-white font-bold uppercase tracking-wider">GOD MODE</div>
+                                    <button id="godmode-btn" onclick="toggleGodMode()" class="cyber-btn text-[10px] py-1 px-3 bg-white/5 border border-white/10 rounded-sm">[ OFF ]</button>
+                                </div>
+                                <div class="text-[9px] text-[rgba(255,255,255,0.35)] mt-2">Toggle invulnerability for testing. Shortcut: <span class="font-bold">G</span></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1538,7 +1830,10 @@
                     <span class="text-[rgba(255,255,255,0.35)]">LINK_STATUS: STABLE</span>
                     <span class="text-[rgba(255,255,255,0.35)]">ENCRYPTION: ACTIVE</span>
                 </div>
-                <button class="cyber-btn" onclick="togglePause()">[ RESUME_SIMULATION ]</button>
+                <div class="flex items-center gap-3">
+                    <button id="pause-resume-btn" class="cyber-btn" onclick="togglePause()" aria-label="Resume simulation">[ RESUME_SIMULATION ]</button>
+                    <button id="pause-quit-btn" class="cyber-btn bg-red-700/10 border-red-500/30 text-red-300" onclick="quitToMenu()" aria-label="Quit to menu">[ QUIT_TO_MENU ]</button>
+                </div>
             </div>
         </div>
     </div>
@@ -2559,13 +2854,15 @@
 
         // 1. Terrain & Map Manager — Procedural Realistic Ground
         const terrain = TerrainGen.getMesh();
+        window.terrain = terrain;
         const toxicWater = new ToxicWater(scene);
         window.toxicWater = toxicWater;
 
         // Clean architecture: Completely omit standard forest terrain and toxicWater meshes
         // from the scene to optimize performance and ensure zero carry-over.
         const isAbyss = (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'abyss');
-        if (!isAbyss) {
+        const isNacht = (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'nacht') || !!window.NACHT_MODE;
+        if (!isAbyss && !isNacht) {
             scene.add(terrain);
         } else {
             toxicWater.mesh.visible = false;
@@ -2660,12 +2957,8 @@
             get: () => currentWeaponIdx,
             set: (val) => {
                 if (val === currentWeaponIdx) return;
-                if (typeof startWeaponSwitch === 'function') {
-                    startWeaponSwitch(val);
-                } else {
-                    currentWeaponIdx = val;
-                    if (typeof updateWeaponMesh === 'function') updateWeaponMesh();
-                }
+                currentWeaponIdx = val;
+                if (typeof updateWeaponMesh === 'function') updateWeaponMesh();
             }
         });
         window.inventory = inventory;
@@ -2777,7 +3070,7 @@
         const recoilCfg = {
             pistol: { pitchKick: 0.018, yawDrift: 0.0, zPush: 0.04, recovery: 25, bloomRate: 0.18, spreadRecovery: 5.0 },
             shotgun: { pitchKick: 0.15, yawDrift: 0.02, zPush: 0.25, recovery: 12, bloomRate: 0.0, spreadRecovery: 3.0 },
-            ar: { pitchKick: 0.000025, yawDrift: 0.0, zPush: 0.0005, recovery: 26, bloomRate: 0.015, spreadRecovery: 5.0 },
+            ar: { pitchKick: 0.00025, yawDrift: 0.0, zPush: 0.005, recovery: 26, bloomRate: 0.15, spreadRecovery: 5.0 },
             railgun: { pitchKick: 0.12, yawDrift: 0.0, zPush: 0.18, recovery: 10, bloomRate: 0.0, spreadRecovery: 2.0 },
             flare: { pitchKick: 0.08, yawDrift: 0.0, zPush: 0.12, recovery: 12, bloomRate: 0.0, spreadRecovery: 3.0 },
             singular: { pitchKick: 0.04, yawDrift: 0.0, zPush: 0.08, recovery: 16, bloomRate: 0.0, spreadRecovery: 3.5 },
@@ -3085,15 +3378,36 @@
         function spawnZombie(sx, sz, forcedType = -1) {
             if (spawnedZombies >= CONFIG.maxZombies || !player) return false;
             const i = spawnedZombies;
-            if (sx !== undefined && sz !== undefined) {
-                zPosX[i] = sx + (Math.random() - 0.5) * 4;
-                zPosZ[i] = sz + (Math.random() - 0.5) * 4;
-            } else {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 30 + Math.random() * 25;
-                zPosX[i] = player.position.x + Math.cos(angle) * dist;
-                zPosZ[i] = player.position.z + Math.sin(angle) * dist;
+
+            // Helper to check Nacht safe rooms
+            const isSafePos = (x, z) => {
+                if (window.mapManager && typeof window.mapManager.isPositionSafe === 'function') return window.mapManager.isPositionSafe(x, z);
+                if (window.NachtSafeRooms && window.NachtSafeRooms.length) {
+                    for (const r of window.NachtSafeRooms) {
+                        if (x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ) return true;
+                    }
+                }
+                return false;
+            };
+
+            let attempts = 0;
+            let px = 0, pz = 0;
+            while (attempts < 10) {
+                if (sx !== undefined && sz !== undefined && attempts === 0) {
+                    px = sx + (Math.random() - 0.5) * 4;
+                    pz = sz + (Math.random() - 0.5) * 4;
+                } else {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 30 + Math.random() * 25;
+                    px = player.position.x + Math.cos(angle) * dist;
+                    pz = player.position.z + Math.sin(angle) * dist;
+                }
+                if (!isSafePos(px, pz)) break;
+                attempts++;
             }
+
+            zPosX[i] = px;
+            zPosZ[i] = pz;
             zRotY[i] = Math.random() * Math.PI * 2;
             zState[i] = 1;
             // Type distribution: 65% normal, 20% puker, 15% thrower (scaled with time)
@@ -3981,15 +4295,15 @@
 
                 // Per-weapon scale & position — weapons 2/3/4 scaled UP significantly
                 const wpScales = {
-                    pistol: { s: 0.28, x: 0.42, y: -0.15, z: -1.3, adsX: 0.42, adsY: -0.06, muzzleZ: -1.2 },
-                    shotgun: { s: 0.20, x: 0.38, y: -0.18, z: -1.1, adsX: 0.38, adsY: -0.12, muzzleZ: -1.4 },
-                    ar: { s: 0.20, x: 0.35, y: -0.14, z: -1.0, adsX: 0.35, adsY: -0.08, muzzleZ: -1.4 },
-                    railgun: { s: 0.22, x: 0.35, y: -0.12, z: -1.0, adsX: 0.35, adsY: -0.06, muzzleZ: -1.8 },
-                    flare: { s: 0.22, x: 0.35, y: -0.16, z: -0.9, adsX: 0.35, adsY: -0.10, muzzleZ: -1.8 },
-                    singular: { s: 0.24, x: 0.35, y: -0.12, z: -1.0, adsX: 0.35, adsY: -0.06, muzzleZ: -1.6 },
-                    sword: { s: 0.20, x: 0.22, y: -0.32, z: -0.72, adsX: 0.0, adsY: 0.0, muzzleZ: -3.5 },
-                    flame: { s: 0.20, x: 0.35, y: -0.16, z: -0.9, adsX: 0.35, adsY: -0.10, muzzleZ: -2.4 },
-                    tentacle: { s: 0.12, x: 0.35, y: -0.20, z: -0.9, adsX: 0.0, adsY: 0.0, muzzleZ: -3.0 },
+                    pistol: { s: 0.40, x: 0.38, y: -0.18, z: -0.85, adsX: 0.42, adsY: -0.06, muzzleZ: -1.2 },
+                    shotgun: { s: 0.30, x: 0.35, y: -0.20, z: -0.70, adsX: 0.38, adsY: -0.12, muzzleZ: -1.4 },
+                    ar: { s: 0.30, x: 0.32, y: -0.16, z: -0.65, adsX: 0.35, adsY: -0.08, muzzleZ: -1.4 },
+                    railgun: { s: 0.32, x: 0.32, y: -0.14, z: -0.65, adsX: 0.35, adsY: -0.06, muzzleZ: -1.8 },
+                    flare: { s: 0.32, x: 0.32, y: -0.18, z: -0.55, adsX: 0.35, adsY: -0.10, muzzleZ: -1.8 },
+                    singular: { s: 0.34, x: 0.32, y: -0.14, z: -0.65, adsX: 0.35, adsY: -0.06, muzzleZ: -1.6 },
+                    sword: { s: 0.28, x: 0.22, y: -0.32, z: -0.50, adsX: 0.0, adsY: 0.0, muzzleZ: -3.5 },
+                    flame: { s: 0.30, x: 0.32, y: -0.18, z: -0.55, adsX: 0.35, adsY: -0.10, muzzleZ: -2.4 },
+                    tentacle: { s: 0.18, x: 0.32, y: -0.22, z: -0.55, adsX: 0.0, adsY: 0.0, muzzleZ: -3.0 },
                     manipulator_tentacle: { s: 1.0, x: 0.0, y: 0.0, z: 0.0, adsX: 0.0, adsY: 0.0, muzzleZ: -2.0 }
                 };
                 const wp = wpScales[weaponId] || { s: 0.22, x: 0.4, y: -0.15, z: -1.2, muzzleZ: -1.2 };
@@ -4376,6 +4690,9 @@
 
             player = new TitanPlayer(scene, { abilityType: aType });
             player.position.set(0, 0, 0);
+            if (window.NACHT_MODE) {
+                player.scale.setScalar(0.11);
+            }
 
             // 3X Health Boost
             player.maxHealth = 300;
@@ -4515,11 +4832,12 @@
             // Load the desert map behind the white/amber flash
             setTimeout(() => {
                 // Change Map Setup to Desert (Desolation)
+                const isCampaign = window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'campaign';
                 window.GAME_START_CONFIG = {
                     fogColor: 0x221a11,
                     difficulty: 'EXTREME',
                     mapId: 'desert',
-                    mode: 'survival'
+                    mode: isCampaign ? 'campaign' : 'survival'
                 };
 
                 // Clear old spawnNodes and companionOrb
@@ -4612,6 +4930,16 @@
                     spawnTimer: Math.random() * 2, active: isActive,
                     respawnTimer: 0, idx: idx, isVariable: false
                 });
+
+                if (isCampaign) {
+                    currentObjective = new ObjectiveDesolation(scene, player, activeCamera, spawnNodes, () => {
+                        if (typeof window.warpToAsynchronousMaze === 'function') {
+                            window.warpToAsynchronousMaze();
+                        }
+                    });
+                } else {
+                    currentObjective = null;
+                }
 
                 // Re-initialize the companion watcher orb for survival (removed from desolation)
                 // window.companionOrb = new CompanionOrb(scene, player, cameraFPS, spawnNodes);
@@ -4720,9 +5048,375 @@
             }, 1800);
         };
 
+        window.warpToAsynchronousMaze = function () {
+            if (window.NeuralConsole) {
+                NeuralConsole.log("DESOLATION OBJECTIVE CLEAR. COGNITIVE LAYER DECAYING. INITIATING FOLD PROTOCOL...", 'sys');
+            }
+
+            // Create full-screen digital glitch slipspace warp overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'slipspace-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.zIndex = '99999';
+            overlay.style.background = 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,220,100,1) 50%, rgba(200,180,50,1) 100%)';
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 1.5s cubic-bezier(0.19, 1, 0.22, 1)';
+            overlay.style.pointerEvents = 'none';
+
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes warpGlitch {
+                    0% { filter: hue-rotate(0deg) saturate(1.5) contrast(1.2); transform: scale(1.0) skewX(0deg); }
+                    10% { filter: hue-rotate(15deg) saturate(2) contrast(1.5) blur(2px); transform: scale(1.05) skewX(1deg); }
+                    20% { filter: hue-rotate(-10deg) saturate(1.2); transform: scale(1.0) skewX(-1deg); }
+                    30% { filter: hue-rotate(90deg) saturate(3) blur(4px); transform: scale(1.1) skewX(2deg); }
+                    40% { filter: hue-rotate(0deg); transform: scale(1.0) skewX(0deg); }
+                    50% { filter: hue-rotate(-45deg) saturate(2.5) contrast(2) blur(1px); transform: scale(1.02) skewX(-0.5deg); }
+                    60% { filter: hue-rotate(180deg) saturate(4) blur(3px); transform: scale(1.08) skewX(1.5deg); }
+                    70% { filter: hue-rotate(0deg); transform: scale(1.0) skewX(0deg); }
+                    80% { filter: hue-rotate(30deg) saturate(1.8) contrast(1.3); transform: scale(1.03) skewX(-1deg); }
+                    90% { filter: hue-rotate(-20deg) saturate(2.2) blur(2px); transform: scale(1.05) skewX(1deg); }
+                    100% { filter: hue-rotate(0deg) saturate(1.5) contrast(1.2); transform: scale(1.0) skewX(0deg); }
+                }
+                #slipspace-overlay.glitching {
+                    animation: warpGlitch 0.2s infinite alternate;
+                }
+            `;
+            document.head.appendChild(style);
+            document.body.appendChild(overlay);
+
+            setTimeout(() => {
+                overlay.style.opacity = '1';
+                overlay.classList.add('glitching');
+
+                // Programmatic warp whoosh audio synthesis
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 1.5);
+                    gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + 0.3);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.8);
+                    osc.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 2.0);
+                } catch (e) {}
+            }, 50);
+
+            setTimeout(() => {
+                if (window.NeuralConsole) {
+                    NeuralConsole.log("SLIPSPACE DRIVE ACTIVATED. EXECUTING BACKROOMS LAYER TRANSITION.", 'sys');
+                }
+            }, 500);
+
+            setTimeout(() => {
+                if (window.NeuralConsole) {
+                    NeuralConsole.log("ENTERING ASYNCHRONOUS MAZE LAYER...", 'err');
+                }
+            }, 1200);
+
+            setTimeout(() => {
+                // Change Map Setup to Asynchronous Maze
+                window.GAME_START_CONFIG = {
+                    fogColor: 0x242416,
+                    difficulty: 'UNSTABLE',
+                    mapId: 'asynchronousmaze1',
+                    mode: 'campaign'
+                };
+
+                // Clear old spawnNodes, companionOrb, aegisSentinel
+                spawnNodes.forEach(node => {
+                    if (node.mesh) scene.remove(node.mesh);
+                });
+                spawnNodes.length = 0;
+
+                if (window.companionOrb) {
+                    if (typeof window.companionOrb.dispose === 'function') window.companionOrb.dispose();
+                    else scene.remove(window.companionOrb.group);
+                    window.companionOrb = null;
+                }
+                if (window.aegisSentinel) {
+                    if (typeof window.aegisSentinel.dispose === 'function') window.aegisSentinel.dispose();
+                    else scene.remove(window.aegisSentinel.group);
+                    window.aegisSentinel = null;
+                }
+
+                // Reset Horde
+                activeZombies = 0;
+                spawnedZombies = 0;
+                zState.fill(0);
+                if (zombieMeshes.normal) {
+                    zombieMeshes.normal.count = 0;
+                    zombieMeshes.puker.count = 0;
+                    zombieMeshes.thrower.count = 0;
+                    zombieMeshes.mutant.count = 0;
+                    zombieMeshes.normal.instanceMatrix.needsUpdate = true;
+                    zombieMeshes.puker.instanceMatrix.needsUpdate = true;
+                    zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
+                    zombieMeshes.mutant.instanceMatrix.needsUpdate = true;
+                }
+
+                // Re-initialize mapManager to AsynchronousMazeMapManager
+                if (window.mapManager && typeof window.mapManager.dispose === 'function') {
+                    window.mapManager.dispose();
+                }
+
+                mapManager = new AsynchronousMazeMapManager(scene, CONFIG);
+                window.mapManager = mapManager;
+
+                // Reset Hazard Manager (Backrooms has no hazards)
+                hazardManager = new HazardManager(scene, 'asynchronousmaze1');
+
+                // Recreate Skybox using BackroomsSkybox
+                if (skyboxManager) {
+                    if (skyboxManager.mesh) {
+                        scene.remove(skyboxManager.mesh);
+                        if (skyboxManager.mesh.geometry) skyboxManager.mesh.geometry.dispose();
+                        if (skyboxManager.mesh.material) skyboxManager.mesh.material.dispose();
+                    }
+                    skyboxManager = null;
+                }
+                skyboxManager = new BackroomsSkybox(scene);
+
+                // Update ambient lighting for backrooms (yellow-ochre fluorescent)
+                ambientLight.color.setHex(0xd1cc9e);
+                ambientLight.intensity = 0.7;
+                dirLight.color.setHex(0xfff5e6);
+                dirLight.intensity = 0.5;
+                scene.fog.color.setHex(0x242416);
+                scene.fog.density = 0.04;
+
+                // Perform complete player respawn and cleanup
+                respawnPlayer();
+
+                // Clear markers
+                document.querySelectorAll('.obj-marker').forEach(m => m.remove());
+
+                // Set up the next objective (Escape the Asynchronous Maze)
+                currentObjective = new ObjectiveMaze(scene, player, activeCamera, () => {
+                    if (typeof window.warpToEndgame === 'function') {
+                        window.warpToEndgame();
+                    }
+                });
+
+                // Fade out transition overlay
+                setTimeout(() => {
+                    const overlayEl = document.getElementById('slipspace-overlay');
+                    if (overlayEl) {
+                        overlayEl.style.transition = 'opacity 1.0s ease';
+                        overlayEl.style.opacity = '0';
+                        setTimeout(() => overlayEl.remove(), 1000);
+                    }
+                }, 500);
+
+            }, 1800);
+        };
+
+        window.warpToEndgame = function () {
+            if (window.NeuralConsole) {
+                NeuralConsole.log("MAZE OBJECTIVE CLEAR. COGNITIVE ANOMALY CORE DETECTED. WARPING TO ENDGAME SECTOR...", 'sys');
+            }
+
+            // Create full-screen digital glitch slipspace warp overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'slipspace-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.zIndex = '99999';
+            overlay.style.background = 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(150,0,255,1) 50%, rgba(20,0,40,1) 100%)';
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 1.5s cubic-bezier(0.19, 1, 0.22, 1)';
+            overlay.style.pointerEvents = 'none';
+
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes warpGlitch {
+                    0% { filter: hue-rotate(0deg) saturate(1.5) contrast(1.2); transform: scale(1.0) skewX(0deg); }
+                    10% { filter: hue-rotate(15deg) saturate(2) contrast(1.5) blur(2px); transform: scale(1.05) skewX(1deg); }
+                    20% { filter: hue-rotate(-10deg) saturate(1.2); transform: scale(1.0) skewX(-1deg); }
+                    30% { filter: hue-rotate(90deg) saturate(3) blur(4px); transform: scale(1.1) skewX(2deg); }
+                    40% { filter: hue-rotate(0deg); transform: scale(1.0) skewX(0deg); }
+                    50% { filter: hue-rotate(-45deg) saturate(2.5) contrast(2) blur(1px); transform: scale(1.02) skewX(-0.5deg); }
+                    60% { filter: hue-rotate(180deg) saturate(4) blur(3px); transform: scale(1.08) skewX(1.5deg); }
+                    70% { filter: hue-rotate(0deg); transform: scale(1.0) skewX(0deg); }
+                    80% { filter: hue-rotate(30deg) saturate(1.8) contrast(1.3); transform: scale(1.03) skewX(-1deg); }
+                    90% { filter: hue-rotate(-20deg) saturate(2.2) blur(2px); transform: scale(1.05) skewX(1deg); }
+                    100% { filter: hue-rotate(0deg) saturate(1.5) contrast(1.2); transform: scale(1.0) skewX(0deg); }
+                }
+                #slipspace-overlay.glitching {
+                    animation: warpGlitch 0.2s infinite alternate;
+                }
+            `;
+            document.head.appendChild(style);
+            document.body.appendChild(overlay);
+
+            setTimeout(() => {
+                overlay.style.opacity = '1';
+                overlay.classList.add('glitching');
+
+                // Programmatic warp whoosh audio synthesis
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 1.5);
+                    gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.3);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.8);
+                    osc.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 2.0);
+                } catch (e) {}
+            }, 50);
+
+            setTimeout(() => {
+                if (window.NeuralConsole) {
+                    NeuralConsole.log("SLIPSPACE DRIVE ACTIVATED. EXECUTING COGNITIVE VOID TRANSITION.", 'sys');
+                }
+            }, 500);
+
+            setTimeout(() => {
+                if (window.NeuralConsole) {
+                    NeuralConsole.log("ENTERING THE FINAL COSMIC VOID...", 'err');
+                }
+            }, 1200);
+
+            setTimeout(() => {
+                // Change Map Setup to Endgame Map
+                window.GAME_START_CONFIG = {
+                    fogColor: 0x100820,
+                    difficulty: 'EXTREME',
+                    mapId: 'endgame',
+                    mode: 'campaign'
+                };
+
+                // Clear old spawnNodes, companionOrb, aegisSentinel
+                spawnNodes.forEach(node => {
+                    if (node.mesh) scene.remove(node.mesh);
+                });
+                spawnNodes.length = 0;
+
+                if (window.companionOrb) {
+                    if (typeof window.companionOrb.dispose === 'function') window.companionOrb.dispose();
+                    else scene.remove(window.companionOrb.group);
+                    window.companionOrb = null;
+                }
+                if (window.aegisSentinel) {
+                    if (typeof window.aegisSentinel.dispose === 'function') window.aegisSentinel.dispose();
+                    else scene.remove(window.aegisSentinel.group);
+                    window.aegisSentinel = null;
+                }
+
+                // Reset Horde
+                activeZombies = 0;
+                spawnedZombies = 0;
+                zState.fill(0);
+                if (zombieMeshes.normal) {
+                    zombieMeshes.normal.count = 0;
+                    zombieMeshes.puker.count = 0;
+                    zombieMeshes.thrower.count = 0;
+                    zombieMeshes.mutant.count = 0;
+                    zombieMeshes.normal.instanceMatrix.needsUpdate = true;
+                    zombieMeshes.puker.instanceMatrix.needsUpdate = true;
+                    zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
+                    zombieMeshes.mutant.instanceMatrix.needsUpdate = true;
+                }
+
+                // Re-initialize mapManager to EndgameMapManager
+                if (window.mapManager && typeof window.mapManager.dispose === 'function') {
+                    window.mapManager.dispose();
+                }
+
+                mapManager = new EndgameMapManager(scene, CONFIG);
+                window.mapManager = mapManager;
+
+                // Reset Hazard Manager (Endgame has no hazards)
+                hazardManager = new HazardManager(scene, 'endgame');
+
+                // Recreate Skybox using BackroomsSkybox
+                if (skyboxManager) {
+                    if (skyboxManager.mesh) {
+                        scene.remove(skyboxManager.mesh);
+                        if (skyboxManager.mesh.geometry) skyboxManager.mesh.geometry.dispose();
+                        if (skyboxManager.mesh.material) skyboxManager.mesh.material.dispose();
+                    }
+                    skyboxManager = null;
+                }
+                skyboxManager = new BackroomsSkybox(scene);
+
+                // Update ambient lighting for endgame
+                ambientLight.color.setHex(0x100820);
+                ambientLight.intensity = 0.5;
+                dirLight.color.setHex(0x502090);
+                dirLight.intensity = 1.5;
+                dirLight.position.set(50, 200, 50);
+                scene.fog.color.setHex(0x050010);
+                scene.fog.density = 0.005;
+
+                // Perform complete player respawn and cleanup
+                respawnPlayer();
+
+                // Clear markers
+                document.querySelectorAll('.obj-marker').forEach(m => m.remove());
+
+                // Set up the next objective (Defeat Zombie Hatman)
+                currentObjective = new ObjectiveEndgame(scene, player, activeCamera, () => {});
+
+                // Fade out transition overlay
+                setTimeout(() => {
+                    const overlayEl = document.getElementById('slipspace-overlay');
+                    if (overlayEl) {
+                        overlayEl.style.transition = 'opacity 1.0s ease';
+                        overlayEl.style.opacity = '0';
+                        setTimeout(() => overlayEl.remove(), 1000);
+                    }
+                }, 500);
+
+            }, 1800);
+        };
+
         // Start App Pipeline — called by MainMenu.onStart
         function startGamePipeline() {
             // --- CLEANUP EXISTING ENTITIES (Prevent static ghosts) ---
+            if (window.mapManager) {
+                console.log("[Pipeline] Cleaning up existing mapManager...");
+                if (window.mapManager.group) {
+                    scene.remove(window.mapManager.group);
+                }
+                if (typeof window.mapManager.dispose === 'function') {
+                    window.mapManager.dispose();
+                }
+                window.mapManager = null;
+                mapManager = null;
+            }
+            window.NACHT_MODE = false;
+            window.ABYSS_MODE = false;
+            window.JUNGLE_MODE = false;
+
+            const cfg = window.GAME_START_CONFIG;
+            if (cfg && cfg.mapId === 'nacht') {
+                window.NACHT_MODE = true;
+                if (window.terrain) scene.remove(window.terrain);
+                if (window.toxicWater) {
+                    scene.remove(window.toxicWater.mesh);
+                    scene.remove(window.toxicWater.bubblesMesh);
+                }
+            }
+
             if (player) {
                 console.log("[Pipeline] Cleaning up existing player...");
                 if (typeof player.dispose === 'function') player.dispose();
@@ -4766,6 +5460,7 @@
 
                 if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'campaign') {
                     campaignTutorial = new CampaignTutorialManager(player, TutorialManager, spawnZombie);
+                    window.campaignTutorial = campaignTutorial;
                 }
 
                 // Apply Map Visuals if config exists
@@ -4773,11 +5468,12 @@
                     const cfg = window.GAME_START_CONFIG;
 
                     // Dynamically toggle visibility of standard terrain and toxic water meshes
+                    const isNacht = (cfg.mapId === 'nacht') || !!window.NACHT_MODE;
                     if (typeof terrain !== 'undefined') {
-                        terrain.visible = (cfg.mapId !== 'abyss' && cfg.mapId !== 'jungle');
+                        terrain.visible = (!isNacht && cfg.mapId !== 'abyss' && cfg.mapId !== 'jungle');
                     }
                     if (typeof toxicWater !== 'undefined') {
-                        const isToxic = (cfg.mapId === 'toxic');
+                        const isToxic = (!isNacht && cfg.mapId === 'toxic');
                         toxicWater.mesh.visible = isToxic;
                         toxicWater.bubblesMesh.visible = isToxic;
                     }
@@ -4915,6 +5611,12 @@
                         window.JUNGLE_MODE = true;
                     } else if (currentMapId === 'asynchronousmaze1') {
                         mapManager = new AsynchronousMazeMapManager(scene, CONFIG);
+                    } else if (currentMapId === 'nacht') {
+                        mapManager = new NachtMapManager(scene, CONFIG);
+                        window.NACHT_MODE = true;
+                        if (player) {
+                            player.scale.setScalar(0.11); // Scale player down so they are ~1.75x bigger than zombies on Nacht
+                        }
                     } else {
                         mapManager = new SurvivalMapManager(scene, CONFIG);
                     }
@@ -6022,10 +6724,17 @@
 
                 const hiveGeo = new THREE.PlaneGeometry(35, 35);
 
-                // Reset/populate spawn positions based on map (only spawn one nest in desolation)
+                // Reset/populate spawn positions based on map (only spawn one nest in desolation and nacht)
                 let activePositions = [...SPAWN_NODE_POSITIONS];
                 if (currentMapId === 'desert') {
                     activePositions = [{ x: 0, z: 60 }];
+                } else if (currentMapId === 'nacht') {
+                    // Spawn inside the three rooms of the bunker (scaled 4x)
+                    activePositions = [
+                        { x: 0, z: 136, isNachtInterior: true },      // Room 1 (Spawn)
+                        { x: -60, z: -40, isNachtInterior: true },   // Room 2 (Comms)
+                        { x: 60, z: -240, isNachtInterior: true }     // Room 3 (Armory)
+                    ];
                 }
 
                 activePositions.forEach((pos, idx) => {
@@ -6045,39 +6754,48 @@
                     const hiveMesh = new THREE.Mesh(hiveGeo, hiveMat);
                     const hiveH = TerrainGen.getHeight(pos.x, pos.z);
                     hiveMesh.position.set(pos.x, hiveH + 18, pos.z);
-                    scene.add(hiveMesh);
+                    
+                    const isNacht = currentMapId === 'nacht';
+                    if (!isNacht) {
+                        scene.add(hiveMesh);
+                    }
 
                     // Green glow light
                     // hiveLight removed as requested
                     const isActive = (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') ? true : (idx === 0);
-                    hiveMesh.visible = isActive;
+                    hiveMesh.visible = isNacht ? false : isActive;
                     spawnNodes.push({
                         x: pos.x, z: pos.z, hp: 500, maxHP: 500,
                         mesh: hiveMesh, light: null, mat: hiveMat,
                         spawnTimer: Math.random() * 2, active: isActive,
-                        respawnTimer: 0, idx: idx, isVariable: !!pos.isVariable
+                        respawnTimer: 0, idx: idx, isVariable: !!pos.isVariable,
+                        isNachtInterior: !!pos.isNachtInterior
                     });
                 });
 
-                // --- START OBJECTIVE 1 (Campaign Only) ---
+                // --- START OBJECTIVE TUTORIAL (Campaign Only) ---
                 if (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mode === 'survival') {
                     currentObjective = null;
                 } else {
-                    currentObjective = new Objective1(scene, player, activeCamera, spawnNodes, () => {
-                        objectivePhase = 2;
-                        // Activate all remaining hives for Objective 2
-                        spawnNodes.forEach(node => {
-                            node.active = true;
-                            if (node.mesh) node.mesh.visible = true;
-                        });
+                    currentObjective = new ObjectiveTutorial(scene, player, activeCamera, () => {
+                        objectivePhase = 1;
+                        // Start standard Level 1 sequence (Hydrogen Scoop parts)
+                        currentObjective = new Objective1(scene, player, activeCamera, spawnNodes, () => {
+                            objectivePhase = 2;
+                            // Activate all remaining hives for Objective 2
+                            spawnNodes.forEach(node => {
+                                node.active = true;
+                                if (node.mesh) node.mesh.visible = true;
+                            });
 
-                        currentObjective = new Objective2(scene, player, activeCamera, spawnNodes, () => {
-                            objectivePhase = 3; // Finished
-                            if (typeof window.warpToDesolation === 'function') {
-                                window.warpToDesolation();
-                            } else {
-                                NeuralConsole.log("ALL_OBJECTIVES_COMPLETED. STAND_BY_FOR_EXTRACTION.", 'sys');
-                            }
+                            currentObjective = new Objective2(scene, player, activeCamera, spawnNodes, () => {
+                                objectivePhase = 3; // Finished
+                                if (typeof window.warpToDesolation === 'function') {
+                                    window.warpToDesolation();
+                                } else {
+                                    NeuralConsole.log("ALL_OBJECTIVES_COMPLETED. STAND_BY_FOR_EXTRACTION.", 'sys');
+                                }
+                            });
                         });
                     });
                 }
@@ -6089,8 +6807,8 @@
                     window.companionOrb = new CompanionOrb(scene, player, cameraFPS, spawnNodes);
                 }
 
-                // --- Spawn Aegis Sentinel Drone Ally (removed from desolation) ---
-                if (currentMapId !== 'desert') {
+                // --- Spawn Aegis Sentinel Drone Ally (removed from desolation and nacht) ---
+                if (currentMapId !== 'desert' && currentMapId !== 'nacht') {
                     window.aegisSentinel = new AegisSentinel(scene, player, cameraFPS);
                 }
 
@@ -6193,6 +6911,123 @@
 
         // --- INPUT & CONTROLS ---
         const keys = { w: false, a: false, s: false, d: false, q: false, shift: false, space: false, c: false };
+
+        // Nacht / general interaction helpers
+        window.interactables = window.interactables || [];
+
+        function registerInteractable(obj) {
+            // obj: { id, type: 'door'|'weapon'|'terminal'|'pickup', pos:{x,z}, mesh, range, price, weaponId, callback }
+            window.interactables.push(obj);
+        }
+
+        function clearInteractables() { window.interactables.length = 0; }
+
+        // Default starting credits for Nacht (can be overridden elsewhere)
+        window.startingCredits = window.startingCredits !== undefined ? window.startingCredits : 10000;
+
+        function isPlayerNearPos(pos, range = 2.25) {
+            if (!player || !pos) return false;
+            const dx = pos.x - player.position.x, dz = pos.z - player.position.z;
+            return (dx * dx + dz * dz) <= (range * range);
+        }
+
+        function handleInteractRequest() {
+            try {
+                // 1) map-specific hook
+                if (window.mapManager && typeof window.mapManager.interact === 'function') {
+                    window.mapManager.interact();
+                    return;
+                }
+
+                // 2) registered interactables (nearest within range)
+                let nearest = null;
+                let bestDist = Infinity;
+                window.interactables.forEach(it => {
+                    const p = it.pos || (it.mesh && it.mesh.position);
+                    if (!p || !player || !player.position) return;
+                    const dx = p.x - player.position.x, dz = p.z - player.position.z;
+                    const d2 = dx * dx + dz * dz;
+                    const r = it.range !== undefined ? it.range : 2.25;
+                    if (d2 <= r * r && d2 < bestDist) { nearest = it; bestDist = d2; }
+                });
+
+                if (nearest) {
+                    const inNacht = (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId === 'nacht') || !!window.NACHT_MODE;
+                    if (inNacht && nearest.price && (nearest.type === 'door' || nearest.type === 'weapon')) {
+                        // simple credit calculation (matches common Nacht behaviour)
+                        const earned = (window.totalKills || 0) * 50 + Math.floor((window.survivalTime || 0) * 2);
+                        window.creditsSpent = window.creditsSpent || 0;
+                        const activeCredits = Math.max(0, (earned + (window.startingCredits || 0)) - window.creditsSpent);
+                        if (activeCredits < nearest.price) {
+                            if (window.NeuralConsole) NeuralConsole.log("INSUFFICIENT_CREDITS", 'err');
+                            return;
+                        }
+                        window.creditsSpent += nearest.price;
+
+                        if (nearest.type === 'door') {
+                            if (typeof nearest.callback === 'function') nearest.callback();
+                            if (window.NeuralConsole) NeuralConsole.log(`DOOR_PURCHASED -${nearest.price} CR`, 'res');
+                            return;
+                        }
+                        if (nearest.type === 'weapon') {
+                            const cfg = window.weaponsCfg && window.weaponsCfg[nearest.weaponId];
+                            if (cfg) {
+                                window.inventory = window.inventory || [];
+                                if (!window.inventory.find(w => w.id === nearest.weaponId)) window.inventory.push({ ...cfg, ammo: cfg.maxAmmo });
+                                if (typeof window.updateWeaponUI === 'function') window.updateWeaponUI();
+                            }
+                            if (typeof nearest.callback === 'function') nearest.callback();
+                            return;
+                        }
+                    }
+
+                    // default callback
+                    if (typeof nearest.callback === 'function') {
+                        nearest.callback();
+                        return;
+                    }
+                }
+
+                // 3) fallback: pickup nearby drops
+                if (window.weaponDrops && window.weaponDrops.length) {
+                    for (let i = 0; i < window.weaponDrops.length; i++) {
+                        const drop = window.weaponDrops[i];
+                        if (!drop || !drop.mesh) continue;
+                        const dpos = drop.mesh.position;
+                        const dx = dpos.x - player.position.x, dz = dpos.z - player.position.z;
+                        if (dx * dx + dz * dz < 2.25) {
+                            const typeId = drop.type;
+                            if (typeId === 'health') {
+                                window.playerHealth = Math.min((window.CONFIG && window.CONFIG.playerHealth) || 200, (window.playerHealth || 0) + 50);
+                                if (player) player.health = window.playerHealth;
+                            } else if (typeId === 'ammo') {
+                                (window.inventory || []).forEach(w => { if (w.maxAmmo) w.ammo = Math.min(w.ammo + Math.floor(w.maxAmmo / 2), w.maxAmmo * 2); });
+                                if (typeof window.updateWeaponUI === 'function') window.updateWeaponUI();
+                            } else {
+                                const wCfg = window.weaponsCfg && window.weaponsCfg[typeId];
+                                if (wCfg) {
+                                    window.inventory = window.inventory || [];
+                                    let existing = window.inventory.find(w => w.id === typeId);
+                                    if (existing) existing.ammo += wCfg.maxAmmo;
+                                    else window.inventory.push({ ...wCfg, ammo: wCfg.maxAmmo });
+                                    window.currentWeaponIdx = window.inventory.findIndex(w => w.id === typeId);
+                                    if (typeof window.updateWeaponMesh === 'function') window.updateWeaponMesh();
+                                    if (typeof window.updateWeaponUI === 'function') window.updateWeaponUI();
+                                }
+                            }
+                            try { if (window.scene && window.scene.remove) scene.remove(drop.mesh); } catch (e) {}
+                            window.weaponDrops.splice(i, 1);
+                            return;
+                        }
+                    }
+                }
+
+                if (window.NeuralConsole) NeuralConsole.log("NO_INTERACTABLE_NEARBY", 'err');
+            } catch (err) {
+                console.error("handleInteractRequest error:", err);
+            }
+        }
+
         window.addEventListener('keydown', e => {
             if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
             if (e.code === 'Space') keys.space = true; // Special map for space
@@ -6201,12 +7036,17 @@
                 keys.q = true;
                 if (isFPSMode) isADS = true;
             }
+            if (e.key.toLowerCase() === 'e') {
+                // Route interaction through helper which handles Nacht purchases, pickups, and map hooks
+                try { handleInteractRequest(); } catch (err) { console.error('interact failed', err); }
+            }
 
             // Weapon swapping
             if (e.key >= '1' && e.key <= '9') {
                 const idx = parseInt(e.key) - 1;
                 if (idx < inventory.length) {
                     currentWeaponIdx = idx;
+                    updateWeaponMesh();
                     updateWeaponUI();
                 }
             }
@@ -6549,6 +7389,8 @@
             const overlay = document.getElementById('pause-overlay');
             if (isPaused) {
                 overlay.classList.remove('hidden');
+                overlay.setAttribute('aria-hidden', 'false');
+                const ph = document.getElementById('pause-header'); if (ph) ph.classList.add('pause-glitch-active');
 
                 // Update Mission Stats
                 const timerEl = document.getElementById('ui-timer');
@@ -6599,15 +7441,94 @@
                 if (window.SFX) window.SFX.triggerUI();
                 startPauseAnimation();
                 document.querySelectorAll('.obj-marker').forEach(el => el.style.visibility = 'hidden');
+                // focus resume for keyboard users
+                setTimeout(() => {
+                    const resumeBtn = document.getElementById('pause-resume-btn');
+                    if (resumeBtn) resumeBtn.focus();
+                }, 60);
             } else {
                 overlay.classList.add('hidden');
+                overlay.setAttribute('aria-hidden', 'true');
+                const ph2 = document.getElementById('pause-header'); if (ph2) ph2.classList.remove('pause-glitch-active');
                 stopPauseAnimation();
                 document.querySelectorAll('.obj-marker').forEach(el => el.style.visibility = 'visible');
+                // return focus to game canvas
+                try { document.getElementById('canvas-container').focus(); } catch (e) {}
             }
         }
 
+        // Pause tabs & SDF-like animation
+        function switchPauseTab(tab) {
+            document.querySelectorAll('#pause-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+            document.querySelectorAll('#pause-tab-panels .tab-panel').forEach(p => {
+                p.classList.add('hidden');
+                if (p.dataset.panel === tab) p.classList.remove('hidden');
+            });
+            // small anim trigger
+            const canvas = document.getElementById('pause-sdf-canvas');
+            if (canvas) {
+                canvas.dataset.active = tab;
+            }
+        }
+
+        function initPauseTabs() {
+            document.querySelectorAll('#pause-tabs .tab-btn').forEach(b => {
+                b.addEventListener('click', () => switchPauseTab(b.dataset.tab));
+            });
+            // wire cheats & debug quick actions
+            const dbg = document.getElementById('dbg-spawn'); if (dbg) dbg.addEventListener('click', () => { if (window.spawnTestEnemy) window.spawnTestEnemy(); });
+            const cheatGod = document.getElementById('cheat-god'); if (cheatGod) cheatGod.addEventListener('click', () => toggleGodMode());
+            const cheatAmmo = document.getElementById('cheat-ammo'); if (cheatAmmo) cheatAmmo.addEventListener('click', () => { if (window.inventory) window.inventory.forEach(w=> w.ammo = w.maxAmmo || 999); });
+
+            // populate loadout panel
+            const loadout = document.getElementById('panel-loadout');
+            if (loadout && window.inventory) {
+                loadout.innerHTML = '';
+                window.inventory.forEach(w => {
+                    const el = document.createElement('div'); el.className = 'panel p-2 text-xs'; el.textContent = w.name || w.id; loadout.appendChild(el);
+                });
+            }
+
+            // start SDF loop
+            startPauseSDF();
+        }
+
+        // Simple SDF-style canvas animation for the pause menu
+        let _sdfRunning = false;
+        function startPauseSDF() {
+            const c = document.getElementById('pause-sdf-canvas');
+            if (!c) return; const ctx = c.getContext('2d');
+            let w = c.width = c.clientWidth * devicePixelRatio; let h = c.height = c.clientHeight * devicePixelRatio;
+            ctx.scale(devicePixelRatio, devicePixelRatio);
+            let t0 = performance.now(); _sdfRunning = true;
+            function loop(now){
+                if (!_sdfRunning) return;
+                const dt = (now - t0) * 0.001;
+                t0 = now;
+                // resize if needed
+                const cw = c.clientWidth, ch = c.clientHeight;
+                if (c.width !== cw * devicePixelRatio || c.height !== ch * devicePixelRatio) {
+                    c.width = cw * devicePixelRatio; c.height = ch * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+                }
+                ctx.clearRect(0,0,cw,ch);
+                // draw multiple pulsating circles based on time
+                const time = now * 0.001;
+                for (let i=0;i<4;i++){
+                    const progress = (Math.sin(time*0.6 + i*1.2) * 0.5 + 0.5);
+                    const radius = 40 + progress * 220;
+                    const x = (0.15 + i*0.2) * cw + Math.sin(time*0.7+i)*12;
+                    const y = (0.4 + i*0.12) * ch + Math.cos(time*0.5+i)*12;
+                    const grd = ctx.createRadialGradient(x,y, radius*0.1, x,y,radius);
+                    grd.addColorStop(0, `rgba(0,230,255,${0.06* (1-progress)})`);
+                    grd.addColorStop(1, `rgba(0,0,0,0)`);
+                    ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fill();
+                }
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        }
+
         function updateWeaponUI() {
-            updateWeaponMesh();
             const cur = inventory[currentWeaponIdx];
 
             // Update player weapon mesh color to match
@@ -6638,13 +7559,18 @@
             const creditsEl = document.getElementById('pause-credits');
             if (creditsEl) creditsEl.textContent = activeCredits;
 
+            // update small panels in pause tabs
+            const pe = document.getElementById('panel-enemies'); if (pe) pe.textContent = activeZombies || 0;
+            const pk = document.getElementById('panel-kills'); if (pk) pk.textContent = totalKills || 0;
+            const pc = document.getElementById('panel-credits'); if (pc) pc.textContent = activeCredits;
+
             inventory.forEach((w, idx) => {
                 const isSelected = idx === currentWeaponIdx;
                 const card = document.createElement('div');
 
                 // Cybernetic-themed card styling
                 card.className = `weapon-card-detailed p-4 rounded-sm border cursor-pointer transition-all ${isSelected ? 'border-[#00e5ff] bg-[rgba(0,229,255,0.06)] shadow-[0_0_12px_rgba(0,229,255,0.15)] text-white' : 'border-white/10 bg-transparent text-[rgba(255,255,255,0.6)] hover:border-white/20 hover:bg-[rgba(255,255,255,0.02)]'}`;
-                card.onclick = () => { currentWeaponIdx = idx; updateWeaponUI(); };
+                card.onclick = () => { currentWeaponIdx = idx; updateWeaponMesh(); updateWeaponUI(); };
 
                 const dmgPerc = Math.min(100, (w.damage / 250) * 100);
                 const ratePerc = Math.min(100, (0.05 / w.fireRate) * 100);
@@ -6774,13 +7700,21 @@
 
         // Purchase Handler
         window.buyUpgrade = function(weaponIdx, type, cost) {
-            window.creditsSpent = window.creditsSpent || 0;
-            const earned = (totalKills * 50) + Math.floor(survivalTime * 2);
-            const activeCredits = Math.max(0, earned - window.creditsSpent);
-            
-            if (activeCredits < cost) {
-                if (window.SFX) window.SFX.triggerUI();
-                return;
+            if (window.NACHT_MODE) {
+                // prefer moneyWeb if present
+                if (window.moneyWeb) {
+                    if (!window.moneyWeb.canAfford(cost)) { if (window.SFX) window.SFX.triggerUI(); return; }
+                } else {
+                    if ((window.zombiePoints || 0) < cost) { if (window.SFX) window.SFX.triggerUI(); return; }
+                }
+            } else {
+                window.creditsSpent = window.creditsSpent || 0;
+                const earned = (totalKills * 50) + Math.floor(survivalTime * 2);
+                const activeCredits = Math.max(0, earned - window.creditsSpent);
+                if (activeCredits < cost) {
+                    if (window.SFX) window.SFX.triggerUI();
+                    return;
+                }
             }
 
             const w = inventory[weaponIdx];
@@ -6794,7 +7728,12 @@
                 w.ammo = w.maxAmmo;
             }
 
-            window.creditsSpent += cost;
+            if (window.NACHT_MODE) {
+                if (window.moneyWeb) window.moneyWeb.spend(cost);
+                else window.zombiePoints -= cost;
+            } else {
+                window.creditsSpent += cost;
+            }
             if (window.SFX) window.SFX.triggerUIConfirm();
             
             renderInventoryUI();
@@ -6802,91 +7741,10 @@
         };
 
 
-        window.weaponSwitchState = 'none';
-        window.weaponSwitchTime = 0.0;
-        window.weaponSwitchDuration = 0.16; // 160ms putting away, 160ms drawing (320ms total)
-        window.pendingWeaponIdx = -1;
         window.fpsSwitchYOffset = 0.0;
 
-        function startWeaponSwitch(newIdx) {
-            if (!player) {
-                currentWeaponIdx = newIdx;
-                updateWeaponMeshInternal();
-                return;
-            }
-            if (window.weaponSwitchState !== 'none') {
-                window.pendingWeaponIdx = newIdx;
-                return;
-            }
-            window.weaponSwitchState = 'putting_away';
-            window.weaponSwitchTime = 0.0;
-            window.pendingWeaponIdx = newIdx;
-            
-            if (window.SFX && window.SFX.triggerUI) {
-                window.SFX.triggerUI();
-            }
-        }
-
-        function applyWeaponSwitchAnimation(progress, isPuttingAway) {
-            if (!player) return;
-            
-            let scale, rotX, armOffset, fpsY;
-            if (isPuttingAway) {
-                scale = 0.6 * (1.0 - progress);
-                rotX = -Math.PI / 2 + progress * (Math.PI / 2);
-                armOffset = -0.55 * progress;
-                fpsY = -1.2 * progress;
-            } else {
-                scale = 0.6 * progress;
-                rotX = -Math.PI / 2 + (1.0 - progress) * (Math.PI / 2);
-                armOffset = -0.55 * (1.0 - progress);
-                fpsY = -1.2 * (1.0 - progress);
-            }
-            
-            if (player.leftWeaponMesh) {
-                player.leftWeaponMesh.scale.setScalar(scale);
-                player.leftWeaponMesh.rotation.x = rotX;
-            }
-            if (player.rightWeaponMesh) {
-                player.rightWeaponMesh.scale.setScalar(scale);
-                player.rightWeaponMesh.rotation.x = rotX;
-            }
-            
-            player.switchArmOffset = armOffset;
-            window.fpsSwitchYOffset = fpsY;
-        }
-
-        function updateWeaponSwitchTransition(dt) {
-            if (window.weaponSwitchState === 'none') return;
-            
-            window.weaponSwitchTime += dt;
-            let progress = Math.min(1.0, window.weaponSwitchTime / window.weaponSwitchDuration);
-            
-            if (window.weaponSwitchState === 'putting_away') {
-                applyWeaponSwitchAnimation(progress, true);
-                
-                if (progress >= 1.0) {
-                    currentWeaponIdx = window.pendingWeaponIdx;
-                    updateWeaponMeshInternal();
-                    window.weaponSwitchState = 'drawing';
-                    window.weaponSwitchTime = 0.0;
-                    
-                    if (window.SFX && window.SFX.triggerAbility) {
-                        window.SFX.triggerAbility();
-                    }
-                }
-            } else if (window.weaponSwitchState === 'drawing') {
-                applyWeaponSwitchAnimation(progress, false);
-                
-                if (progress >= 1.0) {
-                    window.weaponSwitchState = 'none';
-                    applyWeaponSwitchAnimation(0.0, false);
-                }
-            }
-        }
-
         function updateWeaponMesh() {
-            startWeaponSwitch(currentWeaponIdx);
+            updateWeaponMeshInternal();
         }
 
         function updateWeaponMeshInternal() {
@@ -6906,6 +7764,17 @@
             fpsViewmodel = WeaponModelFactory.getFPSArmAndGun(weapon.id);
             fpsViewmodel.visible = isFPSMode; // only show if currently in FPS
             cameraFPS.add(fpsViewmodel);
+
+            // Initialize target positions instantly to prevent slide-in weapon switch animation
+            const adsCfg = fpsViewmodel.adsConfig || { x: 0.05, y: -0.05 };
+            const adsTargetX = isADS ? -adsCfg.x : 0.05;
+            const adsTargetY = isADS ? (-adsCfg.y - 0.05) : -0.05;
+            const adsTargetZ = isADS ? (weapon.id === 'ar' ? 0.38 : 0.46) : 0.0;
+            
+            fpsViewmodel.targetX = adsTargetX;
+            fpsViewmodel.targetY = adsTargetY;
+            fpsViewmodel.targetZ = adsTargetZ;
+            fpsViewmodel.position.set(adsTargetX, adsTargetY, adsTargetZ);
 
             // Left Gun
             player.leftArm.hand.add(player.leftWeaponMesh);
@@ -7054,6 +7923,7 @@
                 const tentacleIdx = inventory.findIndex(w => w.id === 'manipulator_tentacle');
                 if (tentacleIdx !== -1) {
                     currentWeaponIdx = tentacleIdx;
+                    updateWeaponMesh();
                     updateWeaponUI();
                 }
                 e.preventDefault();
@@ -7141,6 +8011,7 @@
 
             if (weapon.ammo <= 0) {
                 currentWeaponIdx = 0;
+                updateWeaponMesh();
                 updateWeaponUI();
                 return;
             }
@@ -7993,13 +8864,48 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            const rawDelta = Math.min(clock.getDelta(), 0.1);
-            if (typeof updateWeaponSwitchTransition === 'function') {
-                updateWeaponSwitchTransition(rawDelta);
+            
+            // Expose internal variables to window for cheatsheet.js
+            window.player = player;
+            window.scene = scene;
+            window.cameraFPS = cameraFPS;
+            window.activeCamera = activeCamera;
+            window.keys = keys;
+            window.isPaused = isPaused;
+            window.inventory = inventory;
+            window.currentWeaponIdx = currentWeaponIdx;
+            window.spawnZombie = spawnZombie;
+            window.mapManager = mapManager;
+            window.zState = zState;
+            window.zPosX = zPosX;
+            window.zPosZ = zPosZ;
+            window.zHP = zHP;
+            window.zType = zType;
+            window.activeZombies = activeZombies;
+            window.spawnedZombies = spawnedZombies;
+            window.lastDelta = lastDelta;
+            if (typeof updateWeaponUI !== 'undefined') window.updateWeaponUI = updateWeaponUI;
+            if (typeof updateWeaponMesh !== 'undefined') window.updateWeaponMesh = updateWeaponMesh;
+            if (typeof AegisSentinel !== 'undefined') window.AegisSentinel = AegisSentinel;
+
+            // Bidirectional syncing for cheatsheet.js overrides
+            if (window.velocityY !== undefined) velocityY = window.velocityY;
+            window.velocityY = velocityY;
+            if (window.isGrounded !== undefined) isGrounded = window.isGrounded;
+            window.isGrounded = isGrounded;
+            if (window.currentSpread !== undefined) currentSpread = window.currentSpread;
+            window.currentSpread = currentSpread;
+            if (window.cheatAimbot && window.playerPitch !== undefined) {
+                playerPitch = window.playerPitch;
+            } else {
+                window.playerPitch = playerPitch;
             }
+            window.recoilCfg = recoilCfg;
+
+            const rawDelta = Math.min(clock.getDelta(), 0.1);
 
             // --- TACTICAL BULLET-TIME (ADS) ---
-            let targetTimeScale = isADS ? 0.65 : 1.0;
+            let targetTimeScale = window.cheatSlowMo ? 0.2 : (isADS ? 0.65 : 1.0);
             if (window.gammaRayTimeSlowTimer > 0) {
                 window.gammaRayTimeSlowTimer -= rawDelta;
                 targetTimeScale = 0.25; // 75% slowdown during Gamma Ray Burst
@@ -8247,16 +9153,46 @@
                 }
             } else {
                 // === NORMAL GRAVITY/JUMP ===
+                // If a portal just teleported us, reset velocity so we don't overshoot
+                if (window._nachtResetVelocity) {
+                    velocityY = 0;
+                    isGrounded = false;
+                    window._nachtResetVelocity = false;
+                }
                 const gravity = CONFIG.gravity || 25.0;
                 if (keys.space && isGrounded) {
                     velocityY = 9.0;
                     isGrounded = false;
                 }
                 velocityY -= gravity * delta;
+                const prevY = player.position.y;
                 player.position.y += velocityY * delta;
 
                 // Align to Terrain or Pyramid Block Height
-                const terrainHeight = TerrainGen.getMeshHeight(player.position.x, player.position.z) + 0.05;
+                let terrainHeight = TerrainGen.getMeshHeight(player.position.x, player.position.z) + 0.05;
+                if (window.NACHT_MODE) {
+                    terrainHeight = 0.05;
+                    if (window.NachtSafeRooms && window.NachtSafeRooms.length) {
+                        for (const r of window.NachtSafeRooms) {
+                            if (player.position.x >= r.minX && player.position.x <= r.maxX &&
+                                player.position.z >= r.minZ && player.position.z <= r.maxZ &&
+                                prevY >= r.minY - 0.5 && prevY <= r.maxY + 0.5) {
+                                // Floor of this room is r.minY (e.g. 0, 4.5, 9.0)
+                                terrainHeight = r.minY + 0.05;
+                                break;
+                            }
+                        }
+                    }
+                    // Ceilings collision detection facing up (so player can walk on ceilings of all floors if player teleports above them)
+                    const ceilings = [18.0, 36.0, 54.0, 72.0, 90.0, 108.0];
+                    for (const cy of ceilings) {
+                        if (prevY >= cy - 0.5 && player.position.x >= -64 && player.position.x <= 64 && player.position.z >= -64 && player.position.z <= 64) {
+                            terrainHeight = Math.max(terrainHeight, cy + 0.05);
+                        }
+                    }
+                } else if (window.ASYNCHRONOUS_MAZE_MODE) {
+                    terrainHeight = 0.05;
+                }
                 let walkY = terrainHeight;
 
                 if (window.PyramidManager && window.PyramidManager.blocks && window.PyramidManager.blocks.length > 0) {
@@ -8295,7 +9231,7 @@
                 const nextPX = player.position.x + playerShockwaveVelX * delta;
                 const nextPZ = player.position.z + playerShockwaveVelZ * delta;
                 let canShockMove = true;
-                if (mapManager.getCostAt(nextPX, nextPZ) === 255) canShockMove = false;
+                if (mapManager.getCostAt(nextPX, nextPZ, player.position.y) === 255) canShockMove = false;
 
                 if (canShockMove && window.PyramidManager && window.PyramidManager.blocks) {
                     const halfSize = 0.79;
@@ -8336,7 +9272,7 @@
                 const nextZ = player.position.z + moveVec.z;
 
                 let canMove = true;
-                if (mapManager.getCostAt(nextX, nextZ) === 255) canMove = false;
+                if (mapManager.getCostAt(nextX, nextZ, player.position.y) === 255) canMove = false;
 
                 // Check if blocked by any pyramid block
                 if (canMove && window.PyramidManager && window.PyramidManager.blocks) {
@@ -8955,21 +9891,21 @@
                         fpsViewmodel.manipulator.visible = true;
 
                         const manipCfg = {
-                            pistol: { px: 0.46, py: -0.22, pz: -1.25, rx: -Math.PI / 2, ry: 0, rz: -0.05, s: 0.38 },
-                            ar: { px: 0.37, py: -0.20, pz: -0.92, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
-                            shotgun: { px: 0.40, py: -0.22, pz: -1.02, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
-                            railgun: { px: 0.37, py: -0.18, pz: -0.92, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
-                            flare: { px: 0.37, py: -0.22, pz: -0.82, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
-                            singular: { px: 0.37, py: -0.18, pz: -0.92, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
-                            flame: { px: 0.37, py: -0.22, pz: -0.82, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.48 },
+                            pistol: { px: 0.42, py: -0.25, pz: -0.80, rx: -Math.PI / 2, ry: 0, rz: -0.05, s: 0.54 },
+                            ar: { px: 0.34, py: -0.22, pz: -0.57, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.72 },
+                            shotgun: { px: 0.37, py: -0.24, pz: -0.62, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.72 },
+                            railgun: { px: 0.34, py: -0.20, pz: -0.57, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.70 },
+                            flare: { px: 0.34, py: -0.24, pz: -0.47, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.70 },
+                            singular: { px: 0.34, py: -0.20, pz: -0.57, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.68 },
+                            flame: { px: 0.34, py: -0.24, pz: -0.47, rx: -Math.PI / 2, ry: 0, rz: -0.08, s: 0.72 },
                         };
-                        const mc = manipCfg[weapon.id] || { px: 0.28, py: -0.20, pz: -0.6, rx: -Math.PI / 2, ry: 0, rz: -0.15, s: 0.55 };
+                        const mc = manipCfg[weapon.id] || { px: 0.28, py: -0.20, pz: -0.45, rx: -Math.PI / 2, ry: 0, rz: -0.15, s: 0.75 };
 
                         fpsViewmodel.manipulator.position.set(mc.px, mc.py, mc.pz);
                         fpsViewmodel.manipulator.rotation.set(mc.rx, mc.ry, mc.rz);
                         fpsViewmodel.manipulator.scale.set(mc.s, mc.s, mc.s);
 
-                        fpsViewmodel.manipulator.update(uTime, delta, mouseHeld, isADS);
+                        fpsViewmodel.manipulator.update(uTime, delta, mouseHeld, isADS, (moveX !== 0 || moveZ !== 0));
                     }
                 }
             } else if (player) {
@@ -9058,6 +9994,24 @@
             if (window.hatmanCameo) {
                 window.hatmanCameo.update(player.position, delta, activeCamera);
             }
+            if (window.aetherMechBoss) {
+                if (!window.NACHT_MODE) {
+                    window.aetherMechBoss.dispose();
+                    window.aetherMechBoss = null;
+                } else {
+                    window.aetherMechBoss.update(player.position, delta, activeCamera);
+                }
+            } else if (window.NACHT_MODE && player.position.y >= 100.0) {
+                window.aetherMechBoss = new window.AetherMechBoss(scene);
+            }
+            if (window.mechaZombieBoss) {
+                if (!window.NACHT_MODE) {
+                    window.mechaZombieBoss.dispose();
+                    window.mechaZombieBoss = null;
+                } else {
+                    window.mechaZombieBoss.update(player.position, delta, activeCamera);
+                }
+            }
             if (window.JUNGLE_MODE && typeof window.JUNGLE_BIOME_SHIFT === 'number') {
                 const shift = window.JUNGLE_BIOME_SHIFT;
                 if (shift < 1.0) {
@@ -9115,15 +10069,17 @@
                 }
 
                 // Pulse the hive visually
-                node.mat.emissiveIntensity = 0.3 + Math.sin(clock.elapsedTime * 2 + node.idx) * 0.15;
-                node.mesh.rotation.y += delta * 0.3;
-                node.mesh.position.y = TerrainGen.getHeight(node.x, node.z) + 0.3 + Math.sin(clock.elapsedTime * 1.5 + node.idx * 2) * 0.1;
+                if (!node.isNachtInterior) {
+                    node.mat.emissiveIntensity = 0.3 + Math.sin(clock.elapsedTime * 2 + node.idx) * 0.15;
+                    node.mesh.rotation.y += delta * 0.3;
+                    node.mesh.position.y = TerrainGen.getHeight(node.x, node.z) + 0.3 + Math.sin(clock.elapsedTime * 1.5 + node.idx * 2) * 0.1;
 
-                // Spore particles from hive
-                if (Math.random() < 0.05) {
-                    emitParticle(node.x, node.mesh.position.y + 0.5, node.z,
-                        (Math.random() - 0.5) * 1.5, 1 + Math.random() * 2, (Math.random() - 0.5) * 1.5,
-                        0.1, 0.8, 0.2, 1.5 + Math.random() * 2, 0.8 + Math.random() * 0.5);
+                    // Spore particles from hive
+                    if (Math.random() < 0.05) {
+                        emitParticle(node.x, node.mesh.position.y + 0.5, node.z,
+                            (Math.random() - 0.5) * 1.5, 1 + Math.random() * 2, (Math.random() - 0.5) * 1.5,
+                            0.1, 0.8, 0.2, 1.5 + Math.random() * 2, 0.8 + Math.random() * 0.5);
+                    }
                 }
 
                 // Spawn zombies from this node
@@ -9171,7 +10127,7 @@
                 aiTranslator.postMessage({
                     delta,
                     elapsedTime: uTime,
-                    playerPos: { x: player.position.x, z: player.position.z },
+                    playerPos: { x: player.position.x, y: player.position.y, z: player.position.z },
                     vectorFieldX,
                     vectorFieldZ,
                     spawnedZombies,
@@ -9180,7 +10136,8 @@
                         cellSize: CONFIG.cellSize,
                         zombieSpeed: CONFIG.zombieSpeed,
                         maxZombies: CONFIG.maxZombies,
-                        mapId: window.GAME_START_CONFIG ? window.GAME_START_CONFIG.mapId : 'forest'
+                        mapId: window.GAME_START_CONFIG ? window.GAME_START_CONFIG.mapId : 'forest',
+                        nachtSafeRooms: window.NachtSafeRooms || []
                     },
                     zState, zPosX, zPosZ, zRotY, zType, zBehavior, zSpeedMul, zStateTimer, zCooldown, zHP
                 });
@@ -9486,6 +10443,32 @@
                         hit = true;
                     }
                 }
+                if (window.aetherMechBoss && window.aetherMechBoss.isEnabled) {
+                    const dx = window.aetherMechBoss.position.x - b.mesh.position.x;
+                    const dz = window.aetherMechBoss.position.z - b.mesh.position.z;
+                    const dy = window.aetherMechBoss.position.y - b.mesh.position.y;
+                    if (dx * dx + dz * dz < 12.0 && Math.abs(dy) < 5.0) { // massive mechanical hitbox
+                        let finalDmg = b.baseDamage || b.damage;
+                        window.aetherMechBoss.takeDamage(finalDmg);
+                        hitCrosshair();
+                        scene.remove(b.mesh);
+                        bullets.splice(i, 1);
+                        hit = true;
+                    }
+                }
+                if (window.mechaZombieBoss && window.mechaZombieBoss.isEnabled) {
+                    const dx = window.mechaZombieBoss.position.x - b.mesh.position.x;
+                    const dz = window.mechaZombieBoss.position.z - b.mesh.position.z;
+                    const dy = window.mechaZombieBoss.position.y - b.mesh.position.y;
+                    if (dx * dx + dz * dz < 9.0 && Math.abs(dy) < 4.0) { // large mechanical zombie hitbox
+                        let finalDmg = b.baseDamage || b.damage;
+                        window.mechaZombieBoss.takeDamage(finalDmg);
+                        hitCrosshair();
+                        scene.remove(b.mesh);
+                        bullets.splice(i, 1);
+                        hit = true;
+                    }
+                }
                 if (hit) continue;
 
                 // Check Stalker hit
@@ -9524,6 +10507,10 @@
                         }
 
                         zHP[j] = Math.max(0, zHP[j] - finalDmg);
+                        if (window.NACHT_MODE) {
+                            if (window.moneyWeb) window.moneyWeb.add(10);
+                            else window.zombiePoints = (window.zombiePoints || 0) + 10;
+                        }
                         hitCrosshair();
 
                         // Visual flash on hit
@@ -9583,6 +10570,11 @@
                             zState[j] = 0;
                             activeZombies--;
                             totalKills++;
+                            if (window.NACHT_MODE) {
+                                const killPoints = (b.weaponId === 'sword') ? 130 : 100;
+                                if (window.moneyWeb) window.moneyWeb.add(killPoints);
+                                else window.zombiePoints = (window.zombiePoints || 0) + killPoints;
+                            }
                             if (window.PyramidManager) {
                                 window.PyramidManager.registerKill(zPosX[j], 1.0, zPosZ[j]);
                             }
@@ -9670,6 +10662,7 @@
                         }
 
                         currentWeaponIdx = inventory.findIndex(w => w.id === wId);
+                        updateWeaponMesh();
                         updateWeaponUI();
 
                         NeuralConsole.log(`0x00A1: NEW_HARDWARE_INTERFACE: [${wCfg.name.toUpperCase()}]. SYNCING...`, 'res');

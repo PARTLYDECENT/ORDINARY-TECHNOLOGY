@@ -20,8 +20,8 @@ class Pistol extends THREE.Group {
         super();
         this.name = "procedural_mac10";
 
-        // Animation states (Open-bolt resting state: bolt held backward at 0.35!)
-        this.boltZ = 0.35;
+        // Animation states (Open-bolt resting state: bolt held backward at 0.24!)
+        this.boltZ = 0.24;
         this.gunPitch = 0;
         this.gunZ = 0;
         this.triggerZ = -0.12; // Start trigger position
@@ -848,25 +848,25 @@ class Pistol extends THREE.Group {
 
         // 5. Charging Handle Shoe (Flat connector plate)
         const handleShoe = new THREE.Mesh(
-            new THREE.BoxGeometry(0.045, 0.012, 0.07),
+            new THREE.BoxGeometry(0.038, 0.01, 0.06),
             this.steelMat
         );
         handleShoe.position.set(0, 0.04, -0.25);
         this.boltGroup.add(handleShoe);
 
-        // 6. Cylindrical Charging Handle (Enlarged)
+        // 6. Cylindrical Charging Handle
         const handleStem = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.024, 0.024, 0.11, 12),
+            new THREE.CylinderGeometry(0.014, 0.014, 0.08, 12),
             this.steelMat
         );
-        handleStem.position.set(0, 0.095, -0.25);
+        handleStem.position.set(0, 0.085, -0.25);
         
-        // Gold knurled head on the handle (Enlarged)
+        // Gold knurled head on the handle
         const handleKnurl = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.034, 0.034, 0.035, 10),
+            new THREE.CylinderGeometry(0.018, 0.018, 0.02, 10),
             this.goldMat
         );
-        handleKnurl.position.set(0, 0.15, -0.25);
+        handleKnurl.position.set(0, 0.125, -0.25);
         this.boltGroup.add(handleStem, handleKnurl);
 
         // 7. Weight reduction slots (Side indentations)
@@ -1098,8 +1098,8 @@ class Pistol extends THREE.Group {
     }
 
     update(dt) {
-        // Bolt carrier group reciprocation (blows back to the open resting state of 0.35)
-        this.boltZ += (0.35 - this.boltZ) * 24 * dt;
+        // Bolt carrier group reciprocation (blows back to the open resting state of 0.24)
+        this.boltZ += (0.24 - this.boltZ) * 32 * dt;
         this.boltGroup.position.z = this.boltZ;
 
         // Hide internal casing when bolt is fully closed to simulate chambered state

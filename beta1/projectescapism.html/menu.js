@@ -43,7 +43,8 @@ const MainMenu = {
         { id: 'endgame', name: 'ENDGAME', desc: 'The final cosmic void. A flat empty glass plane under a majestic nebula.', difficulty: 'APOCALYPSE', color: '#a020f0', fog: 0x050010 },
         { id: 'abyss', name: 'WATER WORLD', desc: 'Procedural floating wooden rafts on an endless waving blue ocean. Watch your step!', difficulty: 'TROPICAL', color: '#0284c7', fog: 0xbae6fd },
         { id: 'jungle', name: 'JUNGLE EXPANSE', desc: 'Dense infinite voxel jungle. Blocky stepped cliffs, canopies and water.', difficulty: 'DENSE VOXEL', color: '#10b981', fog: 0x051d0f },
-        { id: 'asynchronousmaze1', name: 'ASYNCHRONOUS MAZE', desc: 'The Backrooms. A yellow-ochre fluorescent labyrinth. Escape the stalker.', difficulty: 'UNSTABLE', color: '#d1cc9e', fog: 0x242416 }
+        { id: 'asynchronousmaze1', name: 'ASYNCHRONOUS MAZE', desc: 'The Backrooms. A yellow-ochre fluorescent labyrinth. Escape the stalker.', difficulty: 'UNSTABLE', color: '#d1cc9e', fog: 0x242416 },
+        { id: 'nacht', name: 'OUTPOST NACHT', desc: 'A ruined military outpost in the dark fog. Buy weapons, open doors, repair barricades, and survive the endless horde.', difficulty: 'CLASSIC ZOMBIES', color: '#7f1d1d', fog: 0x050505 }
     ],
     selectedMap: 0,
 

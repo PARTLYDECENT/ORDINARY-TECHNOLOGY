@@ -210,6 +210,7 @@ self.onmessage = function (e) {
     const delta = Math.min(data.delta, 0.1);
     const elapsedTime = data.elapsedTime;
     const px = data.playerPos.x;
+    const py = data.playerPos.y || 0.0;
     const pz = data.playerPos.z;
     const config = data.config || {};
 
@@ -331,8 +332,31 @@ self.onmessage = function (e) {
             // Map the matrix exactly as set by the main thread.
             const cosY = Math.cos(zRotY[i]);
             const sinY = Math.sin(zRotY[i]);
-            const scale = type === 3 ? 1.35 : 1.0;
+            let scale = type === 3 ? 1.35 : 1.0;
+            if (currentMapId === 'nacht') {
+                scale *= 2.0;
+            }
             let zh = TerrainGen.getMeshHeight(zx, zz);
+            if (currentMapId === 'nacht') {
+                zh = 0.05;
+                if (config.nachtSafeRooms && config.nachtSafeRooms.length) {
+                    let bestRoom = null;
+                    let minDistY = Infinity;
+                    for (let rIdx = 0; rIdx < config.nachtSafeRooms.length; rIdx++) {
+                        const r = config.nachtSafeRooms[rIdx];
+                        if (zx >= r.minX && zx <= r.maxX && zz >= r.minZ && zz <= r.maxZ) {
+                            const distY = Math.abs((r.minY + r.maxY) / 2.0 - py);
+                            if (distY < minDistY) {
+                                minDistY = distY;
+                                bestRoom = r;
+                            }
+                        }
+                    }
+                    if (bestRoom) {
+                        zh = bestRoom.minY + 0.05;
+                    }
+                }
+            }
             const matrix = [
                 cosY * scale, 0, -sinY * scale, 0,
                 0, scale, 0, 0,
@@ -647,10 +671,31 @@ self.onmessage = function (e) {
         const sinY = Math.sin(zRotY[i]);
         const baseScale = type === 3 ? 1.35 : 1.0;
         const scaleMultiplier = isBoss ? 1.65 : (isGlitchedSwarmed ? 0.78 * glitchSwarmFactor : 0.0);
-        const scale = baseScale * (1.0 + (isBoss ? morph : glitchSwarmFactor) * scaleMultiplier);
+        let scale = baseScale * (1.0 + (isBoss ? morph : glitchSwarmFactor) * scaleMultiplier);
 
         // Determine target mesh properties sitting perfectly on ground level
         let zh = TerrainGen.getMeshHeight(zx, zz);
+        if (currentMapId === 'nacht') {
+            scale *= 2.0;
+            zh = 0.05;
+            if (config.nachtSafeRooms && config.nachtSafeRooms.length) {
+                let bestRoom = null;
+                let minDistY = Infinity;
+                for (let rIdx = 0; rIdx < config.nachtSafeRooms.length; rIdx++) {
+                    const r = config.nachtSafeRooms[rIdx];
+                    if (zx >= r.minX && zx <= r.maxX && zz >= r.minZ && zz <= r.maxZ) {
+                        const distY = Math.abs((r.minY + r.maxY) / 2.0 - py);
+                        if (distY < minDistY) {
+                            minDistY = distY;
+                            bestRoom = r;
+                        }
+                    }
+                }
+                if (bestRoom) {
+                    zh = bestRoom.minY + 0.05;
+                }
+            }
+        }
 
         // In abyss (Water World) mode, Aqua-Sentinels float at the ocean surface or hover over rafts
         if (currentMapId === 'abyss') {

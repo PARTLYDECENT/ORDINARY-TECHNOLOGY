@@ -767,6 +767,19 @@ class SDFGUI {
         ctx.fillStyle = dimCyan;
         ctx.fillText(this.state.objectiveCount, this.width / 2, 36);
 
+        // --- TOP RIGHT: Credits (Nacht Mode) ---
+        if (window.NACHT_MODE) {
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'top';
+            ctx.font = fLabel;
+            ctx.fillStyle = dimCyan;
+            ctx.fillText('NEURAL_CREDITS ◈', this.width - 20, 14);
+            ctx.font = 'bold 16px "Courier New", monospace';
+            ctx.fillStyle = amber;
+            const _bal = (window.moneyWeb && typeof window.moneyWeb.getBalance === 'function') ? window.moneyWeb.getBalance() : (window.zombiePoints || 10000);
+            ctx.fillText(`${_bal} CR`, this.width - 20, 32);
+        }
+
         // --- BOTTOM RIGHT: Ammo & Weapon ---
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
