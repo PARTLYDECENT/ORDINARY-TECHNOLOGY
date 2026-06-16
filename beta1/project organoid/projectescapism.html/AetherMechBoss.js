@@ -314,12 +314,12 @@ class AetherMechBoss {
         this.maxHealth = 8000;
         this.health = this.maxHealth;
 
-        // Position: centers around Room 12 flat roof (Y = 108.05)
-        this.homePosition = new THREE.Vector3(0, 108.05, 0);
-        this.position = new THREE.Vector3(0, 108.05 + 5.0, 0); // starts suspended
+        // Position: centers around Room 12 flat roof (Y = 532.05)
+        this.homePosition = new THREE.Vector3(0, 532.05, 0);
+        this.position = new THREE.Vector3(0, 532.05 + 5.0, 0); // starts suspended
 
         // Kinematics (spring suspension bobbing)
-        this.bossY = 108.05 + 5.0;
+        this.bossY = 532.05 + 5.0;
         this.bossVy = 0.0;
         this.bossMass = 180.0; // heavy mechanical chassis
         this.springK = 45.0;
@@ -370,7 +370,7 @@ class AetherMechBoss {
             fragmentShader: this.raymarchFrag,
             uniforms: {
                 uTime: { value: 0.0 },
-                uBobOffset: { value: 108.05 + 5.0 },
+                uBobOffset: { value: 532.05 + 5.0 },
                 uNPCOffset: { value: new THREE.Vector3() },
                 uRotationY: { value: 0.0 },
                 uState: { value: 0 },
@@ -558,17 +558,17 @@ class AetherMechBoss {
         if (barStat) barStat.innerText = `STATUS: ${this.state}`;
 
         if (this.state === 'SPIN_CHARGE') {
-            this.targetAltitude = 108.05 + 6.5 + 1.2 * Math.sin(this.time * 2.2);
+            this.targetAltitude = 532.05 + 6.5 + 1.2 * Math.sin(this.time * 2.2);
             this.npcMaterial.uniforms.uCoreColor.value.setRGB(1.0, 0.35, 0.0); // Orange charging core
             this.bossLight.color.setHex(0xff5500);
             this.bossLight.intensity = 6.0 + 3.0 * Math.sin(this.time * 12.0);
-
+ 
             // Orbit the player from a distance of 18 units, shifting slowly
             const orbitSpeed = 0.45;
             const targetX = playerPos.x + 18.0 * Math.cos(this.time * orbitSpeed);
             const targetZ = playerPos.z + 18.0 * Math.sin(this.time * orbitSpeed);
-            this.homePosition.lerp(new THREE.Vector3(targetX, 108.05, targetZ), delta * 2.5);
-
+            this.homePosition.lerp(new THREE.Vector3(targetX, 532.05, targetZ), delta * 2.5);
+ 
             // Charge sparks
             if (typeof emitParticle === 'function' && Math.random() > 0.45) {
                 emitParticle(
@@ -579,16 +579,16 @@ class AetherMechBoss {
                     1.0, 0.4, 0.0, 16.0, 0.4
                 );
             }
-
+ 
         } else if (this.state === 'PISTON_SLAM') {
-            this.targetAltitude = 108.05 + 4.5 + 0.5 * Math.sin(this.time * 6.0);
+            this.targetAltitude = 532.05 + 4.5 + 0.5 * Math.sin(this.time * 6.0);
             this.npcMaterial.uniforms.uCoreColor.value.setRGB(0.0, 1.0, 0.85); // Teal sparks
             this.bossLight.color.setHex(0x00ffaa);
             this.bossLight.intensity = 4.5;
-
+ 
             // Chases the player directly!
-            this.homePosition.lerp(new THREE.Vector3(playerPos.x, 108.05, playerPos.z), delta * 3.2);
-
+            this.homePosition.lerp(new THREE.Vector3(playerPos.x, 532.05, playerPos.z), delta * 3.2);
+ 
             // Spawn slam contact hazard sparks if close to player
             const dx = playerPos.x - this.position.x;
             const dz = playerPos.z - this.position.z;
@@ -598,7 +598,7 @@ class AetherMechBoss {
                 // Slam damage tick!
                 window.takeDamage(1);
             }
-
+ 
             if (typeof emitParticle === 'function' && Math.random() > 0.3) {
                 emitParticle(
                     this.position.x + (Math.random() - 0.5) * 4,
@@ -608,16 +608,16 @@ class AetherMechBoss {
                     0.0, 0.9, 0.9, 14.0, 0.35
                 );
             }
-
+ 
         } else if (this.state === 'HELIOTROPE_SHIELD') {
-            this.targetAltitude = 108.05 + 8.0 + 0.3 * Math.sin(this.time * 0.8);
+            this.targetAltitude = 532.05 + 8.0 + 0.3 * Math.sin(this.time * 0.8);
             this.npcMaterial.uniforms.uCoreColor.value.setRGB(0.7, 0.0, 1.0); // Deep violet defensive shield
             this.bossLight.color.setHex(0x9900ff);
             this.bossLight.intensity = 5.0;
-
+ 
             // Slowly retreats to Spire Roof center (0, 0)
-            this.homePosition.lerp(new THREE.Vector3(0, 108.05, 0), delta * 1.5);
-
+            this.homePosition.lerp(new THREE.Vector3(0, 532.05, 0), delta * 1.5);
+ 
             // Shield particles surrounding the torus ring
             if (typeof emitParticle === 'function' && Math.random() > 0.2) {
                 const sAng = Math.random() * Math.PI * 2;
@@ -631,13 +631,13 @@ class AetherMechBoss {
                 );
             }
         }
-
-        // Limit boss movement within Nacht Spire Roof boundaries (radius 48 from summit center)
+ 
+        // Limit boss movement within Nacht Spire Roof boundaries (radius 24 from summit center)
         const dSqSum = this.homePosition.x * this.homePosition.x + this.homePosition.z * this.homePosition.z;
-        if (dSqSum > 2304.0) { // 48^2
+        if (dSqSum > 576.0) { // 24^2
             const d = Math.sqrt(dSqSum);
-            this.homePosition.x = (this.homePosition.x / d) * 48.0;
-            this.homePosition.z = (this.homePosition.z / d) * 48.0;
+            this.homePosition.x = (this.homePosition.x / d) * 24.0;
+            this.homePosition.z = (this.homePosition.z / d) * 24.0;
         }
 
         // 2. Kinematics Spring Bobbing

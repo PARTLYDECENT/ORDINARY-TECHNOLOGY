@@ -464,6 +464,16 @@ void main(){
         // Remove any lingering blackout
         const bo = document.getElementById('escapism-blackout');
         if (bo) bo.remove();
+
+        // Re-request pointer lock if in FPS mode and not locked
+        if (window.isFPSMode && !document.pointerLockElement) {
+            try {
+                document.body.requestPointerLock();
+            } catch (e) {
+                console.warn("Could not request pointer lock on EasterEgg deactivate:", e);
+            }
+        }
+
         console.log('%c[THE ESCAPISM] ██ REALITY RECONSTITUTED ██', 'color:#0ff;font-weight:bold;');
     }
 

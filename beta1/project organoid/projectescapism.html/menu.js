@@ -91,8 +91,10 @@ const MainMenu = {
         if (!this.canvas) return;
         this.ctx = this.canvas.getContext('2d');
 
-        // Kill the shader background
-        if (window.MenuBG) { window.MenuBG.stop(); window.MenuBG = null; }
+        // Start the shader background if not already active
+        if (window.MenuBG && !window.MenuBG.active) {
+            window.MenuBG.init('main-menu');
+        }
 
         // Initialize transition states for menu items
         this.itemStates = this.menuItems.map(() => ({ xOffset: 0, alpha: 0.35 }));

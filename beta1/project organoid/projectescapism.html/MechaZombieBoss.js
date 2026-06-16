@@ -617,25 +617,32 @@ class MechaZombieBoss {
             }
         }
 
-        // Limit boss to general arena range (radius 75)
+        // Limit boss to general arena range (radius 75, or 375 on Nacht)
+        const limit = window.NACHT_MODE ? 375.0 : 75.0;
         const dSqSum = this.homePosition.x * this.homePosition.x + this.homePosition.z * this.homePosition.z;
-        if (dSqSum > 5625.0) {
+        if (dSqSum > limit * limit) {
             const d = Math.sqrt(dSqSum);
-            this.homePosition.x = (this.homePosition.x / d) * 75.0;
-            this.homePosition.z = (this.homePosition.z / d) * 75.0;
+            this.homePosition.x = (this.homePosition.x / d) * limit;
+            this.homePosition.z = (this.homePosition.z / d) * limit;
         }
 
         // Keep altitude on floor matching maps (especially Nacht vertical layers)
         if (window.NACHT_MODE && window.NachtSafeRooms) {
-            // Check matching room floor
+            let bestRoom = null;
+            let minDistY = Infinity;
             for (let i = 0; i < window.NachtSafeRooms.length; i++) {
                 const room = window.NachtSafeRooms[i];
                 if (this.homePosition.x >= room.minX && this.homePosition.x <= room.maxX &&
                     this.homePosition.z >= room.minZ && this.homePosition.z <= room.maxZ) {
-                    // Lock homePosition.y to this room's floor
-                    this.homePosition.y = room.minY + 0.05;
-                    break;
+                    const distY = Math.abs((room.minY + room.maxY) / 2.0 - playerPos.y);
+                    if (distY < minDistY) {
+                        minDistY = distY;
+                        bestRoom = room;
+                    }
                 }
+            }
+            if (bestRoom) {
+                this.homePosition.y = bestRoom.minY + 0.05;
             }
         }
 

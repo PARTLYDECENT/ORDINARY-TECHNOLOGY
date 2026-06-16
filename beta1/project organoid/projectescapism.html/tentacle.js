@@ -159,9 +159,11 @@ class WhipTentacle extends THREE.Group {
         clawGeom.rotateX(Math.PI / 3.5);
 
         const clawMat = new THREE.MeshStandardMaterial({
-            color: 0x0c1015,
-            roughness: 0.15,
-            metalness: 0.95
+            color: 0x00aaff,
+            emissive: 0x00f3ff,
+            emissiveIntensity: 3.5,
+            roughness: 0.10,
+            metalness: 0.90
         });
 
         for (let c = 0; c < 3; c++) {

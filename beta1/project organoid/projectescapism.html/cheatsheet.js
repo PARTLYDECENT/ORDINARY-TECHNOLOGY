@@ -359,7 +359,8 @@
         synthSound(window.cheatGiantPlayer ? 1100 : 550, 'triangle');
         updateUIState('btn-giantplayer', window.cheatGiantPlayer);
         if (window.player) {
-            window.player.scale.setScalar(window.cheatGiantPlayer ? 0.25 : 0.11);
+            const baseScale = window.NACHT_MODE ? 0.11 : 0.19;
+            window.player.scale.setScalar(window.cheatGiantPlayer ? baseScale * 2.27 : baseScale);
         }
         if (window.NeuralConsole) {
             window.NeuralConsole.log(`[MOD]: OPERATOR CHASSIS SCALE: ${window.cheatGiantPlayer ? 'GIANT (2.3x)' : 'NORMAL'}`, 'sys');
@@ -375,7 +376,8 @@
         synthSound(window.cheatMiniPlayer ? 600 : 1200, 'triangle');
         updateUIState('btn-miniplayer', window.cheatMiniPlayer);
         if (window.player) {
-            window.player.scale.setScalar(window.cheatMiniPlayer ? 0.05 : 0.11);
+            const baseScale = window.NACHT_MODE ? 0.11 : 0.19;
+            window.player.scale.setScalar(window.cheatMiniPlayer ? baseScale * 0.45 : baseScale);
         }
         if (window.NeuralConsole) {
             window.NeuralConsole.log(`[MOD]: OPERATOR CHASSIS SCALE: ${window.cheatMiniPlayer ? 'MINI (0.4x)' : 'NORMAL'}`, 'sys');
@@ -610,18 +612,18 @@
         if (!window.player) return;
         synthSound(1300, 'triangle');
         const rooms = {
-            1: { x: 0, y: 0.05, z: 12, name: "Room 1 (Spawn Station)" },
-            2: { x: 0, y: 0.05, z: -12, name: "Room 2 (Power Grid Vault)" },
-            3: { x: 0, y: 18.05, z: 12, name: "Room 3 (Comms Control Deck)" },
-            4: { x: 0, y: 18.05, z: -12, name: "Room 4 (Logistics Supply Bay)" },
-            5: { x: 0, y: 36.05, z: 0, name: "Room 5 (Roof Apex Penthouse)" },
-            6: { x: 0, y: 54.05, z: 12, name: "Room 6 (Armory Bunker)" },
-            7: { x: 0, y: 54.05, z: -12, name: "Room 7 (Bio-Lab Chamber)" },
-            8: { x: 0, y: 72.05, z: 12, name: "Room 8 (Reactor Core)" },
-            9: { x: 0, y: 72.05, z: -12, name: "Room 9 (War Room)" },
-            10: { x: 0, y: 90.05, z: 12, name: "Room 10 (Observatory Spire)" },
-            11: { x: 0, y: 90.05, z: -12, name: "Room 11 (Aether Research Lab)" },
-            12: { x: 0, y: 108.05, z: 0, name: "Spire Roof (Top Summit)" }
+            1: { x: 0, y: -9.95, z: 60, name: "Room 1 (Spawn Station)" },
+            2: { x: 0, y: -9.95, z: -60, name: "Room 2 (Power Grid Vault)" },
+            3: { x: 0, y: 82.05, z: 60, name: "Room 3 (Comms Control Deck)" },
+            4: { x: 0, y: 82.05, z: -60, name: "Room 4 (Logistics Supply Bay)" },
+            5: { x: 0, y: 172.05, z: 0, name: "Room 5 (Roof Apex Penthouse)" },
+            6: { x: 0, y: 262.05, z: 60, name: "Room 6 (Armory Bunker)" },
+            7: { x: 0, y: 262.05, z: -60, name: "Room 7 (Bio-Lab Chamber)" },
+            8: { x: 0, y: 352.05, z: 60, name: "Room 8 (Reactor Core)" },
+            9: { x: 0, y: 352.05, z: -60, name: "Room 9 (War Room)" },
+            10: { x: 0, y: 442.05, z: 60, name: "Room 10 (Observatory Spire)" },
+            11: { x: 0, y: 442.05, z: -60, name: "Room 11 (Aether Research Lab)" },
+            12: { x: 0, y: 532.05, z: 0, name: "Spire Roof (Top Summit)" }
         };
         const coord = rooms[roomNum];
         if (coord) {

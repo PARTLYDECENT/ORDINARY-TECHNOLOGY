@@ -171,6 +171,11 @@ const MenuBG = {
                         col = vec3(0.001, 0.001, 0.002);
                         col += uColor * fre * 0.45;
                         col += vec3(1.0) * spec * 0.2;
+
+                        // Pulse cyber-grid lines along the Glossy Wave Surface
+                        float gridLines = step(0.97, cos(p.x * 2.2)) + step(0.97, cos(p.z * 2.2));
+                        float gridPulse = sin(uTime * 2.0 - length(p.xz) * 0.35) * 0.35 + 0.65;
+                        col += uColor * gridLines * 0.45 * gridPulse;
                         
                         // Fog out into the background in the distance
                         float fog = smoothstep(0.0, 1.0, t / maxT);

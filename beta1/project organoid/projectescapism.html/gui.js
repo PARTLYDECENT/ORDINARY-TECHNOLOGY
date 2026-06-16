@@ -728,10 +728,10 @@ class SDFGUI {
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.width, this.height);
 
-        const fMain = 'bold 14px "Courier New", monospace';
-        const fSmall = 'bold 11px "Courier New", monospace';
-        const fLarge = 'bold 32px "Courier New", monospace';
-        const fLabel = '10px "Courier New", monospace';
+        const fMain = 'bold 18px "Courier New", monospace';
+        const fSmall = 'bold 15px "Courier New", monospace';
+        const fLarge = 'bold 48px "Courier New", monospace';
+        const fLabel = 'bold 13px "Courier New", monospace';
 
         const cyan = '#00e5ff';
         const dimCyan = '#00808a';
@@ -749,14 +749,14 @@ class SDFGUI {
 
         ctx.font = fMain;
         ctx.fillStyle = red;
-        ctx.fillText(`[ KILLS: ${this.state.kills} ]`, 20, 32);
+        ctx.fillText(`[ KILLS: ${this.state.kills} ]`, 20, 36);
 
         ctx.fillStyle = white;
         ctx.font = fSmall;
-        ctx.fillText(`HOSTILES: ${this.state.zombies}`, 20, 54);
+        ctx.fillText(`HOSTILES: ${this.state.zombies}`, 20, 62);
 
         ctx.fillStyle = cyan;
-        ctx.fillText(`NODES: ${this.state.nodesActive}`, 20, 70);
+        ctx.fillText(`NODES: ${this.state.nodesActive}`, 20, 82);
 
         // --- TOP CENTER: Objective ---
         ctx.textAlign = 'center';
@@ -765,7 +765,7 @@ class SDFGUI {
         ctx.fillText(`◈ ${this.state.objectiveName}`, this.width / 2, 14);
         ctx.font = fSmall;
         ctx.fillStyle = dimCyan;
-        ctx.fillText(this.state.objectiveCount, this.width / 2, 36);
+        ctx.fillText(this.state.objectiveCount, this.width / 2, 38);
 
         // --- TOP RIGHT: Credits (Nacht Mode) ---
         if (window.NACHT_MODE) {
@@ -774,10 +774,10 @@ class SDFGUI {
             ctx.font = fLabel;
             ctx.fillStyle = dimCyan;
             ctx.fillText('NEURAL_CREDITS ◈', this.width - 20, 14);
-            ctx.font = 'bold 16px "Courier New", monospace';
+            ctx.font = 'bold 22px "Courier New", monospace';
             ctx.fillStyle = amber;
             const _bal = (window.moneyWeb && typeof window.moneyWeb.getBalance === 'function') ? window.moneyWeb.getBalance() : (window.zombiePoints || 10000);
-            ctx.fillText(`${_bal} CR`, this.width - 20, 32);
+            ctx.fillText(`${_bal} CR`, this.width - 20, 36);
         }
 
         // --- BOTTOM RIGHT: Ammo & Weapon ---
@@ -785,15 +785,15 @@ class SDFGUI {
         ctx.textBaseline = 'bottom';
         ctx.fillStyle = dimCyan;
         ctx.font = fLabel;
-        ctx.fillText('ARMAMENT_STATUS ◈', this.width - 20, this.height - 72);
+        ctx.fillText('ARMAMENT_STATUS ◈', this.width - 20, this.height - 100);
 
         ctx.fillStyle = white;
         ctx.font = fSmall;
-        ctx.fillText(`[ ${this.state.weaponName.toUpperCase()} ]`, this.width - 20, this.height - 56);
+        ctx.fillText(`[ ${this.state.weaponName.toUpperCase()} ]`, this.width - 20, this.height - 78);
 
         ctx.fillStyle = cyan;
         ctx.font = fLarge;
-        ctx.fillText(this.state.ammo, this.width - 20, this.height - 18);
+        ctx.fillText(this.state.ammo, this.width - 20, this.height - 24);
 
         // --- LEFT SIDE: Health % next to vial (removed per request) ---
         /*

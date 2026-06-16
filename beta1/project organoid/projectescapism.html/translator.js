@@ -361,7 +361,7 @@ self.onmessage = function (e) {
                 cosY * scale, 0, -sinY * scale, 0,
                 0, scale, 0, 0,
                 sinY * scale, 0, cosY * scale, 0,
-                zx, zh, zz, 1
+                zx, zh - 0.05, zz, 1
             ];
             let offset = 0;
             if (type === 0) {
@@ -714,7 +714,7 @@ self.onmessage = function (e) {
             cosY * scale, 0, -sinY * scale, 0,
             0, scale, 0, 0,
             sinY * scale, 0, cosY * scale, 0,
-            zx, zh, zz, 1
+            zx, zh - 0.05, zz, 1
         ];
 
         let offset = 0;

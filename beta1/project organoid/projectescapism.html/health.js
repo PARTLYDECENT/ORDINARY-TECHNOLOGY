@@ -495,17 +495,17 @@ class HealthSystem {
         const cy = this.h - 50;
 
         // 1. LEFT-WING TACTICAL HUB
-        this._renderThreatRadar(75, this.h - 75);
-        this._renderReactorCore(185, this.h - 65, hpPct);
-        this._renderInjectors(225, this.h - 78);
+        this._renderThreatRadar(40, this.h - 135);
+        this._renderReactorCore(170, this.h - 90, hpPct);
+        this._renderInjectors(245, this.h - 105);
 
         // 2. CENTER-WING VITALLING HUD
         // this._renderECGGraph(cx - 150, this.h - 95, 300, hpPct);
-        this._renderDiagnosticsFeed(cx - 150, this.h - 35);
+        this._renderDiagnosticsFeed(cx - 200, this.h - 30);
         
         // Health bar
         this._renderBar(
-            cx - 150, cy, 300, this.barH, 
+            cx - 200, cy - 3, 400, 24, 
             hpPct, displayHpPct, 
             'rgba(15, 20, 25, 0.9)', 
             null, 
@@ -516,7 +516,7 @@ class HealthSystem {
 
         // Shield bar
         this._renderBar(
-            cx - 150, cy - 13, 300, 7, 
+            cx - 200, cy - 24, 400, 15, 
             shPct, displayShPct, 
             'rgba(0, 75, 180, 0.15)', 
             'rgba(0, 200, 255, 0.4)', 
@@ -536,10 +536,10 @@ class HealthSystem {
         }
 
         // 3. RIGHT-WING WEAPONRY & STATUS HUD
-        this._renderBiometricsPanel(this.w - 240, this.h - 110);
-        this._renderBuffNodes(this.w - 240, this.h - 65);
+        this._renderBiometricsPanel(this.w - 410, this.h - 115);
+        this._renderBuffNodes(this.w - 410, this.h - 45);
         // this._renderOscilloscope(this.w - 240, this.h - 50, 120);
-        this._renderWeaponConsole(this.w - 110, this.h - 110);
+        this._renderWeaponConsole(this.w - 190, this.h - 115);
 
         // Telemetry glitch text
         if (this.glitchTimer > 0 && Math.random() < 0.7) {
@@ -591,8 +591,8 @@ class HealthSystem {
 
     _renderCompass() {
         const ctx = this.ctx;
-        const compassW = 240;
-        const compassH = 18;
+        const compassW = 360;
+        const compassH = 26;
         const cx = this.w / 2;
         const cy = 30;
 
@@ -608,12 +608,12 @@ class HealthSystem {
         ctx.fillStyle = '#00ffcc';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx - 4, cy - 4);
-        ctx.lineTo(cx + 4, cy - 4);
+        ctx.lineTo(cx - 6, cy - 6);
+        ctx.lineTo(cx + 6, cy - 6);
         ctx.closePath();
         ctx.fill();
 
-        ctx.font = 'bold 8px "Share Tech Mono", monospace';
+        ctx.font = 'bold 15px "Share Tech Mono", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
 
@@ -627,15 +627,15 @@ class HealthSystem {
         else if (headingDeg >= 247.5 && headingDeg < 292.5) headingDir = "W";
         else headingDir = "NW";
 
-        ctx.fillText(`${headingDeg}° ${headingDir}`, cx, cy + compassH + 4);
+        ctx.fillText(`${headingDeg}° ${headingDir}`, cx, cy + compassH + 6);
 
         ctx.beginPath();
         ctx.strokeStyle = 'rgba(0, 255, 200, 0.4)';
-        ctx.font = '7px "Share Tech Mono", monospace';
+        ctx.font = 'bold 12px "Share Tech Mono", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        const tickSpacing = 2.0; 
+        const tickSpacing = 3.0; 
         const startDeg = headingDeg - (compassW / 2) / tickSpacing;
 
         ctx.rect(cx - compassW / 2, cy, compassW, compassH);
@@ -647,7 +647,7 @@ class HealthSystem {
 
             if (normalizedDeg % 30 === 0) {
                 ctx.moveTo(tx, cy);
-                ctx.lineTo(tx, cy + 8);
+                ctx.lineTo(tx, cy + 12);
                 
                 let dirLabel = normalizedDeg.toString();
                 if (normalizedDeg === 0) dirLabel = "N";
@@ -655,11 +655,11 @@ class HealthSystem {
                 else if (normalizedDeg === 180) dirLabel = "S";
                 else if (normalizedDeg === 270) dirLabel = "W";
 
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                ctx.fillText(dirLabel, tx, cy + 13);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fillText(dirLabel, tx, cy + 18);
             } else if (normalizedDeg % 10 === 0) {
                 ctx.moveTo(tx, cy);
-                ctx.lineTo(tx, cy + 4);
+                ctx.lineTo(tx, cy + 6);
             }
         }
         ctx.stroke();
@@ -675,28 +675,28 @@ class HealthSystem {
         const scale = 1.0 + timerPct * 0.12;
         ctx.scale(scale, scale);
 
-        ctx.font = 'bold 15px "Share Tech Mono", monospace';
+        ctx.font = 'bold 28px "Share Tech Mono", monospace';
         ctx.fillStyle = '#ffcc00';
         ctx.shadowColor = '#ffaa00';
         ctx.shadowBlur = 8;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`COMBO x${this.comboCount}`, 0, -4);
+        ctx.fillText(`COMBO x${this.comboCount}`, 0, -8);
         
-        ctx.font = 'bold 8px "Share Tech Mono", monospace';
+        ctx.font = 'bold 15px "Share Tech Mono", monospace';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`STREAK STATUS: ${this.comboRank}`, 0, 8);
+        ctx.fillText(`STREAK STATUS: ${this.comboRank}`, 0, 15);
         ctx.shadowBlur = 0;
 
         ctx.strokeStyle = 'rgba(255, 200, 0, 0.15)';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2.0;
         ctx.beginPath();
-        ctx.arc(0, 16, 8, 0, Math.PI * 2);
+        ctx.arc(0, 26, 12, 0, Math.PI * 2);
         ctx.stroke();
 
         ctx.strokeStyle = '#ffd700';
         ctx.beginPath();
-        ctx.arc(0, 16, 8, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * timerPct));
+        ctx.arc(0, 26, 12, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * timerPct));
         ctx.stroke();
 
         ctx.restore();
@@ -710,9 +710,9 @@ class HealthSystem {
         ctx.strokeRect(7, 7, this.w - 14, this.h - 14);
 
         ctx.fillStyle = `rgba(220, 20, 20, ${pulse * 0.75})`;
-        ctx.font = 'bold 9px "Share Tech Mono", monospace';
-        ctx.fillText("/// ALARM: BIO-LINK COMPROMISED ///", 24, 28);
-        ctx.fillText("/// WARNING: CHASSIS CORROSION ///", this.w - 240, this.h - 24);
+        ctx.font = 'bold 12px "Share Tech Mono", monospace';
+        ctx.fillText("/// ALARM: BIO-LINK COMPROMISED ///", 24, 30);
+        ctx.fillText("/// WARNING: CHASSIS CORROSION ///", this.w - 280, this.h - 24);
     }
 
     _renderReactorCore(cx, cy, hpPct) {
@@ -782,20 +782,20 @@ class HealthSystem {
 
     _renderInjectors(x, y) {
         const ctx = this.ctx;
-        const w = 7;
-        const h = 24;
-        const gap = 5;
+        const w = 12;
+        const h = 38;
+        const gap = 8;
 
-        ctx.font = '7px "Share Tech Mono", monospace';
+        ctx.font = 'bold 13px "Share Tech Mono", monospace';
         ctx.fillStyle = 'rgba(0, 255, 200, 0.4)';
-        ctx.fillText("INJ", x, y - 4);
+        ctx.fillText("INJ", x, y - 8);
 
         for (let i = 0; i < 3; i++) {
             const ix = x + i * (w + gap);
             const inj = this.injectors[i];
 
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.2;
             ctx.strokeRect(ix, y, w, h);
 
             if (inj.level > 0.01) {
@@ -812,12 +812,12 @@ class HealthSystem {
                 }
 
                 ctx.fillStyle = grad;
-                ctx.fillRect(ix + 1, fillY, w - 2, fillH);
+                ctx.fillRect(ix + 1.5, fillY, w - 3, fillH);
             }
 
             ctx.fillStyle = 'rgba(100, 110, 120, 0.6)';
-            ctx.fillRect(ix + 2, y - 2, w - 4, 2);
-            ctx.fillRect(ix + 2, y + h, w - 4, 2);
+            ctx.fillRect(ix + 3, y - 2, w - 6, 2);
+            ctx.fillRect(ix + 3, y + h, w - 6, 2);
         }
     }
 
@@ -825,12 +825,12 @@ class HealthSystem {
         const ctx = this.ctx;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.font = '8px "Share Tech Mono", monospace';
+        ctx.font = 'bold 15px "Share Tech Mono", monospace';
 
         ctx.fillStyle = 'rgba(5, 8, 12, 0.7)';
-        ctx.fillRect(x, y, 120, 36);
+        ctx.fillRect(x, y, 230, 60);
         ctx.strokeStyle = 'rgba(0, 255, 200, 0.1)';
-        ctx.strokeRect(x, y, 120, 36);
+        ctx.strokeRect(x, y, 230, 60);
 
         const activeMapId = (window.GAME_START_CONFIG && window.GAME_START_CONFIG.mapId) || 'forest';
         let envVal = "ATMOSPHERE: HIGH SPORES";
@@ -847,18 +847,18 @@ class HealthSystem {
         }
 
         ctx.fillStyle = 'rgba(0, 255, 200, 0.6)';
-        ctx.fillText(envVal, x + 5, y + 4);
+        ctx.fillText(envVal, x + 8, y + 8);
 
         ctx.fillStyle = '#e0e8f0';
-        ctx.fillText(`CORE TEMP:  ${this.coreTemp.toFixed(1)}°C`, x + 5, y + 14);
-        ctx.fillText(envMetric, x + 5, y + 24);
+        ctx.fillText(`CORE TEMP:  ${this.coreTemp.toFixed(1)}°C`, x + 8, y + 25);
+        ctx.fillText(envMetric, x + 8, y + 42);
     }
 
     _renderBuffNodes(x, y) {
         const ctx = this.ctx;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.font = '7px "Share Tech Mono", monospace';
+        ctx.font = 'bold 13px "Share Tech Mono", monospace';
 
         const buffs = [
             { label: "REGEN", active: window.isHydrogenScoopBuilt || false, col: "#00ffa0" },
@@ -868,10 +868,10 @@ class HealthSystem {
 
         for (let i = 0; i < buffs.length; i++) {
             const b = buffs[i];
-            const bx = x + i * 42;
+            const bx = x + i * 75;
 
             ctx.beginPath();
-            ctx.arc(bx + 4, y, 3, 0, Math.PI * 2);
+            ctx.arc(bx + 5, y, 4.5, 0, Math.PI * 2);
             if (b.active) {
                 ctx.fillStyle = b.col;
                 ctx.shadowColor = b.col;
@@ -884,7 +884,7 @@ class HealthSystem {
             }
 
             ctx.fillStyle = b.active ? "#ffffff" : "rgba(120, 130, 140, 0.5)";
-            ctx.fillText(b.label, bx + 10, y);
+            ctx.fillText(b.label, bx + 14, y);
         }
     }
 
@@ -947,22 +947,22 @@ class HealthSystem {
         const ctx = this.ctx;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.font = '7px "Share Tech Mono", monospace';
+        ctx.font = 'bold 14px "Share Tech Mono", monospace';
 
         for (let i = 0; i < this.systemLogs.length; i++) {
             const log = this.systemLogs[i];
             const opacity = Math.max(0.25, 1.0 - (this.systemLogs.length - 1 - i) * 0.22);
             ctx.fillStyle = log.color;
             ctx.globalAlpha = opacity;
-            ctx.fillText(log.text, x, y + i * 8.5);
+            ctx.fillText(log.text, x, y + i * 16.0);
         }
         ctx.globalAlpha = 1.0;
     }
 
     _renderWeaponConsole(x, y) {
         const ctx = this.ctx;
-        const w = 90;
-        const h = 55;
+        const w = 170;
+        const h = 85;
 
         ctx.save();
         ctx.translate(x, y);
@@ -991,32 +991,32 @@ class HealthSystem {
 
         // Header Title
         ctx.fillStyle = 'rgba(0, 255, 200, 0.6)';
-        ctx.font = '7px "Share Tech Mono", monospace';
-        ctx.fillText("WEAPONRY SYSTEM", 5, 4);
+        ctx.font = 'bold 12px "Share Tech Mono", monospace';
+        ctx.fillText("WEAPONRY SYSTEM", 8, 8);
 
         // Weapon Name
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 9px "Share Tech Mono", monospace';
-        ctx.fillText(weaponName.toUpperCase(), 5, 14);
+        ctx.font = 'bold 15px "Share Tech Mono", monospace';
+        ctx.fillText(weaponName.toUpperCase(), 8, 22);
 
         // Ammo numeric readout
         ctx.fillStyle = ammoCount === "0" ? "#ff1133" : "#00ffcc";
-        ctx.font = 'bold 16px "Share Tech Mono", monospace';
-        ctx.fillText(ammoCount, 5, 25);
+        ctx.font = 'bold 32px "Share Tech Mono", monospace';
+        ctx.fillText(ammoCount, 8, 48);
 
         // Max capacity
         ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.font = '7px "Share Tech Mono", monospace';
-        ctx.fillText(`/ ${maxAmmo}`, 38, 32);
+        ctx.font = 'bold 14px "Share Tech Mono", monospace';
+        ctx.fillText(`/ ${maxAmmo}`, 80, 48);
 
         // Graphical Ammo Grid Visualizer
-        const gridX = 5;
-        const gridY = 44;
+        const gridX = 8;
+        const gridY = 64;
         const gridRows = 2;
         const gridCols = 10;
-        const cellW = 7;
-        const cellH = 4;
-        const cellGap = 1.5;
+        const cellW = 14;
+        const cellH = 8;
+        const cellGap = 2;
 
         // Bullet calculation pct
         let ammoPct = 1.0;
@@ -1135,23 +1135,23 @@ class HealthSystem {
             ctx.fill();
         }
 
-        ctx.font = 'bold 8.5px "Share Tech Mono", monospace';
+        ctx.font = 'bold 16px "Share Tech Mono", monospace';
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
 
         if (label === 'SHIELD') {
             ctx.fillStyle = '#00aaff';
-            ctx.fillText(`SHIELD: ${Math.round(this.shield)}`, bx, by - 7);
+            ctx.fillText(`SHIELD: ${Math.round(this.shield)}`, bx, by - 12);
         } else {
             ctx.fillStyle = pct > 0.6 ? '#00ffa0' : pct > 0.3 ? '#ffaa00' : '#ff3344';
-            ctx.fillText(`INTEGRITY: ${Math.round(this.health)}`, bx, by + bh / 2);
+            ctx.fillText(`INTEGRITY: ${Math.round(this.health)}`, bx + 10, by + bh / 2 + 1);
         }
     }
 
     _renderGlitchWarning(x, y) {
         const ctx = this.ctx;
         ctx.save();
-        ctx.font = 'bold 13px "Share Tech Mono", monospace';
+        ctx.font = 'bold 24px "Share Tech Mono", monospace';
         ctx.fillStyle = `rgba(255, 15, 30, ${0.45 + Math.sin(this.time * 20) * 0.4})`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1293,10 +1293,10 @@ class HealthSystem {
             ctx.shadowBlur = 0;
         }
 
-        ctx.font = '7px "Share Tech Mono", monospace';
+        ctx.font = 'bold 13px "Share Tech Mono", monospace';
         ctx.fillStyle = 'rgba(0, 255, 200, 0.5)';
         ctx.textAlign = 'center';
-        ctx.fillText("TACTICAL THREAT", 0, radius + 8);
+        ctx.fillText("TACTICAL THREAT", 0, radius + 16);
 
         ctx.restore();
     }
@@ -1334,9 +1334,9 @@ class HealthSystem {
         }
         ctx.stroke();
 
-        ctx.font = '7px "Share Tech Mono", monospace';
+        ctx.font = 'bold 12px "Share Tech Mono", monospace';
         ctx.fillStyle = 'rgba(0, 255, 200, 0.4)';
-        ctx.fillText("SYNAPSE OSCILLOSCOPE", 0, h + 8);
+        ctx.fillText("SYNAPSE OSCILLOSCOPE", 0, h + 13);
 
         ctx.restore();
     }
@@ -1346,7 +1346,7 @@ class HealthSystem {
         ctx.save();
         ctx.translate(x, y);
 
-        ctx.font = 'bold 14px "Share Tech Mono", monospace';
+        ctx.font = 'bold 18px "Share Tech Mono", monospace';
         ctx.fillStyle = '#ff1133';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1355,9 +1355,9 @@ class HealthSystem {
         ctx.shadowBlur = 10;
         ctx.fillText("⚠️ WARNING: HOSTILE PROXIMITY ALERT ⚠️", 0, 0);
 
-        ctx.font = '9px "Share Tech Mono", monospace';
+        ctx.font = '12px "Share Tech Mono", monospace';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText("BREACH IN CELLULAR RADIUS", 0, 16);
+        ctx.fillText("BREACH IN CELLULAR RADIUS", 0, 20);
         ctx.shadowBlur = 0;
 
         ctx.restore();
