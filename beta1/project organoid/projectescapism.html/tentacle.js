@@ -1,507 +1,457 @@
 /**
- * Ultra-Evolved WhipTentacle — Bio-Mechanical Combat Appendage
- * Features:
- * - Bio-Energy Overload Charging State: Claw jaws spin rapidly like a turbine, stinger oscillates, and shader uniforms glow white-hot.
- * - Symbiotic Auto-Swat State: Triggers rapid defensive swats to protect the player from rear/side threats.
- * - Dynamic GLSL shaders mapping Fresnel contours, plasma flow currents, and vibration offsets.
+ * WhipTentacle — Procedural Bio-Organic WebGL Shader Appendage
+ * Replaced with the high-fidelity 3D Procedural Bioweapon Tentacle raymarched fragment shader.
+ * Renders seamlessly over the game world using screen-space discard transparency.
  */
 class WhipTentacle extends THREE.Group {
     constructor() {
         super();
         this.name = "whip_tentacle";
 
-        // 3 Control Points in Viewmodel Local Space
-        this.p0 = new THREE.Vector3(0.3, -0.3, -0.6); // Base
-        this.p1 = new THREE.Vector3(0.25, -0.15, -1.2); // Middle
-        this.p2 = new THREE.Vector3(0.2, 0.1, -2.0); // Tip
-
-        // Physics State Vectors
-        this.v1 = new THREE.Vector3();
-        this.v2 = new THREE.Vector3();
-
-        // Animation States
-        this.whipActive = false;
-        this.whipTimer = 0;
-        this.whipDuration = 0.35;
-        this.whipComboType = 0; // 0 = Snap, 1 = Sweep
-        
-        // Charging & Overload States
+        // Weapon states required for compatibility with index.html
+        this.idleTime = 0;
+        this.attackStartTime = -999.0;
         this.isCharging = false;
         this.chargeProgress = 0.0;
+        this.whipComboType = 0;
+        
+        // Setup Uniforms
+        this.uniforms = {
+            iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            iTime: { value: 0.0 },
+            iMouse: { value: new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2) },
+            iAttackTime: { value: 999.0 }
+        };
 
-        // Auto-Swat State (Passive Defensive Guard)
-        this.autoSwatActive = false;
-        this.autoSwatTimer = 0.0;
-        this.autoSwatDuration = 0.26;
-        this.localSwatTarget = new THREE.Vector3();
-
-        // Claw Jaw articulation angles
-        this.clawOpenAngle = 0.25;
-
-        this.segmentCount = 24;
-        this.joints = [];
-        this.connectors = [];
-        this.shaderMaterials = [];
-
-        // Dynamic GLSL Shaders
-        const vertexShader = `
-            varying vec3 vNormal;
-            varying vec3 vViewPosition;
+        // Screen-aligned quad vertex shader (passes vertices directly to clip space [-1, 1])
+        const vsSource = `
             varying vec2 vUv;
-            
             void main() {
                 vUv = uv;
-                vNormal = normalize(normalMatrix * normal);
-                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                vViewPosition = -mvPosition.xyz;
-                gl_Position = projectionMatrix * mvPosition;
+                gl_Position = vec4(position, 1.0);
             }
         `;
 
-        const fragmentShader = `
-            uniform float uTime;
-            uniform float uLengthPct;
-            uniform vec3 uActiveColor;
-            uniform float uEmissionPulse;
-            uniform float uVibration;
+        // Raymarching fragment shader grafted from tentacle9.html with background transparency (discard)
+        const fsSource = `
+            precision highp float;
 
-            varying vec3 vNormal;
-            varying vec3 vViewPosition;
+            uniform vec2 iResolution;
+            uniform float iTime;
+            uniform vec2 iMouse;
+            uniform float iAttackTime;
+
             varying vec2 vUv;
 
+            // --- Math & Noise Utilities ---
+            mat2 rot(float a) {
+                float s = sin(a), c = cos(a);
+                return mat2(c, -s, s, c);
+            }
+
+            float hash(float n) { return fract(sin(n) * 1e4); }
+            float hash(vec2 p) { return fract(1e4 * sin(17.0 * p.x + p.y * 0.1) * (0.1 + abs(sin(p.y * 13.0 + p.x)))); }
+
+            float noise(vec3 x) {
+                const vec3 step = vec3(110, 241, 171);
+                vec3 i = floor(x);
+                vec3 f = fract(x);
+                float n = dot(i, step);
+                vec3 u = f * f * (3.0 - 2.0 * f);
+                return mix(mix(mix( hash(n + dot(step, vec3(0, 0, 0))), hash(n + dot(step, vec3(1, 0, 0))), u.x),
+                               mix( hash(n + dot(step, vec3(0, 1, 0))), hash(n + dot(step, vec3(1, 1, 0))), u.x), u.y),
+                           mix(mix( hash(n + dot(step, vec3(0, 0, 1))), hash(n + dot(step, vec3(1, 0, 1))), u.x),
+                               mix( hash(n + dot(step, vec3(0, 1, 1))), hash(n + dot(step, vec3(1, 1, 1))), u.x), u.y), u.z);
+            }
+
+            float fbm(vec3 p) {
+                float f = 0.0;
+                f += 0.5000 * noise(p); p *= 2.01;
+                f += 0.2500 * noise(p); p *= 2.02;
+                f += 0.1250 * noise(p); p *= 2.03;
+                f += 0.0625 * noise(p);
+                return f;
+            }
+
+            // Smooth minimum for blending flesh and bone materials
+            vec2 smin2(vec2 a, vec2 b, float k) {
+                float h = clamp(0.5 + 0.5 * (b.x - a.x) / k, 0.0, 1.0);
+                float d = mix(b.x, a.x, h) - k * h * (1.0 - h);
+                float m = mix(b.y, a.y, h);
+                return vec2(d, m);
+            }
+
+            // --- SDF Geometry Setup ---
+            // Maps world space to the curved local space of the tentacle
+            vec3 getLocal(vec3 p) {
+                vec3 q = p;
+                
+                // First Person Base anchor (bottom right, slightly forward)
+                vec2 base = vec2(0.8, -1.0);
+                float startZ = 0.5; 
+                
+                float localZ = max(0.0, q.z - startZ);
+                
+                // --- NON-EUCLIDEAN IDLE TWIST ---
+                // Impossible twisting geometry that shifts over time
+                float twist = sin(localZ * 0.4 - iTime * 0.8) * 0.5 * smoothstep(0.0, 4.0, localZ);
+                q.xy *= rot(twist); 
+                
+                // Bend path towards screen center
+                float curveX = -0.08; // Less curve, more direct/aggressive
+                float curveY = 0.1;  
+                
+                // Organic wriggling animation
+                float t = iTime * 1.5;
+                // Sway peaks gently in the middle, dampens strongly towards the tip for rigidity
+                float swayAmt = smoothstep(0.0, 3.0, localZ) * mix(1.0, 0.05, smoothstep(2.0, 6.5, localZ));
+                float wX = sin(localZ * 0.8 - t) * 0.05 * swayAmt;
+                float wY = cos(localZ * 0.7 - t * 0.8) * 0.05 * swayAmt;
+                
+                // --- DEVASTATING MECHANICAL WHIP ATTACK ---
+                float att = iAttackTime;
+                float isAttacking = step(0.0, att) * step(att, 2.0); 
+                
+                if (isAttacking > 0.5) {
+                    // 0.0 -> 0.15: Windup (curl back tightly)
+                    float windup = smoothstep(0.0, 0.15, att) * (1.0 - smoothstep(0.15, 0.25, att));
+                    // 0.15 -> 0.3: Strike (snap forward/down)
+                    float strike = smoothstep(0.15, 0.25, att) * (1.0 - smoothstep(0.3, 0.6, att));
+                    // 0.2 -> 1.5: Flail/Vibrate (uncanny mechanical shudder)
+                    float flail = smoothstep(0.2, 0.3, att) * (1.0 - smoothstep(0.3, 1.5, att));
+                    
+                    // Apply Windup (Tight unnatural spiral)
+                    float spiral = localZ * 2.5;
+                    wX += sin(spiral) * localZ * 0.4 * windup;
+                    wY += cos(spiral) * localZ * 0.4 * windup;
+                    q.z -= localZ * 0.3 * windup; // Compress length
+                    
+                    // Apply Strike (Brutal snap)
+                    wY -= pow(localZ, 1.8) * 0.25 * strike; // Slam down heavily
+                    wX += curveX * localZ * 3.0 * strike; // Straighten out towards center
+                    q.z -= localZ * 0.5 * strike; // Extend violently forward
+                    
+                    // Apply Flail (High freq glitch/mechanical vibration)
+                    float glitchX = sin(localZ * 40.0 - iTime * 100.0) * 0.04 * localZ * flail;
+                    float glitchY = cos(localZ * 45.0 - iTime * 113.0) * 0.04 * localZ * flail;
+                    wX += glitchX;
+                    wY += glitchY;
+                    
+                    // Extra non-euclidean glitch during flail: local space stretching
+                    q.xy *= rot(sin(iTime * 60.0) * 0.3 * flail);
+                }
+                
+                // Mouse look sway (interactive)
+                vec2 ms = (iMouse.xy / iResolution.xy) * 2.0 - 1.0;
+                float mouseX = ms.x * swayAmt * 0.5;
+                float mouseY = ms.y * swayAmt * 0.5;
+                
+                // Warp space
+                q.x -= (base.x + localZ * curveX + wX + mouseX);
+                q.y -= (base.y + localZ * curveY + wY + mouseY);
+                q.z -= startZ;
+                
+                return q;
+            }
+
+            vec2 map(vec3 p) {
+                vec3 q = getLocal(p);
+                float len = 6.5; // Total length of the tentacle
+                
+                float h = clamp(q.z, 0.0, len);
+                vec3 tq = vec3(q.x, q.y, q.z - h); // Distance to center spline
+                
+                // Tapered radius: MUCH skinnier base, terrifyingly sharp tip
+                float r = mix(0.18, 0.03, pow(h / len, 0.7));
+                
+                // Muscular ridges / variance - almost removed for ultra-sleekness
+                float ridges = (sin(h * 15.0) * 0.5 + 0.5) * 0.001 * smoothstep(0.0, 2.0, h);
+                r -= ridges;
+                
+                float dBody = length(tq) - r;
+                vec2 body = vec2(dBody, 1.0); // Material 1 = Blue Flesh
+                
+                // --- Spikes Setup ---
+                // Move origin to the tip of the tentacle
+                vec3 sq = q;
+                sq.z -= len - 0.05; // Sink slightly into the flesh
+                
+                // Spike 1: Front Face (Points forward, slightly up)
+                vec3 sq1 = sq;
+                sq1.yz *= rot(0.25);
+                sq1.y += sq1.z * sq1.z * 0.15; // Natural curved bend
+                float l1 = 1.3; // Longer, more intimidating
+                float dSp1 = length(vec3(sq1.x, sq1.y, sq1.z - clamp(sq1.z, 0.0, l1))) - mix(0.03, 0.001, pow(clamp(sq1.z/l1, 0.0, 1.0), 1.5));
+                
+                // Spike 2: Canted Right (Points forward, down, right)
+                vec3 sq2 = sq;
+                sq2.yz *= rot(-0.35); // tilt down
+                sq2.xz *= rot(-0.6);  // splay right
+                sq2.y += sq2.z * sq2.z * 0.2; // bend outwards
+                float l2 = 0.95;
+                float dSp2 = length(vec3(sq2.x, sq2.y, sq2.z - clamp(sq2.z, 0.0, l2))) - mix(0.025, 0.001, pow(clamp(sq2.z/l2, 0.0, 1.0), 1.5));
+
+                // Spike 3: Canted Left (Points forward, down, left)
+                vec3 sq3 = sq;
+                sq3.yz *= rot(-0.35); // tilt down
+                sq3.xz *= rot(0.6);   // splay left
+                sq3.y += sq3.z * sq3.z * 0.2; // bend outwards
+                float l3 = 0.95;
+                float dSp3 = length(vec3(sq3.x, sq3.y, sq3.z - clamp(sq3.z, 0.0, l3))) - mix(0.025, 0.001, pow(clamp(sq3.z/l3, 0.0, 1.0), 1.5));
+                
+                // Combine Spikes
+                float dSpikes = min(dSp1, min(dSp2, dSp3));
+                vec2 spikes = vec2(dSpikes, 2.0); // Material 2 = White Bone
+                
+                // Organic biological blending using smin
+                return smin2(body, spikes, 0.12);
+            }
+
+            // Add high-frequency skin bump detail only during normal calculation
+            float mapBump(vec3 p) {
+                vec2 res = map(p);
+                if (res.y < 1.5) { // Flesh
+                    // Ultra-smooth, micro-pore scale noise for realistic lighting breakdown
+                    float b = fbm(p * 25.0) * 0.001 + fbm(p * 60.0) * 0.0003;
+                    return res.x - b;
+                } else { // Bone/Spikes
+                    // Subtle striations
+                    vec3 q = getLocal(p);
+                    float b = sin(q.z * 40.0) * 0.002;
+                    return res.x - b;
+                }
+            }
+
+            vec3 calcNormal(vec3 p) {
+                const vec2 k = vec2(1.0, -1.0);
+                const float h = 0.001;
+                return normalize(k.xyy * mapBump(p + k.xyy * h) +
+                                 k.yyx * mapBump(p + k.yyx * h) +
+                                 k.yxy * mapBump(p + k.yxy * h) +
+                                 k.xxx * mapBump(p + k.xxx * h));
+            }
+
+            // Soft ambient occlusion
+            float calcAO(vec3 pos, vec3 nor) {
+                float occ = 0.0;
+                float sca = 1.0;
+                for(int i = 0; i < 5; i++) {
+                    float h = 0.01 + 0.12 * float(i) / 4.0;
+                    float d = map(pos + h * nor).x;
+                    occ += (h - d) * sca;
+                    sca *= 0.95;
+                    if(occ > 0.35) break;
+                }
+                return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
+            }
+
             void main() {
-                vec3 normal = normalize(vNormal);
-                vec3 viewDir = normalize(vViewPosition);
-
-                // 1. Fresnel rim highlight
-                float fresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 3.0);
-
-                // 2. Scrolling plasma core pulses
-                float speed = 16.0 + uVibration * 24.0;
-                float pulse = sin(uLengthPct * 12.0 - uTime * speed) * 0.5 + 0.5;
-                pulse = pow(pulse, 4.0) * (1.6 + uVibration * 1.5);
-
-                // 3. Cybernetic scanline overlays
-                float scanline = sin(vViewPosition.y * 120.0 + uTime * 4.0) * 0.12 + 0.88;
-
-                // 4. Hexagonal coordinate glow
-                float grid = sin(vUv.x * 20.0) * sin(vUv.y * 20.0);
-                float gridPulse = step(0.9, grid) * 0.35;
-
-                vec3 baseColor = vec3(0.05, 0.07, 0.10) * scanline;
-                vec3 glowColor = uActiveColor * (fresnel * 1.8 + pulse + gridPulse + uEmissionPulse * 6.5);
-                vec3 fleshColor = vec3(0.20, 0.02, 0.04) * (1.0 - uLengthPct) * 0.5;
-
-                gl_FragColor = vec4(baseColor + glowColor + fleshColor, 1.0);
+                vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+                
+                // Camera setup
+                vec3 ro = vec3(0.0, sin(iTime * 1.5) * 0.02, 0.0); // slight breathing bob
+                vec3 rd = normalize(vec3(uv, 1.0)); // 90 degree FOV
+                
+                // Raymarching Loop
+                float t = 0.0;
+                vec2 res = vec2(0.0);
+                for(int i = 0; i < 150; i++) {
+                    vec3 p = ro + rd * t;
+                    res = map(p);
+                    if(res.x < 0.001 || t > 15.0) break;
+                    
+                    // Reduce step size drastically during attack to prevent stepping through warped geometry
+                    float stepMult = iAttackTime > 0.0 && iAttackTime < 1.5 ? 0.25 : 0.65;
+                    t += res.x * stepMult; 
+                }
+                
+                vec3 col = vec3(0.0);
+                
+                if(t < 15.0) {
+                    // Surface Hit
+                    vec3 p = ro + rd * t;
+                    vec3 n = calcNormal(p);
+                    vec3 v = normalize(ro - p);
+                    
+                    // --- Shader Profiling / Lighting ---
+                    vec3 lightDir = normalize(vec3(0.8, 0.9, -0.3));
+                    vec3 rimLightDir = normalize(vec3(-0.6, -0.3, 0.7));
+                    
+                    float dif = max(dot(n, lightDir), 0.0);
+                    float rimDif = max(dot(n, rimLightDir), 0.0);
+                    
+                    vec3 h = normalize(lightDir + v);
+                    
+                    // Variable roughness/wetness for realistic skin
+                    float wetness = fbm(p * 8.0) * 0.5 + 0.5;
+                    float specExponent = mix(80.0, 400.0, wetness);
+                    float spec = pow(max(dot(n, h), 0.0), specExponent) * (1.0 + wetness * 1.5); // Sharp, varied wet specular highlight
+                    
+                    float fresnel = pow(1.0 - max(dot(n, v), 0.0), 4.0);
+                    
+                    // Fake Subsurface Scattering (Wrap lighting)
+                    float sss = max(0.0, (dot(n, lightDir) + 0.5) / 1.5);
+                    sss = pow(sss, 2.0) * 0.4;
+                    
+                    float ao = calcAO(p, n);
+                    
+                    // --- Materials ---
+                    vec3 qLocal = getLocal(p);
+                    float zPos = clamp(qLocal.z, 0.0, 6.5);
+                    float matBlend = clamp(res.y - 1.0, 0.0, 1.0); // 0 = flesh, 1 = spike
+                    
+                    // Base Flesh (Deep, intimidating oceanic dark blues)
+                    vec3 skinBase = mix(vec3(0.01, 0.02, 0.06), vec3(0.02, 0.06, 0.12), fbm(p * 4.0));
+                    
+                    // Faint, slick mottling
+                    float mottle = fbm(p * 15.0 - iTime * 0.1);
+                    skinBase = mix(skinBase, vec3(0.05, 0.1, 0.2), smoothstep(0.6, 0.9, mottle) * 0.5); 
+                    
+                    // Spikes (Stained bone white/yellow)
+                    vec3 spikeBase = vec3(0.85, 0.8, 0.75);
+                    spikeBase *= 0.7 + 0.3 * sin(qLocal.z * 25.0); // texture
+                    spikeBase = mix(spikeBase, vec3(0.1, 0.05, 0.05), smoothstep(0.8, 1.0, fbm(p * 10.0))); // Grime
+                    
+                    vec3 albedo = mix(skinBase, spikeBase, matBlend);
+                    
+                    // Apply lighting
+                    vec3 diffuseLight = dif * vec3(1.0, 0.95, 0.9) + rimDif * vec3(0.2, 0.4, 0.6) * 0.6;
+                    col = albedo * diffuseLight;
+                    
+                    // SSS injected in shadow terminator
+                    vec3 sssColor = mix(vec3(0.0, 0.2, 0.5), vec3(0.3, 0.1, 0.0), matBlend); // Bio-cyan undertones
+                    col += sssColor * sss * (1.0 - matBlend);
+                    
+                    // Add Wet Specularity and Fresnel Rim
+                    col += spec * mix(vec3(0.8, 0.9, 1.0), vec3(1.0), wetness);
+                    col += fresnel * mix(vec3(0.2, 0.5, 0.9), vec3(0.8, 0.8, 0.8), matBlend) * 0.9;
+                    
+                    // Fake Environment Reflection
+                    float fakeEnv = smoothstep(0.4, 1.0, reflect(-v, n).y);
+                    col += fakeEnv * vec3(0.02, 0.08, 0.15) * fresnel * wetness;
+                    
+                    col *= ao;
+                    
+                    // --- Emissive Pulsing Light ---
+                    float pPhase = zPos * 2.5 - iTime * 4.0;
+                    float pulseVal = sin(pPhase);
+                    float bioGlow = pow(smoothstep(0.8, 1.0, pulseVal), 2.0); // Sharper, more aggressive pulse
+                    
+                    // Mask glow - less ribbed, more of a sweeping organic pulse
+                    float pulseMask = sin(zPos * 4.0 - iTime * 0.5) * 0.5 + 0.5; 
+                    bioGlow *= mix(0.3, 1.0, pulseMask);
+                    
+                    // Break up glow with noise for realism - like glowing veins beneath smooth skin
+                    float veinGlow = fbm(p * 18.0 - iTime * 1.5);
+                    bioGlow *= smoothstep(0.4, 0.8, veinGlow) * 2.5;
+                    
+                    // Attack color override
+                    float att = iAttackTime;
+                    float attackGlowPhase = smoothstep(0.0, 0.1, att) * (1.0 - smoothstep(1.0, 1.5, att));
+                    
+                    vec3 glowColBase = vec3(0.0, 0.6, 1.0); // Toxic cyan/blue
+                    vec3 glowColAttack = vec3(1.0, 0.1, 0.0); // Devastating mechanical red
+                    vec3 glowCol = mix(glowColBase, glowColAttack, attackGlowPhase) * bioGlow * 4.0;
+                    
+                    // Amp up the glow drastically during strike to simulate overdrive
+                    glowCol += glowColAttack * 2.0 * attackGlowPhase * pow(sin(att * 50.0) * 0.5 + 0.5, 4.0);
+                    
+                    col += glowCol * ao * (1.0 - matBlend); // Emit only from flesh, shaded by AO
+                    
+                    gl_FragColor = vec4(col, 1.0);
+                } else {
+                    // Discard background to allow full transparency over the game world
+                    discard;
+                }
             }
         `;
 
-        for (let i = 0; i < this.segmentCount; i++) {
-            const pct = i / (this.segmentCount - 1);
-            const rad = 0.055 * (1.0 - pct * 0.82);
-
-            const segMat = new THREE.ShaderMaterial({
-                uniforms: {
-                    uTime: { value: 0.0 },
-                    uLengthPct: { value: pct },
-                    uActiveColor: { value: new THREE.Color(0x00f3ff) },
-                    uEmissionPulse: { value: 0.0 },
-                    uVibration: { value: 0.0 }
-                },
-                vertexShader,
-                fragmentShader
-            });
-            this.shaderMaterials.push(segMat);
-
-            // Joint Sphere
-            const sphereMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(rad, 8, 8),
-                segMat
-            );
-            this.add(sphereMesh);
-            this.joints.push(sphereMesh);
-
-            // Connecting cylinder
-            if (i < this.segmentCount - 1) {
-                const nextPct = (i + 1) / (this.segmentCount - 1);
-                const nextRad = 0.055 * (1.0 - nextPct * 0.82);
-
-                const taperCylGeom = new THREE.CylinderGeometry(nextRad, rad, 1.0, 8, 1);
-                taperCylGeom.translate(0, 0.5, 0);
-
-                const connMesh = new THREE.Mesh(taperCylGeom, segMat);
-                this.add(connMesh);
-                this.connectors.push(connMesh);
-            }
-
-            // Suction Cups
-            if (i > 1 && i < this.segmentCount - 2 && i % 2 === 0) {
-                const ringMesh = new THREE.Mesh(
-                    new THREE.TorusGeometry(rad * 1.15, rad * 0.22, 4, 10),
-                    new THREE.MeshStandardMaterial({
-                        color: 0x00aaff,
-                        emissive: 0x00f3ff,
-                        emissiveIntensity: 2.5
-                    })
-                );
-                ringMesh.rotation.x = Math.PI / 2;
-                sphereMesh.add(ringMesh);
-            }
-        }
-
-        // 3-Jaw Claw tip
-        const tipJoint = this.joints[this.segmentCount - 1];
-        this.clawPivots = [];
-        this.clawParts = [];
-
-        const clawGeom = new THREE.ConeGeometry(0.012, 0.08, 4);
-        clawGeom.translate(0, 0.04, 0);
-        clawGeom.rotateX(Math.PI / 3.5);
-
-        const clawMat = new THREE.MeshStandardMaterial({
-            color: 0x00aaff,
-            emissive: 0x00f3ff,
-            emissiveIntensity: 3.5,
-            roughness: 0.10,
-            metalness: 0.90
+        // Viewport-covering screen quad material
+        const material = new THREE.ShaderMaterial({
+            uniforms: this.uniforms,
+            vertexShader: vsSource,
+            fragmentShader: fsSource,
+            transparent: true,
+            depthWrite: false,
+            depthTest: false
         });
 
-        for (let c = 0; c < 3; c++) {
-            const pivot = new THREE.Group();
-            pivot.position.set(0, 0, 0.01);
-            pivot.rotation.z = (c * Math.PI * 2) / 3;
-            
-            const mesh = new THREE.Mesh(clawGeom, clawMat);
-            pivot.add(mesh);
-            
-            tipJoint.add(pivot);
-            this.clawPivots.push(pivot);
-            this.clawParts.push(mesh);
-        }
+        // Geometry spanning clip space coords
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const screenQuad = new THREE.Mesh(geometry, material);
+        this.add(screenQuad);
 
-        // Center needle stinger
-        const stingerGeom = new THREE.ConeGeometry(0.008, 0.15, 8);
-        stingerGeom.translate(0, 0.075, 0);
-        stingerGeom.rotateX(Math.PI / 2);
-        this.stinger = new THREE.Mesh(
-            stingerGeom,
-            new THREE.MeshStandardMaterial({
-                color: 0x00ffff,
-                emissive: 0x00d2ff,
-                emissiveIntensity: 4.0
-            })
-        );
-        tipJoint.add(this.stinger);
+        // Bind interactive mousemove tracking
+        this.mouseMoveHandler = (e) => {
+            this.uniforms.iMouse.value.set(e.clientX, window.innerHeight - e.clientY);
+        };
+        window.addEventListener('mousemove', this.mouseMoveHandler);
     }
 
-    /**
-     * Trigger a whip strike (alternates Snap and Sweep)
-     */
     fire() {
-        this.whipActive = true;
-        this.whipTimer = 0;
-        this.whipComboType = (this.whipComboType === 0) ? 1 : 0;
+        this.attackStartTime = this.idleTime;
+        this.playProceduralWetSound();
+    }
 
-        if (window.AudioSynth) {
-            if (this.whipComboType === 0) {
-                window.AudioSynth.playClick(150, 0.08);
-                window.AudioSynth.playClick(600, 0.03);
-            } else {
-                window.AudioSynth.playClick(100, 0.12);
-                window.AudioSynth.playClick(400, 0.05);
+    playProceduralWetSound() {
+        try {
+            if (!window.audioCtx) {
+                window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
-        }
-    }
+            const ctx = window.audioCtx;
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
 
-    /**
-     * Trigger a symbiotic defensive swat at a target close to the player
-     */
-    fireAutoSwat(worldTarget) {
-        this.autoSwatActive = true;
-        this.autoSwatTimer = 0.0;
-        
-        // Project target coordinate into local system
-        const localTarget = worldTarget.clone();
-        this.worldToLocal(localTarget);
-        
-        // Clamp reach radius
-        if (localTarget.length() > 4.5) {
-            localTarget.normalize().multiplyScalar(4.5);
-        }
-        this.localSwatTarget.copy(localTarget);
-
-        if (window.AudioSynth) {
-            window.AudioSynth.playClick(280, 0.05);
-            window.AudioSynth.playClick(500, 0.03);
-        }
-    }
-
-    /**
-     * Main simulation tick update
-     */
-    update(uTime, delta, isFiring, isADS, mouseVelX, mouseVelY, grabbedZombieWorldPos = null) {
-        const dt = Math.min(0.05, delta);
-
-        // Update shader uniforms
-        this.shaderMaterials.forEach(mat => {
-            mat.uniforms.uTime.value = uTime;
-            // Decay emission pulses
-            mat.uniforms.uEmissionPulse.value = Math.max(0.0, mat.uniforms.uEmissionPulse.value - dt * 2.2);
+            const t = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(320, t);
+            osc.frequency.exponentialRampToValueAtTime(50, t + 0.32);
             
-            let vib = 0.0;
-            if (this.whipActive) vib = 1.0;
-            else if (this.autoSwatActive) vib = 0.8;
-            else if (this.isCharging) vib = 0.5 + this.chargeProgress * 1.5;
-            else if (grabbedZombieWorldPos) vib = 0.4;
-            mat.uniforms.uVibration.value = vib;
-        });
+            const mod = ctx.createOscillator();
+            mod.type = 'sawtooth';
+            mod.frequency.setValueAtTime(120, t);
+            
+            const modGain = ctx.createGain();
+            modGain.gain.setValueAtTime(90, t);
 
-        // Mouse look inertia forces
-        const swayForceX = -mouseVelX * 0.09;
-        const swayForceY = mouseVelY * 0.09;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.25, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
 
-        // Base idle positions in local space
-        const idleP1 = new THREE.Vector3(0.25, -0.15 + Math.sin(uTime * 3.5) * 0.04, -1.2 + Math.cos(uTime * 2.8) * 0.03);
-        const idleP2 = new THREE.Vector3(
-            0.2 + Math.sin(uTime * 2.0) * 0.12, 
-            0.1 + Math.cos(uTime * 1.5) * 0.12, 
-            -2.0 + Math.sin(uTime * 3.2) * 0.06
-        );
+            mod.connect(modGain);
+            modGain.connect(osc.frequency);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
 
-        // Multi-Animation State Machine
-        if (this.whipActive) {
-            // WHIPPING STATE
-            this.whipTimer += dt;
-            const progress = this.whipTimer / this.whipDuration;
+            mod.start();
+            osc.start();
+            mod.stop(t + 0.38);
+            osc.stop(t + 0.38);
+        } catch (e) {
+            // Audio context not allowed or initialized yet
+        }
+    }
 
-            if (progress >= 1.0) {
-                this.whipActive = false;
-                this.whipTimer = 0;
-            } else {
-                let strikeAmt = 0;
-                if (progress < 0.22) {
-                    strikeAmt = Math.sin((progress / 0.22) * Math.PI / 2);
-                } else {
-                    strikeAmt = 1.0 - (progress - 0.22) / 0.78;
-                }
+    update(uTime, delta, isFiring, isADS, mouseVelX, mouseVelY, grabbedZombieWorldPos) {
+        this.idleTime = uTime;
+        this.uniforms.iTime.value = uTime;
+        this.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
 
-                // White-hot plasma flash
-                this.shaderMaterials.forEach(mat => {
-                    mat.uniforms.uEmissionPulse.value = strikeAmt * 1.6;
-                });
-
-                if (this.whipComboType === 0) {
-                    // Forward Snap
-                    const targetP2 = new THREE.Vector3(0.0, 0.1, -7.5);
-                    const targetP1 = new THREE.Vector3(0.12, 0.0, -3.75);
-                    const jitter = Math.sin(progress * Math.PI * 12) * 0.5;
-
-                    this.p2.lerpVectors(idleP2, targetP2, strikeAmt);
-                    this.p2.x += jitter;
-                    this.p2.y += Math.cos(progress * Math.PI * 8) * 0.25;
-
-                    this.p1.lerpVectors(idleP1, targetP1, strikeAmt);
-                    this.p1.y += jitter * 0.5;
-                } else {
-                    // Horizontal Sweep
-                    const sweepX = Math.sin((progress - 0.5) * Math.PI) * 4.2;
-                    const targetP2 = new THREE.Vector3(sweepX, 0.0, -5.5);
-                    const targetP1 = new THREE.Vector3(sweepX * 0.5, -0.1, -2.75);
-
-                    this.p2.lerpVectors(idleP2, targetP2, strikeAmt);
-                    this.p1.lerpVectors(idleP1, targetP1, strikeAmt);
-                }
-
-                this.clawOpenAngle = -0.1; // Snap shut talons
-
-                this.v1.set(0, 0, 0);
-                this.v2.set(0, 0, 0);
-            }
-        } else if (this.autoSwatActive) {
-            // PASSIVE DEFENISVE AUTO-SWAT
-            this.autoSwatTimer += dt;
-            const progress = this.autoSwatTimer / this.autoSwatDuration;
-
-            if (progress >= 1.0) {
-                this.autoSwatActive = false;
-                this.autoSwatTimer = 0.0;
-            } else {
-                // Quick thrust to target and return
-                const strikeAmt = Math.sin(progress * Math.PI);
-                this.p2.lerpVectors(idleP2, this.localSwatTarget, strikeAmt);
-                this.p1.lerpVectors(idleP1, new THREE.Vector3().addVectors(this.p0, this.localSwatTarget).multiplyScalar(0.5), strikeAmt);
-                
-                this.clawOpenAngle = -0.15; // Clench shut claws on strike
-                
-                this.shaderMaterials.forEach(mat => {
-                    mat.uniforms.uEmissionPulse.value = strikeAmt * 1.2;
-                });
-            }
-            this.v1.set(0, 0, 0);
-            this.v2.set(0, 0, 0);
-        } else if (this.isCharging && grabbedZombieWorldPos) {
-            // CHARGING OVERLOAD STATE
-            const localZombie = grabbedZombieWorldPos.clone();
-            this.worldToLocal(localZombie);
-
-            if (localZombie.length() > 8.0) {
-                localZombie.normalize().multiplyScalar(8.0);
-            }
-
-            this.p2.copy(localZombie);
-
-            // Extreme vibration ripple based on charge progress
-            const chargeVib = 0.07 * this.chargeProgress * Math.sin(uTime * 64.0);
-            this.p2.x += chargeVib;
-            this.p2.y += chargeVib;
-
-            const targetP1 = new THREE.Vector3().addVectors(this.p0, this.p2).multiplyScalar(0.5);
-            targetP1.y += 0.25 + chargeVib * 0.5;
-            this.p1.lerp(targetP1, 15 * dt);
-
-            // Jaws form a wide open charging turbine shape
-            this.clawOpenAngle = 0.45;
-
-            // Pulse shader emission intensity to maximum
-            this.shaderMaterials.forEach(mat => {
-                mat.uniforms.uEmissionPulse.value = this.chargeProgress * 2.8;
-            });
-
-            this.v1.set(0, 0, 0);
-            this.v2.set(0, 0, 0);
-        } else if (grabbedZombieWorldPos) {
-            // GRABBED / CONSTRICTION STATE
-            const localZombie = grabbedZombieWorldPos.clone();
-            this.worldToLocal(localZombie);
-
-            if (localZombie.length() > 8.0) {
-                localZombie.normalize().multiplyScalar(8.0);
-            }
-
-            this.p2.copy(localZombie);
-
-            const vibAmt = 0.025 * Math.sin(uTime * 32.0);
-            this.p2.x += vibAmt;
-            this.p2.y += vibAmt;
-
-            const targetP1 = new THREE.Vector3().addVectors(this.p0, this.p2).multiplyScalar(0.5);
-            targetP1.y += 0.25;
-            this.p1.lerp(targetP1, 12 * dt);
-
-            this.clawOpenAngle = -0.05;
-
-            this.v1.set(0, 0, 0);
-            this.v2.set(0, 0, 0);
-        } else if (isADS) {
-            // Aim/Reach grab scanner state
-            const targetP2 = new THREE.Vector3(0.08, -0.05, -4.5);
-            const targetP1 = new THREE.Vector3(0.15, -0.1, -2.25);
-
-            const f1 = new THREE.Vector3().subVectors(targetP1, this.p1).multiplyScalar(22);
-            const f2 = new THREE.Vector3().subVectors(targetP2, this.p2).multiplyScalar(22);
-
-            this.v1.addScaledVector(f1, dt);
-            this.v2.addScaledVector(f2, dt);
-
-            this.v1.multiplyScalar(Math.max(0, 1 - 7 * dt));
-            this.v2.multiplyScalar(Math.max(0, 1 - 7 * dt));
-
-            this.p1.addScaledVector(this.v1, dt);
-            this.p2.addScaledVector(this.v2, dt);
-
-            this.clawOpenAngle = 0.65;
-        } else {
-            // IDLE SCANNING / Passive twitchy state
-            const scanTwitchX = Math.sin(uTime * 1.5) * Math.cos(uTime * 4.0) > 0.65 ? Math.sin(uTime * 12.0) * 0.15 : 0.0;
-            const scanTwitchY = Math.cos(uTime * 2.0) * Math.sin(uTime * 3.5) > 0.65 ? Math.cos(uTime * 10.0) * 0.10 : 0.0;
-
-            const targetP1 = idleP1.clone();
-            targetP1.x += scanTwitchX * 0.5;
-            targetP1.y += scanTwitchY * 0.5;
-
-            const targetP2 = idleP2.clone();
-            targetP2.x += scanTwitchX;
-            targetP2.y += scanTwitchY;
-
-            const kSpring = 24.0;
-            const kDamping = 5.5;
-
-            const f1 = new THREE.Vector3().subVectors(targetP1, this.p1).multiplyScalar(kSpring);
-            const f2 = new THREE.Vector3().subVectors(targetP2, this.p2).multiplyScalar(kSpring * 0.78);
-
-            f1.x += swayForceX * 10;
-            f1.y += swayForceY * 10;
-
-            f2.x += swayForceX * 22;
-            f2.y += swayForceY * 22;
-
-            this.v1.addScaledVector(f1, dt);
-            this.v2.addScaledVector(f2, dt);
-
-            this.v1.multiplyScalar(Math.max(0, 1 - kDamping * dt));
-            this.v2.multiplyScalar(Math.max(0, 1 - kDamping * dt));
-
-            this.p1.addScaledVector(this.v1, dt);
-            this.p2.addScaledVector(this.v2, dt);
-
-            this.clawOpenAngle = 0.25;
+        // Trigger attack on firing input
+        if (isFiring && (uTime - this.attackStartTime > 2.0 || this.attackStartTime === -999.0)) {
+            this.attackStartTime = uTime;
         }
 
-        // 1. Position joints along Bezier Spline
-        for (let i = 0; i < this.segmentCount; i++) {
-            const pct = i / (this.segmentCount - 1);
-            const t1 = 1.0 - pct;
+        this.uniforms.iAttackTime.value = uTime - this.attackStartTime;
+    }
 
-            const pos = new THREE.Vector3()
-                .copy(this.p0)
-                .multiplyScalar(t1 * t1)
-                .addScaledVector(this.p1, 2.0 * t1 * pct)
-                .addScaledVector(this.p2, pct * pct);
-
-            this.joints[i].position.copy(pos);
-        }
-
-        // 2. Orient and stretch connectors between joints
-        for (let i = 0; i < this.segmentCount - 1; i++) {
-            const pCurrent = this.joints[i].position;
-            const pNext = this.joints[i + 1].position;
-
-            const dir = new THREE.Vector3().subVectors(pNext, pCurrent);
-            const len = dir.length();
-
-            if (len > 0.0001) {
-                dir.normalize();
-                this.connectors[i].position.copy(pCurrent);
-
-                const alignAxis = new THREE.Vector3(0, 1, 0);
-                const quaternion = new THREE.Quaternion().setFromUnitVectors(alignAxis, dir);
-                this.connectors[i].quaternion.copy(quaternion);
-                this.connectors[i].scale.set(1.0, len, 1.0);
-            }
-        }
-
-        // 3. Update Claw Pivot rotations
-        this.clawPivots.forEach((pivot, c) => {
-            // In charging state: Spin claw pivots rapidly around Z axis like an energy turbine!
-            if (this.isCharging && grabbedZombieWorldPos) {
-                pivot.rotation.z = (c * Math.PI * 2) / 3 + uTime * 35.0 * this.chargeProgress;
-            } else {
-                // Restore default Z angle spacing
-                pivot.rotation.z = (c * Math.PI * 2) / 3;
-            }
-            pivot.rotation.x = this.clawOpenAngle;
-        });
-
-        // 4. Align tip block to face direction of travel
-        const pLast = this.joints[this.segmentCount - 1].position;
-        const pPrev = this.joints[this.segmentCount - 2].position;
-        const stingerDir = new THREE.Vector3().subVectors(pLast, pPrev);
-        
-        if (stingerDir.lengthSq() > 0.0001) {
-            stingerDir.normalize();
-            const alignAxis = new THREE.Vector3(0, 1, 0);
-            const quaternion = new THREE.Quaternion().setFromUnitVectors(alignAxis, stingerDir);
-            this.joints[this.segmentCount - 1].quaternion.copy(quaternion);
-        }
+    // Clean up event listener when weapon is destroyed / switched out
+    destroy() {
+        window.removeEventListener('mousemove', this.mouseMoveHandler);
     }
 }
+
+// Global hook registration
+window.WhipTentacle = WhipTentacle;

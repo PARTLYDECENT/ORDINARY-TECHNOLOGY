@@ -1,8 +1,6 @@
 /**
- * ASYNCHRONOUS MAZE MAP MANAGER: The Backrooms (Hyper-Realistic Edition)
- * Procedural yellow-ochre fluorescent office corridors, metallic ceiling pipes,
- * real-time shadow-casting point lights, random light flickers, ambient dust motes,
- * realistic ballast hum and heartbeat synths, and a slimy flesh-textured Stalker entity.
+ * ASYNCHRONOUS MAZE MAP MANAGER: Raymarched Backrooms (Hyper-Realistic Non-Euclidean SDF Raymarching)
+ * Rendered behind all 3D weapons, HUD, hands, and the 3D Stalker using screen-space quad.
  */
 
 // Creepy slimy flesh textured Stalker anomaly
@@ -53,6 +51,22 @@ class Stalker {
         this.torso.receiveShadow = true;
         this.group.add(this.torso);
 
+        // Holographic cyber-glitch wireframe overlay on torso
+        const wireMat = new THREE.MeshBasicMaterial({
+            color: 0x00f3ff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.45
+        });
+        this.torsoWire = new THREE.Mesh(torsoGeo, wireMat);
+        this.group.add(this.torsoWire);
+
+        // Glowing red organic core inside chest
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+        this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), coreMat);
+        this.heart.position.set(0, 0.1, 0.05);
+        this.group.add(this.heart);
+
         // Head
         const headGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
         this.head = new THREE.Mesh(headGeo, torsoMat);
@@ -60,17 +74,17 @@ class Stalker {
         this.head.castShadow = true;
         this.group.add(this.head);
 
-        // Glowing white pinprick eyes
+        // Glowing red pinprick eyes
         const eyeGeo = new THREE.SphereGeometry(0.035, 8, 8);
-        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-        leftEye.position.set(-0.065, 0.45, 0.105);
-        this.group.add(leftEye);
+        this.leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        this.leftEye.position.set(-0.065, 0.45, 0.105);
+        this.group.add(this.leftEye);
 
-        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-        rightEye.position.set(0.065, 0.45, 0.105);
-        this.group.add(rightEye);
+        this.rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        this.rightEye.position.set(0.065, 0.45, 0.105);
+        this.group.add(this.rightEye);
 
         // Spindly, insectoid limbs (4 limbs)
         this.limbs = [];
@@ -126,44 +140,87 @@ class Stalker {
         this.torso.position.y = Math.sin(time * 16.0) * 0.03;
         this.head.rotation.y = Math.sin(time * 25.0) * 0.1 + (Math.random() - 0.5) * 0.08;
         this.head.rotation.x = Math.cos(time * 18.0) * 0.05 + (Math.random() - 0.5) * 0.05;
+
+        // Animate bioluminescent heart and cyber overlay
+        if (this.heart) {
+            this.heart.material.color.setRGB(1.0, 0.1 + Math.sin(time * 6.0) * 0.08, 0.0);
+            this.heart.scale.setScalar(1.0 + Math.sin(time * 6.0) * 0.15);
+        }
+        if (this.leftEye && this.rightEye) {
+            const eyeGlow = 1.0 + Math.sin(time * 10.0) * 0.35;
+            this.leftEye.scale.setScalar(eyeGlow);
+            this.rightEye.scale.setScalar(eyeGlow);
+        }
+        if (this.torsoWire) {
+            this.torsoWire.material.opacity = 0.2 + Math.sin(time * 7.5) * 0.18;
+            this.torsoWire.rotation.y = Math.sin(time * 1.5) * 0.08;
+        }
     }
 }
 
 const AsynchronousMazeMapManager = (function () {
 
+    // --- MATH & NOISE ---
+    function hash21(x, z) {
+        let dot = x * 12.9898 + z * 78.233;
+        let p = dot - Math.floor(dot);
+        p += (x * 12.9898 + z * 78.233 + 34.56);
+        let val = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+        return val - Math.floor(val);
+    }
+
+    function sdBox(px, pz, bx, bz) {
+        let dx = Math.abs(px) - bx;
+        let dz = Math.abs(pz) - bz;
+        return Math.sqrt(Math.max(dx, 0)**2 + Math.max(dz, 0)**2) + Math.min(Math.max(dx, dz), 0);
+    }
+
+    function checkCollision(x, z) {
+        const spacing = 6.0;
+        let idX = Math.floor((x + spacing*0.5) / spacing);
+        let idZ = Math.floor((z + spacing*0.5) / spacing);
+        let qx = ((x + spacing*0.5) % spacing + spacing) % spacing - spacing*0.5;
+        let qz = ((z + spacing*0.5) % spacing + spacing) % spacing - spacing*0.5;
+
+        let h = hash21(idX, idZ);
+        let d = 1000.0;
+        if (h < 0.25) {
+            d = sdBox(qx, qz, 1.6, 1.6); 
+        } else if (h < 0.6) {
+            let h2 = hash21(idX + 0.5, idZ);
+            if (h2 > 0.5) d = sdBox(qx, qz, 3.2, 0.6); 
+            else d = sdBox(qx, qz, 0.6, 3.2); 
+        }
+        return d > 0.2; 
+    }
+
     class AsynchronousMazeMapManager {
         constructor(scene, config) {
             this.scene = scene;
             this.config = config;
-            this.chunks = new Map();
-            this.chunkSize = 128; // 32 cells * 4 cellSize
-            this.activeChunks = new Set();
-            this.viewRadius = 1;
+            this.cellSize = 6.0;
 
-            // Geometries
-            this.wallGeometry = new THREE.BoxGeometry(4.0, 4.0, 4.0);
-            this.floorGeometry = new THREE.PlaneGeometry(4.0, 4.0);
-            this.ceilingGeometry = new THREE.PlaneGeometry(4.0, 4.0);
+            window.ASYNCHRONOUS_MAZE_MODE = true;
 
-            this._initTextures();
-            this._initMaterials();
-            this._initDustMotes();
-
-            // Dynamic lights pool
-            this.activeLights = new Map();
-            this.flickerTimer = 0.0;
-            this.flickeringLightKey = null;
-            this.flickerEnd = 0.0;
-
-            // Audio System
+            // Audio Setup
             this.audioCtx = null;
             this.lastHeartbeat = 0;
             this.heartbeatInterval = 1.0;
-
-            // Sanity Level
             this.sanity = 100.0;
 
-            // Spawner/Entity tracking
+            this._initAudio();
+            const resumeAudio = () => {
+                if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+            };
+            window.addEventListener('click', resumeAudio, { once: true });
+            window.addEventListener('keydown', resumeAudio, { once: true });
+
+            // Initialize Background Raymarched Quad
+            this._initShaderQuad();
+
+            // Spawner/Entity tracking (chases player in 3D through Backrooms)
             this.stalker = new Stalker();
             this.scene.add(this.stalker.group);
             this.stalker.position = new THREE.Vector3(34.0, 0, 34.0);
@@ -178,545 +235,474 @@ const AsynchronousMazeMapManager = (function () {
                 this.stalker.stunTimer = 3.0; // Stun for 3s
                 this.triggerStalkerClick(); // clicking screech feedback
 
-                // Dark/black goo splatters
-                for (let i = 0; i < 15; i++) {
-                    emitParticle(
-                        this.stalker.position.x, 0.8, this.stalker.position.z,
-                        (Math.random() - 0.5) * 6, Math.random() * 4, (Math.random() - 0.5) * 6,
-                        0.05, 0.05, 0.05,
-                        2.5 + Math.random() * 2, 0.4
-                    );
+                // Dark/black organic goo splatters
+                if (typeof emitParticle === 'function') {
+                    for (let i = 0; i < 15; i++) {
+                        emitParticle(
+                            this.stalker.position.x, 0.8, this.stalker.position.z,
+                            (Math.random() - 0.5) * 6, Math.random() * 4, (Math.random() - 0.5) * 6,
+                            0.05, 0.05, 0.05,
+                            2.5 + Math.random() * 2, 0.4
+                        );
+                    }
                 }
             };
 
             window.stalkerEntity = this.stalker;
-
-            window.ASYNCHRONOUS_MAZE_MODE = true;
         }
 
-        _initTextures() {
-            // Wallpaper texture
-            const wallCanvas = document.createElement('canvas');
-            wallCanvas.width = 512; wallCanvas.height = 512;
-            const wCtx = wallCanvas.getContext('2d');
-            wCtx.fillStyle = '#d4c594'; // Realistic wallpaper base
-            wCtx.fillRect(0, 0, 512, 512);
+        _initShaderQuad() {
+            const fsSource = `#version 300 es
+            precision highp float;
 
-            // Vertical stripes - subtle and realistic
-            wCtx.fillStyle = '#c5b685';
-            for (let x = 0; x < 512; x += 32) {
-                wCtx.fillRect(x, 0, 6, 512);
+            in vec2 vUV;
+            out vec4 fragColor;
+
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform vec3 u_cameraPos;
+            uniform vec3 u_cameraDir;
+            uniform vec3 u_cameraRight;
+            uniform vec3 u_cameraUp;
+
+            #define MAX_STEPS 180
+            #define MAX_DIST 60.0
+            #define SURF_DIST 0.003
+
+            // --- MATH & NOISE ---
+            float hash21(vec2 p) {
+                p = fract(p * vec2(12.9898, 78.233));
+                p += dot(p, p + 34.56);
+                return fract(p.x * p.y);
             }
 
-            // Plaster grunge
-            for (let i = 0; i < 40; i++) {
-                const x = Math.random() * 512;
-                const y = Math.random() * 512;
-                wCtx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-                wCtx.fillRect(x, y, 2 + Math.random() * 4, 2 + Math.random() * 4);
+            float noise(vec2 p) {
+                vec2 i = floor(p);
+                vec2 f = fract(p);
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(mix(hash21(i + vec2(0.0,0.0)), hash21(i + vec2(1.0,0.0)), u.x),
+                           mix(hash21(i + vec2(0.0,1.0)), hash21(i + vec2(1.0,1.0)), u.x), u.y);
             }
 
-            // Damp wall stains
-            for (let i = 0; i < 8; i++) {
-                const cx = Math.random() * 512; const cy = Math.random() * 512;
-                const r = 35 + Math.random() * 65;
-                const grad = wCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
-                grad.addColorStop(0, 'rgba(68, 62, 38, 0.45)');
-                grad.addColorStop(0.5, 'rgba(68, 62, 38, 0.15)');
-                grad.addColorStop(1, 'rgba(68, 62, 38, 0)');
-                wCtx.fillStyle = grad; wCtx.beginPath(); wCtx.arc(cx, cy, r, 0, Math.PI * 2); wCtx.fill();
+            float fbm(vec2 p) {
+                float v = 0.0;
+                float a = 0.5;
+                mat2 rot = mat2(0.866, -0.5, 0.5, 0.866);
+                for (int i = 0; i < 5; i++) {
+                    v += a * noise(p);
+                    p = rot * p * 2.0;
+                    a *= 0.5;
+                }
+                return v;
             }
 
-            this.wallTexture = new THREE.CanvasTexture(wallCanvas);
-            this.wallTexture.wrapS = THREE.RepeatWrapping;
-            this.wallTexture.wrapT = THREE.RepeatWrapping;
-
-            // Carpet diffuse map
-            const carpetCanvas = document.createElement('canvas');
-            carpetCanvas.width = 512; carpetCanvas.height = 512;
-            const cCtx = carpetCanvas.getContext('2d');
-            cCtx.fillStyle = '#a19965';
-            cCtx.fillRect(0, 0, 512, 512);
-            for (let i = 0; i < 8000; i++) {
-                const x = Math.random() * 512; const y = Math.random() * 512;
-                cCtx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-                cCtx.fillRect(x, y, 1, 2);
+            float sdBox(vec3 p, vec3 b) {
+                vec3 q = abs(p) - b;
+                return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
             }
 
-            // Carpet roughness map (white = dry/rough, black = wet/shiny)
-            const roughCanvas = document.createElement('canvas');
-            roughCanvas.width = 512; roughCanvas.height = 512;
-            const rCtx = roughCanvas.getContext('2d');
-            rCtx.fillStyle = '#f0f0f0'; // Default rough dry carpet
-            rCtx.fillRect(0, 0, 512, 512);
+            float smin(float a, float b, float k) {
+                float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+                return mix(b, a, h) - k * h * (1.0 - h);
+            }
 
-            // Draw damp reflection stains
-            const wetStains = [
-                { cx: 120, cy: 150, r: 80 },
-                { cx: 340, cy: 280, r: 120 },
-                { cx: 200, cy: 400, r: 90 },
-                { cx: 420, cy: 100, r: 70 }
-            ];
+            // --- ARCHITECTURE ---
+            vec2 map(vec3 p) {
+                // Structural Baselines
+                float floorDist = p.y + 1.2; 
+                
+                // Grid Setup
+                float spacing = 6.0;
+                vec2 id = floor((p.xz + spacing*0.5) / spacing);
+                vec3 q = p;
+                q.xz = mod(p.xz + spacing*0.5, spacing) - spacing*0.5;
 
-            wetStains.forEach(s => {
-                const cGrad = cCtx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, s.r);
-                cGrad.addColorStop(0, 'rgba(54, 49, 28, 0.65)');
-                cGrad.addColorStop(0.7, 'rgba(54, 49, 28, 0.2)');
-                cGrad.addColorStop(1, 'rgba(54, 49, 28, 0)');
-                cCtx.fillStyle = cGrad; cCtx.beginPath(); cCtx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2); cCtx.fill();
+                // CEILING LOGIC: The "Void" Panels
+                // Create a drop-ceiling grid
+                float ceilDist = 2.0 - p.y;
+                vec2 ceilId = floor(p.xz * 0.5); // Smaller grid for ceiling tiles
+                float tileHash = hash21(ceilId);
+                
+                // 5% chance for a ceiling tile to be completely missing, revealing the void
+                if (tileHash < 0.05) {
+                    // Create an upward shaft/hole
+                    vec2 localTile = fract(p.xz * 0.5) - 0.5;
+                    float holeDist = max(abs(localTile.x), abs(localTile.y)) - 0.45;
+                    
+                    // Extrude ceiling upwards if inside the hole
+                    if(holeDist < 0.0) {
+                        ceilDist = 10.0 - p.y; // Pitch black void above
+                    } else {
+                        // Edges of the broken tile
+                        ceilDist = min(ceilDist, (2.0 - p.y) + holeDist); 
+                    }
+                }
 
-                const rGrad = rCtx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, s.r);
-                rGrad.addColorStop(0, '#0a0a0a'); // Mirror shiny center
-                rGrad.addColorStop(0.7, '#999999');
-                rGrad.addColorStop(1, '#f0f0f0');
-                rCtx.fillStyle = rGrad; rCtx.beginPath(); rCtx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2); rCtx.fill();
+                // WALL/PILLAR LOGIC
+                float h = hash21(id);
+                float wallDist = MAX_DIST;
+                float mat = 0.0; // 0:None, 1:Wallpaper, 2:Carpet, 3:Ceiling, 4:Light, 5:Puddle
+
+                if (h < 0.25) {
+                    // Claustrophobic brutalist pillars
+                    wallDist = sdBox(q, vec3(1.4, 3.0, 1.4));
+                    wallDist -= 0.1; // Smooth
+                    mat = 1.0; 
+                } else if (h < 0.6) {
+                    // Directional walls
+                    float h2 = hash21(id + 0.5);
+                    if (h2 > 0.5) {
+                        wallDist = sdBox(q, vec3(3.0, 3.0, 0.4)); // Thick walls
+                    } else {
+                        wallDist = sdBox(q, vec3(0.4, 3.0, 3.0));
+                    }
+                    
+                    // Anomalous doorways
+                    if (hash21(id + 0.8) > 0.3) {
+                        float doorWidth = mix(0.8, 1.5, hash21(id+0.1)); // Random width doors
+                        float door = sdBox(q - vec3(0.0, -1.0, 0.0), vec3(doorWidth, 1.8, doorWidth));
+                        wallDist = max(wallDist, -door);
+                    }
+                    mat = 1.0;
+                }
+
+                // Fluorescent Lights
+                float lightDist = sdBox(q - vec3(0.0, 1.95, 0.0), vec3(0.8, 0.1, 0.4));
+                
+                // CSG Melt (Walls melt into floor like a disease)
+                float d = smin(floorDist, wallDist, 0.25); 
+                
+                d = min(d, ceilDist);
+                d = min(d, lightDist);
+
+                if (d == floorDist) mat = 2.0;       
+                else if (d == wallDist) mat = 1.0;   
+                else if (d == ceilDist) mat = 3.0;   
+                else if (d == lightDist) mat = 4.0;  
+
+                // Puddle Masking on Floor
+                if (mat == 2.0) {
+                    float puddleMask = smoothstep(0.4, 0.7, fbm(p.xz * 1.5));
+                    // Sink the puddle slightly into the floor
+                    if (puddleMask > 0.0 && p.y < -1.18) {
+                        mat = 5.0; // Puddle material
+                    }
+                }
+
+                if(abs(d - smin(floorDist, wallDist, 0.25)) < 0.001 && p.y < -0.5) mat = 1.0;
+
+                return vec2(d, mat);
+            }
+
+            vec2 rayMarch(vec3 ro, vec3 rd) {
+                float dO = 0.0;
+                float mat = 0.0;
+                for (int i = 0; i < MAX_STEPS; i++) {
+                    vec3 p = ro + rd * dO;
+                    
+                    // DEEP WARP: Domain curving. Space bends downwards slightly.
+                    p.y -= dot(p.xz - ro.xz, p.xz - ro.xz) * 0.0015; 
+
+                    vec2 dS = map(p);
+                    dO += dS.x * 0.75; // Slower march step to handle extreme warps safely
+                    mat = dS.y;
+                    
+                    if (dO > MAX_DIST || abs(dS.x) < SURF_DIST) break;
+                }
+                return vec2(dO, mat);
+            }
+
+            vec3 getNormal(vec3 p, float mat) {
+                vec2 e = vec2(0.005, 0.0);
+                vec3 n = normalize(vec3(
+                    map(p + e.xyy).x - map(p - e.xyy).x,
+                    map(p + e.yxy).x - map(p - e.yxy).x,
+                    map(p + e.yyx).x - map(p - e.yyx).x
+                ));
+
+                // Material-specific micro-displacement
+                if (mat == 2.0) { // Carpet
+                    n.x += fbm(p.xz * 30.0) * 0.2;
+                    n.z += fbm(p.xz * 30.0 + 12.34) * 0.2;
+                    n = normalize(n);
+                } else if (mat == 5.0) { // Puddles
+                    // Water is mostly flat, slight rippling from hum vibration
+                    n.x += sin(p.x * 50.0 + u_time * 2.0) * 0.005;
+                    n.z += cos(p.z * 50.0 + u_time * 2.0) * 0.005;
+                    n = normalize(n);
+                } else if (mat == 1.0) { // Wallpaper
+                    n.x += noise(p.xy * 15.0) * 0.03;
+                    n.z += noise(p.zy * 15.0) * 0.03;
+                    n = normalize(n);
+                } else if (mat == 3.0) { // Ceiling
+                    float pores = smoothstep(0.4, 0.6, noise(p.xz * 80.0));
+                    n.y -= pores * 0.15;
+                    n = normalize(n);
+                }
+                return n;
+            }
+
+            float calcSoftShadow(vec3 ro, vec3 rd, float mint, float maxt, float k) {
+                float res = 1.0;
+                float t = mint;
+                for(int i = 0; i < 32; i++) {
+                    float h = map(ro + rd * t).x;
+                    if(h < 0.001) return 0.0;
+                    res = min(res, k * h / t);
+                    t += clamp(h, 0.02, 0.25);
+                    if(t > maxt) break;
+                }
+                return clamp(res, 0.0, 1.0);
+            }
+
+            float calcAO(vec3 pos, vec3 nor) {
+                float occ = 0.0;
+                float sca = 1.0;
+                for(int i = 0; i < 5; i++) {
+                    float h = 0.01 + 0.15 * float(i) / 4.0;
+                    float d = map(pos + h * nor).x;
+                    occ += (h - d) * sca;
+                    sca *= 0.95;
+                }
+                return clamp(1.0 - 2.0 * occ, 0.0, 1.0);
+            }
+
+            vec3 render(vec3 ro, vec3 rd) {
+                vec2 trace = rayMarch(ro, rd);
+                float d = trace.x;
+                float mat = trace.y;
+
+                vec3 col = vec3(0.005, 0.005, 0.005); // Void background
+
+                if (d < MAX_DIST) {
+                    vec3 p = ro + rd * d;
+                    vec3 p_curved = p; 
+                    p_curved.y -= dot(p.xz - ro.xz, p.xz - ro.xz) * 0.0015;
+                    vec3 n = getNormal(p_curved, mat);
+
+                    vec3 albedo = vec3(0.0);
+                    float roughness = 1.0;
+                    float metallic = 0.0;
+
+                    // Puddle logic pre-calculation
+                    float puddleDepth = 0.0;
+                    if(mat == 5.0) puddleDepth = smoothstep(0.4, 0.7, fbm(p.xz * 1.5));
+
+                    if (mat == 1.0) { // Wallpaper
+                        vec3 baseColor = vec3(0.85, 0.75, 0.40);
+                        vec2 st = p.xz + p.y;
+                        vec2 warpedSt = st + fbm(st * 2.5) * 1.5;
+                        float stain = smoothstep(0.3, 0.8, fbm(warpedSt * 1.8));
+                        float stripes = fract(p.x * 5.0 + p.z * 5.0);
+                        stripes = smoothstep(0.0, 0.1, stripes) * smoothstep(1.0, 0.9, stripes);
+                        albedo = mix(baseColor * (0.9 + 0.1*stripes), vec3(0.3, 0.25, 0.15), stain * 0.7);
+                        
+                        // Creeping Mold at the bottom
+                        float mold = smoothstep(-1.0, -1.2, p.y) * fbm(p.xz * 5.0);
+                        albedo = mix(albedo, vec3(0.05, 0.08, 0.02), mold);
+                        
+                        roughness = mix(0.8, 0.9, mold);
+                        
+                    } else if (mat == 2.0) { // Carpet
+                        vec3 carpetBase = vec3(0.65, 0.55, 0.25);
+                        float dirt = fbm(p.xz * 4.0);
+                        albedo = mix(carpetBase, vec3(0.15, 0.15, 0.1), dirt * 0.6);
+                        roughness = 0.6;
+                        
+                    } else if (mat == 5.0) { // Puddle
+                        albedo = vec3(0.1, 0.09, 0.05); // Dark murky water
+                        roughness = 0.02; // Highly reflective
+                        metallic = 0.5;
+                        
+                    } else if (mat == 3.0) { // Ceiling
+                        albedo = vec3(0.75, 0.75, 0.70);
+                        float gridX = smoothstep(0.0, 0.03, abs(fract(p.x * 0.5) - 0.5));
+                        float gridZ = smoothstep(0.0, 0.03, abs(fract(p.z * 0.5) - 0.5));
+                        albedo *= min(gridX, gridZ);
+                        
+                        // Water stains on ceiling
+                        float leak = smoothstep(0.5, 0.8, fbm(p.xz * 2.0));
+                        albedo = mix(albedo, vec3(0.4, 0.35, 0.2), leak * 0.8);
+                        roughness = 0.9;
+                        
+                    } else if (mat == 4.0) { // Light
+                        albedo = vec3(1.0, 1.0, 0.9);
+                        roughness = 1.0;
+                    }
+
+                    // Lighting calculation
+                    float spacing = 6.0;
+                    vec2 cellId = floor((p.xz + spacing*0.5) / spacing);
+                    vec3 lightPos = vec3(cellId.x * spacing, 1.8, cellId.y * spacing);
+                    vec2 camCellId = floor((ro.xz + spacing*0.5) / spacing);
+                    vec3 lightPos2 = vec3(camCellId.x * spacing, 1.8, camCellId.y * spacing);
+
+                    vec3 l = normalize(lightPos - p);
+                    vec3 l2 = normalize(lightPos2 - p);
+                    
+                    float distToLight = length(lightPos - p);
+                    float atten = 1.0 / (1.0 + 0.1 * distToLight + 0.08 * distToLight * distToLight);
+                    float distToLight2 = length(lightPos2 - p);
+                    float atten2 = 1.0 / (1.0 + 0.2 * distToLight2 + 0.15 * distToLight2 * distToLight2);
+
+                    float dif = max(dot(n, l), 0.0);
+                    float dif2 = max(dot(n, l2), 0.0);
+                    
+                    vec3 viewDir = normalize(ro - p);
+                    vec3 halfVec = normalize(l + viewDir);
+                    float spec = pow(max(dot(n, halfVec), 0.0), mix(10.0, 200.0, 1.0 - roughness));
+                    spec *= dif; 
+
+                    // Fake Reflection for Puddles
+                    if (mat == 5.0) {
+                        vec3 ref = reflect(-viewDir, n);
+                        float ceilHit = max(dot(ref, vec3(0,-1,0)), 0.0);
+                        spec += pow(ceilHit, 15.0) * atten * 2.0; // Mirror the light above
+                    }
+
+                    float shadow = 1.0;
+                    if(mat != 4.0 && p.y < 1.8) { 
+                        shadow = calcSoftShadow(p, l, 0.05, distToLight, 12.0);
+                    }
+
+                    float ao = calcAO(p, n);
+                    vec3 ambient = albedo * 0.03 * ao;
+                    vec3 lightColor = vec3(1.0, 0.95, 0.8); // Sickly yellow
+                    
+                    // Failing Light Logic
+                    float flicker = 1.0;
+                    float faultHash = hash21(cellId);
+                    if(faultHash < 0.15) {
+                        // Dying ballast flicker
+                        flicker = step(0.5, noise(vec2(u_time * mix(10.0, 50.0, faultHash), cellId.x)));
+                        lightColor = mix(lightColor, vec3(0.5, 0.2, 0.1), 1.0 - flicker); // Brownish when off
+                    }
+
+                    vec3 finalLight = ambient;
+                    if(mat == 4.0) {
+                        finalLight += albedo * flicker * 2.5; 
+                    } else {
+                        finalLight += albedo * dif * lightColor * atten * shadow * flicker;
+                        finalLight += albedo * dif2 * lightColor * atten2 * 0.3 * ao; 
+                        finalLight += vec3(1.0) * spec * lightColor * atten * shadow * flicker;
+                    }
+
+                    col = finalLight;
+
+                    // Oppressive distance fog
+                    float fogDensity = 0.07;
+                    float fogFactor = exp(-d * fogDensity);
+                    vec3 fogColor = vec3(0.05, 0.06, 0.03); 
+                    col = mix(fogColor, col, clamp(fogFactor, 0.0, 1.0));
+                }
+
+                return col;
+            }
+
+            void main() {
+                vec2 uv = vUV;
+                
+                // Lens Distortion (Barrel)
+                vec2 centeredUV = uv * 2.0 - 1.0;
+                float radius = length(centeredUV);
+                float distortion = 1.0 + radius * radius * 0.05; // Bend outwards
+                vec2 distortedUV = centeredUV * distortion;
+                distortedUV.x *= u_resolution.x / u_resolution.y;
+
+                vec3 ro = u_cameraPos;
+                vec3 rd = normalize(distortedUV.x * u_cameraRight + distortedUV.y * u_cameraUp + 1.1 * u_cameraDir); 
+
+                vec3 col = render(ro, rd);
+
+                // Vignette
+                col *= 1.0 - 0.4 * dot(centeredUV, centeredUV);
+
+                // Film Grain
+                float grain = fract(sin(dot(vUV + u_time*0.1, vec2(12.9898, 78.233))) * 43758.5453);
+                col -= grain * 0.06;
+
+                // CRT Scanlines (Subtle security camera effect)
+                col *= 1.0 - 0.03 * sin(vUV.y * u_resolution.y * 2.5);
+
+                // ACES Tone Mapping
+                col = (col*(2.51*col+0.03))/(col*(2.43*col+0.59)+0.14);
+                
+                fragColor = vec4(col, 1.0);
+            }`;
+
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            this.material = new THREE.RawShaderMaterial({
+                glslVersion: THREE.GLSL3,
+                uniforms: {
+                    u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    u_time: { value: 0 },
+                    u_cameraPos: { value: new THREE.Vector3() },
+                    u_cameraDir: { value: new THREE.Vector3(0, 0, -1) },
+                    u_cameraRight: { value: new THREE.Vector3(1, 0, 0) },
+                    u_cameraUp: { value: new THREE.Vector3(0, 1, 0) }
+                },
+                vertexShader: `#version 300 es
+                in vec3 position;
+                out vec2 vUV;
+                void main() {
+                    vUV = position.xy * 0.5 + 0.5;
+                    gl_Position = vec4(position.xy, 0.0, 1.0);
+                }`,
+                fragmentShader: fsSource,
+                depthWrite: false,
+                depthTest: false
             });
 
-            this.carpetTexture = new THREE.CanvasTexture(carpetCanvas);
-            this.carpetTexture.wrapS = THREE.RepeatWrapping;
-            this.carpetTexture.wrapT = THREE.RepeatWrapping;
-
-            this.carpetRoughness = new THREE.CanvasTexture(roughCanvas);
-            this.carpetRoughness.wrapS = THREE.RepeatWrapping;
-            this.carpetRoughness.wrapT = THREE.RepeatWrapping;
-
-            // Ceiling texture (acoustic panels)
-            const ceilCanvas = document.createElement('canvas');
-            ceilCanvas.width = 256; ceilCanvas.height = 256;
-            const ceCtx = ceilCanvas.getContext('2d');
-            ceCtx.fillStyle = '#d4ceb0'; ceCtx.fillRect(0, 0, 256, 256);
-            for (let i = 0; i < 600; i++) {
-                const x = Math.random() * 256; const y = Math.random() * 256;
-                ceCtx.fillStyle = 'rgba(75, 68, 48, 0.12)';
-                ceCtx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
-            }
-            ceCtx.strokeStyle = '#8c866b'; ceCtx.lineWidth = 6;
-            ceCtx.strokeRect(0, 0, 256, 256);
-
-            // Ceiling metalness map (borders are metallic grid lines)
-            const metalCanvas = document.createElement('canvas');
-            metalCanvas.width = 256; metalCanvas.height = 256;
-            const mCtx = metalCanvas.getContext('2d');
-            mCtx.fillStyle = '#000000';
-            mCtx.fillRect(0, 0, 256, 256);
-            mCtx.strokeStyle = '#ffffff'; // White = 100% metallic grid
-            mCtx.lineWidth = 6;
-            mCtx.strokeRect(0, 0, 256, 256);
-
-            this.ceilingTexture = new THREE.CanvasTexture(ceilCanvas);
-            this.ceilingTexture.wrapS = THREE.RepeatWrapping;
-            this.ceilingTexture.wrapT = THREE.RepeatWrapping;
-
-            this.ceilingMetalness = new THREE.CanvasTexture(metalCanvas);
-            this.ceilingMetalness.wrapS = THREE.RepeatWrapping;
-            this.ceilingMetalness.wrapT = THREE.RepeatWrapping;
-
-            // Bump map
-            const bumpCanvas = document.createElement('canvas');
-            bumpCanvas.width = 128; bumpCanvas.height = 128;
-            const bCtx = bumpCanvas.getContext('2d');
-            bCtx.fillStyle = '#808080'; bCtx.fillRect(0, 0, 128, 128);
-            for (let i = 0; i < 3000; i++) {
-                const x = Math.random() * 128; const y = Math.random() * 128;
-                bCtx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-                bCtx.fillRect(x, y, 1, 1);
-            }
-            this.noiseBump = new THREE.CanvasTexture(bumpCanvas);
-            this.noiseBump.wrapS = THREE.RepeatWrapping;
-            this.noiseBump.wrapT = THREE.RepeatWrapping;
+            this.quad = new THREE.Mesh(geometry, this.material);
+            this.quad.renderOrder = -1000;
         }
 
-        _initMaterials() {
-            this.wallMaterial = new THREE.MeshStandardMaterial({
-                map: this.wallTexture,
-                bumpMap: this.noiseBump,
-                bumpScale: 0.04,
-                roughness: 0.8
-            });
+        update(playerPosition, delta = 0, activeCamera) {
+            if (!activeCamera) return;
 
-            this.floorMaterial = new THREE.MeshStandardMaterial({
-                map: this.carpetTexture,
-                roughnessMap: this.carpetRoughness,
-                bumpMap: this.noiseBump,
-                bumpScale: 0.03,
-                roughness: 1.0 // Read from roughnessMap
-            });
-
-            this.ceilingMaterial = new THREE.MeshStandardMaterial({
-                map: this.ceilingTexture,
-                metalnessMap: this.ceilingMetalness,
-                metalness: 1.0, // Read from metalnessMap
-                bumpMap: this.noiseBump,
-                bumpScale: 0.015,
-                roughness: 0.6
-            });
-
-            this.fixtureMaterial = new THREE.MeshStandardMaterial({
-                color: 0xdddddd,
-                emissive: 0xfffae0,
-                emissiveIntensity: 1.6,
-                roughness: 0.2,
-                metalness: 0.8
-            });
-
-            this.pipeMaterial = new THREE.MeshStandardMaterial({
-                color: 0x666666,
-                metalness: 0.9,
-                roughness: 0.25
-            });
-        }
-
-        _initDustMotes() {
-            const particleCount = 180;
-            const geo = new THREE.BufferGeometry();
-            const positions = new Float32Array(particleCount * 3);
-            this.dustVelocities = [];
-
-            for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] = (Math.random() - 0.5) * 35;
-                positions[i * 3 + 1] = Math.random() * 4.0;
-                positions[i * 3 + 2] = (Math.random() - 0.5) * 35;
-
-                this.dustVelocities.push({
-                    x: (Math.random() - 0.5) * 0.15,
-                    y: (Math.random() - 0.5) * 0.08,
-                    z: (Math.random() - 0.5) * 0.15
-                });
+            // Dynamically mount/re-mount the screen-space quad to the active camera if parent changes
+            if (this.quad.parent !== activeCamera) {
+                activeCamera.add(this.quad);
+                this.quad.position.set(0, 0, -1.05); // position just inside camera near plane
             }
 
-            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const now = clock ? clock.elapsedTime : (performance.now() * 0.001);
 
-            // Dust texture
-            const canvas = document.createElement('canvas');
-            canvas.width = 16; canvas.height = 16;
-            const ctx = canvas.getContext('2d');
-            const grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
-            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.7)');
-            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
-            const tex = new THREE.CanvasTexture(canvas);
+            // Update Shader Uniforms from camera orientation
+            const matrix = activeCamera.matrixWorld;
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3();
+            const dir = new THREE.Vector3();
 
-            const mat = new THREE.PointsMaterial({
-                color: 0xfffcf0, // Warm tint dust
-                size: 0.07,
-                map: tex,
-                transparent: true,
-                opacity: 0.35,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
-            });
+            right.setFromMatrixColumn(matrix, 0);
+            up.setFromMatrixColumn(matrix, 1);
+            dir.setFromMatrixColumn(matrix, 2).multiplyScalar(-1); // camera forward is -z
 
-            this.dustPoints = new THREE.Points(geo, mat);
-            this.scene.add(this.dustPoints);
-        }
+            this.material.uniforms.u_time.value = now;
+            this.material.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+            this.material.uniforms.u_cameraPos.value.copy(activeCamera.position);
+            this.material.uniforms.u_cameraDir.value.copy(dir);
+            this.material.uniforms.u_cameraRight.value.copy(right);
+            this.material.uniforms.u_cameraUp.value.copy(up);
 
-        _updateDustMotes(playerPosition, delta) {
-            if (!this.dustPoints) return;
-
-            const posAttr = this.dustPoints.geometry.attributes.position;
-            const posArr = posAttr.array;
-
-            this.dustPoints.position.copy(playerPosition);
-            this.dustPoints.position.y = 0;
-
-            for (let i = 0; i < posArr.length / 3; i++) {
-                posArr[i * 3] += this.dustVelocities[i].x * delta;
-                posArr[i * 3 + 1] += this.dustVelocities[i].y * delta;
-                posArr[i * 3 + 2] += this.dustVelocities[i].z * delta;
-
-                const range = 17.5;
-                if (posArr[i * 3] < -range) posArr[i * 3] += range * 2;
-                if (posArr[i * 3] > range) posArr[i * 3] -= range * 2;
-
-                if (posArr[i * 3 + 1] < 0.05) posArr[i * 3 + 1] = 3.95;
-                if (posArr[i * 3 + 1] > 3.95) posArr[i * 3 + 1] = 0.05;
-
-                if (posArr[i * 3 + 2] < -range) posArr[i * 3 + 2] += range * 2;
-                if (posArr[i * 3 + 2] > range) posArr[i * 3 + 2] -= range * 2;
-            }
-
-            posAttr.needsUpdate = true;
-        }
-
-        _cellHash(x, z) {
-            let h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453123;
-            return h - Math.floor(h);
+            this._updateStalker(playerPosition, delta);
+            this._updateSanity(playerPosition, delta);
         }
 
         _isWall(cellX, cellZ) {
-            if (Math.abs(cellX) <= 2 && Math.abs(cellZ) <= 2) {
-                return false;
-            }
-            if (cellX % 2 === 0 && cellZ % 2 === 0) {
-                return true;
-            }
-            if (cellX % 2 === 0 || cellZ % 2 === 0) {
-                return this._cellHash(cellX, cellZ) < 0.6;
-            }
-            return false;
+            const x = cellX * this.cellSize;
+            const z = cellZ * this.cellSize;
+            return !checkCollision(x, z);
         }
 
         getCostAt(worldX, worldZ) {
-            const cs = 4.0;
-            const cellX = Math.floor(worldX / cs);
-            const cellZ = Math.floor(worldZ / cs);
-            return this._isWall(cellX, cellZ) ? 255 : 1;
-        }
-
-        _generateChunk(cx, cz) {
-            const key = `${cx},${cz}`;
-            const worldOffsetX = cx * this.chunkSize;
-            const worldOffsetZ = cz * this.chunkSize;
-
-            const chunkGroup = new THREE.Group();
-            chunkGroup.position.set(worldOffsetX, 0, worldOffsetZ);
-            this.scene.add(chunkGroup);
-
-            let wallCount = 0;
-            for (let lz = 0; lz < 32; lz++) {
-                for (let lx = 0; lx < 32; lx++) {
-                    const cellX = cx * 32 + lx;
-                    const cellZ = cz * 32 + lz;
-                    if (this._isWall(cellX, cellZ)) {
-                        wallCount++;
-                    }
-                }
-            }
-
-            const floorCount = 1024 - wallCount;
-
-            const wallInst = new THREE.InstancedMesh(this.wallGeometry, this.wallMaterial, wallCount);
-            wallInst.castShadow = true;
-            wallInst.receiveShadow = true;
-
-            const floorInst = new THREE.InstancedMesh(this.floorGeometry, this.floorMaterial, floorCount);
-            floorInst.receiveShadow = true;
-
-            const ceilingInst = new THREE.InstancedMesh(this.ceilingGeometry, this.ceilingMaterial, floorCount);
-            ceilingInst.receiveShadow = true;
-
-            let wallIdx = 0;
-            let floorIdx = 0;
-            const tempMatrix = new THREE.Matrix4();
-            const cs = 4.0;
-            const wallH = 4.0;
-
-            for (let lz = 0; lz < 32; lz++) {
-                for (let lx = 0; lx < 32; lx++) {
-                    const cellX = cx * 32 + lx;
-                    const cellZ = cz * 32 + lz;
-                    const posX = lx * cs + cs / 2;
-                    const posZ = lz * cs + cs / 2;
-
-                    if (this._isWall(cellX, cellZ)) {
-                        tempMatrix.makeTranslation(posX, wallH / 2, posZ);
-                        wallInst.setMatrixAt(wallIdx++, tempMatrix);
-                    } else {
-                        // Floor
-                        tempMatrix.makeRotationX(-Math.PI / 2);
-                        tempMatrix.setPosition(posX, 0, posZ);
-                        floorInst.setMatrixAt(floorIdx, tempMatrix);
-
-                        // Ceiling
-                        tempMatrix.makeRotationX(Math.PI / 2);
-                        tempMatrix.setPosition(posX, wallH, posZ);
-                        ceilingInst.setMatrixAt(floorIdx, tempMatrix);
-
-                        floorIdx++;
-
-                        // Light Fixture
-                        if (cellX % 4 === 2 && cellZ % 4 === 2) {
-                            const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.5), this.fixtureMaterial);
-                            fixture.position.set(posX, wallH - 0.03, posZ);
-                            fixture.castShadow = true;
-                            chunkGroup.add(fixture);
-                        }
-
-                        // Pipes
-                        if (this._cellHash(cellX, cellZ) > 0.90) {
-                            const pipeGeo = new THREE.CylinderGeometry(0.06, 0.06, cs, 8);
-                            const pipe = new THREE.Mesh(pipeGeo, this.pipeMaterial);
-                            pipe.position.set(posX, wallH - 0.2, posZ);
-                            if (this._cellHash(cellZ, cellX) > 0.5) {
-                                pipe.rotation.z = Math.PI / 2;
-                            } else {
-                                pipe.rotation.x = Math.PI / 2;
-                            }
-                            pipe.castShadow = true;
-                            chunkGroup.add(pipe);
-                        }
-                    }
-                }
-            }
-
-            chunkGroup.add(wallInst);
-            chunkGroup.add(floorInst);
-            chunkGroup.add(ceilingInst);
-
-            this.chunks.set(key, {
-                group: chunkGroup,
-                cx: cx,
-                cz: cz
-            });
-        }
-
-        _unloadChunk(key) {
-            const chunk = this.chunks.get(key);
-            if (chunk) {
-                this.scene.remove(chunk.group);
-                chunk.group.traverse(child => {
-                    if (child.geometry) child.geometry.dispose();
-                });
-                this.chunks.delete(key);
-            }
-        }
-
-        update(playerPosition, delta = 0) {
-            if (!this.audioCtx) {
-                this.initAudio();
-            }
-            if (this.audioCtx && this.audioCtx.state === 'suspended') {
-                this.audioCtx.resume();
-            }
-
-            const px = Math.floor(playerPosition.x / this.chunkSize);
-            const pz = Math.floor(playerPosition.z / this.chunkSize);
-
-            const currentActive = new Set();
-
-            for (let x = px - this.viewRadius; x <= px + this.viewRadius; x++) {
-                for (let z = pz - this.viewRadius; z <= pz + this.viewRadius; z++) {
-                    const key = `${x},${z}`;
-                    currentActive.add(key);
-                    if (!this.chunks.has(key)) {
-                        this._generateChunk(x, z);
-                    }
-                }
-            }
-
-            for (const key of this.activeChunks) {
-                if (!currentActive.has(key)) {
-                    this._unloadChunk(key);
-                }
-            }
-            this.activeChunks = currentActive;
-
-            this._updateDynamicLights(playerPosition, delta);
-            this._updateStalker(playerPosition, delta);
-            this._updateSanity(playerPosition, delta);
-            this._updateDustMotes(playerPosition, delta);
-        }
-
-        _updateDynamicLights(playerPosition, delta) {
-            const cs = 4.0;
-            const lightDistThreshold = 25.0;
-            const activeLightKeys = new Set();
-
-            const now = clock.elapsedTime;
-
-            // Light flickering trigger logic
-            if (this.flickeringLightKey === null && Math.random() < 0.004) {
-                // Select a random active light key
-                const keys = Array.from(this.activeLights.keys());
-                if (keys.length > 0) {
-                    this.flickeringLightKey = keys[Math.floor(Math.random() * keys.length)];
-                    this.flickerEnd = now + 0.4 + Math.random() * 0.4;
-                    // Trigger click/buzz spatial sound
-                    const targetLight = this.activeLights.get(this.flickeringLightKey);
-                    if (targetLight) {
-                        this.triggerLightFlickerSFX(targetLight.position);
-                    }
-                }
-            }
-
-            for (const [key, chunk] of this.chunks) {
-                const worldOffsetX = chunk.cx * this.chunkSize;
-                const worldOffsetZ = chunk.cz * this.chunkSize;
-
-                for (let lz = 0; lz < 32; lz++) {
-                    for (let lx = 0; lx < 32; lx++) {
-                        const cellX = chunk.cx * 32 + lx;
-                        const cellZ = chunk.cz * 32 + lz;
-
-                        if (cellX % 4 === 2 && cellZ % 4 === 2 && !this._isWall(cellX, cellZ)) {
-                            const posX = worldOffsetX + lx * cs + cs / 2;
-                            const posZ = worldOffsetZ + lz * cs + cs / 2;
-
-                            const dx = posX - playerPosition.x;
-                            const dz = posZ - playerPosition.z;
-                            const dist = Math.sqrt(dx * dx + dz * dz);
-
-                            if (dist < lightDistThreshold) {
-                                const lightKey = `${cellX},${cellZ}`;
-                                activeLightKeys.add(lightKey);
-
-                                if (!this.activeLights.has(lightKey)) {
-                                    const pointLight = new THREE.PointLight(0xffebb3, 1.2, 10.0, 1.5);
-                                    pointLight.position.set(posX, 3.8, posZ);
-                                    this.scene.add(pointLight);
-                                    this.activeLights.set(lightKey, pointLight);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Clean up out of range lights
-            for (const [lightKey, pointLight] of this.activeLights) {
-                if (!activeLightKeys.has(lightKey)) {
-                    this.scene.remove(pointLight);
-                    pointLight.dispose();
-                    this.activeLights.delete(lightKey);
-                    if (this.flickeringLightKey === lightKey) {
-                        this.flickeringLightKey = null;
-                    }
-                }
-            }
-
-            // Process lighting shadow casting (enable only on closest 3 lights for performance)
-            const lightsList = Array.from(this.activeLights.values());
-            lightsList.sort((a, b) => {
-                const distA = a.position.distanceTo(playerPosition);
-                const distB = b.position.distanceTo(playerPosition);
-                return distA - distB;
-            });
-
-            lightsList.forEach((light, index) => {
-                if (index < 3) {
-                    light.castShadow = true;
-                    light.shadow.mapSize.width = 512;
-                    light.shadow.mapSize.height = 512;
-                    light.shadow.bias = -0.002;
-                    light.shadow.camera.near = 0.5;
-                    light.shadow.camera.far = 12;
-                } else {
-                    light.castShadow = false;
-                }
-            });
-
-            // Apply flicker intensity variations
-            for (const [lightKey, pointLight] of this.activeLights) {
-                if (lightKey === this.flickeringLightKey) {
-                    if (now > this.flickerEnd) {
-                        this.flickeringLightKey = null;
-                        pointLight.intensity = 1.2;
-                    } else {
-                        // Sputtering intensity
-                        pointLight.intensity = Math.random() < 0.25 ? 0.0 : 1.2 * Math.random();
-                    }
-                } else {
-                    pointLight.intensity = 1.2;
-                }
-            }
+            return checkCollision(worldX, worldZ) ? 1 : 255;
         }
 
         _updateStalker(playerPosition, delta) {
             if (!this.stalker || !this.stalker.active) return;
 
-            const now = clock.elapsedTime;
+            const now = clock ? clock.elapsedTime : (performance.now() * 0.001);
             const stalkerPos = this.stalker.position;
             const dist = stalkerPos.distanceTo(playerPosition);
 
@@ -726,8 +712,8 @@ const AsynchronousMazeMapManager = (function () {
                 const targetX = playerPosition.x + Math.cos(angle) * spawnDist;
                 const targetZ = playerPosition.z + Math.sin(angle) * spawnDist;
 
-                const cellX = Math.floor(targetX / 4.0);
-                const cellZ = Math.floor(targetZ / 4.0);
+                const cellX = Math.floor(targetX / this.cellSize);
+                const cellZ = Math.floor(targetZ / this.cellSize);
                 if (!this._isWall(cellX, cellZ)) {
                     this.stalker.position.set(targetX, 0, targetZ);
                     this.stalker.group.position.copy(this.stalker.position);
@@ -745,10 +731,10 @@ const AsynchronousMazeMapManager = (function () {
 
             if (now - this.stalker.lastPathTime > 0.3) {
                 this.stalker.lastPathTime = now;
-                const sCellX = Math.floor(stalkerPos.x / 4.0);
-                const sCellZ = Math.floor(stalkerPos.z / 4.0);
-                const pCellX = Math.floor(playerPosition.x / 4.0);
-                const pCellZ = Math.floor(playerPosition.z / 4.0);
+                const sCellX = Math.floor(stalkerPos.x / this.cellSize);
+                const sCellZ = Math.floor(stalkerPos.z / this.cellSize);
+                const pCellX = Math.floor(playerPosition.x / this.cellSize);
+                const pCellZ = Math.floor(playerPosition.z / this.cellSize);
 
                 const newPath = this.findPath(sCellX, sCellZ, pCellX, pCellZ);
                 if (newPath && newPath.length > 0) {
@@ -761,8 +747,8 @@ const AsynchronousMazeMapManager = (function () {
 
             if (this.stalker.path && this.stalker.path.length > 0) {
                 const targetCell = this.stalker.path[0];
-                const targetWorldX = targetCell.x * 4.0 + 2.0;
-                const targetWorldZ = targetCell.z * 4.0 + 2.0;
+                const targetWorldX = targetCell.x * this.cellSize + this.cellSize / 2;
+                const targetWorldZ = targetCell.z * this.cellSize + this.cellSize / 2;
 
                 const dx = targetWorldX - stalkerPos.x;
                 const dz = targetWorldZ - stalkerPos.z;
@@ -809,9 +795,11 @@ const AsynchronousMazeMapManager = (function () {
                     this.lastDmgTime = now;
                     const dmgAmt = 25;
                     window.playerHealth = Math.max(0, window.playerHealth - dmgAmt);
-                    if (player) player.health = window.playerHealth;
+                    if (window.player) window.player.health = window.playerHealth;
 
-                    screenShakeIntensity += 2.5;
+                    if (typeof screenShakeIntensity !== 'undefined') {
+                        screenShakeIntensity += 2.5;
+                    }
                     if (window.SFX && typeof window.SFX.triggerHurt === 'function') {
                         window.SFX.triggerHurt();
                     }
@@ -877,21 +865,21 @@ const AsynchronousMazeMapManager = (function () {
                 this.sanity = Math.min(100, this.sanity + 1.0 * delta);
             }
 
-            // Realistic double-vision and blur filter based on sanity / stalker proximity
-            const canvas = document.querySelector('canvas');
+            // Apply double-vision blur filter based on sanity
+            const canvas = document.querySelector('canvas:not(#glcanvas)');
             if (canvas) {
                 let blurAmt = 0;
                 if (this.sanity < 50) {
                     blurAmt += (50 - this.sanity) / 50 * 2.0; // Up to 2px blur
                 }
                 if (dist < 15.0 && this.stalker.stunTimer <= 0) {
-                    blurAmt += (15.0 - dist) / 15.0 * 2.5; // Additional blur on proximity
+                    blurAmt += (15.0 - dist) / 15.0 * 2.5; 
                 }
 
                 if (blurAmt > 0.05) {
                     canvas.style.filter = `blur(${blurAmt.toFixed(2)}px)`;
-                    // Add subtle breathing camera scale
-                    const scaleFactor = 1.0 + Math.sin(clock.elapsedTime * 2.5) * 0.005 * (blurAmt / 4.0);
+                    const now = clock ? clock.elapsedTime : (performance.now() * 0.001);
+                    const scaleFactor = 1.0 + Math.sin(now * 2.5) * 0.005 * (blurAmt / 4.0);
                     canvas.style.transform = `scale(${scaleFactor.toFixed(3)})`;
                 } else {
                     canvas.style.filter = '';
@@ -900,57 +888,71 @@ const AsynchronousMazeMapManager = (function () {
             }
         }
 
-        initAudio() {
+        _initAudio() {
             if (this.audioCtx) return;
             try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                this.audioCtx = ctx;
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                const masterGain = this.audioCtx.createGain();
+                masterGain.gain.value = 0.25;
+                masterGain.connect(this.audioCtx.destination);
 
-                const master = ctx.createGain();
-                master.gain.value = 0.25;
-                master.connect(ctx.destination);
-                this.masterGain = master;
+                // 1. Mains AC Hum (60Hz Sine)
+                const humOsc = this.audioCtx.createOscillator();
+                humOsc.type = 'sine';
+                humOsc.frequency.value = 60;
+                const humGain = this.audioCtx.createGain();
+                humGain.gain.value = 0.6;
+                humOsc.connect(humGain).connect(masterGain);
+                humOsc.start();
 
-                // Realistic ballast hum: combine 60Hz and 120Hz tones with high-pitched whine
-                const osc60 = ctx.createOscillator();
-                osc60.type = 'sawtooth';
-                osc60.frequency.value = 60;
-
-                const osc120 = ctx.createOscillator();
-                osc120.type = 'sine';
-                osc120.frequency.value = 120;
-
-                const oscWhine = ctx.createOscillator();
-                oscWhine.type = 'sine';
-                oscWhine.frequency.value = 4500; // 4.5kHz fluorescent coil buzz
-
-                const lowpass = ctx.createBiquadFilter();
-                lowpass.type = 'lowpass';
-                lowpass.frequency.value = 180;
-
-                const whineGain = ctx.createGain();
-                whineGain.gain.value = 0.003;
-
-                const lfo = ctx.createOscillator();
-                lfo.frequency.value = 0.4;
-                const lfoGain = ctx.createGain();
-                lfoGain.gain.value = 0.04;
-
-                lfo.connect(lfoGain).connect(master.gain);
+                // 2. Ballast Buzz (120Hz Sawtooth through Lowpass)
+                const buzzOsc = this.audioCtx.createOscillator();
+                buzzOsc.type = 'sawtooth';
+                buzzOsc.frequency.value = 120;
+                const buzzFilter = this.audioCtx.createBiquadFilter();
+                buzzFilter.type = 'lowpass';
+                buzzFilter.frequency.value = 400;
+                const buzzGain = this.audioCtx.createGain();
+                buzzGain.gain.value = 0.15;
+                
+                const lfo = this.audioCtx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = 0.5; // Slow breathing cycle
+                const lfoGain = this.audioCtx.createGain();
+                lfoGain.gain.value = 0.05;
+                lfo.connect(lfoGain).connect(buzzGain.gain);
                 lfo.start();
 
-                osc60.connect(lowpass).connect(master);
-                osc120.connect(lowpass).connect(master);
-                oscWhine.connect(whineGain).connect(master);
+                buzzOsc.connect(buzzFilter).connect(buzzGain).connect(masterGain);
+                buzzOsc.start();
 
-                osc60.start();
-                osc120.start();
-                oscWhine.start();
+                // 3. Room Tone / HVAC (Brown Noise)
+                const bufferSize = this.audioCtx.sampleRate * 2;
+                const noiseBuffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                let lastOut = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    let white = Math.random() * 2 - 1;
+                    output[i] = (lastOut + (0.02 * white)) / 1.02; // Brown noise approximation
+                    lastOut = output[i];
+                    output[i] *= 3.5; 
+                }
+                const noiseSrc = this.audioCtx.createBufferSource();
+                noiseSrc.buffer = noiseBuffer;
+                noiseSrc.loop = true;
+                
+                const noiseFilter = this.audioCtx.createBiquadFilter();
+                noiseFilter.type = 'lowpass';
+                noiseFilter.frequency.value = 800; // Muffled distant air
+                
+                const noiseGain = this.audioCtx.createGain();
+                noiseGain.gain.value = 0.4;
+                
+                noiseSrc.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+                noiseSrc.start();
 
-                this.humOsc = osc60;
-                this.humOsc2 = osc120;
-                this.whineOsc = oscWhine;
-                this.lfoOsc = lfo;
+                this.audioNodes = [humOsc, buzzOsc, lfo, noiseSrc];
             } catch (e) {
                 console.warn("Backrooms audio failed to initialize:", e);
             }
@@ -970,7 +972,7 @@ const AsynchronousMazeMapManager = (function () {
                 gain.gain.setValueAtTime(0.35, time);
                 gain.gain.exponentialRampToValueAtTime(0.01, time + 0.25);
 
-                osc.connect(gain).connect(this.masterGain);
+                osc.connect(gain).connect(this.audioCtx.destination);
                 osc.start(time);
                 osc.stop(time + 0.25);
             };
@@ -996,80 +998,43 @@ const AsynchronousMazeMapManager = (function () {
                 gain.gain.setValueAtTime(0.08, t);
                 gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
 
-                osc.connect(gain).connect(this.masterGain);
+                osc.connect(gain).connect(this.audioCtx.destination);
                 osc.start(t);
                 osc.stop(t + 0.04);
             }
         }
 
-        triggerLightFlickerSFX(position) {
-            const ctx = this.audioCtx;
-            if (!ctx || ctx.state === 'suspended') return;
-
-            const now = ctx.currentTime;
-            const count = 3 + Math.floor(Math.random() * 4);
-            for (let i = 0; i < count; i++) {
-                const t = now + i * 0.04;
-
-                const osc = ctx.createOscillator();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(250 + Math.random() * 1000, t);
-
-                const filter = ctx.createBiquadFilter();
-                filter.type = 'bandpass';
-                filter.frequency.setValueAtTime(800, t);
-                filter.Q.setValueAtTime(4, t);
-
-                const gain = ctx.createGain();
-                gain.gain.setValueAtTime(0.035, t);
-                gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
-
-                osc.connect(filter).connect(gain).connect(this.masterGain);
-                osc.start(t);
-                osc.stop(t + 0.02);
-            }
-        }
-
         dispose() {
+            window.ASYNCHRONOUS_MAZE_MODE = false;
+
+            if (this.quad) {
+                if (this.quad.parent) {
+                    this.quad.parent.remove(this.quad);
+                }
+                this.quad.geometry.dispose();
+                this.quad.material.dispose();
+            }
+
             if (this.stalker) {
                 this.scene.remove(this.stalker.group);
                 this.stalker = null;
                 window.stalkerEntity = null;
             }
-            if (this.dustPoints) {
-                this.scene.remove(this.dustPoints);
-                this.dustPoints.geometry.dispose();
-                this.dustPoints.material.dispose();
-                this.dustPoints = null;
-            }
-            if (this.audioCtx) {
-                try {
-                    if (this.humOsc) this.humOsc.stop();
-                    if (this.humOsc2) this.humOsc2.stop();
-                    if (this.whineOsc) this.whineOsc.stop();
-                    if (this.lfoOsc) this.lfoOsc.stop();
-                    this.audioCtx.close();
-                } catch (e) { }
-                this.audioCtx = null;
-            }
-            for (const [key, pointLight] of this.activeLights) {
-                this.scene.remove(pointLight);
-                pointLight.dispose();
-            }
-            this.activeLights.clear();
-            for (const [key, chunk] of this.chunks) {
-                this.scene.remove(chunk.group);
-                chunk.group.traverse(child => {
-                    if (child.geometry) child.geometry.dispose();
+
+            if (this.audioNodes) {
+                this.audioNodes.forEach(node => {
+                    try { node.stop(); } catch(e) {}
                 });
             }
-            this.chunks.clear();
-            const canvas = document.querySelector('canvas');
+            if (this.audioCtx) {
+                try { this.audioCtx.close(); } catch(e) {}
+            }
+
+            const canvas = document.querySelector('canvas:not(#glcanvas)');
             if (canvas) {
                 canvas.style.transform = '';
                 canvas.style.filter = '';
             }
-            window.ASYNCHRONOUS_MAZE_MODE = false;
         }
     }
 

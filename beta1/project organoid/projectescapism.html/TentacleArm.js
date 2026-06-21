@@ -8,9 +8,10 @@
  * - Bio-Slime Drips: Viscous tear-shaped drips falling from segments under gravity.
  */
 class TentacleArm extends THREE.Group {
-    constructor() {
+    constructor(isBlue = false) {
         super();
         this.name = "evolved_procedural_tentacle_arm";
+        this.isBlue = isBlue;
 
         // Animation states
         this.idleTime = 0;
@@ -22,41 +23,79 @@ class TentacleArm extends THREE.Group {
         this.spits = [];
         this.splashes = []; // Flat ground splashes
 
-        // Materials
+        // Charging & Overload States (required for manipulator compatibility)
+        this.isCharging = false;
+        this.chargeProgress = 0.0;
+        this.whipComboType = 0;
+
+        // Materials (Redesigned for slender blue tentacle with white prongs)
         this.fleshMat = new THREE.MeshStandardMaterial({
-            color: 0x18281e, roughness: 0.65, metalness: 0.1,
-            bumpScale: 0.05
+            color: 0x0044cc, 
+            emissive: 0x001144, 
+            emissiveIntensity: 1.0,
+            roughness: 0.1, 
+            metalness: 0.8,
+            transparent: true, 
+            opacity: 0.88
         });
-        this.companionFleshMat = new THREE.MeshStandardMaterial({
-            color: 0x122018, roughness: 0.7, metalness: 0.08
-        });
+        this.companionFleshMat = this.fleshMat; // Fallback
         this.suckerMat = new THREE.MeshStandardMaterial({
-            color: 0x00ff66, emissive: 0x00aa33, emissiveIntensity: 2.0,
-            transparent: true, opacity: 0.9
+            color: 0x00f3ff, 
+            emissive: 0x00a8e8, 
+            emissiveIntensity: 2.2,
+            transparent: true, 
+            opacity: 0.95
         });
         this.glowMat = new THREE.MeshStandardMaterial({
-            color: 0x22ff88, emissive: 0x11aa55, emissiveIntensity: 3.0,
-            transparent: true, opacity: 0.8
+            color: 0x00ffff, 
+            emissive: 0x0088cc, 
+            emissiveIntensity: 3.5,
+            transparent: true, 
+            opacity: 0.85
         });
         this.baseMat = new THREE.MeshStandardMaterial({
-            color: 0x0b1a13, roughness: 0.3, metalness: 0.4
+            color: 0x0a1c3a, 
+            roughness: 0.2, 
+            metalness: 0.8
         });
         this.finMat = new THREE.MeshStandardMaterial({
-            color: 0x16a05e, emissive: 0x0b5d35, emissiveIntensity: 1.2,
-            transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.1,
+            color: 0x0088ff, 
+            emissive: 0x0044aa, 
+            emissiveIntensity: 1.8,
+            transparent: true, 
+            opacity: 0.65, 
+            roughness: 0.05, 
+            metalness: 0.2,
             side: THREE.DoubleSide
         });
         this.slimeMat = new THREE.MeshStandardMaterial({
-            color: 0x33ff66, emissive: 0x118833, emissiveIntensity: 2.0,
-            transparent: true, opacity: 0.85, roughness: 0.05, metalness: 0.2
+            color: 0x00f3ff, 
+            emissive: 0x00a8e8, 
+            emissiveIntensity: 3.0,
+            transparent: true, 
+            opacity: 0.9, 
+            roughness: 0.05, 
+            metalness: 0.1
+        });
+        this.prongMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xffffff,
+            emissiveIntensity: 3.5,
+            roughness: 0.1,
+            metalness: 0.1
         });
         
         // Eyeball materials
         this.scleraMat = new THREE.MeshStandardMaterial({
-            color: 0xddddcc, roughness: 0.1, metalness: 0.1
+            color: 0xddddff, 
+            roughness: 0.05, 
+            metalness: 0.1
         });
         this.irisMat = new THREE.MeshStandardMaterial({
-            color: 0x00ff88, emissive: 0x009944, emissiveIntensity: 3.0, roughness: 0.2
+            color: 0x00f3ff, 
+            emissive: 0x0088cc, 
+            emissiveIntensity: 4.0, 
+            roughness: 0.1
         });
 
         this.segments = [];
@@ -108,7 +147,7 @@ class TentacleArm extends THREE.Group {
         this.baseRoot.add(eyeIris);
         this.iris = eyeIris;
 
-        // 3. Main Central Tentacle (14 segments)
+        // 3. Main Central Tentacle (14 segments, slender and sleek)
         const SEG_COUNT = 14;
         const SEG_LEN = 0.25;
         let parent = this.baseRoot;
@@ -117,8 +156,9 @@ class TentacleArm extends THREE.Group {
             const segGroup = new THREE.Group();
             segGroup.position.set(0, 0, -SEG_LEN);
             
-            const taper = 1.0 - (i / SEG_COUNT) * 0.72;
-            const radius = 0.13 * taper;
+            // Slender and sleek taper
+            const taper = Math.pow(1.0 - (i / SEG_COUNT), 1.4);
+            const radius = 0.08 * taper + 0.012;
 
             const segMesh = new THREE.Mesh(
                 new THREE.CylinderGeometry(radius * 0.9, radius, SEG_LEN, 12),
@@ -129,17 +169,17 @@ class TentacleArm extends THREE.Group {
             segGroup.add(segMesh);
 
             // Undulating Membrane Fin
-            const finGeo = new THREE.BoxGeometry(0.005, radius * 2.0, SEG_LEN);
+            const finGeo = new THREE.BoxGeometry(0.003, radius * 1.8, SEG_LEN);
             const fin = new THREE.Mesh(finGeo, this.finMat);
             fin.position.set(0, radius * 0.9, -SEG_LEN / 2);
             segGroup.add(fin);
             this.fins.push(fin);
 
-            // Peristaltic Vein Detail
+            // Peristaltic Vein Detail (Blue Pulse)
             if (i % 2 === 0) {
                 const veinMatInstance = this.glowMat.clone();
                 const vein = new THREE.Mesh(
-                    new THREE.TorusGeometry(radius * 1.05, 0.009, 6, 12),
+                    new THREE.TorusGeometry(radius * 1.05, 0.007, 6, 12),
                     veinMatInstance
                 );
                 vein.rotation.y = Math.PI / 2;
@@ -152,7 +192,7 @@ class TentacleArm extends THREE.Group {
             if (i > 1 && i % 2 === 0) {
                 const suckerMatInstance = this.suckerMat.clone();
                 const sucker = new THREE.Mesh(
-                    new THREE.CylinderGeometry(radius * 0.45, radius * 0.55, 0.025, 8),
+                    new THREE.CylinderGeometry(radius * 0.45, radius * 0.55, 0.02, 8),
                     suckerMatInstance
                 );
                 sucker.position.set(0, -radius, -SEG_LEN / 2);
@@ -169,80 +209,43 @@ class TentacleArm extends THREE.Group {
         // Bio-Glow Core tip
         this.tipMatInstance = this.glowMat.clone();
         this.tip = new THREE.Mesh(
-            new THREE.SphereGeometry(0.052, 10, 10),
+            new THREE.SphereGeometry(0.035, 10, 10),
             this.tipMatInstance
         );
         parent.add(this.tip);
 
-        // Grasping bio-claws (3 fingers)
+        // Grasping organic prongs (3 small spikey white prongs at the end)
         for (let c = 0; c < 3; c++) {
             const clawGroup = new THREE.Group();
             const angle = (c / 3) * Math.PI * 2;
             clawGroup.rotation.z = angle;
             
-            const clawMesh = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.016, 0.005, 0.20, 6),
-                this.fleshMat
+            // Slender white spike prong
+            const prongGeo = new THREE.ConeGeometry(0.008, 0.12, 6);
+            prongGeo.translate(0, 0.06, 0);
+            prongGeo.rotateX(Math.PI / 2 + 0.35); // Pointing forward/outward
+
+            const prongMesh = new THREE.Mesh(
+                prongGeo,
+                this.prongMat
             );
-            clawMesh.rotation.x = 0.35;
-            clawMesh.position.set(0, 0.08, -0.10);
-            clawGroup.add(clawMesh);
-            
-            const clawTip = new THREE.Mesh(
-                new THREE.SphereGeometry(0.013, 6, 6),
-                this.tipMatInstance
-            );
-            clawTip.position.set(0, 0.18, -0.17);
-            clawGroup.add(clawTip);
+            prongMesh.position.set(0, 0.02, -0.02);
+            clawGroup.add(prongMesh);
             
             parent.add(clawGroup);
-            this.claws.push(clawMesh);
+            this.claws.push(prongMesh);
         }
 
-        this.tipLight = new THREE.PointLight(0x00ff55, 1.2, 5);
+        this.tipLight = new THREE.PointLight(0x00a8ff, 1.2, 5);
         parent.add(this.tipLight);
 
-        // 4. Companion Side Tentacles (left & right flankers, 8 segments each)
-        this.buildCompanionTentacle(-0.18, -0.06, 0.04, this.leftSegments, -0.6);
-        this.buildCompanionTentacle(0.18, -0.06, 0.04, this.rightSegments, 0.6);
+        // Companion Side Tentacles: REMOVED for singular design
+        this.leftSegments = [];
+        this.rightSegments = [];
     }
 
     buildCompanionTentacle(offsetX, offsetY, offsetZ, list, angleZ) {
-        const sideGroup = new THREE.Group();
-        sideGroup.position.set(offsetX, offsetY, offsetZ);
-        sideGroup.rotation.z = angleZ;
-        this.baseRoot.add(sideGroup);
-
-        const COMP_SEG_COUNT = 8;
-        const COMP_SEG_LEN = 0.16;
-        let parent = sideGroup;
-
-        for (let i = 0; i < COMP_SEG_COUNT; i++) {
-            const seg = new THREE.Group();
-            seg.position.set(0, 0, -COMP_SEG_LEN);
-
-            const taper = 1.0 - (i / COMP_SEG_COUNT) * 0.7;
-            const radius = 0.075 * taper;
-
-            const mesh = new THREE.Mesh(
-                new THREE.CylinderGeometry(radius * 0.85, radius, COMP_SEG_LEN, 8),
-                this.companionFleshMat
-            );
-            mesh.rotation.x = Math.PI / 2;
-            mesh.position.set(0, 0, -COMP_SEG_LEN / 2);
-            seg.add(mesh);
-
-            // Small glow node at tip
-            if (i === COMP_SEG_COUNT - 1) {
-                const node = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.2, 6, 6), this.suckerMat);
-                node.position.set(0, 0, -COMP_SEG_LEN);
-                seg.add(node);
-            }
-
-            parent.add(seg);
-            list.push(seg);
-            parent = seg;
-        }
+        // Disabled for singular design
     }
 
     fire() {
@@ -339,10 +342,10 @@ class TentacleArm extends THREE.Group {
     }
 
     spawnSplashDecal(pos) {
-        // Flat green puddle decal on the ground
+        // Flat ground puddle decal on the ground
         const splashGeo = new THREE.RingGeometry(0.01, 0.26, 12);
         const splashMat = new THREE.MeshBasicMaterial({
-            color: 0x00ff55,
+            color: this.isBlue ? 0x00f3ff : 0x00ff55,
             transparent: true,
             opacity: 0.8,
             side: THREE.DoubleSide,
@@ -363,8 +366,29 @@ class TentacleArm extends THREE.Group {
             life: 1.5,
             maxLife: 1.5
         });
-    }    update(dt, isADS = false) {
-        this.idleTime += dt;
+    }    update(a1, a2, a3, a4, a5, a6, a7) {
+        let uTime, dt, isFiring, isADS, mouseVelX, mouseVelY, grabbedZombieWorldPos;
+        if (typeof a2 === 'boolean' || a2 === undefined) {
+            // update(dt, isADS) signature (from non-manipulator update path)
+            dt = a1;
+            isADS = a2 || false;
+            uTime = this.idleTime + dt; // synthesize uTime
+            isFiring = false;
+            mouseVelX = 0;
+            mouseVelY = 0;
+            grabbedZombieWorldPos = null;
+        } else {
+            // update(uTime, delta, isFiring, isADS, mouseVelX, mouseVelY, grabbedZombieWorldPos) signature
+            uTime = a1;
+            dt = a2;
+            isFiring = a3;
+            isADS = a4;
+            mouseVelX = a5 || 0;
+            mouseVelY = a6 || 0;
+            grabbedZombieWorldPos = a7 || null;
+        }
+
+        this.idleTime = uTime;
         this.absorbPulse = Math.max(0, this.absorbPulse - dt * 2.0);
 
         if (this.adsAlpha === undefined) this.adsAlpha = 0;
@@ -376,6 +400,27 @@ class TentacleArm extends THREE.Group {
 
         const t = this.adsAlpha;
 
+        // Bending logic if zombie is grabbed
+        let targetRotX = 0;
+        let targetRotY = 0;
+        if (grabbedZombieWorldPos) {
+            try {
+                const localZombie = grabbedZombieWorldPos.clone();
+                this.worldToLocal(localZombie);
+                
+                // Calculate angle to local zombie
+                const angleY = Math.atan2(localZombie.x, -localZombie.z); // Yaw
+                const distXZ = Math.sqrt(localZombie.x * localZombie.x + localZombie.z * localZombie.z);
+                const angleX = Math.atan2(localZombie.y, distXZ); // Pitch
+                
+                // Distribute the rotation along the segments
+                targetRotX = angleX / this.segments.length;
+                targetRotY = angleY / this.segments.length;
+            } catch (err) {
+                console.error("Tentacle targeting error:", err);
+            }
+        }
+
         // A. Primary Tentacle undulating writhing movement
         this.segments.forEach((seg, i) => {
             const freqX = 2.5;
@@ -386,8 +431,16 @@ class TentacleArm extends THREE.Group {
             const noiseX = Math.sin(this.idleTime * freqX + phase) * 0.07 + Math.sin(this.idleTime * 0.8 + phase) * 0.08;
             const noiseY = Math.cos(this.idleTime * freqY + phase) * 0.07 + Math.cos(this.idleTime * 1.1 + phase) * 0.08;
 
-            seg.rotation.x = noiseX * (1.0 - this.grabExtend) * (1.0 - t * 0.75);
-            seg.rotation.y = noiseY * (1.0 - this.grabExtend) * (1.0 - t * 0.75);
+            if (grabbedZombieWorldPos) {
+                // Blend noise with target rotation to bend towards the zombie!
+                // Extreme vibration ripple if charging
+                const vib = this.isCharging ? 0.04 * this.chargeProgress * Math.sin(this.idleTime * 60) : 0;
+                seg.rotation.x = THREE.MathUtils.lerp(seg.rotation.x, targetRotX + noiseX * 0.2 + vib, dt * 10.0);
+                seg.rotation.y = THREE.MathUtils.lerp(seg.rotation.y, targetRotY + noiseY * 0.2 + vib, dt * 10.0);
+            } else {
+                seg.rotation.x = noiseX * (1.0 - this.grabExtend) * (1.0 - t * 0.75);
+                seg.rotation.y = noiseY * (1.0 - this.grabExtend) * (1.0 - t * 0.75);
+            }
         });
 
         // B. Companion Tentacles writhing out-of-phase (Flanking movement)
@@ -409,14 +462,14 @@ class TentacleArm extends THREE.Group {
             const dilation = 1.0 + Math.sin(this.idleTime * 8.0) * 0.12 + this.absorbPulse * 0.9 + t * 0.6;
             this.iris.scale.set(dilation, 1.0, dilation);
 
-            // Change eye to crimson red when aiming
+            // Change eye to deep neon blue/purple when aiming
             if (t > 0.05) {
-                this.iris.material.color.setHex(0xff3300);
-                this.iris.material.emissive.setHex(0xcc0000);
+                this.iris.material.color.setHex(0x3300ff);
+                this.iris.material.emissive.setHex(0x2200cc);
                 this.iris.material.emissiveIntensity = 3.0 + t * 4.0;
             } else {
-                this.iris.material.color.setHex(0x00ff88);
-                this.iris.material.emissive.setHex(0x009944);
+                this.iris.material.color.setHex(0x00f3ff);
+                this.iris.material.emissive.setHex(0x0088cc);
                 this.iris.material.emissiveIntensity = 3.0;
             }
 

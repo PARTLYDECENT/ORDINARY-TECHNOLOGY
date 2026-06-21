@@ -15,64 +15,103 @@ class ObjectiveMaze {
     }
 
     init() {
-        // Dynamically find an open cell (not a wall) in the maze at a distance of 14-25 cells (56-100 units)
+        // Dynamically find an open cell (not a wall) that is guaranteed reachable from (0,0) via BFS
         let cellX = 14;
         let cellZ = 14;
         
         if (window.mapManager && typeof window.mapManager._isWall === 'function') {
-            let found = false;
-            // Scan in expanding circles to find an open cell
-            for (let r = 15; r < 28; r++) {
-                for (let theta = 0; theta < Math.PI * 2; theta += Math.PI / 12) {
-                    const cx = Math.round(Math.cos(theta) * r);
-                    const cz = Math.round(Math.sin(theta) * r);
-                    if (!window.mapManager._isWall(cx, cz)) {
-                        cellX = cx;
-                        cellZ = cz;
-                        found = true;
-                        break;
+            const queue = [{ x: 0, z: 0, dist: 0 }];
+            const visited = new Set(["0,0"]);
+            const candidates = [];
+
+            // Perform Breadth-First Search to locate reachable coordinates
+            while (queue.length > 0) {
+                const curr = queue.shift();
+                
+                // If it is far enough from start (between 14 and 28 cells away), save it as a candidate
+                const distFromStart = Math.sqrt(curr.x * curr.x + curr.z * curr.z);
+                if (distFromStart >= 14 && distFromStart <= 28) {
+                    candidates.push(curr);
+                }
+
+                // Limit BFS search radius to keep it fast and localized
+                if (curr.dist < 32) {
+                    const neighbors = [
+                        { x: curr.x + 1, z: curr.z },
+                        { x: curr.x - 1, z: curr.z },
+                        { x: curr.x, z: curr.z + 1 },
+                        { x: curr.x, z: curr.z - 1 }
+                    ];
+
+                    for (const n of neighbors) {
+                        const key = `${n.x},${n.z}`;
+                        if (!visited.has(key) && !window.mapManager._isWall(n.x, n.z)) {
+                            visited.add(key);
+                            queue.push({ x: n.x, z: n.z, dist: curr.dist + 1 });
+                        }
                     }
                 }
-                if (found) break;
+            }
+
+            if (candidates.length > 0) {
+                // Sort by distance and pick from the furthest 25% of candidates to maximize maze exploration
+                candidates.sort((a, b) => b.dist - a.dist);
+                const selectIndex = Math.floor(Math.random() * Math.max(1, Math.floor(candidates.length * 0.25)));
+                cellX = candidates[selectIndex].x;
+                cellZ = candidates[selectIndex].z;
             }
         }
 
-        // Cell center world position (4.0 units per cell)
-        this.targetPos.set(cellX * 4.0 + 2.0, 1.8, cellZ * 4.0 + 2.0);
+        // Cell center world position (dynamic cell spacing)
+        const spacing = window.mapManager && window.mapManager.cellSize ? window.mapManager.cellSize : 4.0;
+        this.targetPos.set(cellX * spacing + spacing / 2, 1.8, cellZ * spacing + spacing / 2);
 
         // Create Rift Group
         this.riftGroup = new THREE.Group();
         this.riftGroup.position.copy(this.targetPos);
 
         // Core Glowing Sphere
-        const coreGeo = new THREE.SphereGeometry(0.4, 16, 16);
+        const coreGeo = new THREE.SphereGeometry(0.5, 32, 32);
         const coreMat = new THREE.MeshBasicMaterial({ 
-            color: 0x00aaff,
+            color: 0x00f3ff,
             transparent: true,
             opacity: 0.95
         });
         const core = new THREE.Mesh(coreGeo, coreMat);
         this.riftGroup.add(core);
 
-        // Outer rotating ring
-        const ringGeo = new THREE.TorusGeometry(0.9, 0.04, 8, 24);
-        const ringMat = new THREE.MeshBasicMaterial({
-            color: 0x00ffff,
-            transparent: true,
-            opacity: 0.8,
+        // Gyroscope Outer rotating rings
+        const ringGeo1 = new THREE.TorusGeometry(1.0, 0.04, 8, 32);
+        const ringMat1 = new THREE.MeshStandardMaterial({
+            color: 0x00f3ff,
+            emissive: 0x00aaff,
+            roughness: 0.1,
+            metalness: 0.9,
             side: THREE.DoubleSide
         });
-        this.ring = new THREE.Mesh(ringGeo, ringMat);
-        this.ring.rotation.x = Math.PI / 2;
-        this.riftGroup.add(this.ring);
+        this.ring1 = new THREE.Mesh(ringGeo1, ringMat1);
+        this.ring1.rotation.x = Math.PI / 2;
+        this.riftGroup.add(this.ring1);
+
+        const ringGeo2 = new THREE.TorusGeometry(1.25, 0.03, 8, 32);
+        const ringMat2 = new THREE.MeshStandardMaterial({
+            color: 0xff00b7, // Magenta inner ring
+            emissive: 0xaa0077,
+            roughness: 0.1,
+            metalness: 0.9,
+            side: THREE.DoubleSide
+        });
+        this.ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+        this.ring2.rotation.y = Math.PI / 4;
+        this.riftGroup.add(this.ring2);
 
         // Vertical sky beacon
-        const beaconGeo = new THREE.CylinderGeometry(0.1, 0.4, 200, 16, 1, true);
+        const beaconGeo = new THREE.CylinderGeometry(0.15, 0.5, 200, 16, 1, true);
         beaconGeo.translate(0, 100, 0);
         const beaconMat = new THREE.MeshBasicMaterial({
-            color: 0x00aaff,
+            color: 0x00f3ff,
             transparent: true,
-            opacity: 0.25,
+            opacity: 0.28,
             blending: THREE.AdditiveBlending,
             side: THREE.DoubleSide,
             depthWrite: false
@@ -81,7 +120,7 @@ class ObjectiveMaze {
         this.riftGroup.add(beacon);
 
         // Dynamic Blue light
-        const light = new THREE.PointLight(0x00ffff, 3.0, 12);
+        const light = new THREE.PointLight(0x00ffff, 4.0, 15);
         this.riftGroup.add(light);
 
         this.scene.add(this.riftGroup);
@@ -139,9 +178,29 @@ class ObjectiveMaze {
         if (this.riftGroup) {
             this.riftGroup.position.y = this.targetPos.y + Math.sin(elapsedTime * 2.5) * 0.15;
         }
-        if (this.ring) {
-            this.ring.rotation.x += delta * 1.5;
-            this.ring.rotation.y += delta * 0.8;
+        if (this.ring1) {
+            this.ring1.rotation.x += delta * 1.5;
+            this.ring1.rotation.y += delta * 0.8;
+        }
+        if (this.ring2) {
+            this.ring2.rotation.y -= delta * 1.8;
+            this.ring2.rotation.z += delta * 1.2;
+        }
+
+        // Particle swirl around rift
+        if (Math.random() < 0.35 && window.emitParticle) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 0.5 + Math.random() * 1.0;
+            emitParticle(
+                this.targetPos.x + Math.cos(angle) * dist,
+                this.targetPos.y + (Math.random() - 0.5) * 1.0,
+                this.targetPos.z + Math.sin(angle) * dist,
+                -Math.cos(angle) * 1.5,
+                (Math.random() - 0.5) * 0.5,
+                -Math.sin(angle) * 1.5,
+                0.0, 0.95, 1.0, // cyan particles swirling in
+                5.0, 0.4
+            );
         }
 
         const dist = this.player.position.distanceTo(this.targetPos);

@@ -390,8 +390,8 @@ class TitanPlayer extends THREE.Group {
             });
         }
 
-        // Chest Light — sinister red glow casting real light
-        this.chestLight = new THREE.PointLight(0xff2200, 1.5, 6);
+        // Chest Light — sinister red glow casting real light (softened)
+        this.chestLight = new THREE.PointLight(0xff2200, 0.4, 3.5);
         this.chestCore.add(this.chestLight);
 
         // --- 3D DNA HELIX SWIRL (DYNAMIC BIO-TECTONIC AESTHETICS) ---
@@ -1175,7 +1175,7 @@ class TitanPlayer extends THREE.Group {
             this.energyMat.emissiveIntensity = intensityBase + Math.sin(this.t * pulseSpeed) * (1.5 + (1.0 - healthFactor) * 2.0);
 
             if (this.chestLight) {
-                this.chestLight.intensity = this.energyMat.emissiveIntensity * 0.5;
+                this.chestLight.intensity = this.energyMat.emissiveIntensity * 0.03;
                 // Shift light color from blue to red as health drops
                 this.chestLight.color.setRGB(1.0 - healthFactor, healthFactor * 0.6, healthFactor);
             }

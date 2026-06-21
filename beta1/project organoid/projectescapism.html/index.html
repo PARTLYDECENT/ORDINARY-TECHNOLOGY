@@ -2885,6 +2885,7 @@
         renderer.toneMappingExposure = 1.2; // Slightly boosted for realism
         renderer.outputEncoding = THREE.sRGBEncoding;
         container.appendChild(renderer.domElement);
+        window.renderer = renderer;
 
         // Initialize the organic SDF GUI
         window.gui = new SDFGUI(window.innerWidth, window.innerHeight);
@@ -2995,7 +2996,7 @@
             sword: { id: 'sword', name: 'Plasma Sword', damage: 180, fireRate: 0.2, spread: 0, pellets: 1, color: 0x00ffaa, speed: 0, maxAmmo: Infinity, isMelee: true },
             flame: { id: 'flame', name: 'Flamethrower', damage: 25, fireRate: 0.05, spread: 0.3, pellets: 1, color: 0xff4400, speed: 12, maxAmmo: 200 },
             tentacle: { id: 'tentacle', name: 'Tentacle Arm', damage: 0, fireRate: 0.35, spread: 0, pellets: 1, color: 0x44ff88, speed: 0, maxAmmo: Infinity, isMelee: true, isAbsorb: true },
-            manipulator_tentacle: { id: 'manipulator_tentacle', name: 'Whip Manipulator', damage: 180, fireRate: 0.38, spread: 0, pellets: 1, color: 0x00f3ff, speed: 0, maxAmmo: Infinity, isMelee: true },
+            manipulator_tentacle: { id: 'manipulator_tentacle', name: 'Whip Manipulator', damage: 180, fireRate: 0.38, spread: 0, pellets: 1, color: 0xff5533, speed: 0, maxAmmo: Infinity, isMelee: true },
             gravitygun: { id: 'gravitygun', name: 'Gravity Gun', damage: 0, fireRate: 0.15, spread: 0.0, pellets: 1, color: 0x00f3ff, speed: 0, maxAmmo: Infinity, isSpecial: true, isGravityGun: true }
         };
 
@@ -3435,7 +3436,11 @@
 
         // Spawn a zombie at given position (from spawn node)
         function spawnZombie(sx, sz, forcedType = -1) {
-            if (spawnedZombies >= CONFIG.maxZombies || !player) return false;
+            console.debug('[Spawn] spawnZombie called', { sx, sz, forcedType, spawnedZombies, activeZombies });
+            const currentMapId = window.GAME_START_CONFIG ? window.GAME_START_CONFIG.mapId : 'forest';
+            let limit = CONFIG.maxZombies;
+            if (currentMapId === 'asynchronousmaze1') limit = 3; // Limit maze zombies to 3 max
+            if (spawnedZombies >= limit || !player) return false;
             const i = spawnedZombies;
 
             // Helper to check Nacht safe rooms
@@ -3473,24 +3478,44 @@
             zPosZ[i] = pz;
             zRotY[i] = Math.random() * Math.PI * 2;
             zState[i] = 1;
-            // Type distribution: 65% normal, 20% puker, 15% thrower (scaled with time)
+            // Type distribution: normal/puker/thrower + rare 'm' mutant (type 3)
             if (forcedType !== -1) {
                 zType[i] = forcedType;
             } else {
                 const r = Math.random();
-                zType[i] = r < 0.65 ? 0 : (r < 0.85 ? 1 : 2);
+                if (currentMapId === 'desert') {
+                    // Type distribution in desolation: ~70% spazzer mutant (type 3), others split
+                    if (r < 0.70) zType[i] = 3; // spazzer mutant — dominant
+                    else if (r < 0.85) zType[i] = 0; // normal
+                    else if (r < 0.95) zType[i] = 1; // puker
+                    else zType[i] = 2; // thrower
+                } else {
+                    // Outside desolation: no spazzer mutant (type 3)
+                    if (r < 0.60) zType[i] = 0; // normal
+                    else if (r < 0.85) zType[i] = 1; // puker
+                    else zType[i] = 2; // thrower
+                }
             }
             zCooldown[i] = 0;
             zBehavior[i] = 0; // Start SHAMBLE
             zStateTimer[i] = 0;
             zSpeedMul[i] = 0.7 + Math.random() * 0.6; // 0.7-1.3 variation
             // HP by type: normal=1, puker=3, thrower=2, developed (3-armed)=6
-            zHP[i] = zType[i] === 3 ? 6 : (zType[i] === 1 ? 3 : (zType[i] === 2 ? 2 : 1));
+            zHP[i] = (zType[i] === 3) ? 6 : (zType[i] === 1 ? 3 : (zType[i] === 2 ? 2 : 1));
+
+            // Debug: log mutant (type 3) spawns and index assignment
+            if (zType[i] === 3) {
+                console.warn('[Spawn] MUTANT(type=3) created', { index: i, x: px, z: pz });
+            } else {
+                console.log('[Spawn] zombie created', { index: i, type: zType[i], x: px, z: pz });
+            }
 
             spawnedZombies++;
             activeZombies++;
+            console.debug('[Spawn] success', { index: i, spawnedZombies, activeZombies });
             return true;
         }
+        window.spawnZombie = spawnZombie;
 
         function spawnWeaponDrop(specificType = null, closeSpawn = false) {
             if (!player) return;
@@ -4369,7 +4394,7 @@
                     sword: { s: 0.28, x: 0.22, y: -0.32, z: -0.50, adsX: 0.0, adsY: 0.0, muzzleZ: -3.5 },
                     flame: { s: 0.30, x: 0.32, y: -0.18, z: -0.55, adsX: 0.32, adsY: -0.10, muzzleZ: -2.4 },
                     tentacle: { s: 0.18, x: 0.32, y: -0.22, z: -0.55, adsX: 0.0, adsY: 0.0, muzzleZ: -3.0 },
-                    manipulator_tentacle: { s: 1.0, x: 0.0, y: 0.0, z: 0.0, adsX: 0.0, adsY: 0.0, muzzleZ: -2.0 },
+                    manipulator_tentacle: { s: 0.18, x: 0.35, y: -0.24, z: -0.65, adsX: 0.0, adsY: 0.0, muzzleZ: -2.0 },
                     gravitygun: { s: 0.35, x: 0.32, y: -0.16, z: -0.65, adsX: 0.32, adsY: -0.08, muzzleZ: -1.6 }
                 };
                 const wp = wpScales[weaponId] || { s: 0.22, x: 0.4, y: -0.15, z: -1.2, muzzleZ: -1.2 };
@@ -4718,6 +4743,9 @@
             activeZombies = 0;
             spawnedZombies = 0;
             zState.fill(0);
+            if (window._spazzerManager) {
+                window._spazzerManager.killAll();
+            }
             if (zombieMeshes.normal) {
                 zombieMeshes.normal.count = 0;
                 zombieMeshes.puker.count = 0;
@@ -4957,12 +4985,12 @@
 
                 // Update map visuals
                 ambientLight.color.setHex(0xffebcc);
-                ambientLight.intensity = 0.8;
+                ambientLight.intensity = 0.18;  // dimmed: was 0.8
                 dirLight.color.setHex(0xfff5e6);
-                dirLight.intensity = 2.0;
+                dirLight.intensity = 0.5;       // dimmed: was 2.0
                 dirLight.position.set(100, 150, -50);
                 scene.fog.color.setHex(0xffc896);
-                scene.fog.density = 0.008;
+                scene.fog.density = 0.015;      // denser fog: was 0.008
 
                 // Perform complete player respawn and scene cleanup!
                 respawnPlayer();
@@ -5024,6 +5052,20 @@
                     NeuralConsole.log("SLIPSPACE TRANSITION SUCCESSFUL.", 'sys');
                     NeuralConsole.log("LOCATION: DESOLATION EXPANSE.", 'sys');
                     NeuralConsole.log("THREAT LEVEL: OMNIPRESENT. SURVIVE.", 'sys');
+                }
+
+                // Spawn Zombie Deer right in front of the player on slipspace transition
+                if (window.Deer) {
+                    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraFPS.quaternion);
+                    fwd.y = 0;
+                    fwd.normalize();
+                    const dPos = player.position.clone().addScaledVector(fwd, 15.0);
+                    window.Deer.spawnDeerAt(dPos.x, dPos.z);
+                    
+                    const dPos2 = player.position.clone().addScaledVector(fwd, 22.0);
+                    const left = new THREE.Vector3(-1, 0, 0).applyQuaternion(cameraFPS.quaternion);
+                    dPos2.addScaledVector(left, 7.0);
+                    window.Deer.spawnDeerAt(dPos2.x, dPos2.z);
                 }
 
                 // Trigger a creepy 1.2-second cameo of Hatman floating in the distance!
@@ -5224,6 +5266,9 @@
                 activeZombies = 0;
                 spawnedZombies = 0;
                 zState.fill(0);
+                if (window._spazzerManager) {
+                    window._spazzerManager.killAll();
+                }
                 if (zombieMeshes.normal) {
                     zombieMeshes.normal.count = 0;
                     zombieMeshes.puker.count = 0;
@@ -5257,13 +5302,13 @@
                 }
                 skyboxManager = new BackroomsSkybox(scene);
 
-                // Update ambient lighting for backrooms (yellow-ochre fluorescent)
+                // Update ambient lighting for backrooms (dimmed fluorescent)
                 ambientLight.color.setHex(0xd1cc9e);
-                ambientLight.intensity = 0.7;
+                ambientLight.intensity = 0.15; // dimmed: was 0.7
                 dirLight.color.setHex(0xfff5e6);
-                dirLight.intensity = 0.5;
+                dirLight.intensity = 0.15;     // dimmed: was 0.5
                 scene.fog.color.setHex(0x242416);
-                scene.fog.density = 0.04;
+                scene.fog.density = 0.055;     // denser: was 0.04
 
                 // Perform complete player respawn and cleanup
                 respawnPlayer();
@@ -5396,6 +5441,9 @@
                 activeZombies = 0;
                 spawnedZombies = 0;
                 zState.fill(0);
+                if (window._spazzerManager) {
+                    window._spazzerManager.killAll();
+                }
                 if (zombieMeshes.normal) {
                     zombieMeshes.normal.count = 0;
                     zombieMeshes.puker.count = 0;
@@ -5550,36 +5598,36 @@
                     }
 
                     if (cfg.mapId === 'desert') {
-                        // Scorching desert twilight/sunset lighting
+                        // Scorching desert lighting — dimmed significantly
                         ambientLight.color.setHex(0xffebcc);
-                        ambientLight.intensity = 0.8;
+                        ambientLight.intensity = 0.18;  // was 0.8
                         dirLight.color.setHex(0xfff5e6);
-                        dirLight.intensity = 2.0;
+                        dirLight.intensity = 0.55;  // was 2.0
                         dirLight.position.set(100, 150, -50);
 
                         scene.fog.color.setHex(0xffc896);
-                        scene.fog.density = 0.008; // gorgeous warm dust horizon haze
+                        scene.fog.density = 0.015; // denser: was 0.008
                     } else if (cfg.mapId === 'endgame') {
-                        // Dark cosmic purple/violet stardust lighting
+                        // Dark cosmic purple lighting — dimmed
                         ambientLight.color.setHex(0x100820);
-                        ambientLight.intensity = 0.5;
+                        ambientLight.intensity = 0.15;  // was 0.5
                         dirLight.color.setHex(0x502090);
-                        dirLight.intensity = 1.5;
+                        dirLight.intensity = 0.4;  // was 1.5
                         dirLight.position.set(50, 200, 50);
 
                         scene.fog.color.setHex(0x050010);
-                        scene.fog.density = 0.005; // gorgeous thin stardust space haze
+                        scene.fog.density = 0.012; // denser: was 0.005
                     } else if (cfg.mapId === 'abyss') {
-                        // Gorgeous sunny Water World lighting
-                        ambientLight.color.setHex(0xa5f3fc); // Cyan sky reflection
-                        ambientLight.intensity = 1.3;
-                        dirLight.color.setHex(0xfef08a); // Bright golden sunlight
-                        dirLight.intensity = 2.8;
-                        dirLight.position.set(60, 120, 40); // Angled sun for gorgeous shadows on the rafts
+                        // Water World lighting — significantly dimmed
+                        ambientLight.color.setHex(0xa5f3fc);
+                        ambientLight.intensity = 0.3;  // was 1.3
+                        dirLight.color.setHex(0xfef08a);
+                        dirLight.intensity = 0.7;  // was 2.8
+                        dirLight.position.set(60, 120, 40);
                         dirLight.castShadow = true;
 
-                        scene.fog = new THREE.FogExp2(0xbae6fd, 0.008); // Clean light coastal mist
-                        scene.background = new THREE.Color(0x38bdf8); // Sky blue background
+                        scene.fog = new THREE.FogExp2(0xbae6fd, 0.015); // denser: was 0.008
+                        scene.background = new THREE.Color(0x38bdf8);
 
                         // Disable standard ambient sound glitches
                         if (window.TutorialManager) {
@@ -5593,21 +5641,20 @@
                             } catch (e) { }
                         }
                     } else if (cfg.mapId === 'jungle') {
-                        // Dense tropical emerald jungle lighting
-                        ambientLight.color.setHex(0x10b981); // Emerald green canopy bounce
-                        ambientLight.intensity = 1.4;
-                        dirLight.color.setHex(0xfbbf24); // Rich golden filtered sun rays
-                        dirLight.intensity = 2.5;
+                        // Jungle lighting — heavily dimmed, darker canopy
+                        ambientLight.color.setHex(0x10b981);
+                        ambientLight.intensity = 0.25;  // was 1.4
+                        dirLight.color.setHex(0xfbbf24);
+                        dirLight.intensity = 0.5;  // was 2.5
                         dirLight.position.set(50, 140, -50);
                         dirLight.castShadow = true;
 
-                        scene.fog = new THREE.FogExp2(0x022c22, 0.012); // Dense moss green mist
-                        scene.background = new THREE.Color(0x042f2e); // Mist green backdrop
+                        scene.fog = new THREE.FogExp2(0x022c22, 0.018); // denser: was 0.012
+                        scene.background = new THREE.Color(0x042f2e);
                     } else if (cfg.fogColor !== undefined) {
                         scene.fog.color.setHex(cfg.fogColor);
-                        // scene.background update removed for skybox
                         ambientLight.color.setHex(0x050510);
-                        ambientLight.intensity = 0.001; // Stay pitch black regardless of map
+                        ambientLight.intensity = 0.001; // pitch black — unchanged
                     }
                 }
 
@@ -5643,16 +5690,16 @@
                 // Mount FPS Camera cleanly to the Scene to avoid player scaling (0.19) and visibility issues
                 scene.add(cameraFPS);
 
-                window.flashLight = new THREE.SpotLight(0xfffaee, 4.0); // Cranked up — primary light source
+                window.flashLight = new THREE.SpotLight(0xffebd2, 0.85); // Dimmed — was 1.2
                 window.flashLight.angle = Math.PI / 5.5;
                 window.flashLight.penumbra = 0.6;
-                window.flashLight.distance = 50; // Longer throw for dark environment
-                window.flashLight.decay = 1.5;
+                window.flashLight.distance = 45; // Slightly shorter throw
+                window.flashLight.decay = 1.8;    // More falloff than before
                 window.flashLight.castShadow = true;
                 window.flashLight.shadow.mapSize.width = 1024;
                 window.flashLight.shadow.mapSize.height = 1024;
                 cameraFPS.add(window.flashLight);
-                window.flashLight.position.set(0, -0.2, 0); // Mount flashlight under the viewmodel
+                window.flashLight.position.set(0, -0.2, 0);
                 window.flashLight.target.position.set(0, -0.2, -5);
                 cameraFPS.add(window.flashLight.target);
 
@@ -6420,6 +6467,7 @@
                 if (vType == 2.0) fleshCol = mix(fleshCol, vec3(0.90, 0.35, 0.0), 0.85); // Thrower: cracked volcanic crust
                 if (vType == 3.0) fleshCol = mix(fleshCol, vec3(1.00, 0.45, 0.0), 0.95); // Mutant: white-hot volcanic core
 
+
                 // --- Procedural Skin Detail ---
                 float skinTex = skinNoise(pos * 2.8 + vSeed);
                 fleshCol *= 0.85 + skinTex * 0.3; // Mottled skin
@@ -6911,6 +6959,12 @@
                     window.aegisSentinel = new AegisSentinel(scene, player, cameraFPS);
                 }
 
+                // Spawn starting ambient Zombie Deer when starting in Desolation
+                if (currentMapId === 'desert' && window.Deer) {
+                    window.Deer.spawnDeerAt(0, 16);
+                    window.Deer.spawnDeerAt(-10, 24);
+                }
+
                 if (!isGameLoopRunning) {
                     isGameLoopRunning = true;
                     animate();
@@ -7265,7 +7319,6 @@
                 window.mouseMovementY = (window.mouseMovementY || 0) + e.movementY;
             }
         });
-        // Re-request pointer lock on click if lost in FPS mode
         document.body.addEventListener('click', () => {
             if (isFPSMode && !isPaused && document.pointerLockElement !== document.body) {
                 document.body.requestPointerLock();
@@ -7775,6 +7828,10 @@
             if (player) {
                 [player.leftWeaponMesh, player.rightWeaponMesh, (fpsViewmodel && fpsViewmodel.weaponMesh) ? fpsViewmodel.weaponMesh : null].forEach(m => {
                     if (m) {
+                        // Skip overrides for organic/shader tentacle weapons to preserve their custom glowing materials!
+                        if (m.name === "whip_tentacle" || m.name === "evolved_procedural_tentacle_arm") {
+                            return;
+                        }
                         m.traverse(child => {
                             if (child.isMesh) {
                                 child.material.emissiveIntensity = 0.5;
@@ -8212,7 +8269,7 @@
             zHP[zi] = Math.max(0, zHP[zi] - 250);
 
             if (window.goreSystem && typeof window.goreSystem.spawnGoreGribs === 'function') {
-                const zTypeLabel = zType[zi] === 0 ? 'normal' : (zType[zi] === 1 ? 'puker' : 'thrower');
+                const zTypeLabel = zType[zi] === 0 ? 'normal' : (zType[zi] === 1 ? 'puker' : (zType[zi] === 2 ? 'thrower' : 'mutant'));
                 window.goreSystem.spawnGoreGribs(zPosX[zi], 1.0, zPosZ[zi], zTypeLabel);
             }
             triggerZombieFireball(zPosX[zi], 1.0, zPosZ[zi]);
@@ -8471,11 +8528,17 @@
                 // Trigger weapon fire animation
                 if (isFPSMode && fpsViewmodel && fpsViewmodel.weaponMesh && typeof fpsViewmodel.weaponMesh.fire === 'function') {
                     fpsViewmodel.weaponMesh.fire();
-                } else if (player.rightWeaponMesh && typeof player.rightWeaponMesh.fire === 'function') {
-                    player.rightWeaponMesh.fire();
-                }
-                if (player.leftWeaponMesh && typeof player.leftWeaponMesh.fire === 'function') {
-                    player.leftWeaponMesh.fire();
+
+
+                } else {
+                    if (player.rightWeaponMesh && typeof player.rightWeaponMesh.fire === 'function') {
+                        player.rightWeaponMesh.fire();
+                    }
+                    if (player.leftWeaponMesh && typeof player.leftWeaponMesh.fire === 'function') {
+                        player.leftWeaponMesh.fire();
+                    }
+
+
                 }
 
                 // Player recoil
@@ -8505,6 +8568,96 @@
                 const meleeFOV = weapon.id === 'manipulator_tentacle'
                     ? (isSweepCombo ? Math.PI * 1.5 : Math.PI * 0.7)
                     : (weapon.id === 'sword' ? Math.PI * 0.75 : (weapon.id === 'tentacle' ? Math.PI * 0.6 : Math.PI * 0.4));
+
+                // Damage/absorb Spazzers in frontal arc
+                if (window._spazzerManager && window._spazzerManager.spazzers.length > 0) {
+                    window._spazzerManager.spazzers.forEach(s => {
+                        if (s.dead) return;
+                        const dx = s.worldX - meleeOrigin.x;
+                        const dz = s.worldZ - meleeOrigin.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        if (dist > meleeRange) return;
+                        const toZombie = new THREE.Vector3(dx, 0, dz).normalize();
+                        const dot = meleeDir.dot(toZombie);
+                        if (dot < Math.cos(meleeFOV / 2)) return;
+
+                        if (weapon.isAbsorb) {
+                            s.takeDamage(s.hp); // instant absorption!
+                            totalKills++;
+                            if (window.PyramidManager) {
+                                window.PyramidManager.registerKill(s.worldX, 1.0, s.worldZ);
+                            }
+                            // Bonus score
+                            survivalTime += 60 * 0.01;
+                            // Heal player
+                            playerHealth = Math.min(playerHealth + 25, CONFIG.playerHealth || 300);
+                            if (player) player.health = playerHealth;
+                            player.speedMultiplier = 1.5;
+                            window.tentacleSpeedBoostTimer = 3.0;
+
+                            // Absorb particles
+                            for (let p = 0; p < 25; p++) {
+                                const angle = Math.random() * Math.PI * 2;
+                                emitParticle(
+                                    s.worldX, 1.0, s.worldZ,
+                                    Math.cos(angle) * 5 + (meleeOrigin.x - s.worldX) * 2.5,
+                                    2 + Math.random() * 5,
+                                    Math.sin(angle) * 5 + (meleeOrigin.z - s.worldZ) * 2.5,
+                                    0.1, 1.0, 0.4, 6, 0.55
+                                );
+                            }
+                        } else if (weapon.id === 'manipulator_tentacle') {
+                            s.takeDamage(weapon.damage);
+                            // Whip it violently: Fling them back!
+                            const knockbackDist = 12.0;
+                            s.worldX += toZombie.x * knockbackDist;
+                            s.worldZ += toZombie.z * knockbackDist;
+                            if (window.SFX) {
+                                window.SFX.play('WATER_4', { volume: 0.75, pitch: 0.8 + Math.random() * 0.3 });
+                            }
+                            // Organic Blood & Flesh Splatters
+                            for (let p = 0; p < 22; p++) {
+                                emitParticle(
+                                    s.worldX + (Math.random() - 0.5) * 0.2,
+                                    1.0 + (Math.random() - 0.5) * 0.3,
+                                    s.worldZ + (Math.random() - 0.5) * 0.2,
+                                    (Math.random() - 0.5) * 6.0 + toZombie.x * 3.0,
+                                    2.0 + Math.random() * 6.0,
+                                    (Math.random() - 0.5) * 6.0 + toZombie.z * 3.0,
+                                    0.22, 0.45, 0.18,
+                                    4 + Math.random() * 4,
+                                    0.3 + Math.random() * 0.3
+                                );
+                            }
+                        } else {
+                            // Sword damage
+                            s.takeDamage(weapon.damage);
+                            for (let p = 0; p < 25; p++) {
+                                emitParticle(
+                                    s.worldX + (Math.random() - 0.5) * 0.25,
+                                    1.0 + (Math.random() - 0.5) * 0.4,
+                                    s.worldZ + (Math.random() - 0.5) * 0.25,
+                                    (Math.random() - 0.5) * 12.0,
+                                    3.0 + Math.random() * 8.0,
+                                    (Math.random() - 0.5) * 12.0,
+                                    0.22, 0.45, 0.18,
+                                    14 + Math.random() * 10,
+                                    0.35 + Math.random() * 0.35
+                                );
+                            }
+                        }
+                        if (s.dead) {
+                            totalKills++;
+                            if (window.PyramidManager) {
+                                window.PyramidManager.registerKill(s.worldX, 1.0, s.worldZ);
+                            }
+                            killFlashTimer = 0.06;
+                            if (totalKills % 10 === 0) {
+                                triggerZombieFireball(s.worldX, 1.0, s.worldZ);
+                            }
+                        }
+                    });
+                }
 
                 // Damage/absorb zombies in frontal arc
                 const nearby = getNearby(player.position.x, player.position.z);
@@ -8560,7 +8713,7 @@
                         }
                         // Update hurt time
                         const zTypeLabel = zType[zi];
-                        const targetMesh = zTypeLabel === 0 ? zombieMeshes.normal : (zTypeLabel === 1 ? zombieMeshes.puker : (zTypeLabel === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                        const targetMesh = zTypeLabel === 0 ? zombieMeshes.normal : (zTypeLabel === 1 ? zombieMeshes.puker : (zTypeLabel === 2 ? zombieMeshes.thrower : (zTypeLabel === 3 ? zombieMeshes.mutant : null)));
                         if (targetMesh) {
                             const hurtTimeAttr = targetMesh.geometry.attributes.aHurtTime;
                             if (hurtTimeAttr && zi < hurtTimeAttr.count) {
@@ -8578,18 +8731,27 @@
                         zPosX[zi] += toZombie.x * knockbackDist;
                         zPosZ[zi] += toZombie.z * knockbackDist;
 
-                        // Neon Cyan Sparks
-                        for (let p = 0; p < 18; p++) {
+                        // Meaty organic splash sound
+                        if (window.SFX) {
+                            window.SFX.play('WATER_4', { volume: 0.75, pitch: 0.8 + Math.random() * 0.3 });
+                        }
+
+                        // Organic Blood & Flesh Splatters
+                        for (let p = 0; p < 22; p++) {
+                            const isFlesh = Math.random() < 0.35;
+                            const r = isFlesh ? 0.75 + Math.random() * 0.15 : 0.65 + Math.random() * 0.2;
+                            const g = isFlesh ? 0.45 + Math.random() * 0.15 : 0.0;
+                            const b = isFlesh ? 0.45 + Math.random() * 0.15 : 0.02 + Math.random() * 0.05;
                             emitParticle(
                                 zPosX[zi] + (Math.random() - 0.5) * 0.2,
                                 1.0 + (Math.random() - 0.5) * 0.3,
                                 zPosZ[zi] + (Math.random() - 0.5) * 0.2,
-                                (Math.random() - 0.5) * 8.0,
-                                3.0 + Math.random() * 5.0,
-                                (Math.random() - 0.5) * 8.0,
-                                0.0, 0.95, 1.0, // Neon Cyan sparks!
-                                8 + Math.random() * 6,
-                                0.2 + Math.random() * 0.2
+                                (Math.random() - 0.5) * 6.0 + toZombie.x * 3.0,
+                                2.0 + Math.random() * 6.0,
+                                (Math.random() - 0.5) * 6.0 + toZombie.z * 3.0,
+                                r, g, b, // Red blood or pink flesh
+                                isFlesh ? (4 + Math.random() * 4) : (7 + Math.random() * 7),
+                                0.3 + Math.random() * 0.3
                             );
                         }
 
@@ -8721,6 +8883,33 @@
                     window.flameEffect.emit(flameOrigin, flameDir, playerVel);
                 }
 
+                // Damage Spazzers in flame cone
+                if (window._spazzerManager && window._spazzerManager.spazzers.length > 0) {
+                    const flameRange = 16.0;
+                    const flameFOV = Math.PI * 0.25;
+                    window._spazzerManager.spazzers.forEach(s => {
+                        if (s.dead) return;
+                        const dx = s.worldX - player.position.x;
+                        const dz = s.worldZ - player.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        if (dist > flameRange) return;
+                        const toZ = new THREE.Vector3(dx, 0, dz).normalize();
+                        const dot = flatFlameDir.dot(toZ);
+                        if (dot < Math.cos(flameFOV / 2)) return;
+                        s.takeDamage(weapon.damage);
+                        if (s.dead) {
+                            totalKills++;
+                            if (window.PyramidManager) {
+                                window.PyramidManager.registerKill(s.worldX, 1.0, s.worldZ);
+                            }
+                            killFlashTimer = 0.06;
+                            if (totalKills % 10 === 0) {
+                                triggerZombieFireball(s.worldX, 1.0, s.worldZ);
+                            }
+                        }
+                    });
+                }
+
                 // Damage zombies in flame cone
                 const flameRange = 16.0;
                 const flameFOV = Math.PI * 0.25; // Narrower damage cone to match visuals
@@ -8741,7 +8930,7 @@
                         window.zombieOnFireTimer[zi] = 5.0; // Ignite zombie for 5s
                     }
                     const zTypeLabel3 = zType[zi];
-                    const targetMesh3 = zTypeLabel3 === 0 ? zombieMeshes.normal : (zTypeLabel3 === 1 ? zombieMeshes.puker : (zTypeLabel3 === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                    const targetMesh3 = zTypeLabel3 === 0 ? zombieMeshes.normal : (zTypeLabel3 === 1 ? zombieMeshes.puker : (zTypeLabel3 === 2 ? zombieMeshes.thrower : (zTypeLabel3 === 3 ? zombieMeshes.mutant : null)));
                     if (targetMesh3) {
                         const hurtTimeAttr3 = targetMesh3.geometry.attributes.aHurtTime;
                         if (hurtTimeAttr3 && zi < hurtTimeAttr3.count) {
@@ -8815,8 +9004,8 @@
 
             // --- MUZZLE FLASH (Weapon-Specific Intensity) ---
             const flashIntensity = {
-                pistol: 8, shotgun: 14, ar: 6, railgun: 18, flare: 20, singular: 12,
-                sword: 6, flame: 16, tentacle: 4
+                pistol: 2.0, shotgun: 3.5, ar: 1.5, railgun: 4.5, flare: 5.0, singular: 3.0,
+                sword: 1.5, flame: 4.0, tentacle: 1.0
             };
             muzzleFlashTimer = weapon.id === 'shotgun' ? 0.1 : (weapon.id === 'railgun' ? 0.15 : 0.06);
             if (muzzleFlashLight) {
@@ -9100,6 +9289,8 @@
             zombieMeshes.thrower.instanceMatrix.needsUpdate = true;
             zombieMeshes.mutant.instanceMatrix.needsUpdate = true;
 
+
+
             // 3. Process Events
             data.triggerAudio.forEach(evt => {
                 if (evt.type === 'ZOMBIE_ATTACK' && window.SFX) SFX.triggerZombieAttack();
@@ -9146,7 +9337,7 @@
                     const distSq = dx * dx + dz * dz;
                     const reach = (zType[i] === 3) ? 2.5 : 1.8;
                     if (distSq < reach * reach) {
-                        const baseDmg = (zType[i] === 3 ? 12 : 5) * delta;
+                        const baseDmg = ((zType[i] === 3) ? 12 : 5) * delta;
                         activeDmg += window.RealityPhaseShifter.activeDimension === 1 ? baseDmg * 2.0 : baseDmg;
                     }
                 }
@@ -9249,6 +9440,12 @@
                 this.wrapEl.style.animation = 'shake 0.3s cubic-bezier(.36,.07,.19,.97) both';
             },
 
+            clear() {
+                if (this.logEl) {
+                    this.logEl.innerHTML = '';
+                }
+            },
+
             log(msg, type = 'sys') {
                 const entry = document.createElement('div');
                 entry.className = `log-entry log-${type}`;
@@ -9310,6 +9507,9 @@
                     case 'purge_all':
                         for (let i = 0; i < zState.length; i++) zState[i] = 0;
                         activeZombies = 0;
+                        if (window._spazzerManager) {
+                            window._spazzerManager.killAll();
+                        }
                         this.log("0x00F6: MASS_PURGE_EXECUTED. ALL_BIOMATTER_TERMINATED.");
                         break;
                     case 'relink_ammo':
@@ -10431,6 +10631,14 @@
             if (typeof updateWeaponMesh !== 'undefined') window.updateWeaponMesh = updateWeaponMesh;
             if (typeof AegisSentinel !== 'undefined') window.AegisSentinel = AegisSentinel;
 
+            // === SPAZZER MANAGER INIT (once, after scene + camera are ready) ===
+            if (!window._spazzerManager && typeof SpazzerManager !== 'undefined') {
+                window._spazzerManager = new SpazzerManager(scene, activeCamera);
+                console.log('[Spazzer] SpazzerManager initialized');
+            }
+            // Keep camera reference current (FPS/ISO can switch)
+            if (window._spazzerManager) window._spazzerManager.camera = activeCamera;
+
             // Bidirectional syncing for cheatsheet.js overrides
             if (window.velocityY !== undefined) velocityY = window.velocityY;
             window.velocityY = velocityY;
@@ -10446,6 +10654,21 @@
             window.recoilCfg = recoilCfg;
 
             const rawDelta = Math.min(clock.getDelta(), 0.1);
+
+            // === SPAZZER UPDATE ===
+            if (window._spazzerManager) {
+                window._spazzerManager.update(rawDelta, player.position.x, player.position.z);
+            }
+
+            // === ZOMBIE DEER UPDATE ===
+            if (window.Deer && typeof window.Deer.update === 'function') {
+                window.Deer.update(rawDelta);
+            }
+
+            // === CYBER-TRUCK UPDATE ===
+            if (window.Truck && typeof window.Truck.update === 'function') {
+                window.Truck.update(rawDelta);
+            }
 
             // --- TACTICAL BULLET-TIME (ADS) ---
             let targetTimeScale = window.cheatSlowMo ? 0.2 : (isADS ? 0.65 : 1.0);
@@ -11409,16 +11632,24 @@
                                     }
                                 }
 
+                                if (window.SFX) {
+                                    window.SFX.play('WATER_4', { volume: 0.6, pitch: 0.9 + Math.random() * 0.2 });
+                                }
+
                                 for (let p = 0; p < 12; p++) {
+                                    const isFlesh = Math.random() < 0.35;
+                                    const r = isFlesh ? 0.75 + Math.random() * 0.15 : 0.65 + Math.random() * 0.2;
+                                    const g = isFlesh ? 0.45 + Math.random() * 0.15 : 0.0;
+                                    const b = isFlesh ? 0.45 + Math.random() * 0.15 : 0.02 + Math.random() * 0.05;
                                     emitParticle(
                                         zPosX[swatIdx] + (Math.random() - 0.5) * 0.2,
                                         1.0 + (Math.random() - 0.5) * 0.2,
                                         zPosZ[swatIdx] + (Math.random() - 0.5) * 0.2,
-                                        (Math.random() - 0.5) * 6.0,
-                                        3.0 + Math.random() * 4.0,
-                                        (Math.random() - 0.5) * 6.0,
-                                        0.0, 0.95, 1.0,
-                                        8 + Math.random() * 4,
+                                        (Math.random() - 0.5) * 4.0,
+                                        2.0 + Math.random() * 5.0,
+                                        (Math.random() - 0.5) * 4.0,
+                                        r, g, b,
+                                        isFlesh ? (4 + Math.random() * 4) : (6 + Math.random() * 6),
                                         0.25
                                     );
                                 }
@@ -11765,11 +11996,18 @@
                 const currentMapId = window.GAME_START_CONFIG ? window.GAME_START_CONFIG.mapId : 'forest';
                 const rateMultiplier = (currentMapId === 'desert') ? 2.0 : 1.0;
                 node.spawnTimer += delta * rateMultiplier;
-                if (node.spawnTimer > spawnRate && spawnedZombies < CONFIG.maxZombies) {
+                let limit = CONFIG.maxZombies;
+                if (currentMapId === 'asynchronousmaze1') limit = 3;
+                if (node.spawnTimer > spawnRate && spawnedZombies < limit) {
                     node.spawnTimer = 0;
-                    const forced = node.isVariable ? 3 : -1;
-                    if (spawnZombie(node.x, node.z, forced)) {
-                        // Handled by SDFGUI
+                    // 50% chance: spawn a real Spazzer entity instead of instanced zombie (Only in Desolation/Desert)
+                    if (window._spazzerManager && currentMapId === 'desert' && Math.random() < 0.5) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = 3 + Math.random() * 2;
+                        window._spazzerManager.spawn(node.x + Math.cos(angle)*dist, node.z + Math.sin(angle)*dist);
+                    } else {
+                        const forced = node.isVariable ? 3 : -1;
+                        spawnZombie(node.x, node.z, forced);
                     }
                 }
             });
@@ -11790,16 +12028,19 @@
                     // Lunge visual trigger
                     if (zBehavior[i] === 2) {
                         const type = zType[i];
-                        const tMesh = type === 0 ? zombieMeshes.normal : (type === 1 ? zombieMeshes.puker : zombieMeshes.thrower);
+                        const tMesh = type === 0 ? zombieMeshes.normal : (type === 1 ? zombieMeshes.puker : (type === 2 ? zombieMeshes.thrower : (type === 3 ? zombieMeshes.mutant : null)));
                         // Approximate local index
-                        tMesh.geometry.attributes.aAttackStart.setX(i, uTime - 0.1);
-                        zMatrixUpdating = true;
+                        if (tMesh) {
+                            tMesh.geometry.attributes.aAttackStart.setX(i, uTime - 0.1);
+                            zMatrixUpdating = true;
+                        }
                     }
                 }
                 if (zMatrixUpdating) {
                     zombieMeshes.normal.geometry.attributes.aAttackStart.needsUpdate = true;
                     zombieMeshes.puker.geometry.attributes.aAttackStart.needsUpdate = true;
                     zombieMeshes.thrower.geometry.attributes.aAttackStart.needsUpdate = true;
+                    zombieMeshes.mutant.geometry.attributes.aAttackStart.needsUpdate = true;
                 }
 
                 aiTranslator.postMessage({
@@ -12216,6 +12457,94 @@
                 }
                 if (hit) continue;
 
+                // Check Spazzer hits
+                if (window._spazzerManager && window._spazzerManager.spazzers.length > 0) {
+                    for (let j = 0; j < window._spazzerManager.spazzers.length; j++) {
+                        const s = window._spazzerManager.spazzers[j];
+                        if (s.dead) continue;
+                        const dx = s.worldX - b.mesh.position.x;
+                        const dz = s.worldZ - b.mesh.position.z;
+                        if (dx * dx + dz * dz < 2.5) {
+                            let finalDmg = b.baseDamage || b.damage;
+                            if (b.distTraveled !== undefined && b.distTraveled > 15) {
+                                if (b.weaponId === 'pistol' || b.weaponId === 'shotgun') {
+                                    const falloffStart = b.weaponId === 'shotgun' ? 12 : 20;
+                                    const falloff = Math.max(0.3, 1.0 - (b.distTraveled - falloffStart) * 0.02);
+                                    finalDmg = Math.round(finalDmg * falloff);
+                                }
+                            }
+                            s.takeDamage(finalDmg);
+                            if (window.NACHT_MODE) {
+                                if (window.moneyWeb) window.moneyWeb.add(10);
+                                else window.zombiePoints = (window.zombiePoints || 0) + 10;
+                            }
+                            hitCrosshair();
+
+                            // Spawn blood particles at hit position
+                            const hitX = b.mesh.position.x;
+                            const hitY = b.mesh.position.y || 1.0;
+                            const hitZ = b.mesh.position.z;
+                            for (let p = 0; p < 15; p++) {
+                                emitParticle(hitX, hitY, hitZ,
+                                    (Math.random() - 0.5) * 4.0, 1.0 + Math.random() * 4.0, (Math.random() - 0.5) * 4.0,
+                                    0.22, 0.45, 0.18,
+                                    4 + Math.random() * 4, 0.3 + Math.random() * 0.3);
+                            }
+
+                            if (b.type === 'aoe') {
+                                SpecRegistry.applyAOE(b.mesh.position, 6.0, b.damage);
+                                if (window.SFX && typeof window.SFX.triggerExplosion === 'function') {
+                                    window.SFX.triggerExplosion();
+                                }
+                                screenShakeIntensity += 1.8;
+                                const expCol = new THREE.Color();
+                                for (let pIdx = 0; pIdx < 60; pIdx++) {
+                                    expCol.setHSL((pIdx / 60.0 + clock.elapsedTime * 0.1) % 1.0, 1.0, 0.6);
+                                    const theta = Math.random() * Math.PI * 2;
+                                    const phi = Math.acos((Math.random() * 2) - 1);
+                                    const speed = 3.0 + Math.random() * 15.0;
+                                    const vx = speed * Math.sin(phi) * Math.cos(theta);
+                                    const vy = speed * Math.sin(phi) * Math.sin(theta) + 2.0;
+                                    const vz = speed * Math.cos(phi);
+                                    emitParticle(
+                                        b.mesh.position.x, b.mesh.position.y || 1.0, b.mesh.position.z,
+                                        vx, vy, vz,
+                                        expCol.r, expCol.g, expCol.b,
+                                        4.0 + Math.random() * 4.0,
+                                        0.4 + Math.random() * 0.4
+                                    );
+                                }
+                                b.life = 0;
+                            } else if (b.type === 'pull') {
+                                SpecRegistry.applySingularity(b.mesh.position, 10.0, 0.4);
+                                b.life = 0;
+                            } else if (b.type === 'pierce') {
+                                b.life = 0;
+                            } else {
+                                b.life = 0;
+                            }
+
+                            if (s.dead) {
+                                SFX.triggerZombieDie();
+                                totalKills++;
+                                if (window.NACHT_MODE) {
+                                    const killPoints = (b.weaponId === 'sword') ? 130 : 100;
+                                    if (window.moneyWeb) window.moneyWeb.add(killPoints);
+                                    else window.zombiePoints = (window.zombiePoints || 0) + killPoints;
+                                }
+                                if (window.PyramidManager) {
+                                    window.PyramidManager.registerKill(s.worldX, 1.0, s.worldZ);
+                                }
+                            }
+                            scene.remove(b.mesh);
+                            bullets.splice(i, 1);
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                if (hit) continue;
+
                 // Check zombie hits
                 for (let j = 0; j < spawnedZombies; j++) {
                     if (zState[j] === 0) continue;
@@ -12244,7 +12573,7 @@
 
                         // Visual flash on hit
                         const zTypeLabelBullet = zType[j];
-                        const targetMeshBullet = zTypeLabelBullet === 0 ? zombieMeshes.normal : (zTypeLabelBullet === 1 ? zombieMeshes.puker : (zTypeLabelBullet === 2 ? zombieMeshes.thrower : zombieMeshes.mutant));
+                        const targetMeshBullet = zTypeLabelBullet === 0 ? zombieMeshes.normal : (zTypeLabelBullet === 1 ? zombieMeshes.puker : (zTypeLabelBullet === 2 ? zombieMeshes.thrower : (zTypeLabelBullet === 3 ? zombieMeshes.mutant : null)));
                         if (targetMeshBullet) {
                             const hurtTimeAttrBullet = targetMeshBullet.geometry.attributes.aHurtTime;
                             if (hurtTimeAttrBullet && j < hurtTimeAttrBullet.count) {
@@ -12538,6 +12867,10 @@
         });
 
     </script>
+    <script src="./spazzer.js"></script>
+    <script src="./deer.js"></script>
+    <script src="./truckview.js"></script>
+    <script src="./truck.js"></script>
 </body>
 
 </html>

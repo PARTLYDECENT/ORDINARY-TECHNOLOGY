@@ -101,6 +101,7 @@ const SFX = {
         else if (weaponId === 'sword') this.play('WATER_1', { volume: 0.5, pitch: 1.8 + Math.random() * 0.4 });
         else if (weaponId === 'flame') this.play('EXP_1', { volume: 0.3, pitch: 0.4 + Math.random() * 0.2 });
         else if (weaponId === 'tentacle') this.play('WATER_2', { volume: 0.6, pitch: 0.6 + Math.random() * 0.3 });
+        else if (weaponId === 'manipulator_tentacle') this.play('WATER_2', { volume: 0.75, pitch: 1.2 + Math.random() * 0.3 });
         else this.play('PISTOL', { volume: 0.5 });
     },
 

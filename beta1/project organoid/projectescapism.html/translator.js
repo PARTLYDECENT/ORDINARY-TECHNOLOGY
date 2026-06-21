@@ -332,7 +332,7 @@ self.onmessage = function (e) {
             // Map the matrix exactly as set by the main thread.
             const cosY = Math.cos(zRotY[i]);
             const sinY = Math.sin(zRotY[i]);
-            let scale = type === 3 ? 1.35 : 1.0;
+            let scale = (type === 3 || type === 4) ? 1.35 : 1.0;
             if (currentMapId === 'nacht') {
                 scale *= 2.0;
             }
@@ -496,10 +496,9 @@ self.onmessage = function (e) {
         // Propagate alert pheromones to surrounding shambling horde members
         ZombieBrain.propagateHiveAlert(i, zx, zz, getNearby, zBehavior, zStateTimer);
 
-        // 2. TYPE-SPECIFIC STEERING & ATTACK BEHAVIORS
         if (type === 3) {
             // Relentless charge/lunge AI for developed mutants
-            speedMul *= 1.35; // 35% speed increase
+            speedMul *= 1.35;
             
             const seekSteer = ZombieBehaviours.seek(zx, zz, brain.tx, brain.tz, data.vectorFieldX || new Uint8Array(0), config, px, pz);
             vx = seekSteer.vx;
@@ -669,7 +668,7 @@ self.onmessage = function (e) {
         // Basic translation + Y-axis rotation matrix with dynamic morphing scale
         const cosY = Math.cos(zRotY[i]);
         const sinY = Math.sin(zRotY[i]);
-        const baseScale = type === 3 ? 1.35 : 1.0;
+        const baseScale = (type === 3 || type === 4) ? 1.35 : 1.0;
         const scaleMultiplier = isBoss ? 1.65 : (isGlitchedSwarmed ? 0.78 * glitchSwarmFactor : 0.0);
         let scale = baseScale * (1.0 + (isBoss ? morph : glitchSwarmFactor) * scaleMultiplier);
 
