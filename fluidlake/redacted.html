@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIY Mini-Truck Chassis Designer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+        }
+        /* Custom scrollbar for control panel */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 flex h-screen w-screen overflow-hidden">
+
+    <!-- Sidebar Control Panel -->
+    <aside class="w-full md:w-[420px] bg-gray-900 border-r border-gray-800 flex flex-col h-full z-10 shadow-2xl transition-all duration-300">
+        <!-- Brand Header -->
+        <div class="p-5 border-b border-gray-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-amber-500/10 text-amber-500 rounded-lg border border-amber-500/20">
+                    <i data-lucide="wrench" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight text-white">ChassisCraft 420</h1>
+                    <p class="text-xs text-gray-400">Composite Mini-Truck Architect</p>
+                </div>
+            </div>
+            <span class="text-xs font-semibold px-2 py-1 bg-gray-800 rounded-full border border-gray-700 text-amber-400">v1.2</span>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-gray-800 text-sm">
+            <button onclick="switchTab('frame')" id="tab-btn-frame" class="flex-1 py-3 text-center border-b-2 border-amber-500 text-amber-500 font-medium transition-colors">Frame</button>
+            <button onclick="switchTab('suspension')" id="tab-btn-suspension" class="flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition-colors">Suspension</button>
+            <button onclick="switchTab('engine')" id="tab-btn-engine" class="flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition-colors">Engine & Cab</button>
+            <button onclick="switchTab('analytics')" id="tab-btn-analytics" class="flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition-colors">Specs & Build</button>
+        </div>
+
+        <!-- Dynamic Control Content Container -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+            
+            <!-- SECTION 1: FRAME -->
+            <div id="section-frame" class="space-y-5">
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Unistrut Core Geometry</h3>
+                    <p class="text-xs text-gray-500">Modify the length and footprint of the metal unistrut members.</p>
+                </div>
+
+                <!-- Chassis Length Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Chassis Total Length</span>
+                        <span class="font-mono text-amber-400" id="val-length">96 in</span>
+                    </div>
+                    <input type="range" id="input-length" min="60" max="144" step="4" value="96" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>5.0 ft (Mini-cart)</span>
+                        <span>12.0 ft (Longbed)</span>
+                    </div>
+                </div>
+
+                <!-- Chassis Width Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Chassis Track Width</span>
+                        <span class="font-mono text-amber-400" id="val-width">36 in</span>
+                    </div>
+                    <input type="range" id="input-width" min="28" max="48" step="2" value="36" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>2.3 ft (Narrow)</span>
+                        <span>4.0 ft (Wide stable)</span>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 my-4"></div>
+
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Fiberglass Wrapping</h3>
+                    <p class="text-xs text-gray-500">Wrapping metal unistrut in biaxial fiberglass sleeves + epoxy dramatically boosts tension capacity and prevents buckling.</p>
+                </div>
+
+                <!-- Fiberglass Layers Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Fiberglass Wrap Thickness</span>
+                        <span class="font-mono text-amber-400" id="val-glass-layers">3 layers (1/8")</span>
+                    </div>
+                    <input type="range" id="input-glass-layers" min="0" max="8" step="1" value="3" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>Bare Unistrut (Weak)</span>
+                        <span>8 Layers (Ultra-Rigid Heavy Duty)</span>
+                    </div>
+                </div>
+
+                <!-- Fiberglass Wrap Material Config -->
+                <div class="space-y-2">
+                    <label class="text-xs text-gray-400 block">Sleeve Wrap Coverage</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="wrap-full" onclick="setWrapStyle('full')" class="py-2 px-3 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold text-center transition">Full Frame Wrap</button>
+                        <button id="wrap-joints" onclick="setWrapStyle('stress')" class="py-2 px-3 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold text-center transition">High-Stress Only</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: SUSPENSION -->
+            <div id="section-suspension" class="space-y-5 hidden">
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Rear Suspension: Leaf Springs</h3>
+                    <p class="text-xs text-gray-500">A heavy-duty leaf spring setup dampens the rear load axle on the unistrut crossbeams.</p>
+                </div>
+
+                <!-- Leaf Arch Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Leaf Spring Arch Height</span>
+                        <span class="font-mono text-amber-400" id="val-leaf-arch">5.0 in</span>
+                    </div>
+                    <input type="range" id="input-leaf-arch" min="2" max="9" step="0.5" value="5" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>Flat / Low-rider</span>
+                        <span>High Clearance Lift</span>
+                    </div>
+                </div>
+
+                <!-- Number of Leaves Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Leaf Stack Count</span>
+                        <span class="font-mono text-amber-400" id="val-leaf-count">4 Leaf Pack</span>
+                    </div>
+                    <input type="range" id="input-leaf-count" min="1" max="6" step="1" value="4" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>1 (Soft/Squishy)</span>
+                        <span>6 (Stiff/Utility Heavy-Haul)</span>
+                    </div>
+                </div>
+
+                <!-- Rear Axle Position Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Rear Axle Offset (from Back)</span>
+                        <span class="font-mono text-amber-400" id="val-axle-pos">16 in</span>
+                    </div>
+                    <input type="range" id="input-axle-pos" min="12" max="32" step="2" value="16" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>Short overhang</span>
+                        <span>Long overhang</span>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 my-4"></div>
+
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Wheels & Tires</h3>
+                </div>
+
+                <!-- Tire Size -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Utility Tire Diameter</span>
+                        <span class="font-mono text-amber-400" id="val-tire-size">18 in</span>
+                    </div>
+                    <input type="range" id="input-tire-size" min="14" max="24" step="1" value="18" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>14" Go-kart wheels</span>
+                        <span>24" Mud/ATV knobbies</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: ENGINE & CAB -->
+            <div id="section-engine" class="space-y-5 hidden">
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Powerplant: 420cc Engine</h3>
+                    <p class="text-xs text-gray-500">The massive 420cc single-cylinder overhead valve (OHV) utility engine provides ~15 HP to the drivetrain.</p>
+                </div>
+
+                <!-- Engine Placement Selector -->
+                <div class="space-y-2">
+                    <label class="text-xs text-gray-400 block">Engine Mount Location</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="mount-rear" onclick="setEngineMount('rear')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold text-center transition">Rear</button>
+                        <button id="mount-mid" onclick="setEngineMount('mid')" class="py-2 px-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold text-center transition">Mid-Mount</button>
+                        <button id="mount-front" onclick="setEngineMount('front')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold text-center transition">Front</button>
+                    </div>
+                </div>
+
+                <!-- Engine Slide Offset -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-300">Fine Engine Position</span>
+                        <span class="font-mono text-amber-400" id="val-engine-offset">Centered</span>
+                    </div>
+                    <input type="range" id="input-engine-offset" min="-12" max="12" step="1" value="0" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-gray-800 rounded-lg appearance-none">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>Forward 12"</span>
+                        <span>Aft 12"</span>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 my-4"></div>
+
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Chassis Overlays</h3>
+                    <p class="text-xs text-gray-500">Visualize spatial arrangements with mock framing bodies.</p>
+                </div>
+
+                <!-- Show Cab and Bed guides -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-300">Show Driver Cab Box</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="toggle-cab" class="sr-only peer" checked>
+                            <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:bg-amber-500 peer-checked:bg-amber-950 peer-checked:border-amber-800/50 border border-gray-700"></div>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-300">Show Rear Cargo Flatbed</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="toggle-bed" class="sr-only peer" checked>
+                            <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:bg-amber-500 peer-checked:bg-amber-950 peer-checked:border-amber-800/50 border border-gray-700"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4: STATS & BUILD -->
+            <div id="section-analytics" class="space-y-5 hidden">
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-1">Bill of Materials</h3>
+                    <p class="text-xs text-gray-500">Estimate raw stock and materials for this DIY design.</p>
+                </div>
+
+                <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 space-y-3 text-xs font-mono">
+                    <div class="flex justify-between pb-2 border-b border-gray-900">
+                        <span class="text-gray-400">Material Component</span>
+                        <span class="text-gray-300">Quantity / Spec</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">1-5/8" Steel Unistrut</span>
+                        <span class="text-amber-400" id="bom-unistrut">24 ft</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Biaxial Glass Sleeve (3" wide)</span>
+                        <span class="text-amber-400" id="bom-fiberglass">12 yds</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Epoxy Resin System</span>
+                        <span class="text-amber-400" id="bom-epoxy">0.6 Gal</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Engine Type</span>
+                        <span class="text-amber-400">420cc OHV (15 HP)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Leaf Springs (Rear)</span>
+                        <span class="text-amber-400" id="bom-leaves">4-Leaf Stack (x2)</span>
+                    </div>
+                    <div class="flex justify-between pt-2 border-t border-gray-900 font-bold text-gray-300">
+                        <span>Est. Build Cost</span>
+                        <span class="text-green-400" id="bom-cost">$890</span>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 my-4"></div>
+
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-2">The Composite Unistrut Concept</h3>
+                    <div class="bg-amber-500/5 border border-amber-500/10 p-3 rounded-lg space-y-2 text-xs text-gray-300 leading-relaxed">
+                        <p>
+                            <strong class="text-amber-400">Why Fiberglass?</strong> Standard 1-5/8" unistrut is highly convenient to bolt together, but flexes significantly under heavy cargo. 
+                        </p>
+                        <p>
+                            By wrapping unistrut elements with epoxy-impregnated glass-fiber sleeves, the composite shell absorbs the extreme tension forces along the bottom edges, while the steel core absorbs compression. This creates an incredibly rigid chassis with negligible extra weight!
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Static Specs Analytics Dashboard (Bottom of Sidebar) -->
+        <div class="p-5 bg-gray-950 border-t border-gray-800 space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
+                    <div class="text-[10px] uppercase text-gray-400 tracking-wider">Dry Weight</div>
+                    <div class="text-lg font-bold text-white font-mono mt-0.5" id="stat-weight">195 lbs</div>
+                </div>
+                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
+                    <div class="text-[10px] uppercase text-gray-400 tracking-wider">Flex Rigidity</div>
+                    <div class="text-lg font-bold text-white font-mono mt-0.5 flex items-center gap-1.5">
+                        <span id="stat-rigidity">72%</span>
+                        <span id="stat-rigidity-indicator" class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-1">
+                <div class="flex justify-between text-xs text-gray-400">
+                    <span>Center of Gravity (CG) Height</span>
+                    <span class="font-mono text-gray-200" id="stat-cg">13.2 in</span>
+                </div>
+                <!-- Mini Progress Bar Visual for Rigidity -->
+                <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                    <div id="bar-rigidity" class="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-300" style="width: 72%;"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Viewport Area -->
+    <main class="flex-1 h-full relative flex flex-col bg-gray-950">
+        <!-- Floating Visual Controls Overlay (Top Right) -->
+        <div class="absolute top-5 right-5 z-10 flex gap-2">
+            <button onclick="resetCamera()" class="bg-gray-900/90 hover:bg-gray-800 text-gray-200 border border-gray-800 p-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm backdrop-blur">
+                <i data-lucide="video" class="w-4 h-4"></i>
+                <span>Reset View</span>
+            </button>
+            <button onclick="toggleExplodedView()" id="btn-explode" class="bg-gray-900/90 hover:bg-gray-800 text-gray-200 border border-gray-800 p-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm backdrop-blur">
+                <i data-lucide="layers" class="w-4 h-4"></i>
+                <span id="label-explode">Explode Layout</span>
+            </button>
+        </div>
+
+        <!-- 3D Canvas Container -->
+        <div id="canvas-container" class="flex-1 w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+        <!-- Lower Interactive Overlay HUD -->
+        <div class="absolute bottom-5 left-5 right-5 pointer-events-none flex flex-col md:flex-row justify-between items-end gap-3 z-10">
+            <!-- Navigation HUD -->
+            <div class="bg-gray-900/95 border border-gray-800 px-4 py-3 rounded-2xl shadow-xl backdrop-blur flex items-center gap-4 pointer-events-auto max-w-sm md:max-w-md">
+                <div class="p-2 bg-amber-500/10 text-amber-400 rounded-lg">
+                    <i data-lucide="info" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold text-gray-200">Interactive 3D Editor</h4>
+                    <p class="text-[11px] text-gray-400">Left-Click and Drag to orbit camera. Scroll to zoom. Right-click to pan around the build frame.</p>
+                </div>
+            </div>
+
+            <!-- Frame Highlight Info box -->
+            <div class="bg-gray-900/95 border border-gray-800 px-4 py-3 rounded-2xl shadow-xl backdrop-blur pointer-events-auto flex flex-col gap-1 w-52 text-xs">
+                <div class="flex items-center gap-2 font-bold text-amber-400">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span>Drivetrain Active</span>
+                </div>
+                <p class="text-gray-400">Ready to accept chain & gear reductions to output shafts.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Interactive script implementation -->
+    <script>
+        // Global variables for user parameters
+        let params = {
+            length: 96,        // inches
+            width: 36,         // inches
+            glassLayers: 3,    // structural wrap sheets
+            wrapStyle: 'full', // 'full' or 'stress' (only joints wrapped)
+            leafArch: 5.0,     // inches height
+            leafCount: 4,      // leaves stacked
+            axleOffset: 16,    // rear axle offset from chassis end
+            tireSize: 18,      // inches wheel/tire overall diameter
+            engineMount: 'mid',// front, mid, rear
+            engineOffset: 0,   // custom slide adjustment
+            showCab: true,
+            showBed: true,
+            exploded: false
+        };
+
+        // UI Tab Management
+        function switchTab(tab) {
+            // Hide all sections
+            document.getElementById('section-frame').classList.add('hidden');
+            document.getElementById('section-suspension').classList.add('hidden');
+            document.getElementById('section-engine').classList.add('hidden');
+            document.getElementById('section-analytics').classList.add('hidden');
+
+            // Reset tab button aesthetics
+            const tabs = ['frame', 'suspension', 'engine', 'analytics'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                btn.className = "flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition-colors";
+            });
+
+            // Show and highlight current tab
+            document.getElementById(`section-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tab}`).className = "flex-1 py-3 text-center border-b-2 border-amber-500 text-amber-500 font-medium transition-colors";
+        }
+
+        function setWrapStyle(style) {
+            params.wrapStyle = style;
+            const btnFull = document.getElementById('wrap-full');
+            const btnStress = document.getElementById('wrap-joints');
+            if (style === 'full') {
+                btnFull.className = "py-2 px-3 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold text-center transition";
+                btnStress.className = "py-2 px-3 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold text-center transition";
+            } else {
+                btnFull.className = "py-2 px-3 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold text-center transition";
+                btnStress.className = "py-2 px-3 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold text-center transition";
+            }
+            updateChassis();
+        }
+
+        function setEngineMount(mount) {
+            params.engineMount = mount;
+            const mounts = ['front', 'mid', 'rear'];
+            mounts.forEach(m => {
+                const btn = document.getElementById(`mount-${m}`);
+                if (m === mount) {
+                    btn.className = "py-2 px-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold text-center transition";
+                } else {
+                    btn.className = "py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold text-center transition";
+                }
+            });
+            updateChassis();
+        }
+
+        function toggleExplodedView() {
+            params.exploded = !params.exploded;
+            const btn = document.getElementById('btn-explode');
+            const label = document.getElementById('label-explode');
+            if (params.exploded) {
+                btn.className = "bg-amber-500 text-gray-950 font-semibold border border-amber-400 p-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm backdrop-blur";
+                label.innerText = "Collapse Layout";
+            } else {
+                btn.className = "bg-gray-900/90 hover:bg-gray-800 text-gray-200 border border-gray-800 p-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm backdrop-blur";
+                label.innerText = "Explode Layout";
+            }
+            updateChassis();
+        }
+
+        // Initialize UI Control Event Listeners
+        function setupUIListeners() {
+            // Unistrut Core
+            document.getElementById('input-length').addEventListener('input', (e) => {
+                params.length = parseFloat(e.target.value);
+                document.getElementById('val-length').innerText = `${params.length} in`;
+                updateChassis();
+            });
+            document.getElementById('input-width').addEventListener('input', (e) => {
+                params.width = parseFloat(e.target.value);
+                document.getElementById('val-width').innerText = `${params.width} in`;
+                updateChassis();
+            });
+
+            // Fiberglass
+            document.getElementById('input-glass-layers').addEventListener('input', (e) => {
+                params.glassLayers = parseInt(e.target.value);
+                let label = "No wrap (Bare Steel)";
+                if (params.glassLayers > 0) {
+                    label = `${params.glassLayers} layers (${(params.glassLayers * 0.04).toFixed(3)}in)`;
+                }
+                document.getElementById('val-glass-layers').innerText = label;
+                updateChassis();
+            });
+
+            // Leaf springs
+            document.getElementById('input-leaf-arch').addEventListener('input', (e) => {
+                params.leafArch = parseFloat(e.target.value);
+                document.getElementById('val-leaf-arch').innerText = `${params.leafArch.toFixed(1)} in`;
+                updateChassis();
+            });
+            document.getElementById('input-leaf-count').addEventListener('input', (e) => {
+                params.leafCount = parseInt(e.target.value);
+                document.getElementById('val-leaf-count').innerText = `${params.leafCount} Leaf Pack`;
+                updateChassis();
+            });
+            document.getElementById('input-axle-pos').addEventListener('input', (e) => {
+                params.axleOffset = parseFloat(e.target.value);
+                document.getElementById('val-axle-pos').innerText = `${params.axleOffset} in`;
+                updateChassis();
+            });
+
+            // Tires
+            document.getElementById('input-tire-size').addEventListener('input', (e) => {
+                params.tireSize = parseFloat(e.target.value);
+                document.getElementById('val-tire-size').innerText = `${params.tireSize} in`;
+                updateChassis();
+            });
+
+            // Engine fine slide
+            document.getElementById('input-engine-offset').addEventListener('input', (e) => {
+                params.engineOffset = parseFloat(e.target.value);
+                let label = "Centered";
+                if (params.engineOffset > 0) label = `Aft ${params.engineOffset} in`;
+                if (params.engineOffset < 0) label = `Forward ${Math.abs(params.engineOffset)} in`;
+                document.getElementById('val-engine-offset').innerText = label;
+                updateChassis();
+            });
+
+            // Toggles
+            document.getElementById('toggle-cab').addEventListener('change', (e) => {
+                params.showCab = e.target.checked;
+                updateChassis();
+            });
+            document.getElementById('toggle-bed').addEventListener('change', (e) => {
+                params.showBed = e.target.checked;
+                updateChassis();
+            });
+        }
+
+        // Real-time calculation logic
+        function updateStats() {
+            // Density assumptions & values:
+            // Standard Unistrut 1-5/8" (12 gauge): ~1.9 lbs per foot.
+            // 3-inch glass wrap sleeve with epoxy: ~0.15 lbs per yard per layer.
+            // 420cc OHV engine block: ~72 lbs.
+            // Rear leaf assembly (pair with bracket mounts): ~22 lbs baseline + 3 lbs per extra leaf layer.
+            // Front spindle / steering / mechanical assembly: ~28 lbs.
+            // Wheels / Tires: ~14 lbs each (total 56 lbs).
+
+            // Calculate active material totals:
+            const totalUnistrutFt = ((params.length * 2 + params.width * 5) / 12); // Rails + 5 cross members
+            const baseUnistrutWt = totalUnistrutFt * 1.9;
+
+            let glassYdsTotal = 0;
+            if (params.glassLayers > 0) {
+                const wrapPerLayer = (params.length * 2 + params.width * 3) / 36; // Yards of sleeving
+                glassYdsTotal = wrapPerLayer * params.glassLayers;
+                if (params.wrapStyle === 'stress') {
+                    glassYdsTotal *= 0.4; // Wrapped only in joints
+                }
+            }
+            const glassWt = glassYdsTotal * 0.18; // Epoxy saturated composite weight
+
+            const engineWt = 72; // 420cc predator clone dry wt
+            const leafWt = (20 + (params.leafCount * 3)) * 2;
+            const wheelsWt = 4 * (10 + (params.tireSize * 0.3)); // scalable tire weight
+            const frontSteeringWt = 25;
+
+            const totalWt = Math.round(baseUnistrutWt + glassWt + engineWt + leafWt + wheelsWt + frontSteeringWt);
+
+            // Frame Rigidity Formula based on depth + fiberglass skins
+            // Unwrapped unistrut is about 40% rigidity index.
+            // Every wrap of structural glass sleeve adds significant resistance to buckling.
+            let rigidityIndex = 40 + (params.glassLayers * 8);
+            if (params.wrapStyle === 'stress') {
+                rigidityIndex = 40 + (params.glassLayers * 4); // half impact if only partial wrap
+            }
+            rigidityIndex = Math.min(Math.round(rigidityIndex), 100);
+
+            // Center of gravity calculation index
+            let engineFactor = 0;
+            if (params.engineMount === 'front') engineFactor = 15;
+            else if (params.engineMount === 'mid') engineFactor = 12;
+            else engineFactor = 14;
+            const calculatedCG = (10 + (params.leafArch * 0.5) + (params.tireSize * 0.1) + (engineFactor * 0.1)).toFixed(1);
+
+            // Est costs
+            const unistrutCost = totalUnistrutFt * 3.50;
+            const glassCost = glassYdsTotal * 8.0;
+            const epoxyCost = (glassYdsTotal * 0.05) * 120.0; // gallon cost
+            const engineCost = 380; // Standard 420cc predator engine clone price
+            const tiresCost = 4 * 45;
+            const hardwareCost = 150;
+            const totalCost = Math.round(unistrutCost + glassCost + epoxyCost + engineCost + tiresCost + hardwareCost);
+
+            // Update UI elements
+            document.getElementById('stat-weight').innerText = `${totalWt} lbs`;
+            document.getElementById('stat-rigidity').innerText = `${rigidityIndex}%`;
+            document.getElementById('stat-cg').innerText = `${calculatedCG} in`;
+            document.getElementById('bar-rigidity').style.width = `${rigidityIndex}%`;
+
+            // Rigidity bullet color indicator
+            const bullet = document.getElementById('stat-rigidity-indicator');
+            if (rigidityIndex < 55) {
+                bullet.className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
+            } else if (rigidityIndex < 75) {
+                bullet.className = "inline-block w-2.5 h-2.5 rounded-full bg-amber-500";
+            } else {
+                bullet.className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500";
+            }
+
+            // BOM elements
+            document.getElementById('bom-unistrut').innerText = `${Math.ceil(totalUnistrutFt)} ft`;
+            document.getElementById('bom-fiberglass').innerText = `${Math.ceil(glassYdsTotal)} yds`;
+            document.getElementById('bom-epoxy').innerText = `${(glassYdsTotal * 0.05).toFixed(1)} Gal`;
+            document.getElementById('bom-leaves').innerText = `${params.leafCount}-Leaf Pack (x2)`;
+            document.getElementById('bom-cost').innerText = `$${totalCost}`;
+        }
+
+        // ==========================================
+        // THREE.JS VIEWPORT & VISUAL ENGINE
+        // ==========================================
+        let scene, camera, renderer, controls;
+        let vehicleGroup; // Holds all dynamic meshes
+
+        // Color & Material definitions
+        const COLORS = {
+            unistrut: 0xb0b3b8,        // galvanised silver
+            fiberglass: 0x22c55e,      // translucent epoxy green-teal
+            fiberglassOpaque: 0x064e3b,// base deep green composite
+            steelLeaf: 0x374151,       // dark grey high temper carbon steel
+            tireRubber: 0x111827,      // deep dark rubber
+            rimMetal: 0xfacc15,        // energetic yellow sporty rims
+            engineCase: 0xef4444,      // bright utility red plastic shroud
+            engineBlock: 0x4b5563,     // aluminum silver casting
+            fuelCap: 0x111827,         // black
+            wireOverlay: 0x3b82f6,     // subtle blue wireframe
+            groundGrid: 0x374151,
+            comIndicator: 0xff3b30     // bright red center of gravity sphere
+        };
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Create Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d); // Dark premium canvas background
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.015);
+
+            // Create Camera
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.set(-110, 60, 110);
+
+            // Create Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Add Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; // Stay above ground plane
+            controls.minDistance = 30;
+            controls.maxDistance = 300;
+            controls.target.set(0, 10, 0);
+
+            // Ambient & Studio Light Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight1.position.set(80, 150, 60);
+            dirLight1.castShadow = true;
+            dirLight1.shadow.mapSize.width = 2048;
+            dirLight1.shadow.mapSize.height = 2048;
+            dirLight1.shadow.bias = -0.0001;
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x3b82f6, 0.3); // subtle blue soft fill
+            dirLight2.position.set(-80, 50, -60);
+            scene.add(dirLight2);
+
+            const floorLight = new THREE.DirectionalLight(0xffffff, 0.1);
+            floorLight.position.set(0, -50, 0);
+            scene.add(floorLight);
+
+            // Infinite Ground helper
+            const gridHelper = new THREE.GridHelper(300, 60, 0x1e293b, 0x111827);
+            gridHelper.position.y = -5; // offset slightly below wheels
+            scene.add(gridHelper);
+
+            const shadowGroundGeo = new THREE.PlaneGeometry(300, 300);
+            const shadowGroundMat = new THREE.ShadowMaterial({ opacity: 0.4 });
+            const shadowGround = new THREE.Mesh(shadowGroundGeo, shadowGroundMat);
+            shadowGround.rotation.x = -Math.PI / 2;
+            shadowGround.position.y = -5.02;
+            shadowGround.receiveShadow = true;
+            scene.add(shadowGround);
+
+            // Initialize Vehicle Component Group
+            vehicleGroup = new THREE.Group();
+            scene.add(vehicleGroup);
+
+            // Initial Draw
+            updateChassis();
+
+            // Resize callback
+            window.addEventListener('resize', onWindowResize);
+
+            // Start animation loop
+            animate();
+        }
+
+        function resetCamera() {
+            camera.position.set(-110, 60, 110);
+            controls.target.set(0, 10, 0);
+            controls.update();
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(width, height);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // ==========================================
+        // 3D PROCEDURAL GENERATOR
+        // ==========================================
+        function updateChassis() {
+            // Clean out the old layout components
+            while(vehicleGroup.children.length > 0){
+                const obj = vehicleGroup.children[0];
+                vehicleGroup.remove(obj);
+            }
+
+            // Global Scaling factor (inches to 3D coordinate units)
+            // Let 1 inch = 0.5 units in Three.js
+            const scale = 0.5;
+
+            const chLength = params.length * scale;
+            const chWidth = params.width * scale;
+            const glassThick = params.glassLayers * 0.1; 
+            const expY = params.exploded ? 10 : 0; // vertical offset factor for exploded view
+
+            // Materials
+            const unistrutMat = new THREE.MeshStandardMaterial({
+                color: COLORS.unistrut,
+                metalness: 0.8,
+                roughness: 0.3,
+                name: "Unistrut Core"
+            });
+
+            // Composite Glass Wrap Sleeve Material
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: COLORS.fiberglass,
+                roughness: 0.1,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.45,
+                depthWrite: true,
+                name: "Fiberglass Shell"
+            });
+
+            const steelLeafMat = new THREE.MeshStandardMaterial({
+                color: COLORS.steelLeaf,
+                roughness: 0.6,
+                metalness: 0.7,
+                name: "Leaf Steel"
+            });
+
+            const tireMat = new THREE.MeshStandardMaterial({
+                color: COLORS.tireRubber,
+                roughness: 0.8,
+                metalness: 0.1,
+                name: "Tire Tread"
+            });
+
+            const rimMat = new THREE.MeshStandardMaterial({
+                color: COLORS.rimMetal,
+                roughness: 0.2,
+                metalness: 0.8,
+                name: "Rim Metal"
+            });
+
+            // 1. GENERATE FRAME RAILS (Unistrut + Fiberglass Wrap)
+            const railHeight = 1.625 * scale; // 1-5/8 in
+            const railWidth = 1.625 * scale;  // 1-5/8 in
+
+            // Two main longitudinal side-frame members
+            const railGeometry = new THREE.BoxGeometry(chLength, railHeight, railWidth);
+            
+            // Left main rail
+            const leftRail = new THREE.Mesh(railGeometry, unistrutMat);
+            leftRail.position.set(0, 5, -chWidth/2);
+            leftRail.castShadow = true;
+            leftRail.receiveShadow = true;
+            vehicleGroup.add(leftRail);
+
+            // Right main rail
+            const rightRail = new THREE.Mesh(railGeometry, unistrutMat);
+            rightRail.position.set(0, 5, chWidth/2);
+            rightRail.castShadow = true;
+            rightRail.receiveShadow = true;
+            vehicleGroup.add(rightRail);
+
+            // Fiberglass Wrap sleeves over Left/Right side rails
+            if (params.glassLayers > 0) {
+                const wrapLength = (params.wrapStyle === 'full') ? chLength + 0.5 : chLength * 0.35;
+                const wrapGeometry = new THREE.BoxGeometry(wrapLength, railHeight + glassThick, railWidth + glassThick);
+
+                if (params.wrapStyle === 'full') {
+                    // One full jacket on each side
+                    const leftWrap = new THREE.Mesh(wrapGeometry, glassMat);
+                    leftWrap.position.set(0, 5 + expY, -chWidth/2);
+                    vehicleGroup.add(leftWrap);
+
+                    const rightWrap = new THREE.Mesh(wrapGeometry, glassMat);
+                    rightWrap.position.set(0, 5 + expY, chWidth/2);
+                    vehicleGroup.add(rightWrap);
+                } else {
+                    // wrapped locally where suspension hangers and engine plates bolt up (stress nodes)
+                    // suspension stress nodes (Rear third)
+                    const leftSuspWrap = new THREE.Mesh(wrapGeometry, glassMat);
+                    leftSuspWrap.position.set(chLength/4, 5 + expY, -chWidth/2);
+                    vehicleGroup.add(leftSuspWrap);
+
+                    const rightSuspWrap = new THREE.Mesh(wrapGeometry, glassMat);
+                    rightSuspWrap.position.set(chLength/4, 5 + expY, chWidth/2);
+                    vehicleGroup.add(rightSuspWrap);
+
+                    // Engine mount stress nodes (front or mid depending on spec)
+                    let engStressX = 0;
+                    if (params.engineMount === 'front') engStressX = -chLength/3;
+                    else if (params.engineMount === 'mid') engStressX = -chLength/8;
+                    else engStressX = chLength/3;
+
+                    const leftEngWrap = new THREE.Mesh(wrapGeometry, glassMat);
+                    leftEngWrap.position.set(engStressX, 5 + expY, -chWidth/2);
+                    vehicleGroup.add(leftEngWrap);
+
+                    const rightEngWrap = new THREE.Mesh(wrapGeometry, glassMat);
+                    rightEngWrap.position.set(engStressX, 5 + expY, chWidth/2);
+                    vehicleGroup.add(rightEngWrap);
+                }
+            }
+
+            // Cross members (Unistrut beams placed at equal divisions)
+            const numCrossMembers = 5;
+            const crossGeo = new THREE.BoxGeometry(railWidth, railHeight, chWidth - railWidth);
+            const startX = -chLength / 2 + railWidth/2;
+            const endX = chLength / 2 - railWidth/2;
+            const stepX = (endX - startX) / (numCrossMembers - 1);
+
+            for (let i = 0; i < numCrossMembers; i++) {
+                const posX = startX + (i * stepX);
+                const crossMember = new THREE.Mesh(crossGeo, unistrutMat);
+                crossMember.position.set(posX, 5, 0);
+                crossMember.castShadow = true;
+                crossMember.receiveShadow = true;
+                vehicleGroup.add(crossMember);
+
+                // Add fiberglass sleeve joints at structural cross intersections
+                if (params.glassLayers > 0 && (params.wrapStyle === 'full' || i === 0 || i === numCrossMembers-1 || i === 2)) {
+                    const jointWrapGeo = new THREE.BoxGeometry(railWidth + glassThick, railHeight + glassThick, chWidth - railWidth + 0.2);
+                    const jointWrap = new THREE.Mesh(jointWrapGeo, glassMat);
+                    jointWrap.position.set(posX, 5 + expY, 0);
+                    vehicleGroup.add(jointWrap);
+                }
+            }
+
+
+            // 2. REAR SUSPENSION: LEAF SPRINGS & DRIVEN REAR AXLE
+            // Rear axle position calculated relative to rear rail tip
+            const rearAxleX = chLength/2 - (params.axleOffset * scale);
+            const springSpan = 32 * scale; // length of leaf spring arch
+            const leafArchH = params.leafArch * scale;
+
+            // Generate Arched Leaf Spring stack dynamically
+            function createLeafSpring(zSide) {
+                const springGroup = new THREE.Group();
+                const count = params.leafCount;
+
+                // Create a series of nested curved leaves
+                for (let layer = 0; layer < count; layer++) {
+                    // Length reduces as we go down the leaf pack
+                    const layerSpan = springSpan * (1 - (layer * 0.15));
+                    const archY = leafArchH - (layer * 0.3 * scale);
+                    
+                    // Build path for Bezier Curve
+                    const curve = new THREE.QuadraticBezierCurve3(
+                        new THREE.Vector3(-layerSpan/2, 0, 0),
+                        new THREE.Vector3(0, archY, 0),
+                        new THREE.Vector3(layerSpan/2, 0, 0)
+                    );
+
+                    // Extrude a flat bar along curve
+                    const extrudeSettings = {
+                        steps: 30,
+                        bevelEnabled: false,
+                        extrudePath: curve
+                    };
+
+                    const barShape = new THREE.Shape();
+                    const bW = 1.5 * scale;  // leaf width
+                    const bH = 0.15 * scale; // thickness of individual leaf
+                    barShape.moveTo(-bW/2, -bH/2);
+                    barShape.lineTo(bW/2, -bH/2);
+                    barShape.lineTo(bW/2, bH/2);
+                    barShape.lineTo(-bW/2, bH/2);
+                    barShape.lineTo(-bW/2, -bH/2);
+
+                    const leafMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(barShape, extrudeSettings), steelLeafMat);
+                    leafMesh.castShadow = true;
+                    springGroup.add(leafMesh);
+                }
+
+                // Add shackles / mounting hangers linking leaf to unistrut frame
+                const bracketGeo = new THREE.BoxGeometry(2 * scale, 2.5 * scale, 1.8 * scale);
+                const bracketMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5, metalness: 0.9 });
+                
+                // Front and rear shackle mounts
+                const frontHanger = new THREE.Mesh(bracketGeo, bracketMat);
+                frontHanger.position.set(-springSpan/2, leafArchH/2, 0);
+                springGroup.add(frontHanger);
+
+                const rearShackle = new THREE.Mesh(bracketGeo, bracketMat);
+                rearShackle.position.set(springSpan/2, leafArchH/2, 0);
+                springGroup.add(rearShackle);
+
+                // Axle block connection U-Bolts
+                const uBoltGeo = new THREE.BoxGeometry(2 * scale, 2 * scale, 2 * scale);
+                const uBolt = new THREE.Mesh(uBoltGeo, bracketMat);
+                uBolt.position.set(0, leafArchH, 0);
+                springGroup.add(uBolt);
+
+                springGroup.position.set(rearAxleX, 5 - leafArchH - (0.5 * scale), zSide);
+                // Invert group scale to orient spring downward under frame
+                springGroup.scale.set(1, -1, 1);
+                vehicleGroup.add(springGroup);
+            }
+
+            // Create both rear side springs
+            createLeafSpring(-chWidth/2);
+            createLeafSpring(chWidth/2);
+
+            // Rear Axle Tube
+            const axleRad = 0.75 * scale;
+            const axleLen = chWidth + (8 * scale);
+            const axleGeo = new THREE.CylinderGeometry(axleRad, axleRad, axleLen, 16);
+            axleGeo.rotateX(Math.PI/2);
+            const axleMesh = new THREE.Mesh(axleGeo, steelLeafMat);
+            axleMesh.position.set(rearAxleX, 5 - leafArchH - (0.75 * scale), 0);
+            axleMesh.castShadow = true;
+            vehicleGroup.add(axleMesh);
+
+
+            // 3. WHEELS & TIRES Setup
+            const tireRad = (params.tireSize / 2) * scale;
+            const tireThick = 5.5 * scale; // Wide rugged look
+            const rimRad = tireRad * 0.6;
+
+            function createWheel(posX, posY, posZ, isSteering = false) {
+                const wheelGroup = new THREE.Group();
+
+                // Tire Rubber
+                const tireGeo = new THREE.CylinderGeometry(tireRad, tireRad, tireThick, 32);
+                tireGeo.rotateX(Math.PI/2);
+                const tire = new THREE.Mesh(tireGeo, tireMat);
+                tire.castShadow = true;
+                wheelGroup.add(tire);
+
+                // Utility Hubcap/Rims with sport holes
+                const rimGeo = new THREE.CylinderGeometry(rimRad, rimRad, tireThick + 0.1, 16);
+                rimGeo.rotateX(Math.PI/2);
+                const rim = new THREE.Mesh(rimGeo, rimMat);
+                rim.castShadow = true;
+                wheelGroup.add(rim);
+
+                // Axle central spindle hub
+                const hubGeo = new THREE.CylinderGeometry(rimRad * 0.3, rimRad * 0.3, tireThick + 0.4, 16);
+                hubGeo.rotateX(Math.PI/2);
+                const hub = new THREE.Mesh(hubGeo, steelLeafMat);
+                wheelGroup.add(hub);
+
+                // Tire Tread details (Visual ribs around tire cylinder)
+                const treadCount = 10;
+                for (let r = 0; r < treadCount; r++) {
+                    const angle = (r / treadCount) * Math.PI * 2;
+                    const ribGeo = new THREE.BoxGeometry(0.4 * scale, tireRad * 0.1, tireThick + 0.05);
+                    const rib = new THREE.Mesh(ribGeo, tireMat);
+                    rib.position.set(Math.cos(angle) * tireRad, Math.sin(angle) * tireRad, 0);
+                    rib.rotation.z = angle;
+                    wheelGroup.add(rib);
+                }
+
+                // If front steering, angle them slightly for an active aesthetic dynamic
+                if (isSteering) {
+                    wheelGroup.rotation.y = 0.22; // slight turn angle
+                }
+
+                wheelGroup.position.set(posX, posY, posZ);
+                vehicleGroup.add(wheelGroup);
+            }
+
+            // Calculate exact ground matching wheel clearance
+            const wheelY = 5 - leafArchH - (0.75 * scale);
+
+            // Back left & right wheels
+            createWheel(rearAxleX, wheelY, -axleLen/2 + (1 * scale));
+            createWheel(rearAxleX, wheelY, axleLen/2 - (1 * scale));
+
+            // Front Axle (Independently suspended crossmember or beam axle)
+            const frontAxleX = -chLength/2 + (12 * scale);
+            const frontAxleGeo = new THREE.CylinderGeometry(axleRad, axleRad, axleLen, 16);
+            frontAxleGeo.rotateX(Math.PI/2);
+            const frontAxle = new THREE.Mesh(frontAxleGeo, steelLeafMat);
+            frontAxle.position.set(frontAxleX, wheelY, 0);
+            frontAxle.castShadow = true;
+            vehicleGroup.add(frontAxle);
+
+            // Front Spindle steering blocks
+            const steerBlockGeo = new THREE.BoxGeometry(2 * scale, 3 * scale, 2 * scale);
+            const leftSteerBlock = new THREE.Mesh(steerBlockGeo, steelLeafMat);
+            leftSteerBlock.position.set(frontAxleX, wheelY, -chWidth/2 - (1 * scale));
+            vehicleGroup.add(leftSteerBlock);
+
+            const rightSteerBlock = new THREE.Mesh(steerBlockGeo, steelLeafMat);
+            rightSteerBlock.position.set(frontAxleX, wheelY, chWidth/2 + (1 * scale));
+            vehicleGroup.add(rightSteerBlock);
+
+            // Front left & right wheels
+            createWheel(frontAxleX, wheelY, -axleLen/2 + (1 * scale), true);
+            createWheel(frontAxleX, wheelY, axleLen/2 - (1 * scale), true);
+
+
+            // 4. POWERPLANT: 420CC OHV SINGLE CYLINDER ENGINE
+            // Modelled dynamically based on real engine proportions (block, cylinder slant, recoil start, tank)
+            const engineGroup = new THREE.Group();
+
+            // Core Crankcase Block
+            const blockW = 8 * scale;
+            const blockH = 7 * scale;
+            const blockD = 7 * scale;
+            const blockGeo = new THREE.BoxGeometry(blockW, blockH, blockD);
+            const blockMat = new THREE.MeshStandardMaterial({ color: COLORS.engineBlock, roughness: 0.4, metalness: 0.8 });
+            const mainBlock = new THREE.Mesh(blockGeo, blockMat);
+            mainBlock.castShadow = true;
+            engineGroup.add(mainBlock);
+
+            // Slanted Overhead Valve (OHV) Cylinder head (Tilted 25 degrees)
+            const cylGeo = new THREE.CylinderGeometry(2.5 * scale, 2.5 * scale, 6 * scale, 12);
+            const cylMesh = new THREE.Mesh(cylGeo, blockMat);
+            cylMesh.position.set(-2.5 * scale, 2.5 * scale, 0);
+            cylMesh.rotation.z = Math.PI / 6; // tilted slant cylinder
+            cylMesh.castShadow = true;
+            engineGroup.add(cylMesh);
+
+            // Red Plastic Starter Recoil shroud / casing
+            const shroudGeo = new THREE.CylinderGeometry(3.5 * scale, 3.5 * scale, 2 * scale, 16);
+            shroudGeo.rotateX(Math.PI/2);
+            const shroudMat = new THREE.MeshStandardMaterial({ color: COLORS.engineCase, roughness: 0.2, metalness: 0.1 });
+            const shroud = new THREE.Mesh(shroudGeo, shroudMat);
+            shroud.position.set(0, 0, blockD/2 + (1 * scale));
+            shroud.castShadow = true;
+            engineGroup.add(shroud);
+
+            // Red Metal Fuel Tank
+            const tankGeo = new THREE.BoxGeometry(6 * scale, 3 * scale, 5 * scale);
+            const tank = new THREE.Mesh(tankGeo, shroudMat);
+            tank.position.set(0, blockH/2 + (1.5 * scale), 0);
+            tank.castShadow = true;
+            engineGroup.add(tank);
+
+            // Gas Cap
+            const capGeo = new THREE.CylinderGeometry(0.8 * scale, 0.8 * scale, 0.5 * scale, 12);
+            const capMat = new THREE.MeshStandardMaterial({ color: COLORS.fuelCap, roughness: 0.8 });
+            const cap = new THREE.Mesh(capGeo, capMat);
+            cap.position.set(1.5 * scale, blockH/2 + (3.2 * scale), 0);
+            engineGroup.add(cap);
+
+            // Muffler / Exhaust pipe
+            const exhaustCurve = new THREE.QuadraticBezierCurve3(
+                new THREE.Vector3(-4 * scale, 3 * scale, 0),
+                new THREE.Vector3(-8 * scale, 5 * scale, -1 * scale),
+                new THREE.Vector3(-6 * scale, 1 * scale, -3 * scale)
+            );
+            const exhaustGeo = new THREE.TubeGeometry(exhaustCurve, 10, 0.6 * scale, 8, false);
+            const exhaustMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.7, metalness: 0.9 });
+            const exhaust = new THREE.Mesh(exhaustGeo, exhaustMat);
+            exhaust.castShadow = true;
+            engineGroup.add(exhaust);
+
+            // Air filter box
+            const airBoxGeo = new THREE.BoxGeometry(4 * scale, 3 * scale, 2.5 * scale);
+            const airBox = new THREE.Mesh(airBoxGeo, capMat);
+            airBox.position.set(-2 * scale, 2.5 * scale, -blockD/2 - (1.2 * scale));
+            engineGroup.add(airBox);
+
+            // Drive PTO Output Shaft
+            const shaftGeo = new THREE.CylinderGeometry(0.5 * scale, 0.5 * scale, 4 * scale, 12);
+            shaftGeo.rotateX(Math.PI/2);
+            const shaft = new THREE.Mesh(shaftGeo, steelLeafMat);
+            shaft.position.set(0, -1.5 * scale, -blockD/2 - (2 * scale));
+            engineGroup.add(shaft);
+
+            // Position engine on chassis based on selection
+            let engX = 0;
+            // Front, mid, rear options
+            if (params.engineMount === 'front') {
+                engX = frontAxleX + (10 * scale);
+            } else if (params.engineMount === 'mid') {
+                engX = 0;
+            } else {
+                engX = rearAxleX - (12 * scale);
+            }
+
+            // Fine adjust engine offset from selector
+            engX += (params.engineOffset * scale);
+
+            // Set Engine height resting directly atop the unistrut rails
+            engineGroup.position.set(engX, 5 + (3.5 * scale) + (railHeight/2), 0);
+            vehicleGroup.add(engineGroup);
+
+
+            // 5. CAB & BED OVERLAY WIREFRAMES
+            // Driver Cab Transparent Overlay (Reference Layout)
+            if (params.showCab) {
+                const cabGroup = new THREE.Group();
+                const cabW = 34 * scale;
+                const cabH = 40 * scale;
+                const cabD = chWidth - (2 * scale);
+                const cabGeo = new THREE.BoxGeometry(cabW, cabH, cabD);
+                
+                // Translucent orange glowing overlay
+                const cabMat = new THREE.MeshStandardMaterial({
+                    color: 0xf59e0b,
+                    transparent: true,
+                    opacity: 0.08,
+                    wireframe: false,
+                    depthWrite: false
+                });
+                const cab = new THREE.Mesh(cabGeo, cabMat);
+                cab.position.set(0, 0, 0);
+                cabGroup.add(cab);
+
+                // Add nice colored edges
+                const edgeGeo = new THREE.EdgesGeometry(cabGeo);
+                const edgeLine = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 2 }));
+                cabGroup.add(edgeLine);
+
+                // Center cabin relative to front steering and chassis mid point
+                const cabX = frontAxleX + (18 * scale);
+                cabGroup.position.set(cabX, 5 + cabH/2 + railHeight/2, 0);
+                vehicleGroup.add(cabGroup);
+            }
+
+            // Rear Cargo Flatbed Transparent Overlay (Reference Layout)
+            if (params.showBed) {
+                const bedGroup = new THREE.Group();
+                // Bed spans from cabin rear to the tip of chassis
+                const cabX = frontAxleX + (18 * scale);
+                const bedStartX = cabX + (17 * scale);
+                const bedEndX = chLength/2;
+                const bedW = bedEndX - bedStartX;
+                const bedH = 12 * scale;
+                const bedD = chWidth + (6 * scale); // Cargo overhang beyond track width
+
+                if (bedW > 4 * scale) {
+                    const bedGeo = new THREE.BoxGeometry(bedW, bedH, bedD);
+                    const bedMat = new THREE.MeshStandardMaterial({
+                        color: 0x3b82f6,
+                        transparent: true,
+                        opacity: 0.06,
+                        depthWrite: false
+                    });
+                    const bed = new THREE.Mesh(bedGeo, bedMat);
+                    bedGroup.add(bed);
+
+                    const bedEdgeGeo = new THREE.EdgesGeometry(bedGeo);
+                    const bedEdgeLine = new THREE.LineSegments(bedEdgeGeo, new THREE.LineBasicMaterial({ color: 0x3b82f6 }));
+                    bedGroup.add(bedEdgeLine);
+
+                    bedGroup.position.set(bedStartX + bedW/2, 5 + bedH/2 + railHeight/2, 0);
+                    vehicleGroup.add(bedGroup);
+                }
+            }
+
+            // 6. CENTER OF GRAVITY (CG) MARKER
+            // Visual dynamic indicator representing calculated Center of Mass
+            const cgMarkerGroup = new THREE.Group();
+            
+            // Sphere core
+            const sphereGeo = new THREE.SphereGeometry(1.2 * scale, 16, 16);
+            const sphereMat = new THREE.MeshBasicMaterial({
+                color: COLORS.comIndicator,
+                transparent: true,
+                opacity: 0.8
+            });
+            const cgSphere = new THREE.Mesh(sphereGeo, sphereMat);
+            cgMarkerGroup.add(cgSphere);
+
+            // Ring around sphere
+            const ringGeo = new THREE.RingGeometry(1.8 * scale, 2.2 * scale, 32);
+            ringGeo.rotateX(Math.PI/2);
+            const ringMat = new THREE.MeshBasicMaterial({ color: COLORS.comIndicator, side: THREE.DoubleSide });
+            const cgRing = new THREE.Mesh(ringGeo, ringMat);
+            cgMarkerGroup.add(cgRing);
+
+            // Position dynamic CG indicator based on active engine mount
+            let cgX = 0;
+            if (params.engineMount === 'front') cgX = frontAxleX + (12 * scale);
+            else if (params.engineMount === 'mid') cgX = 0;
+            else cgX = rearAxleX - (10 * scale);
+            cgX += (params.engineOffset * 0.3 * scale); // engine weight offset slider bias
+
+            const cgY = wheelY + (params.leafArch * 0.5 * scale) + (params.tireSize * 0.1 * scale) + 6 * scale;
+            cgMarkerGroup.position.set(cgX, cgY, 0);
+            vehicleGroup.add(cgMarkerGroup);
+
+            // Re-render UI dashboard numbers in unison
+            updateStats();
+        }
+
+        // Window startup trigger
+        window.onload = function () {
+            init3D();
+            setupUIListeners();
+            lucide.createIcons(); // Initialize modern crisp vector sidebar icons
+        }
+    </script>
+</body>
+</html>
