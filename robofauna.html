@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>ROBOFAUNA // SDF</title>
+<style>
+  html,body{margin:0;height:100%;background:#050608;overflow:hidden;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Inter",Segoe UI,Roboto;}
+  canvas{display:block;width:100%;height:100%}
+  .ui{position:fixed;top:20px;left:20px;z-index:10;padding:16px 18px;min-width:240px;max-width:340px;background:linear-gradient(180deg,rgba(22,26,33,.78),rgba(10,12,16,.56));border:1px solid rgba(255,255,255,.09);border-radius:16px;backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);box-shadow:0 12px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);color:#e6ecf3;}
+  .ui h1{margin:0 0 2px;font-size:15px;font-weight:600;letter-spacing:.14em;color:#d8e6ff}
+  .ui p{margin:0 0 12px;font-size:12px;color:#9fb0c3;letter-spacing:.02em}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  button{appearance:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#d5e2f2;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:500;letter-spacing:.02em;cursor:pointer;transition:.2s;backdrop-filter:blur(4px);}
+  button:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  .hint{position:fixed;bottom:16px;right:16px;color:#7e8da1;font-size:11px;opacity:.7;pointer-events:none}
+  @media (max-width:600px){.ui{top:12px;left:12px;right:12px;max-width:none;padding:14px}.ui h1{font-size:14px}button{flex:1 1 auto;padding:10px}.hint{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="ui">
+  <h1>ROBOFAUNA // SDF</h1>
+  <p>procedural robot creatures — raymarched</p>
+  <div class="btns">
+    <button id="regen">Regenerate</button>
+    <button id="pause">Pause</button>
+    <button id="debug">Toggle Debug</button>
+  </div>
+</div>
+<div class="hint">drag to orbit • scroll to zoom</div>
+
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', {antialias:true});
+if(!gl){document.body.innerHTML='<h2 style="color:white">WebGL2 required</h2>';}
+
+const vert = `#version 300 es
+precision highp float;
+in vec2 aPos;
+out vec2 vUv;
+void main(){
+  vUv = aPos*0.5+0.5;
+  gl_Position = vec4(aPos,0.0,1.0);
+}`;
+
+const frag = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform float uTime; uniform vec2 uResolution; uniform vec3 uCamPos; uniform vec3 uCamTarget; uniform float uSeed; uniform float uDebug;
+
+float hash(float n){ return fract(sin(n)*43758.5453123); }
+float hash21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+
+float sdSphere(vec3 p,float r){ return length(p)-r; }
+float sdBox(vec3 p,vec3 b){ vec3 d=abs(p)-b; return length(max(d,0.0))+min(max(d.x,max(d.y,d.z)),0.0); }
+float sdCyl(vec3 p,float r,float h){ vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h); return min(max(d.x,d.y),0.0)+length(max(d,0.0)); }
+float sdTorus(vec3 p,vec2 t){ vec2 q=vec2(length(p.xz)-t.x,p.y); return length(q)-t.y; }
+float sdCapsule(vec3 p,vec3 a,vec3 b,float r){ vec3 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-r; }
+
+struct Hit{ float d; vec3 col; float metal; float rough; float glow; };
+
+Hit creatureHex(vec3 p, float seed){
+  Hit h; h.d=1e5; h.col=vec3(.62); h.metal=.9; h.rough=.35; h.glow=0.;
+  float bodyL=mix(.9,1.3,hash(seed));
+  vec3 bp=p-vec3(0,.35,0);
+  float dBody=sdBox(bp, vec3(bodyL*.5,.15,.22));
+  if(dBody<h.d){ h.d=dBody; h.col=vec3(.62,.63,.66); }
+  for(int i=0;i<5;i++){
+    float fi=float(i); float t=fi/4.-.5;
+    vec3 pp=p-vec3(t*bodyL*.8,.52,0);
+    float dPl=sdBox(pp,vec3(.18,.03,.24));
+    if(dPl<h.d){ h.d=dPl; h.col=mix(vec3(.5,.5,.55),vec3(.6,.42,.28),hash(seed+fi)); h.metal=.86; h.rough=.32; }
+  }
+  vec3 hp=p-vec3(bodyL*.55,.35,0);
+  float dHead=mix(sdBox(hp,vec3(.14,.11,.13)), sdSphere(hp,.14), step(.5,hash(seed+2.)));
+  if(dHead<h.d){ h.d=dHead; h.col=vec3(.59); h.metal=.95; h.rough=.22; }
+  vec3 eyeOff=vec3(.11,.02,.07);
+  float dEL=sdSphere(p-(vec3(bodyL*.55,.35,0)+eyeOff),.025);
+  float dER=sdSphere(p-(vec3(bodyL*.55,.35,0)+vec3(eyeOff.x,eyeOff.y,-eyeOff.z)),.025);
+  float dEye=min(dEL,dER);
+  if(dEye<h.d){ h.d=dEye; vec3 ec=mix(vec3(.1,.9,1.),vec3(1.,.4,.1),hash(seed+3.)); h.col=ec; h.metal=.1; h.rough=.08; h.glow=1.; }
+  vec3 ab=vec3(bodyL*.55,.45,0);
+  for(int a=0;a<2;a++){
+    float s=a==0?1.:-1.;
+    vec3 a0=ab+vec3(0,0,s*.06);
+    vec3 a1=a0+vec3(.25,.15,s*.05)*mix(.8,1.3,hash(seed+4.));
+    float dAnt=sdCapsule(p,a0,a1,.008);
+    if(dAnt<h.d){ h.d=dAnt; h.col=vec3(.32); h.metal=.9; h.rough=.4; }
+  }
+  for(int i=0;i<6;i++){
+    float side=i<3?1.:-1.; float idx=float(i%3);
+    vec3 root=vec3((idx-1.)*.2, .25, side*.24);
+    float phase=float(i)*1.047+hash(seed)*6.28;
+    float swing=sin(uTime*2.8+phase)*.45;
+    float lift=max(0.,sin(uTime*2.8+phase))*.25;
+    vec3 knee=root+vec3(swing*.18, -.18 - lift*.3, side*.05);
+    vec3 foot=knee+vec3(swing*.15, -.22 - lift*.2, side*.12);
+    float dUp=sdCapsule(p,root,knee,.028);
+    float dLo=sdCapsule(p,knee,foot,.022);
+    float dLeg=min(dUp,dLo);
+    if(dLeg<h.d){ h.d=dLeg; h.col=vec3(.55,.56,.58); h.metal=.9; h.rough=.46; }
+    float dJ=sdSphere(p-knee,.038);
+    if(dJ<h.d){ h.d=dJ; h.col=vec3(.85,.35,.12); h.metal=.3; h.rough=.22; h.glow=.6+.4*sin(uTime*3.+phase); }
+  }
+  return h;
+}
+
+Hit creatureCrab(vec3 p,float seed){
+  Hit h; h.d=1e5; h.col=vec3(.5); h.metal=.85; h.rough=.4; h.glow=0.;
+  float w=mix(.6,.9,hash(seed)); float l=mix(.5,.7,hash(seed+1.));
+  vec3 bp=p-vec3(0,.28,0);
+  float dBody=min(sdBox(bp,vec3(l,.12,w)), sdSphere(bp+vec3(0,.05,0),w*.9)-.05);
+  if(dBody<h.d){ h.d=dBody; h.col=vec3(.48,.42,.38); }
+  for(int e=0;e<2;e++){ float s=e==0?1.:-1.; vec3 e0=vec3(l*.4,.38,s*.18); vec3 e1=e0+vec3(.08,.12,s*.02);
+    float dS=sdCapsule(p,e0,e1,.018); if(dS<h.d){h.d=dS; h.col=vec3(.5);}
+    float dE=sdSphere(p-e1,.032); if(dE<h.d){h.d=dE; h.col=vec3(1.,.25,.12); h.glow=.9; h.metal=.15; h.rough=.12;}
+  }
+  for(int i=0;i<4;i++){ float side=i<2?1.:-1.; float idx=float(i%2); vec3 root=vec3((idx-.5)*l*.4,.22, side*(w+.05));
+    float phase=float(i)*1.3+hash(seed)*6.28; float swing=sin(uTime*3.2+phase)*.6; float lift=max(0.,sin(uTime*3.2+phase))*.3;
+    vec3 mid=root+vec3(swing*.15, -.15-lift*.25, side*.25); vec3 foot=mid+vec3(swing*.15, -.2, side*.15);
+    float d1=sdCapsule(p,root,mid,.025); float d2=sdCapsule(p,mid,foot,.02); float dL=min(d1,d2); if(dL<h.d){h.d=dL; h.col=vec3(.55,.5,.45);}
+    float dJ=sdSphere(p-mid,.035); if(dJ<h.d){h.d=dJ; h.col=vec3(.2,.72,.95); h.glow=.5+.3*sin(uTime*4.+phase); h.metal=.25; h.rough=.2;}
+  }
+  for(int c=0;c<2;c++){ float s=c==0?1.:-1.; vec3 c0=vec3(l+.05,.25,s*.3); vec3 c1=c0+vec3(.32,-.05,s*.15);
+    float dA=sdCapsule(p,c0,c1,.03); if(dA<h.d){h.d=dA; h.col=vec3(.52);}
+    float dP=sdSphere(p-c1,.05); if(dP<h.d){h.d=dP; h.col=vec3(.62,.62,.65); h.metal=.95; h.rough=.2;}
+  }
+  return h;
+}
+
+Hit creatureGrazer(vec3 p,float seed){
+  Hit h; h.d=1e5; h.col=vec3(.55); h.metal=.88; h.rough=.35; h.glow=0.;
+  float L=mix(1.,1.4,hash(seed));
+  vec3 bp=p-vec3(-.1,.65,0); float dB=sdBox(bp,vec3(L*.45,.22,.22)); if(dB<h.d){h.d=dB;}
+  vec3 n0=vec3(L*.25,.65,0); vec3 n1=n0+vec3(.4,.35+.05*sin(uTime*.4+seed*5.),0);
+  float dN=sdCapsule(p,n0,n1,.07); if(dN<h.d){h.d=dN;}
+  vec3 head=n1+vec3(.12,.05,0); float dH=sdBox(p-head,vec3(.12,.07,.09)); if(dH<h.d){h.d=dH; h.metal=.9; h.rough=.25;}
+  float dE=sdSphere(p-(head+vec3(.08,.02,.07)),.02); if(dE<h.d){h.d=dE; h.col=vec3(.1,1.,.6); h.glow=.85; h.metal=.1; h.rough=.1;}
+  for(int i=0;i<4;i++){ float side=i<2?1.:-1.; float front=(i%2==0)?1.:-1.; vec3 root=vec3(front*L*.35,.6,side*.18);
+    float phase=float(i)*1.57+hash(seed)*3.; float swing=sin(uTime*1.2+phase)*.25; float lift=max(0.,sin(uTime*1.2+phase+1.))*0.15;
+    vec3 knee=root+vec3(swing*.2, -.35-lift*.2,0); vec3 foot=knee+vec3(swing*.15,-.35,0);
+    float d1=sdCapsule(p,root,knee,.03); float d2=sdCapsule(p,knee,foot,.025); float dl=min(d1,d2); if(dl<h.d){h.d=dl; h.col=vec3(.46,.44,.42); h.metal=.8; h.rough=.6;}
+    float dj=sdSphere(p-knee,.04); if(dj<h.d){h.d=dj; h.col=vec3(.92,.62,.22); h.glow=.42; h.metal=.3; h.rough=.2;}
+  }
+  vec3 t0=vec3(-L*.45,.65,0); vec3 t1=t0+vec3(-.3,.1,0); float dt=sdCapsule(p,t0,t1,.02); if(dt<h.d){h.d=dt;}
+  return h;
+}
+
+Hit creatureBall(vec3 p,float seed){
+  Hit h; h.d=1e5; h.col=vec3(.66); h.metal=.95; h.rough=.25; h.glow=0.;
+  float r=mix(.28,.36,hash(seed+1.)); vec3 cp=p-vec3(0,r+.05,0);
+  float spin=uTime*1.5; float cs=cos(spin), ss=sin(spin); float tx=cp.x; cp.x=cs*tx-ss*cp.z; cp.z=ss*tx+cs*cp.z;
+  float dBall=sdSphere(cp,r); float dGro=sdSphere(cp,r*.92); dBall=max(dBall,-dGro*.5);
+  if(dBall<h.d){h.d=dBall; h.col=vec3(.66,.67,.70);}
+  float dRing=sdTorus(cp,vec2(r*.85,.02)); if(dRing<h.d){h.d=dRing; h.col=vec3(.92,.32,.2); h.metal=.4; h.rough=.2; h.glow=.32;}
+  int legN=3+int(hash(seed+2.)*2.);
+  for(int i=0;i<4;i++){ if(i>=legN) break; float ang=float(i)/float(legN)*6.283+hash(seed); float ph=sin(uTime*1.7+ang*2.); float ext=.5+.5*ph;
+    vec3 dir=vec3(cos(ang),-.7,sin(ang)); vec3 l0=dir*r*.6; l0.y+=r; vec3 l1=l0+dir*(.22+ext*.18);
+    float dL=sdCapsule(p,l0+vec3(0,r+.05,0),l1+vec3(0,r+.05,0),.022); if(dL<h.d){h.d=dL; h.col=vec3(.42); h.metal=.86; h.rough=.5;}
+    float dF=sdSphere(p-(l1+vec3(0,r+.05,0)),.032); if(dF<h.d){h.d=dF; h.col=vec3(.2,.85,1.); h.glow=.7; h.metal=.2; h.rough=.15;}
+  }
+  float dEye=sdTorus(p-vec3(0,r+.05,0),vec2(r*.6,.015)); if(dEye<h.d){h.d=dEye; h.col=vec3(.1,.95,.9); h.glow=1.; h.metal=.1; h.rough=.05;}
+  return h;
+}
+
+float floraDist(vec3 p){
+  vec2 cell=floor(p.xz*0.2+0.5)*5.0;
+  float id=hash21(cell);
+  if(id>0.18) return 1e5;
+  vec2 pos=cell+vec2(hash(id+1.),hash(id+2.))*4.-2.;
+  vec3 base=vec3(pos.x,0.,pos.y);
+  float hgt=.6+hash(id+3.)*1.1;
+  vec3 top=base+vec3(0.,hgt,0.); top.xz+=sin(uTime*.5+id*6.28)*.07;
+  float d=sdCapsule(p,base,top,.019);
+  float db=sdSphere(p-top,.042);
+  return min(d,db);
+}
+
+Hit map(vec3 p){
+  Hit res; res.d = p.y + .03*sin(p.x*.31)*sin(p.z*.27);
+  res.col=vec3(.13,.14,.16); res.metal=.05; res.rough=.95; res.glow=0.;
+  float tr=abs(fract((p.z+p.x*.1)*.2)-.5); if(tr<.018 && p.y<.02) res.col=mix(res.col,vec3(.08),.35);
+  for(int i=0;i<4;i++){
+    float s=hash(uSeed+float(i)*13.37);
+    float radius=4.2+s*2.8;
+    float ang=uTime*.08*(.7+hash(s)*.6)+float(i)*1.7+s*3.; if(i%2==1) ang=-ang;
+    vec3 cPos=vec3(cos(ang)*radius,0.,sin(ang)*radius);
+    cPos.x+=sin(uTime*.21+s*7.)*.6; cPos.z+=cos(uTime*.19+s*5.)*.6;
+    if(length(p.xz-cPos.xz)>3.5) continue;
+    float yaw=atan(sin(ang),cos(ang))+1.5708;
+    vec3 pl=p-cPos; float cy=cos(-yaw), sy=sin(-yaw); float tx=pl.x; pl.x=cy*tx - sy*pl.z; pl.z=sy*tx + cy*pl.z;
+    pl.y+=.05 + sin(uTime*1.8+s*5.)*.04;
+    Hit ch; ch.d=1e5;
+    int type=i%4; 
+    if(type==0) ch=creatureHex(pl,s);
+    else if(type==1) ch=creatureCrab(pl,s);
+    else if(type==2) ch=creatureGrazer(pl,s);
+    else ch=creatureBall(pl,s);
+    if(ch.d<res.d){ res=ch; res.col=mix(res.col, vec3(.7+.3*hash(s+2.),.6+.3*hash(s+3.),.55+.3*hash(s+4.)), .07); }
+  }
+  float fd=floraDist(p);
+  if(fd<res.d){ res.d=fd; res.col=vec3(.24,.27,.31); res.metal=.72; res.rough=.32; res.glow = (p.y>.5? .8*smoothstep(.05,0.,fd):0.); }
+  return res;
+}
+
+vec3 calcNormal(vec3 p){
+  vec2 e=vec2(.001,0);
+  return normalize(vec3(map(p+e.xyy).d-map(p-e.xyy).d, map(p+e.yxy).d-map(p-e.yxy).d, map(p+e.yyx).d-map(p-e.yyx).d));
+}
+float softShadow(vec3 ro, vec3 rd, float mint, float maxt){
+  float res=1.; float t=mint;
+  for(int i=0;i<16;i++){
+    float h=map(ro+rd*t).d; if(h<.001) return 0.; res=min(res,8.*h/t); t+=clamp(h,.02,.15); if(t>maxt) break;
+  }
+  return clamp(res,0.,1.);
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
+  vec3 ro=uCamPos; vec3 ta=uCamTarget;
+  vec3 fw=normalize(ta-ro); vec3 ri=normalize(cross(fw,vec3(0,1,0))); vec3 up=cross(ri,fw);
+  vec3 rd=normalize(fw + uv.x*ri + uv.y*up);
+
+  float t=0.; Hit hit; hit.d=1e5; int steps=0;
+  for(int i=0;i<90;i++){ vec3 p=ro+rd*t; hit=map(p); if(hit.d<.0015||t>50.) break; t+=hit.d*.85; steps++; }
+  vec3 col=vec3(0);
+  if(t<50. && hit.d<.01){
+    vec3 p=ro+rd*t; vec3 N=calcNormal(p); vec3 V=normalize(-rd);
+    vec3 sunDir=normalize(vec3(.6,.78,.32)); vec3 sunCol=vec3(1.,.96,.88);
+    float sh=softShadow(p+N*.02, sunDir, .05, 7.);
+    float diff=max(dot(N,sunDir),0.)*sh;
+    vec3 H=normalize(sunDir+V); float spec=pow(max(dot(N,H),0.), 32.)*(1.-hit.rough)*(hit.metal*.9+.1);
+    vec3 amb=vec3(.08,.09,.12);
+    col = hit.col * (amb + diff*sunCol*.95);
+    col += spec*sunCol*1.1;
+    float fres=pow(1.-max(dot(N,V),0.),5.);
+    col += fres*.18*hit.metal;
+    col += hit.col * hit.glow * (.85 + .15*sin(uTime*5.+hash21(p.xz)));
+    col += vec3(.1,.2,.35)*pow(1.-max(dot(N,V),0.),2.)*.15;
+  }else{
+    float hrz = pow(max(0.,rd.y*.5+.5),1.5);
+    col = mix(vec3(.06,.07,.09), vec3(.12,.15,.21), hrz);
+    float sun = pow(max(dot(rd, normalize(vec3(.6,.78,.32))),0.), 256.);
+    col += vec3(1.,.9,.75)*sun*.6;
+  }
+  float fog=1.-exp(-t*.043);
+  col = mix(col, vec3(.07,.085,.105), fog);
+  vec2 q=vUv; col *= .85 + .15*pow(16.*q.x*q.y*(1.-q.x)*(1.-q.y), .2);
+  if(uDebug>.5){
+    float db = float(steps)/90.;
+    col = mix(col, vec3(db,.2,1.-db), .35);
+  }
+  col = pow(col, vec3(.92));
+  col = clamp(col,0.,1.);
+  outColor=vec4(col,1.);
+}`;
+
+function createShader(type, src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s); return s;}
+const prog=gl.createProgram();
+gl.attachShader(prog, createShader(gl.VERTEX_SHADER, vert));
+gl.attachShader(prog, createShader(gl.FRAGMENT_SHADER, frag));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw gl.getProgramInfoLog(prog);
+gl.useProgram(prog);
+
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog,'aPos');
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+
+const uni = {
+  uTime: gl.getUniformLocation(prog,'uTime'),
+  uResolution: gl.getUniformLocation(prog,'uResolution'),
+  uCamPos: gl.getUniformLocation(prog,'uCamPos'),
+  uCamTarget: gl.getUniformLocation(prog,'uCamTarget'),
+  uSeed: gl.getUniformLocation(prog,'uSeed'),
+  uDebug: gl.getUniformLocation(prog,'uDebug'),
+};
+
+let paused=false, start=performance.now();
+let userYaw=0, userPitch=0, isDown=false, lx=0, ly=0;
+let radius=12;
+let seed=17.3, debug=0;
+
+function resize(){
+  canvas.width = innerWidth*devicePixelRatio;
+  canvas.height = innerHeight*devicePixelRatio;
+  gl.viewport(0,0,canvas.width,canvas.height);
+}
+addEventListener('resize',resize); resize();
+
+canvas.addEventListener('pointerdown',e=>{isDown=true;lx=e.clientX;ly=e.clientY;});
+addEventListener('pointerup',()=>isDown=false);
+addEventListener('pointermove',e=>{ if(!isDown) return; userYaw+=(e.clientX-lx)*.005; userPitch+=(e.clientY-ly)*.003; userPitch=Math.max(-.35,Math.min(.6,userPitch)); lx=e.clientX; ly=e.clientY; });
+canvas.addEventListener('wheel',e=>{ radius+=e.deltaY*.008; radius=Math.max(5,Math.min(18,radius)); e.preventDefault();},{passive:false});
+
+document.getElementById('regen').onclick=()=>{ seed=Math.random()*1000; };
+document.getElementById('pause').onclick=(e)=>{ paused=!paused; e.target.textContent=paused?'Resume':'Pause'; };
+document.getElementById('debug').onclick=()=>{ debug=1-debug; };
+
+function animate(now){
+  requestAnimationFrame(animate);
+  const t = (now-start)*.001;
+  const time = paused? (window._pt||0) : t; window._pt=time;
+  const baseYaw = time*0.05;
+  const yaw = baseYaw + userYaw;
+  const pitch = 0.32 + userPitch;
+  const cp = [Math.sin(yaw)*Math.cos(pitch)*radius, Math.sin(pitch)*radius + 1.4, Math.cos(yaw)*Math.cos(pitch)*radius];
+
+  gl.uniform1f(uni.uTime, time);
+  gl.uniform2f(uni.uResolution, canvas.width, canvas.height);
+  gl.uniform3f(uni.uCamPos, cp[0], cp[1], cp[2]);
+  gl.uniform3f(uni.uCamTarget, 0,0.35,0);
+  gl.uniform1f(uni.uSeed, seed);
+  gl.uniform1f(uni.uDebug, debug);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+animate(0);
+</script>
+</body>
+</html>
