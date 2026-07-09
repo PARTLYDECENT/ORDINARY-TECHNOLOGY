@@ -5573,7 +5573,11 @@
                 if (selectedMod.id === "neural") aType = "scan";
 
                 player = new TitanPlayer(scene, { abilityType: aType });
-                player.position.set(0, 0, 0);
+                if (cfg.mapId === 'abyss') {
+                    player.position.set(6.0, 0.25, 6.0);
+                } else {
+                    player.position.set(0, 0, 0);
+                }
                 perks.player = player;
 
 
@@ -5620,14 +5624,14 @@
                     } else if (cfg.mapId === 'abyss') {
                         // Water World lighting — significantly dimmed
                         ambientLight.color.setHex(0xa5f3fc);
-                        ambientLight.intensity = 0.3;  // was 1.3
+                        ambientLight.intensity = 0.08;
                         dirLight.color.setHex(0xfef08a);
-                        dirLight.intensity = 0.7;  // was 2.8
+                        dirLight.intensity = 0.15;
                         dirLight.position.set(60, 120, 40);
                         dirLight.castShadow = true;
 
-                        scene.fog = new THREE.FogExp2(0xbae6fd, 0.015); // denser: was 0.008
-                        scene.background = new THREE.Color(0x38bdf8);
+                        scene.fog = new THREE.FogExp2(0x030d1a, 0.015);
+                        scene.background = new THREE.Color(0x020813);
 
                         // Disable standard ambient sound glitches
                         if (window.TutorialManager) {
@@ -6878,9 +6882,10 @@
                 } else if (currentMapId === 'nacht') {
                     // Spawn inside the three rooms of the bunker (scaled 4x)
                     activePositions = [
-                        { x: 0, z: 68, isNachtInterior: true },      // Room 1 (Spawn)
-                        { x: -30, z: -20, isNachtInterior: true },   // Room 2 (Comms)
-                        { x: 30, z: -120, isNachtInterior: true }     // Room 3 (Armory)
+                        { x: 160, z: 160, isNachtInterior: true },   // Room 1 (Spawn)
+                        { x: 160, z: -160, isNachtInterior: true },  // Room 3 (Help Room)
+                        { x: -160, z: -160, isNachtInterior: true }, // Room 6 (Armory)
+                        { x: -160, z: 160, isNachtInterior: true }   // Room 5 (West Wing)
                     ];
                 }
 
@@ -6972,9 +6977,9 @@
 
                 // Activate abyss underwater overlay if in abyss mode
                 if (window.ABYSS_MODE) {
-                    document.getElementById('abyss-overlay').style.display = 'block';
+                    document.getElementById('abyss-overlay').style.display = 'none';
                     document.getElementById('abyss-depth-indicator').style.display = 'block';
-                    player.position.y = 0; // Start floating at mid-depth
+                    player.position.set(6.0, 0.25, 6.0); // Start floating at start platform center
                 }
             }).catch(console.error);
         } // end startGamePipeline
@@ -10886,8 +10891,8 @@
                 // Determine raft height at player location
                 const raftHeight = TerrainGen.getMeshHeight(player.position.x, player.position.z);
 
-                // If they are on a raft or walkway and not submerged
-                if (raftHeight > -2.0 && player.position.y >= -0.15) {
+                // If they are on a raft or walkway (even if submerged)
+                if (raftHeight > -2.0 && player.position.y >= raftHeight - 0.2) {
                     // === PLATFORM GRAVITY & JUMPING ===
                     const gravity = CONFIG.gravity || 25.0;
                     if (keys.space && isGrounded) {
@@ -10909,15 +10914,26 @@
                     // Reset swim velocity
                     window.abyssVelY = 0;
                 } else {
-                    // === INSTANT DEATH OCEAN ===
+                    // === SINKING / SWIMMING IN OPEN OCEAN ===
                     isGrounded = false;
 
-                    if (typeof window.triggerAbyssDeath === 'function') {
-                        window.triggerAbyssDeath();
+                    // Reduce gravity / apply buoyancy so player sinks slowly.
+                    // Holding Space allows the player to paddle upwards, while letting go sinks them.
+                    if (keys.space) {
+                        velocityY = 1.2; // Slow paddle upward
                     } else {
-                        // Fallback if script not loaded
-                        velocityY -= (CONFIG.gravity || 25.0) * delta;
-                        player.position.y += velocityY * delta;
+                        velocityY = -2.0; // Sink downward
+                    }
+                    
+                    player.position.y += velocityY * delta;
+
+                    // If player sinks below critical depth, they drown / die in the abyss
+                    if (player.position.y < -5.0) {
+                        if (typeof window.triggerAbyssDeath === 'function') {
+                            window.triggerAbyssDeath();
+                        } else {
+                            player.position.y = -8.0;
+                        }
                     }
                 }
             } else {
@@ -11041,7 +11057,12 @@
 
             if (moveX !== 0 || moveZ !== 0) {
                 // Underwater movement is slower with drag-based inertia
-                const swimMult = window.ABYSS_MODE ? 0.6 : 1.0;
+                let swimMult = 1.0;
+                if (window.ABYSS_MODE) {
+                    const rHeight = TerrainGen.getMeshHeight(player.position.x, player.position.z);
+                    const onPlatform = (rHeight > -2.0 && player.position.y >= rHeight - 0.2);
+                    swimMult = onPlatform ? 0.8 : 0.35; // Slower in water than on platforms
+                }
                 const moveVec = new THREE.Vector3(moveX, 0, moveZ).normalize().multiplyScalar(CONFIG.playerSpeed * delta * sprintSpeed * swimMult * (player.speedMultiplier || 1.0));
 
                 if (isFPSMode) {

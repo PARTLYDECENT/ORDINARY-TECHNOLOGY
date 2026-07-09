@@ -289,11 +289,9 @@ class TitanPlayer extends THREE.Group {
         this.torso = new THREE.Group();
         droidRoot.add(this.torso);
 
-        const torsoBase = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.4, 1.4), frameMat);
+        const torsoBase = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), armorMat);
+        torsoBase.scale.set(1.0, 1.25, 0.85);
         this.torso.add(torsoBase);
-
-        const shell = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.6, 1.5), armorMat);
-        this.torso.add(shell);
 
         // --- MODULAR BACKPACK & THRUSTER SYSTEMS ---
         this.backpackModule = new THREE.Group();
@@ -513,20 +511,9 @@ class TitanPlayer extends THREE.Group {
         this.pelvis.position.y = -2.6;
         droidRoot.add(this.pelvis);
 
-        const pelvisCore = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.8, 1.2), frameMat);
+        const pelvisCore = new THREE.Mesh(new THREE.SphereGeometry(0.95, 16, 16), armorMat);
+        pelvisCore.scale.set(1.2, 0.65, 0.9);
         this.pelvis.add(pelvisCore);
-
-        const skirtL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.0, 1.4), armorMat);
-        skirtL.position.set(-0.9, 0, 0); skirtL.rotation.z = -0.2;
-        this.pelvis.add(skirtL);
-
-        const skirtR = skirtL.clone();
-        skirtR.position.x = 0.9; skirtR.rotation.z = 0.2;
-        this.pelvis.add(skirtR);
-
-        const skirtF = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.3), armorMat);
-        skirtF.position.set(0, -0.2, 0.7); skirtF.rotation.x = 0.2;
-        this.pelvis.add(skirtF);
 
         // Head
         this.headRoot = new THREE.Group();
@@ -589,34 +576,57 @@ class TitanPlayer extends THREE.Group {
             hipMesh.rotation.z = Math.PI / 2;
             hip.add(hipMesh);
 
-            const thighFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 2.0, 16), frameMat);
+            // Thigh: Thick yellow cylinder representing a hazmat leg segment
+            const thighFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.42, 2.0, 16), armorMat);
             thighFrame.position.y = -1.0;
             hip.add(thighFrame);
 
-            const thighArmorF = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.4), armorMat);
-            thighArmorF.position.set(0, -1.0, 0.3); thighArmorF.rotation.x = 0.05;
-            hip.add(thighArmorF);
+            // Thigh Caps for rounded capsule look
+            const thighCapTop = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), armorMat);
+            thighCapTop.position.set(0, 0, 0);
+            hip.add(thighCapTop);
+
+            const thighCapBottom = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), armorMat);
+            thighCapBottom.position.set(0, -2.0, 0);
+            hip.add(thighCapBottom);
 
             const knee = new THREE.Group();
             knee.position.y = -2.0;
             hip.add(knee);
-            const kneeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.9, 16), accentMat);
-            kneeMesh.rotation.z = Math.PI / 2;
+            
+            // Knee Joint: Black rubber joint sphere
+            const kneeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.43, 16, 16), rubberSealMat);
             knee.add(kneeMesh);
 
-            const calfFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 2.0, 16), frameMat);
+            // Calf/Shin: Thick yellow cylinder
+            const calfFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.35, 2.0, 16), armorMat);
             calfFrame.position.y = -1.0;
             knee.add(calfFrame);
+
+            // Calf bottom cap for ankle joint
+            const calfCapBottom = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), armorMat);
+            calfCapBottom.position.set(0, -2.0, 0);
+            knee.add(calfCapBottom);
 
             const ankle = new THREE.Group();
             ankle.position.y = -2.0;
             knee.add(ankle);
-            const ankleJoint = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), frameMat);
-            ankle.add(ankleJoint);
 
-            const footBase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.2), armorMat);
-            footBase.position.set(0, -0.2, 0.2);
+            // Boot base
+            const footBase = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.45, 1.3), armorMat);
+            footBase.position.set(0, -0.22, 0.25);
             ankle.add(footBase);
+
+            // Rounded boot toe
+            const bootToe = new THREE.Mesh(new THREE.SphereGeometry(0.425, 16, 16), armorMat);
+            bootToe.scale.set(1.0, 0.53, 1.0);
+            bootToe.position.set(0, -0.22, 0.9);
+            ankle.add(bootToe);
+
+            // Rugged black sole
+            const sole = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, 1.5), rubberSealMat);
+            sole.position.set(0, -0.45, 0.35);
+            ankle.add(sole);
 
             // --- MODULAR HYDRAULIC CALF PISTONS ---
             const pistonUpperMount = new THREE.Group();
@@ -684,7 +694,7 @@ class TitanPlayer extends THREE.Group {
                 launcherPod.add(tube);
             }
 
-            const bicepFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.6, 16), frameMat);
+            const bicepFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 1.6, 16), armorMat);
             bicepFrame.position.y = -0.8;
             shoulder.add(bicepFrame);
 

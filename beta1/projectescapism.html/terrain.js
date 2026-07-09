@@ -179,49 +179,34 @@ const TerrainGen = {
                 let h = Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453123;
                 return h - Math.floor(h);
             };
-            const cs = 12.0; // matched to AbyssMap.js
+            const cs = 12.0;
             const cx = Math.floor(x / cs);
             const cz = Math.floor(z / cs);
             const isRaft = (cx === 0 && cz === 0) || (getRaftHash(cx, cz) < 0.26);
+            const isSubmerged = isRaft && (cx !== 0 || cz !== 0) && (getRaftHash(cx, cz) < 0.12);
+            
             const centerX = (cx + 0.5) * cs;
             const centerZ = (cz + 0.5) * cs;
-            const raftHalf = 2.25;
+            const raftHalf = isSubmerged ? 6.44 : 5.15;
+            const baseHeight = isSubmerged ? -0.45 : 0.2;
 
             if (isRaft) {
                 if (Math.abs(x - centerX) <= raftHalf && Math.abs(z - centerZ) <= raftHalf) {
-                    return 0.2;
-                }
-            }
+                    const t = (window.mapManager && window.mapManager.time) || 0;
+                    
+                    // Multi-octave wave height calculation matching shader
+                    const w1_1 = Math.sin(centerX * 0.08 + t * 1.2) * Math.cos(centerZ * 0.10 - t * 1.08) * 0.45;
+                    const w1_2 = Math.sin(centerX * 0.20 - t * 1.68) * Math.cos(centerZ * 0.22 + t * 1.32) * 0.18;
+                    const wave1 = w1_1 + w1_2;
 
-            const raftRight = getRaftHash(cx + 1, cz) < 0.26;
-            if (isRaft && raftRight) {
-                const nextCenterX = (cx + 1.5) * cs;
-                if (x >= centerX && x <= nextCenterX && Math.abs(z - centerZ) <= 0.85) {
-                    return 0.2;
-                }
-            }
+                    const px2 = centerX * 2.0 + 2.0;
+                    const pz2 = centerZ * 2.0;
+                    const w2_1 = Math.sin(px2 * 0.08 + t * 1.6) * Math.cos(pz2 * 0.10 - t * 1.44) * 0.45;
+                    const w2_2 = Math.sin(px2 * 0.20 - t * 2.24) * Math.cos(pz2 * 0.22 + t * 1.76) * 0.18;
+                    const wave2 = w2_1 + w2_2;
 
-            const raftLeft = (cx - 1 === 0 && cz === 0) || (getRaftHash(cx - 1, cz) < 0.26);
-            if (raftLeft && isRaft) {
-                const prevCenterX = (cx - 0.5) * cs;
-                if (x >= prevCenterX && x <= centerX && Math.abs(z - centerZ) <= 0.85) {
-                    return 0.2;
-                }
-            }
-
-            const raftDown = getRaftHash(cx, cz + 1) < 0.26;
-            if (isRaft && raftDown) {
-                const nextCenterZ = (cz + 1.5) * cs;
-                if (z >= centerZ && z <= nextCenterZ && Math.abs(x - centerX) <= 0.85) {
-                    return 0.2;
-                }
-            }
-
-            const raftUp = (cx === 0 && cz - 1 === 0) || (getRaftHash(cx, cz - 1) < 0.26);
-            if (raftUp && isRaft) {
-                const prevCenterZ = (cz - 0.5) * cs;
-                if (z >= prevCenterZ && z <= centerZ && Math.abs(x - centerX) <= 0.85) {
-                    return 0.2;
+                    const waveHeight = wave1 + wave2 * 0.3;
+                    return baseHeight + waveHeight;
                 }
             }
             return -8.0; // Water level
