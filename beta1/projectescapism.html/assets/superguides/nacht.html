@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nacht V2: The Bunker Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+        }
+
+        #blocker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+
+        #instructions {
+            text-align: center;
+            cursor: pointer;
+            padding: 40px;
+            border: 1px solid #330000;
+            background: radial-gradient(circle, rgba(20,0,0,1) 0%, rgba(0,0,0,1) 100%);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 5rem;
+            color: #8b0000;
+            text-shadow: 2px 2px 10px rgba(255, 0, 0, 0.6);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 8px;
+        }
+
+        p {
+            font-size: 1.2rem;
+            color: #aaa;
+            letter-spacing: 1px;
+        }
+
+        .blood-text {
+            color: #ff3333;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background-color: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+            display: none;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+</head>
+<body>
+
+    <div id="blocker">
+        <div id="instructions">
+            <h1>THE BUNKER</h1>
+            <p>10 Rooms. No way out.</p>
+            <p class="blood-text">Click to enter.</p>
+            <p style="font-size: 0.9rem; color: #555; margin-top: 30px;">WASD: Move | MOUSE: Look</p>
+        </div>
+    </div>
+    
+    <div id="crosshair"></div>
+
+    <script>
+        let camera, scene, renderer, controls;
+        let prevTime = performance.now();
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        
+        // Physics and Collision
+        const collidableBoxes = [];
+        const playerHeight = 1.8;
+        const playerRadius = 0.4;
+
+        // Visual FX
+        let particles;
+        const flickeringLights = [];
+        let walkTime = 0;
+
+        // Audio API
+        let audioCtx, droneOsc, rumbleLFO;
+        let heartbeatOsc, heartbeatGain, heartbeatInterval;
+        let isHeartbeatPlaying = false;
+
+        // Texture caches
+        const textures = {};
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x010102);
+            // Thick, claustrophobic fog (reduced slightly for larger rooms)
+            scene.fog = new THREE.FogExp2(0x010102, 0.035);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 400);
+            camera.position.y = playerHeight;
+            // Spawn point in R1
+            camera.position.set(0, playerHeight, 0); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: false }); // Disable antialias for grittier look
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 0.8;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.PointerLockControls(camera, document.body);
+
+            const blocker = document.getElementById('blocker');
+            const instructions = document.getElementById('instructions');
+            const crosshair = document.getElementById('crosshair');
+
+            instructions.addEventListener('click', function () {
+                controls.lock();
+            });
+
+            controls.addEventListener('lock', function () {
+                blocker.style.display = 'none';
+                crosshair.style.display = 'block';
+                initAudio();
+            });
+
+            controls.addEventListener('unlock', function () {
+                blocker.style.display = 'flex';
+                crosshair.style.display = 'none';
+                if(audioCtx) audioCtx.suspend();
+            });
+
+            scene.add(controls.getObject());
+
+            generateTextures();
+            setupLighting();
+            buildComplex(); // The new 10-room generator
+            createDustParticles();
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function generateTextures() {
+            function createNoiseCanvas(width, height, color1, color2, noiseScale, isWood = false, overlayText = null) {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const context = canvas.getContext('2d');
+
+                context.fillStyle = color1;
+                context.fillRect(0, 0, width, height);
+
+                // Basic noise pass
+                for (let i = 0; i < width; i += noiseScale) {
+                    for (let j = 0; j < height; j += (isWood ? height : noiseScale)) {
+                        if (Math.random() > 0.5) {
+                            context.fillStyle = color2;
+                            context.fillRect(i, j, noiseScale, isWood ? height : noiseScale);
+                        }
+                    }
+                }
+
+                // Add grime/dirt vignette
+                const gradient = context.createRadialGradient(width/2, height/2, width/4, width/2, height/2, width);
+                gradient.addColorStop(0, "rgba(0,0,0,0)");
+                gradient.addColorStop(1, "rgba(0,0,0,0.6)");
+                context.fillStyle = gradient;
+                context.fillRect(0, 0, width, height);
+
+                if (overlayText) {
+                    context.font = "bold 80px Courier New";
+                    context.fillStyle = "rgba(120, 0, 0, 0.8)"; // Dried blood
+                    context.textAlign = "center";
+                    context.textBaseline = "middle";
+                    
+                    context.save();
+                    context.translate(width/2, height/2);
+                    // Add random frantic lines
+                    context.strokeStyle = "rgba(100, 0, 0, 0.5)";
+                    context.lineWidth = 5;
+                    for(let k=0; k<15; k++) {
+                        context.beginPath();
+                        context.moveTo(Math.random()*width - width/2, Math.random()*height - height/2);
+                        context.lineTo(Math.random()*width - width/2, Math.random()*height - height/2);
+                        context.stroke();
+                    }
+                    context.rotate(-0.05 + Math.random()*0.1);
+                    context.fillText(overlayText, 0, 0);
+                    // Blood drips
+                    for(let k=0; k<20; k++) {
+                        context.fillRect(Math.random()*300 - 150, Math.random()*100, 3 + Math.random()*5, Math.random()*150 + 50);
+                    }
+                    context.restore();
+                }
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                return texture;
+            }
+
+            textures.floor = createNoiseCanvas(512, 512, '#151515', '#0a0a0a', 2);
+            textures.floor.repeat.set(50, 50); // Scaled up repeat for the massive floor
+            
+            textures.wall = createNoiseCanvas(512, 512, '#222225', '#111115', 4);
+            textures.wall.repeat.set(2, 2);
+
+            textures.wood = createNoiseCanvas(256, 256, '#2e1b15', '#1a0b08', 2, true);
+            
+            textures.bloodWall1 = createNoiseCanvas(512, 512, '#222225', '#111115', 4, false, "TURN BACK");
+            textures.bloodWall2 = createNoiseCanvas(512, 512, '#222225', '#111115', 4, false, "HELL");
+        }
+
+        function setupLighting() {
+            // Very dark ambient base
+            const ambientLight = new THREE.AmbientLight(0x050508, 0.2);
+            scene.add(ambientLight);
+
+            // Cold blue moonlight coming from "outside"
+            const moonLight = new THREE.DirectionalLight(0x446688, 0.6);
+            moonLight.position.set(50, 60, 50);
+            moonLight.castShadow = true;
+            moonLight.shadow.mapSize.width = 2048;
+            moonLight.shadow.mapSize.height = 2048;
+            moonLight.shadow.camera.near = 10;
+            moonLight.shadow.camera.far = 300;
+            moonLight.shadow.camera.left = -125;
+            moonLight.shadow.camera.right = 125;
+            moonLight.shadow.camera.top = 125;
+            moonLight.shadow.camera.bottom = -125;
+            scene.add(moonLight);
+
+            // Localized lights to guide the player (Scaled positions for larger rooms)
+            // R1: Warm barrel fire
+            addPointLight(0, 1.5, -7.5, 0xff7700, 2.0, 35, true); 
+            // R5 (Armory): Creepy green chem light
+            addPointLight(25, 4, -25, 0x00ff44, 1.2, 30, false);
+            // R8 (Lab): Flickering fluorescent blue
+            addPointLight(25, 4.5, -50, 0x88ccff, 1.8, 40, true);
+            // R9 (Catacombs): Deep ominous red
+            addPointLight(0, 3, -80, 0xff0000, 2.0, 50, true);
+        }
+
+        function addPointLight(x, y, z, color, intensity, distance, flickers) {
+            const light = new THREE.PointLight(color, intensity, distance);
+            light.position.set(x, y, z);
+            light.castShadow = true;
+            scene.add(light);
+
+            if (flickers) {
+                flickeringLights.push({ light, baseIntensity: intensity });
+            }
+        }
+
+        function createWallMesh(x, y, z, w, h, d, texType = 'wall') {
+            const geometry = new THREE.BoxGeometry(w, h, d);
+            const material = new THREE.MeshStandardMaterial({ 
+                map: textures[texType], 
+                roughness: 0.9, 
+                metalness: 0.2 
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y + h / 2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            const box = new THREE.Box3().setFromObject(mesh);
+            collidableBoxes.push(box);
+        }
+
+        function createPlank(x, y, z, rotY, rotZ) {
+            const plankGeo = new THREE.BoxGeometry(0.1, 0.4, 4.5); // Longer planks for bigger windows
+            const plankMat = new THREE.MeshStandardMaterial({ map: textures.wood });
+            const plank = new THREE.Mesh(plankGeo, plankMat);
+            plank.position.set(x, y, z);
+            plank.rotation.y = rotY;
+            plank.rotation.z = rotZ;
+            plank.castShadow = true;
+            scene.add(plank);
+        }
+
+        function addHWall(startX, endX, z, type, specialTex = null) {
+            const length = endX - startX;
+            const cx = startX + length / 2;
+            const thickness = 1;
+            const height = 7; // Taller walls
+            const tex = specialTex || 'wall';
+            
+            if (type === 'solid') {
+                createWallMesh(cx, 0, z, length + thickness, height, thickness, tex);
+            } else if (type === 'door') {
+                const doorW = 5; // Wider doors
+                const sideW = (length - doorW) / 2;
+                createWallMesh(startX + sideW/2, 0, z, sideW + thickness, height, thickness, tex);
+                createWallMesh(endX - sideW/2, 0, z, sideW + thickness, height, thickness, tex);
+                createWallMesh(cx, 4.5, z, doorW, 2.5, thickness, tex); // Header
+            } else if (type === 'window') {
+                const winW = 6; // Wider windows
+                const sideW = (length - winW) / 2;
+                createWallMesh(startX + sideW/2, 0, z, sideW + thickness, height, thickness, tex);
+                createWallMesh(endX - sideW/2, 0, z, sideW + thickness, height, thickness, tex);
+                createWallMesh(cx, 0, z, winW, 1.5, thickness, tex); // Sill
+                createWallMesh(cx, 4.5, z, winW, 2.5, thickness, tex); // Header
+                
+                // Wooden barricades
+                createPlank(cx - 1.5, 2.0, z, Math.PI/2, 0.1);
+                createPlank(cx, 2.8, z + 0.1, Math.PI/2, -0.2);
+                createPlank(cx + 1.5, 3.5, z, Math.PI/2, 0.05);
+            }
+        }
+
+        function addVWall(x, startZ, endZ, type, specialTex = null) {
+            const length = endZ - startZ;
+            const cz = startZ + length / 2;
+            const thickness = 1;
+            const height = 7; // Taller walls
+            const tex = specialTex || 'wall';
+            
+            if (type === 'solid') {
+                createWallMesh(x, 0, cz, thickness, height, length + thickness, tex);
+            } else if (type === 'door') {
+                const doorW = 5; // Wider doors
+                const sideW = (length - doorW) / 2;
+                createWallMesh(x, 0, startZ + sideW/2, thickness, height, sideW + thickness, tex);
+                createWallMesh(x, 0, endZ - sideW/2, thickness, height, sideW + thickness, tex);
+                createWallMesh(x, 4.5, cz, thickness, 2.5, doorW, tex); 
+            } else if (type === 'window') {
+                const winW = 6; // Wider windows
+                const sideW = (length - winW) / 2;
+                createWallMesh(x, 0, startZ + sideW/2, thickness, height, sideW + thickness, tex);
+                createWallMesh(x, 0, endZ - sideW/2, thickness, height, sideW + thickness, tex);
+                createWallMesh(x, 0, cz, thickness, 1.5, winW, tex); // Sill
+                createWallMesh(x, 4.5, cz, thickness, 2.5, winW, tex); // Header
+                
+                createPlank(x, 2.0, cz - 1.5, 0, 0.1);
+                createPlank(x + 0.1, 2.8, cz, 0, -0.2);
+                createPlank(x, 3.5, cz + 1.5, 0, 0.05);
+            }
+        }
+
+        function buildComplex() {
+            // Massive floor spanning the scaled bunker area
+            const floorGeo = new THREE.PlaneGeometry(250, 250);
+            const floorMat = new THREE.MeshStandardMaterial({ map: textures.floor, roughness: 1 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(-12.5, 0, -37.5);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Roof segments (Missing in some rooms to let moonlight in)
+            function addCeiling(cx, cz) {
+                const cGeo = new THREE.PlaneGeometry(25, 25);
+                const cMat = new THREE.MeshStandardMaterial({ map: textures.wall, roughness: 1 });
+                const ceil = new THREE.Mesh(cGeo, cMat);
+                ceil.rotation.x = Math.PI / 2;
+                ceil.position.set(cx, 7, cz); // Increased ceiling height
+                scene.add(ceil);
+            }
+
+            // Room Centers (Scaled 2.5x): 
+            // R1(0,0), R2(25,0), R3(-25,0), R4(0,-25), R5(25,-25)
+            // R6(-25,-25), R7(0,-50), R8(25,-50), R9(0,-75), R10(-50,0)
+            
+            // Ceilings (R1, R4 open to sky)
+            addCeiling(25, 0);    // R2
+            addCeiling(-25, 0);   // R3
+            addCeiling(25, -25);  // R5
+            addCeiling(-25, -25); // R6
+            addCeiling(0, -50);   // R7
+            addCeiling(25, -50);  // R8
+            addCeiling(0, -75);   // R9
+            addCeiling(-50, 0);   // R10
+            
+            // ======= HORIZONTAL WALLS =======
+            // Z = 12.5 (South Edge)
+            addHWall(-62.5, -37.5, 12.5, 'solid');  // R10
+            addHWall(-37.5, -12.5, 12.5, 'window'); // R3
+            addHWall(-12.5, 12.5, 12.5, 'window');  // R1 (Spawn)
+            addHWall(12.5, 37.5, 12.5, 'solid');    // R2
+
+            // Z = -12.5
+            addHWall(-62.5, -37.5, -12.5, 'solid'); // R10 N
+            addHWall(-37.5, -12.5, -12.5, 'door');  // R3 N to R6
+            addHWall(-12.5, 12.5, -12.5, 'door');   // R1 N to R4
+            addHWall(12.5, 37.5, -12.5, 'door');    // R2 N to R5
+
+            // Z = -37.5
+            addHWall(-37.5, -12.5, -37.5, 'solid'); // R6 N
+            addHWall(-12.5, 12.5, -37.5, 'door');   // R4 N to R7
+            addHWall(12.5, 37.5, -37.5, 'solid');   // R5 N
+
+            // Z = -62.5
+            addHWall(-12.5, 12.5, -62.5, 'door');   // R7 N to R9
+            addHWall(12.5, 37.5, -62.5, 'solid');   // R8 N
+
+            // Z = -87.5 (Deepest North)
+            addHWall(-12.5, 12.5, -87.5, 'solid', 'bloodWall2'); // R9 N
+
+            // ======= VERTICAL WALLS =======
+            // X = -62.5 (Far West)
+            addVWall(-62.5, -12.5, 12.5, 'solid');   // R10 W
+
+            // X = -37.5
+            addVWall(-37.5, -12.5, 12.5, 'door');    // R10 E / R3 W
+            addVWall(-37.5, -37.5, -12.5, 'solid');  // R6 W
+
+            // X = -12.5
+            addVWall(-12.5, -12.5, 12.5, 'door');    // R3 E / R1 W
+            addVWall(-12.5, -37.5, -12.5, 'door');   // R6 E / R4 W
+            addVWall(-12.5, -62.5, -37.5, 'solid');  // R7 W
+            addVWall(-12.5, -87.5, -62.5, 'solid', 'bloodWall1'); // R9 W
+
+            // X = 12.5
+            addVWall(12.5, -12.5, 12.5, 'door');     // R1 E / R2 W
+            addVWall(12.5, -37.5, -12.5, 'door');    // R4 E / R5 W
+            addVWall(12.5, -62.5, -37.5, 'door');    // R7 E / R8 W
+            addVWall(12.5, -87.5, -62.5, 'solid');   // R9 E
+
+            // X = 37.5 (Far East)
+            addVWall(37.5, -12.5, 12.5, 'window');   // R2 E
+            addVWall(37.5, -37.5, -12.5, 'solid');   // R5 E
+            addVWall(37.5, -62.5, -37.5, 'window');  // R8 E
+
+            // Decorative Pillars inside rooms to break up the boxes
+            createWallMesh(-5, 0, -5, 2, 7, 2);  // R1 Pillar L
+            createWallMesh(5, 0, -5, 2, 7, 2);   // R1 Pillar R
+            createWallMesh(0, 0, -25, 3, 7, 3);  // R4 Central debris
+            
+            // The Burning Barrel in Spawn (R1)
+            const barrelGeo = new THREE.CylinderGeometry(0.8, 0.8, 1.5, 16);
+            const barrelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1 });
+            const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+            barrel.position.set(0, 0.75, -7.5);
+            barrel.castShadow = true;
+            scene.add(barrel);
+            collidableBoxes.push(new THREE.Box3().setFromObject(barrel));
+        }
+
+        function createDustParticles() {
+            const particleGeo = new THREE.BufferGeometry();
+            const particleCount = 5000; // More particles for larger volume
+            const posArray = new Float32Array(particleCount * 3);
+
+            for(let i = 0; i < particleCount * 3; i+=3) {
+                // Spread particles across the scaled play area
+                posArray[i] = (Math.random() - 0.5) * 150;          // x
+                posArray[i+1] = Math.random() * 7;                  // y (ceiling is at 7)
+                posArray[i+2] = (Math.random() - 0.5) * 150 - 37.5; // z
+            }
+
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const particleMat = new THREE.PointsMaterial({
+                size: 0.04,
+                color: 0x777777,
+                transparent: true,
+                opacity: 0.4,
+                blending: THREE.AdditiveBlending
+            });
+
+            particles = new THREE.Points(particleGeo, particleMat);
+            scene.add(particles);
+        }
+
+        function initAudio() {
+            if(audioCtx) {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                return;
+            }
+            
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            // 1. Ambient Drone
+            droneOsc = audioCtx.createOscillator();
+            droneOsc.type = 'triangle';
+            droneOsc.frequency.value = 35; // Very low rumble
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 150;
+
+            const droneGain = audioCtx.createGain();
+            droneGain.gain.value = 0.4;
+
+            rumbleLFO = audioCtx.createOscillator();
+            rumbleLFO.type = 'sine';
+            rumbleLFO.frequency.value = 0.05; 
+            
+            const lfoGain = audioCtx.createGain();
+            lfoGain.gain.value = 0.2;
+
+            rumbleLFO.connect(lfoGain);
+            lfoGain.connect(droneGain.gain);
+
+            droneOsc.connect(filter);
+            filter.connect(droneGain);
+            droneGain.connect(audioCtx.destination);
+
+            droneOsc.start();
+            rumbleLFO.start();
+
+            // 2. Proximity Heartbeat Setup (Triggered based on depth)
+            heartbeatOsc = audioCtx.createOscillator();
+            heartbeatOsc.type = 'sine';
+            heartbeatOsc.frequency.value = 50;
+
+            heartbeatGain = audioCtx.createGain();
+            heartbeatGain.gain.value = 0; // Starts silent
+
+            heartbeatOsc.connect(heartbeatGain);
+            heartbeatGain.connect(audioCtx.destination);
+            heartbeatOsc.start();
+        }
+
+        function triggerHeartbeat(intensity) {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            
+            const now = audioCtx.currentTime;
+            
+            // Double thump pattern
+            heartbeatGain.gain.cancelScheduledValues(now);
+            heartbeatGain.gain.setValueAtTime(0, now);
+            heartbeatGain.gain.linearRampToValueAtTime(intensity, now + 0.1);
+            heartbeatGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            
+            heartbeatGain.gain.setValueAtTime(0, now + 0.35);
+            heartbeatGain.gain.linearRampToValueAtTime(intensity * 0.8, now + 0.45);
+            heartbeatGain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        const moveState = { forward: false, backward: false, left: false, right: false };
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyD': moveState.right = true; break;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyD': moveState.right = false; break;
+            }
+        });
+
+        function checkCollision(position) {
+            const playerBox = new THREE.Box3();
+            playerBox.setFromCenterAndSize(
+                new THREE.Vector3(position.x, position.y - playerHeight/2, position.z),
+                new THREE.Vector3(playerRadius*2, playerHeight, playerRadius*2)
+            );
+
+            for (let i = 0; i < collidableBoxes.length; i++) {
+                if (playerBox.intersectsBox(collidableBoxes[i])) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        let lastHeartbeatTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+
+            // Animate flickering lights
+            flickeringLights.forEach(item => {
+                item.light.intensity = item.baseIntensity * (0.8 + Math.random() * 0.4);
+                if (Math.random() > 0.95) item.light.intensity *= 0.1; // Sudden drops
+            });
+
+            // Animate dust
+            if (particles) {
+                particles.rotation.y += 0.02 * delta;
+                const positions = particles.geometry.attributes.position.array;
+                for(let i=1; i<positions.length; i+=3) {
+                    positions[i] -= 0.05 * delta; 
+                    if(positions[i] < 0) positions[i] = 7; // Reset to new ceiling height
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Movement and Physics Logic
+            if (controls.isLocked === true) {
+                velocity.x -= velocity.x * 12.0 * delta; 
+                velocity.z -= velocity.z * 12.0 * delta;
+
+                direction.z = Number(moveState.forward) - Number(moveState.backward);
+                direction.x = Number(moveState.right) - Number(moveState.left);
+                direction.normalize(); 
+
+                const speed = 40.0; // Increased speed to traverse larger rooms better
+                if (moveState.forward || moveState.backward) velocity.z -= direction.z * speed * delta;
+                if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                const currentPos = controls.getObject().position;
+
+                // Wall Collision
+                if (checkCollision(currentPos)) {
+                    controls.moveRight(velocity.x * delta);
+                    controls.moveForward(velocity.z * delta);
+                    velocity.x = 0;
+                    velocity.z = 0;
+                }
+
+                // Head bobbing
+                const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
+                if (isMoving) {
+                    walkTime += delta * 10;
+                    controls.getObject().position.y = playerHeight + Math.sin(walkTime) * 0.06;
+                } else {
+                    controls.getObject().position.y += (playerHeight - controls.getObject().position.y) * 0.1;
+                }
+
+                // Dynamic Location-Based Audio (Heartbeat gets faster/louder as Z goes negative)
+                if (audioCtx && audioCtx.state === 'running') {
+                    const depthZ = currentPos.z;
+                    if (depthZ < -25) { // Scaled depth trigger
+                        // Max depth is around -87.5
+                        let normalizedDepth = Math.min(Math.abs(depthZ + 25) / 62.5, 1);
+                        
+                        // Heartbeat timing gets faster (from 1.5s down to 0.6s)
+                        let interval = 1.5 - (normalizedDepth * 0.9);
+                        
+                        // Volume gets louder
+                        let intensity = normalizedDepth * 1.5;
+
+                        if (time - lastHeartbeatTime > interval * 1000) {
+                            triggerHeartbeat(intensity);
+                            lastHeartbeatTime = time;
+                        }
+                    }
+                }
+            }
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

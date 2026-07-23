@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDF Zombie — NPC Preview</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#050608; font-family:'SF Mono',Menlo,Consolas,monospace; color:#9ab; }
+  #c { display:block; width:100vw; height:100vh; cursor:grab; }
+  #c:active { cursor:grabbing; }
+
+  #info {
+    position:fixed; top:18px; left:20px; z-index:10; pointer-events:none;
+    font-size:11px; letter-spacing:2px; line-height:1.7; text-transform:uppercase;
+    color:#678; text-shadow:0 0 8px #000;
+  }
+  #info b { color:#bcd; font-weight:600; }
+  #info .hint { color:#456; font-size:10px; margin-top:6px; }
+
+  #controls {
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:10;
+    display:flex; gap:8px;
+    background:rgba(10,14,18,.7); padding:6px; border-radius:6px;
+    border:1px solid rgba(100,140,170,.15); backdrop-filter:blur(8px);
+  }
+  #controls button {
+    background:transparent; border:1px solid rgba(100,140,170,.2);
+    color:#8aa; font-family:inherit; font-size:11px; letter-spacing:1.5px;
+    padding:8px 16px; border-radius:4px; cursor:pointer; transition:all .15s;
+    text-transform:uppercase;
+  }
+  #controls button:hover { background:rgba(100,140,170,.1); color:#bcd; }
+  #controls button.active { background:rgba(180,60,60,.25); border-color:rgba(220,80,80,.5); color:#fcc; }
+
+  #stats {
+    position:fixed; top:18px; right:20px; z-index:10; pointer-events:none;
+    font-size:10px; letter-spacing:1.5px; color:#567; text-align:right;
+    text-shadow:0 0 8px #000;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="info">
+  <b>SDF ZOMBIE</b> · NPC PREVIEW<br>
+  <span class="hint">drag to orbit · scroll to zoom</span>
+</div>
+
+<div id="stats">
+  SDF RAYMARCHED · WEBGL2<br>
+  <span id="fps">— FPS</span>
+</div>
+
+<div id="controls">
+  <button id="btnIdle" class="active">IDLE</button>
+  <button id="btnWalk">SHAMBLE</button>
+  <button id="btnReach">REACH</button>
+</div>
+
+<script id="vs" type="x-shader/x-vertex">#version 300 es
+in vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos,0.0,1.0); }
+</script>
+
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 outColor;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCamPos;
+uniform vec3  uCamTarget;
+uniform float uFov;
+uniform int   uAnimMode; // 0=idle, 1=walk, 2=reach
+
+// ============================================================
+//  SDF primitives
+// ============================================================
+float sdSphere(vec3 p, float r){ return length(p)-r; }
+float sdBox(vec3 p, vec3 b){
+  vec3 q = abs(p)-b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+float sdRoundBox(vec3 p, vec3 b, float r){
+  vec3 q = abs(p)-b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+}
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/max(dot(ba,ba),1e-5), 0.0, 1.0);
+  return length(pa - ba*h) - r;
+}
+float sdTorus(vec3 p, vec2 t){
+  vec2 q = vec2(length(p.xz)-t.x, p.y);
+  return length(q)-t.y;
+}
+float sdEllipsoid(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/k1;
+}
+// Round cone: capsule whose radius interpolates from ra (at a) to rb (at b)
+float sdRoundCone(vec3 p, vec3 a, vec3 b, float ra, float rb){
+  vec3 ba = b - a;
+  float l2 = dot(ba, ba);
+  float t = clamp(dot(p - a, ba) / max(l2, 1e-5), 0.0, 1.0);
+  float r = mix(ra, rb, t);
+  return length(p - a - ba * t) - r;
+}
+
+// smooth min (polynomial)
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b, a, h) - k*h*(1.0-h);
+}
+// smooth max
+float smax(float a, float b, float k){
+  return -smin(-a, -b, k);
+}
+
+// 2D rotation
+mat2 rot(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
+
+// material IDs
+const int MAT_FLESH    = 1;
+const int MAT_BONE     = 2;
+const int MAT_BLOOD    = 3;
+const int MAT_EYE      = 4;
+const int MAT_FLOOR    = 5;
+const int MAT_PEDESTAL = 6;
+const int MAT_CLOTH    = 7;
+
+vec2 opU(vec2 a, vec2 b){ return (a.x < b.x) ? a : b; }
+
+// hash for surface variation
+float hash13(vec3 p){
+  p = fract(p*0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x*p.y*p.z*(p.x+p.y+p.z));
+}
+float hash21(vec2 p){
+  p = fract(p*vec2(123.34, 345.45));
+  p += dot(p, p+34.345);
+  return fract(p.x*p.y);
+}
+float noise3(vec3 p){
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  float n000 = hash13(i+vec3(0,0,0));
+  float n100 = hash13(i+vec3(1,0,0));
+  float n010 = hash13(i+vec3(0,1,0));
+  float n110 = hash13(i+vec3(1,1,0));
+  float n001 = hash13(i+vec3(0,0,1));
+  float n101 = hash13(i+vec3(1,0,1));
+  float n011 = hash13(i+vec3(0,1,1));
+  float n111 = hash13(i+vec3(1,1,1));
+  float nx00 = mix(n000,n100,f.x);
+  float nx10 = mix(n010,n110,f.x);
+  float nx01 = mix(n001,n101,f.x);
+  float nx11 = mix(n011,n111,f.x);
+  float nxy0 = mix(nx00,nx10,f.y);
+  float nxy1 = mix(nx01,nx11,f.y);
+  return mix(nxy0,nxy1,f.z);
+}
+float fbm(vec3 p){
+  float v=0.0, a=0.5;
+  for(int i=0;i<4;i++){
+    v += a*noise3(p);
+    p *= 2.0;
+    a *= 0.5;
+  }
+  return v;
+}
+
+// ============================================================
+//  ZOMBIE SDF
+//  Origin at feet (y=0). Faces +Z.
+//  Returns vec2(distance, materialID)
+// ============================================================
+vec2 zombieSDF(vec3 p, float t, int mode){
+  // ---------- ANIMATION ----------
+  float phase = t * 1.3;                 // slow shamble cadence
+  float stride = sin(phase);             // -1..1
+  float liftR = max(0.0,  sin(phase)) * 0.08;
+  float liftL = max(0.0, -sin(phase)) * 0.08;
+  float bodySway = stride * 0.025;       // weight shift
+  float breath = sin(t * 1.6) * 0.006;   // subtle chest expansion
+
+  // mode blending
+  float walkAmt = (mode==1) ? 1.0 : 0.0;
+  float reachAmt = (mode==2) ? 1.0 : 0.0;
+  stride  *= walkAmt;
+  liftR   *= walkAmt;
+  liftL   *= walkAmt;
+  bodySway *= walkAmt;
+
+  // head twitch (idle micro-motion)
+  float twitch = sin(t*2.3)*0.5 + sin(t*5.1)*0.3;
+  float headTwitch = (mode==0) ? twitch*0.02 : 0.0;
+
+  // ---------- LEGS (rooted, do NOT sway with body) — slimmed ----------
+  // Right leg (stance when stride<0, swing when stride>0)
+  vec3 rHip   = vec3( 0.09, 0.92, 0.0);
+  vec3 rKnee  = vec3( 0.09 + stride*0.05, 0.50 - liftR*0.20, stride*0.06);
+  vec3 rAnkle = vec3( 0.09 + stride*0.10, 0.05 + liftR,       stride*0.12);
+  float legR = sdCapsule(p, rHip, rKnee, 0.060);
+  legR = smin(legR, sdCapsule(p, rKnee, rAnkle, 0.046), 0.02);
+  // Knee bump
+  legR = smin(legR, sdSphere(p - rKnee, 0.044), 0.012);
+  // Teardrop foot: fat round heel → tapered toes (pointing +Z, forward)
+  vec3 rHeel = rAnkle + vec3(0.0, -0.005, -0.015);
+  vec3 rToe  = rAnkle + vec3(0.0, -0.005,  0.135);
+  legR = smin(legR, sdRoundCone(p, rHeel, rToe, 0.038, 0.014), 0.018);
+
+  // Left leg (dragging, slightly bent — the "bad" leg)
+  vec3 lHip   = vec3(-0.09, 0.92, 0.0);
+  vec3 lKnee  = vec3(-0.11 - stride*0.04, 0.48 - liftL*0.15, -stride*0.05 + 0.02);
+  vec3 lAnkle = vec3(-0.13 - stride*0.08, 0.05 + liftL*0.5,  -stride*0.10 + 0.04);
+  float legL = sdCapsule(p, lHip, lKnee, 0.060);
+  legL = smin(legL, sdCapsule(p, lKnee, lAnkle, 0.046), 0.02);
+  legL = smin(legL, sdSphere(p - lKnee, 0.044), 0.012);
+  vec3 lHeel = lAnkle + vec3(0.0, -0.005, -0.015);
+  vec3 lToe  = lAnkle + vec3(0.0, -0.005,  0.135);
+  legL = smin(legL, sdRoundCone(p, lHeel, lToe, 0.038, 0.014), 0.018);
+
+  // ---------- TORSO (hunched forward, sways with body) ----------
+  // Apply forward lean by pivoting around the hips (y=0.92) on X axis (yz plane)
+  vec3 tp = p;
+  tp.x -= bodySway;                       // weight shift
+  tp.y -= 0.92;
+  tp.yz = rot(0.30) * tp.yz;              // ~17° forward lean
+  tp.y += 0.92;
+
+  // Ribcage / chest (tapered ellipsoid)
+  float chest = sdEllipsoid(tp - vec3(0.0, 1.30, 0.0), vec3(0.15, 0.20, 0.11));
+  // Spine hump (kyphosis — hunchback)
+  chest = smin(chest, sdSphere(tp - vec3(0.0, 1.46, -0.08), 0.11), 0.05);
+  // Belly (sunken, not pot-bellied — zombie is starving)
+  chest = smin(chest, sdEllipsoid(tp - vec3(0.0, 1.02, 0.03), vec3(0.13, 0.10, 0.11)), 0.08);
+  // Pelvis (small, organic — not a box)
+  chest = smin(chest, sdEllipsoid(tp - vec3(0.0, 0.88, 0.0), vec3(0.082, 0.05, 0.065)), 0.04);
+  // Collar bones (subtle)
+  chest = smin(chest, sdCapsule(tp, vec3(-0.13,1.42,0.04), vec3(0.13,1.42,0.04), 0.015), 0.02);
+
+  // ---------- RIBS (shallow grooves on chest front, via smax) ----------
+  // This creates visible ribcage texture without breaking the SDF
+  float ribs = 1e9;
+  for(int i=0; i<4; i++){
+    float fi = float(i);
+    vec3 ribC = tp - vec3(0.0, 1.40 - fi*0.05, 0.10);
+    float rib = sdCapsule(ribC, vec3(-0.10,0.0,0.0), vec3(0.10,0.0,0.0), 0.012);
+    ribs = min(ribs, rib);
+  }
+  // Only carve ribs where they're close to the chest surface (avoid carving through back)
+  float ribMask = smoothstep(0.06, 0.02, ribs);
+  chest = smax(chest, -ribs*0.4, 0.01) * (1.0 - ribMask*0.0) + chest*0.0 + smax(chest, -ribs*0.35, 0.015);
+  // (the above is a safe way to add subtle rib grooves without holes)
+
+  // ---------- NECK ----------
+  // Slightly forward-curving neck (head pokes forward)
+  float neck = sdCapsule(tp, vec3(0.0,1.48,0.0), vec3(0.0,1.58,0.03), 0.045);
+
+  // ---------- HEAD (faces +Z, toward reaching arm) ----------
+  vec3 hp = tp - vec3(0.0, 1.66, 0.04);   // head center, shifted forward by lean
+  // Head tilt: roll to the right + slight downward pitch (zombie loll)
+  hp.xy = rot(0.18 + headTwitch) * hp.xy;    // roll
+  hp.yz = rot(0.12) * hp.yz;                 // pitch down (chin toward chest)
+
+  // Skull (slightly elongated, gaunt)
+  float head = sdEllipsoid(hp, vec3(0.085, 0.105, 0.095));
+  // Cranium bump (BACK of skull → -Z, away from face)
+  head = smin(head, sdSphere(hp - vec3(0.0, 0.03, -0.06), 0.08), 0.03);
+  // Brow ridge (FRONT → +Z)
+  head = smin(head, sdEllipsoid(hp - vec3(0.0, 0.025, 0.07), vec3(0.07, 0.025, 0.04)), 0.02);
+  // Cheekbones (gaunt) — FRONT
+  head = smin(head, sdSphere(hp - vec3(-0.07, -0.02, 0.05), 0.028), 0.025);
+  head = smin(head, sdSphere(hp - vec3( 0.07, -0.02, 0.05), 0.028), 0.025);
+  // Jaw — FRONT
+  head = smin(head, sdEllipsoid(hp - vec3(0.0, -0.07, 0.02), vec3(0.055, 0.035, 0.055)), 0.03);
+
+  // Eye sockets (carved — concave dents, not holes) — FRONT
+  float sockL = sdSphere(hp - vec3(-0.040, 0.015, 0.085), 0.026);
+  float sockR = sdSphere(hp - vec3( 0.040, 0.015, 0.085), 0.026);
+  head = smax(head, -sockL, 0.008);
+  head = smax(head, -sockR, 0.008);
+
+  // Nose cavity (small dent) — FRONT
+  float nose = sdSphere(hp - vec3(0.0, -0.02, 0.10), 0.018);
+  head = smax(head, -nose, 0.006);
+
+  // Mouth (gash — elongated dent) — FRONT
+  float mouth = sdRoundBox(hp - vec3(0.0, -0.075, 0.075), vec3(0.030, 0.008, 0.015), 0.005);
+  head = smax(head, -mouth, 0.005);
+
+  // Teeth hint (tiny bumps inside mouth region) — skip for perf, fake via albedo
+
+  // ---------- EYES (glowing, recessed in sockets) — FRONT ----------
+  float eyeL = sdSphere(hp - vec3(-0.040, 0.012, 0.092), 0.011);
+  float eyeR = sdSphere(hp - vec3( 0.040, 0.012, 0.092), 0.011);
+
+  // ---------- RIGHT ARM (reaching forward — zombie grab pose) ----------
+  // Shoulder anchored on torso (which has lean + sway applied), so compute in tp space then
+  // we need world-space. But tp = p with lean applied; capsule endpoints in tp space are
+  // in the leaned frame. To get world space, reverse the lean. Simpler: define arm endpoints
+  // directly in world space with manual lean compensation.
+  // Shoulder world pos (approx, after lean+sway):
+  vec3 rShoulder = vec3( 0.16 + bodySway, 1.38, 0.06);
+  // Reach forward and slightly up; sway slowly
+  float reachSway = sin(t*0.6) * 0.04;
+  float reachBob  = sin(t*0.9) * 0.02;
+  vec3 rElbow = vec3( 0.20 + bodySway, 1.22 + reachBob, 0.28 + reachSway*0.5);
+  vec3 rWrist = vec3( 0.22 + bodySway, 1.08 + reachBob*1.5, 0.50 + reachSway);
+  // When in REACH mode, extend further
+  rWrist.z += reachAmt * 0.18;
+  rWrist.y -= reachAmt * 0.05;
+  rElbow.z += reachAmt * 0.08;
+
+  float armR = sdCapsule(p, rShoulder, rElbow, 0.048);
+  armR = smin(armR, sdCapsule(p, rElbow, rWrist, 0.042), 0.02);
+  // Elbow bone exposure (subtle bump)
+  armR = smin(armR, sdSphere(p - rElbow, 0.038), 0.015);
+  // Hand / palm
+  vec3 rPalm = rWrist + vec3(0.0, -0.01, 0.04);
+  armR = smin(armR, sdSphere(p - rPalm, 0.035), 0.015);
+  // Fingers (3 visible, splayed forward)
+  for(int i=0; i<4; i++){
+    float fi = float(i);
+    float spread = (fi - 1.5) * 0.018;
+    vec3 fStart = rPalm + vec3(spread, 0.0, 0.035);
+    vec3 fEnd   = fStart + vec3(spread*0.5, -0.008, 0.045);
+    armR = smin(armR, sdCapsule(p, fStart, fEnd, 0.008), 0.004);
+  }
+
+  // ---------- LEFT ARM (dangling limp, broken at elbow) ----------
+  vec3 lShoulder = vec3(-0.16 + bodySway, 1.38, 0.06);
+  // Unnatural bend — elbow juts outward, hand hangs low
+  float dangleSway = sin(t*0.7) * 0.025;
+  vec3 lElbow = vec3(-0.22 + bodySway, 1.05, 0.04);
+  lElbow.x += dangleSway;
+  vec3 lWrist = vec3(-0.20 + bodySway, 0.72, 0.06);
+  lWrist.x += dangleSway * 1.5;
+  // Wrist bent at unnatural angle
+  vec3 lPalm = lWrist + vec3(-0.01, -0.035, 0.015);
+
+  float armL = sdCapsule(p, lShoulder, lElbow, 0.048);
+  armL = smin(armL, sdCapsule(p, lElbow, lWrist, 0.042), 0.02);
+  armL = smin(armL, sdSphere(p - lElbow, 0.038), 0.015); // elbow bone
+  armL = smin(armL, sdSphere(p - lPalm, 0.033), 0.015);  // palm
+  // Curled fingers (hand half-closed, limp)
+  for(int i=0; i<4; i++){
+    float fi = float(i);
+    float spread = (fi - 1.5) * 0.016;
+    vec3 fStart = lPalm + vec3(spread, -0.005, 0.01);
+    vec3 fEnd   = fStart + vec3(spread*0.3, -0.025, 0.015);
+    armL = smin(armL, sdCapsule(p, fStart, fEnd, 0.0075), 0.004);
+  }
+
+  // ---------- COMBINE BODY (all material FLESH, smooth-blended) ----------
+  float body = legR;
+  body = smin(body, legL, 0.04);
+  body = smin(body, chest, 0.05);
+  body = smin(body, neck, 0.03);
+  body = smin(body, head, 0.035);
+  body = smin(body, armR, 0.035);
+  body = smin(body, armL, 0.035);
+
+  vec2 res = vec2(body, float(MAT_FLESH));
+
+  // Eyes (emissive, hard union — they sit proud in the socket dents)
+  res = opU(res, vec2(eyeL, float(MAT_EYE)));
+  res = opU(res, vec2(eyeR, float(MAT_EYE)));
+
+  // Exposed bone regions: shin bone on left leg (broken pant leg)
+  float boneShinL = sdCapsule(p, lKnee, lAnkle + vec3(0.0,0.02,0.0), 0.035);
+  // Only show bone where it pokes through (use smax to keep it inside flesh normally)
+  // Simpler: just add as a slightly smaller capsule that's mostly hidden
+  // For preview, let's expose a small bone fragment on the left forearm
+  float boneFragL = sdCapsule(p, lElbow + vec3(-0.02,-0.02,0.0), lElbow + vec3(0.03,-0.05,0.0), 0.012);
+  res = opU(res, vec2(boneFragL, float(MAT_BONE)));
+
+  return res;
+}
+
+// ============================================================
+//  SCENE
+// ============================================================
+vec2 map(vec3 p){
+  vec2 res = vec2(1e9, 0.0);
+
+  // Floor
+  float floor_d = p.y;
+  if(floor_d < res.x) res = vec2(floor_d, float(MAT_FLOOR));
+
+  // Pedestal (cylinder)
+  vec3 pedP = p - vec3(0.0, 0.0, 0.0);
+  float ped = sdTorus(pedP.xzy - vec3(0.0, 0.0, 0.04), vec2(0.75, 0.04));
+  // Actually use a flat cylinder disc
+  float pedDisc = max(length(p.xz) - 0.75, abs(p.y - 0.0));
+  pedDisc = max(pedDisc, p.y - 0.04); // top at y=0.04, but zombie feet at y=0... adjust
+  // Use a low pedestal
+  pedDisc = max(length(p.xz) - 0.75, max(p.y - 0.03, -p.y));
+  if(pedDisc < res.x) res = vec2(pedDisc, float(MAT_PEDESTAL));
+
+  // Zombie (only render nearby for perf)
+  float zdist = length(p.xz) + max(0.0, p.y - 2.0);
+  if(zdist < 4.0){
+    vec2 z = zombieSDF(p, uTime, uAnimMode);
+    if(z.x < res.x) res = z;
+  }
+
+  return res;
+}
+
+vec3 calcNormal(vec3 p){
+  vec2 e = vec2(0.0008, 0.0);
+  return normalize(vec3(
+    map(p+e.xyy).x - map(p-e.xyy).x,
+    map(p+e.yxy).x - map(p-e.yxy).x,
+    map(p+e.yyx).x - map(p-e.yyx).x
+  ));
+}
+
+float softShadow(vec3 ro, vec3 rd, float mint, float maxt, float k){
+  float res = 1.0;
+  float t = mint;
+  for(int i=0; i<32; i++){
+    if(t >= maxt) break;
+    float h = map(ro + rd*t).x;
+    if(h < 0.001) return 0.0;
+    res = min(res, k*h/t);
+    t += clamp(h, 0.01, 0.3);
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+float calcAO(vec3 p, vec3 n){
+  float occ = 0.0;
+  float sca = 1.0;
+  for(int i=0; i<5; i++){
+    float hr = 0.02 + 0.06*float(i);
+    float d = map(p + n*hr).x;
+    occ += (hr - d)*sca;
+    sca *= 0.7;
+  }
+  return clamp(1.0 - 1.5*occ, 0.0, 1.0);
+}
+
+// ============================================================
+//  MATERIALS
+// ============================================================
+vec3 shadeFlesh(vec3 p, vec3 n, vec3 rd){
+  // Base skin: desaturated green-grey
+  vec3 base = vec3(0.42, 0.52, 0.38);
+  // Decay variation via fbm
+  float decay = fbm(p*3.0);
+  base = mix(base, vec3(0.28, 0.36, 0.22), decay*0.5);
+  // Darker rot patches
+  float rot = fbm(p*5.0 + 10.0);
+  base = mix(base, vec3(0.12, 0.16, 0.10), smoothstep(0.55, 0.85, rot)*0.7);
+  // Veins (dark streaks)
+  float vein = fbm(p*8.0 + vec3(0.0, 5.0, 0.0));
+  base = mix(base, vec3(0.08, 0.10, 0.06), smoothstep(0.6, 0.75, vein)*0.6);
+  // Blood stains (red patches near chest and mouth)
+  float bloodMask = smoothstep(0.5, 0.3, length(p - vec3(0.0, 1.30, 0.12))); // chest
+  bloodMask += smoothstep(0.15, 0.05, length(p - vec3(0.0, 1.585, 0.13)));   // mouth (front of face)
+  bloodMask += smoothstep(0.10, 0.03, length(p - vec3(0.22, 1.08, 0.50)));   // right hand
+  base = mix(base, vec3(0.35, 0.06, 0.05), clamp(bloodMask, 0.0, 1.0) * 0.6);
+  // Yellowed jaundice tint in shadows
+  base = mix(base, vec3(0.50, 0.48, 0.20), 0.08);
+  return base;
+}
+
+vec3 shadeBone(vec3 p){
+  vec3 base = vec3(0.78, 0.74, 0.62);
+  base *= 0.7 + 0.3*hash13(floor(p*20.0));
+  // Yellowing
+  base = mix(base, vec3(0.55, 0.50, 0.30), fbm(p*4.0)*0.4);
+  return base;
+}
+
+vec3 shadePedestal(vec3 p){
+  vec3 base = vec3(0.18, 0.20, 0.22);
+  // Radial darkening
+  float r = length(p.xz);
+  base *= 0.5 + 0.5*smoothstep(0.75, 0.4, r);
+  // Speckle
+  base += (hash13(floor(p*30.0))-0.5)*0.04;
+  return base;
+}
+
+vec3 shadeFloor(vec3 p, vec3 n, vec3 rd){
+  vec3 base = vec3(0.05, 0.06, 0.08);
+  // Grid
+  vec2 g = abs(fract(p.xz*2.0)-0.5);
+  float grid = smoothstep(0.48, 0.50, max(g.x, g.y));
+  base += vec3(0.02,0.03,0.04) * grid;
+  // Fresnel sheen (wet look)
+  float fres = pow(1.0 - max(dot(n, -rd), 0.0), 4.0);
+  base += vec3(0.15, 0.20, 0.28) * fres * 0.5;
+  return base;
+}
+
+// ============================================================
+//  RENDER
+// ============================================================
+vec3 background(vec3 rd){
+  // Vertical gradient: dark blue top → black bottom
+  float t = rd.y*0.5 + 0.5;
+  vec3 top = vec3(0.025, 0.035, 0.055);
+  vec3 bot = vec3(0.005, 0.008, 0.012);
+  vec3 col = mix(bot, top, smoothstep(0.0, 1.0, t));
+  // Radial glow behind subject (centered around look direction's horizon)
+  float glow = pow(max(0.0, 1.0 - length(rd.xy - vec2(0.0, 0.0))), 4.0);
+  col += vec3(0.08, 0.10, 0.14) * glow * 0.5;
+  return col;
+}
+
+vec3 render(vec3 ro, vec3 rd){
+  // Raymarch
+  float t = 0.05;
+  float mID = 0.0;
+  bool hit = false;
+  vec3 p;
+  for(int i=0; i<160; i++){
+    p = ro + rd*t;
+    vec2 res = map(p);
+    if(res.x < 0.0008){ hit = true; mID = res.y; break; }
+    if(t > 30.0) break;
+    t += res.x * 0.85;
+  }
+
+  if(!hit) return background(rd);
+
+  vec3 n = calcNormal(p);
+
+  // 3-point studio lighting (brightened for preview clarity)
+  vec3 keyDir  = normalize(vec3( 0.6,  0.8,  0.4));
+  vec3 keyCol  = vec3(1.0, 0.95, 0.85) * 2.2;
+  vec3 fillDir = normalize(vec3(-0.7,  0.5,  0.3));
+  vec3 fillCol = vec3(0.30, 0.45, 0.70) * 0.9;
+  vec3 rimDir  = normalize(vec3( 0.0,  0.3, -1.0));
+  vec3 rimCol  = vec3(0.50, 0.65, 0.85) * 1.4;
+  vec3 amb     = vec3(0.10, 0.12, 0.16);
+
+  // material albedo / emissive
+  vec3 albedo;
+  vec3 emissive = vec3(0.0);
+  int m = int(mID + 0.5);
+
+  if(m == MAT_FLESH){
+    albedo = shadeFlesh(p, n, rd);
+  } else if(m == MAT_BONE){
+    albedo = shadeBone(p);
+  } else if(m == MAT_EYE){
+    // Glowing red eyes
+    albedo = vec3(0.9, 0.1, 0.05);
+    emissive = vec3(1.5, 0.15, 0.05) * 2.5;
+  } else if(m == MAT_FLOOR){
+    albedo = shadeFloor(p, n, rd);
+  } else if(m == MAT_PEDESTAL){
+    albedo = shadePedestal(p);
+  } else {
+    albedo = vec3(0.5);
+  }
+
+  // Lighting calc
+  float diffKey  = max(dot(n, keyDir), 0.0);
+  float diffFill = max(dot(n, fillDir), 0.0);
+  float diffRim  = max(dot(n, rimDir), 0.0);
+  float sh = softShadow(p + n*0.01, keyDir, 0.02, 8.0, 8.0);
+  float ao = calcAO(p, n);
+
+  vec3 lin = amb * ao;
+  lin += keyCol  * diffKey  * sh;
+  lin += fillCol * diffFill * 0.8;
+  lin += rimCol  * diffRim  * 1.0;
+
+  vec3 col = albedo * lin + emissive;
+
+  // Specular on skin (subtle, wet sheen)
+  if(m == MAT_FLESH || m == MAT_BONE){
+    vec3 h = normalize(keyDir - rd);
+    float spec = pow(max(dot(n, h), 0.0), 24.0);
+    col += vec3(0.4, 0.45, 0.40) * spec * sh * 0.4;
+  }
+
+  // Rim light pop on body edges
+  if(m == MAT_FLESH || m == MAT_BONE){
+    float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+    col += rimCol * rim * 0.5;
+  }
+
+  // Fog
+  float fogAmt = 1.0 - exp(-0.018 * t);
+  col = mix(col, background(rd), fogAmt);
+
+  return col;
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes.xy) / uRes.y;
+
+  // Camera basis
+  vec3 fwd = normalize(uCamTarget - uCamPos);
+  vec3 right = normalize(cross(fwd, vec3(0,1,0)));
+  vec3 up = cross(right, fwd);
+
+  vec3 rd = normalize(fwd + right*uv.x*uFov + up*uv.y*uFov);
+  vec3 col = render(uCamPos, rd);
+
+  // Tone map (filmic-ish)
+  col = col / (1.0 + col);
+  col = pow(col, vec3(0.82));
+
+  // Vignette
+  float vig = 1.0 - 0.4*dot(uv*0.7, uv*0.7);
+  col *= 0.55 + 0.45*vig;
+
+  // Subtle grain
+  col += (hash21(gl_FragCoord.xy + uTime*60.0) - 0.5) * 0.015;
+
+  outColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+'use strict';
+
+// ============================================================
+//  WebGL2 setup
+// ============================================================
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias:false, powerPreference:'high-performance', preserveDrawingBuffer:true });
+if(!gl){
+  document.body.innerHTML = '<div style="color:#f66;padding:40px;font-family:monospace">WebGL2 not supported.</div>';
+  throw new Error('no webgl2');
+}
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    console.error('Shader error:', gl.getShaderInfoLog(s));
+    throw new Error('compile failed');
+  }
+  return s;
+}
+const vs = compile(gl.VERTEX_SHADER, document.getElementById('vs').textContent);
+const fs = compile(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent);
+const prog = gl.createProgram();
+gl.attachShader(prog, vs);
+gl.attachShader(prog, fs);
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+  console.error(gl.getProgramInfoLog(prog));
+  throw new Error('link failed');
+}
+gl.useProgram(prog);
+
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, 'a_pos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+['uRes','uTime','uCamPos','uCamTarget','uFov','uAnimMode'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+// ============================================================
+//  Resize
+// ============================================================
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  canvas.width  = Math.floor(window.innerWidth  * dpr);
+  canvas.height = Math.floor(window.innerHeight * dpr);
+  canvas.style.width  = window.innerWidth  + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ============================================================
+//  Orbit camera
+// ============================================================
+const cam = {
+  angle: -0.3,      // azimuth (radians); 0 = front
+  pitch: 0.05,      // elevation
+  dist: 3.2,        // distance from target
+  targetY: 1.05,    // look-at height (mid-torso)
+  autoRotate: true,
+  autoSpeed: 0.0015,
+};
+
+let dragging = false;
+let lastX = 0, lastY = 0;
+let autoResumeTimer = null;
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  cam.autoRotate = false;
+  if(autoResumeTimer) clearTimeout(autoResumeTimer);
+});
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  cam.angle -= dx * 0.008;
+  cam.pitch += dy * 0.006;
+  cam.pitch = Math.max(-0.5, Math.min(0.8, cam.pitch));
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  // resume auto-rotate after 2.5s of no interaction
+  autoResumeTimer = setTimeout(() => { cam.autoRotate = true; }, 2500);
+});
+
+// Touch support
+canvas.addEventListener('touchstart', e => {
+  if(e.touches.length === 1){
+    dragging = true;
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+    cam.autoRotate = false;
+    if(autoResumeTimer) clearTimeout(autoResumeTimer);
+  }
+}, {passive:true});
+window.addEventListener('touchmove', e => {
+  if(!dragging || e.touches.length !== 1) return;
+  const dx = e.touches[0].clientX - lastX;
+  const dy = e.touches[0].clientY - lastY;
+  lastX = e.touches[0].clientX;
+  lastY = e.touches[0].clientY;
+  cam.angle -= dx * 0.008;
+  cam.pitch += dy * 0.006;
+  cam.pitch = Math.max(-0.5, Math.min(0.8, cam.pitch));
+}, {passive:true});
+window.addEventListener('touchend', () => {
+  dragging = false;
+  autoResumeTimer = setTimeout(() => { cam.autoRotate = true; }, 2500);
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  cam.dist *= (1.0 + e.deltaY * 0.0012);
+  cam.dist = Math.max(1.6, Math.min(6.5, cam.dist));
+}, {passive:false});
+
+function camPos(){
+  const cp = Math.cos(cam.pitch);
+  return [
+    Math.sin(cam.angle) * cp * cam.dist,
+    cam.targetY + Math.sin(cam.pitch) * cam.dist,
+    Math.cos(cam.angle) * cp * cam.dist
+  ];
+}
+
+// ============================================================
+//  Animation mode toggle
+// ============================================================
+let animMode = 0; // 0=idle, 1=walk, 2=reach
+const btnIdle = document.getElementById('btnIdle');
+const btnWalk = document.getElementById('btnWalk');
+const btnReach = document.getElementById('btnReach');
+function setMode(m){
+  animMode = m;
+  btnIdle.classList.toggle('active', m===0);
+  btnWalk.classList.toggle('active', m===1);
+  btnReach.classList.toggle('active', m===2);
+}
+btnIdle.addEventListener('click', () => setMode(0));
+btnWalk.addEventListener('click', () => setMode(1));
+btnReach.addEventListener('click', () => setMode(2));
+
+// ============================================================
+//  Render loop
+// ============================================================
+const FOV = 0.34; // ~35° portrait lens
+let lastT = performance.now();
+let fpsAccum = 0, fpsCount = 0, fpsLast = lastT;
+const fpsEl = document.getElementById('fps');
+
+function frame(now){
+  const dt = (now - lastT) / 1000;
+  lastT = now;
+  const t = now / 1000;
+
+  // FPS
+  fpsAccum += 1/Math.max(dt, 1e-4);
+  fpsCount++;
+  if(now - fpsLast > 500){
+    fpsEl.textContent = (fpsAccum/fpsCount).toFixed(0) + ' FPS';
+    fpsAccum = 0; fpsCount = 0; fpsLast = now;
+  }
+
+  if(cam.autoRotate){
+    cam.angle += cam.autoSpeed;
+  }
+
+  const cp = camPos();
+  gl.useProgram(prog);
+  gl.bindVertexArray(vao);
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uTime, t);
+  gl.uniform3fv(U.uCamPos, cp);
+  gl.uniform3fv(U.uCamTarget, [0, cam.targetY, 0]);
+  gl.uniform1f(U.uFov, FOV);
+  gl.uniform1i(U.uAnimMode, animMode);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

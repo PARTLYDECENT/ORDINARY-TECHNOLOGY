@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proc.Zombie // SDF NPC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#030504; --panel:rgba(6,10,8,.85); --border:#142219; --border-hi:#263e2e;
+  --fg:#99a691; --fg-dim:#556050; --accent:#72f342; --accent-dim:#2d5c1e;
+  --warn:#ffaa3d; --danger:#ff3b3b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:'JetBrains Mono',monospace;overflow:hidden;user-select:none;-webkit-user-select:none}
+canvas#c{display:block;width:100vw;height:100vh;cursor:grab}
+canvas#c:active{cursor:grabbing}
+.panel{position:fixed;background:var(--panel);border:1px solid var(--border);border-radius:3px;backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);padding:14px 16px;font-size:11px;line-height:1.5;box-shadow:0 8px 40px rgba(0,0,0,.8);z-index:10}
+.panel::before{content:'';position:absolute;top:-1px;left:-1px;right:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--accent-dim),transparent)}
+#header{top:16px;left:16px;max-width:360px}
+#header h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:4px}
+#header .sub{font-size:10px;color:var(--fg-dim);letter-spacing:.08em;line-height:1.6}
+#header .id{margin-top:10px;color:var(--danger);font-size:10px;letter-spacing:.12em;display:flex;align-items:center}
+#telemetry-hud{bottom:16px;left:16px;width:300px}
+.hud-title{color:var(--accent);font-size:10px;letter-spacing:.2em;margin-bottom:12px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;display:flex;justify-content:space-between}
+.hud-title .state{color:var(--danger);font-weight:700;animation:pulse-text 1s infinite alternate}
+@keyframes pulse-text{from{opacity:0.6}to{opacity:1}}
+.hud-metric{display:flex;justify-content:space-between;margin-bottom:8px;font-size:10px}
+.hud-metric .label{color:var(--fg-dim);text-transform:uppercase}
+.hud-metric .value{font-weight:700}
+.graph-container{height:45px;border:1px solid var(--border-hi);background:rgba(0,0,0,0.4);margin-top:10px;position:relative;overflow:hidden}
+.graph-container canvas{width:100%;height:100%;display:block}
+.graph-container .graph-label{position:absolute;top:4px;left:6px;font-size:8px;color:var(--accent-dim);text-transform:uppercase;letter-spacing:1px}
+#status{top:16px;right:16px;width:240px}
+.stat-row{display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px;letter-spacing:.05em}
+.stat-row .k{color:var(--fg-dim);text-transform:uppercase}
+.stat-row .v{color:var(--accent);font-weight:700}
+.stat-row .v.warn{color:var(--warn)}
+.stat-row .v.danger{color:var(--danger)}
+#help{bottom:16px;right:16px;width:240px;font-size:10px;color:var(--fg-dim)}
+#help .key{color:var(--accent);font-weight:700;display:inline-block;min-width:42px}
+#help div{margin-bottom:4px}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.12) 3px);z-index:100;mix-blend-mode:multiply}
+.pulse-dot{display:inline-block;width:7px;height:7px;background:var(--danger);border-radius:50%;margin-right:8px;animation:pulse 1.2s ease-in-out infinite;box-shadow:0 0 10px var(--danger);vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.2;transform:scale(.7)}}
+@media (max-width:760px){#header,#telemetry-hud,#status,#help{max-width:calc(100vw - 32px);width:calc(100vw - 32px)}#status{top:auto}#help{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="panel" id="header">
+  <h1>Specimen-07 // AUTONOMOUS</h1>
+  <div class="sub">Signed Distance Field Raymarcher v3.5<br>Decaying Tissue Translucency · Organic Specular Layer<br>Self-Governing Procedural Stalking Nervous System</div>
+  <div class="id"><span class="pulse-dot"></span>BIO-CONTAINMENT ACTIVE · BEHAVIOR RUNTIME</div>
+</div>
+
+<div class="panel" id="telemetry-hud">
+  <div class="hud-title">
+    <span>// Behavioral System</span>
+    <span class="state" id="hud-state">STALKING</span>
+  </div>
+  <div class="hud-metric"><span class="label">Nerve Twitch Spasms</span><span class="value" id="hud-twitch">0.00 Hz</span></div>
+  <div class="hud-metric"><span class="label">Balance Decay Coeff</span><span class="value" id="hud-decay">0.00</span></div>
+  <div class="hud-metric"><span class="label">Spine Lurch Offset</span><span class="value" id="hud-lurch">0.00 rad</span></div>
+  <div class="hud-metric"><span class="label">Locomotion Velocity</span><span class="value" id="hud-speed">0.00 m/s</span></div>
+  <div class="graph-container">
+    <div class="graph-label">Nervous Motor Output (EEG)</div>
+    <canvas id="g-eeg"></canvas>
+  </div>
+</div>
+
+<div class="panel" id="status">
+  <div class="ctrl-title" style="color:var(--accent);font-size:10px;letter-spacing:.2em;margin-bottom:10px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px">// Analytical Telemetry</div>
+  <div class="stat-row"><span class="k">Render FPS</span><span class="v" id="t-fps">--</span></div>
+  <div class="stat-row"><span class="k">Up-Time</span><span class="v" id="t-frame">0.0s</span></div>
+  <div class="stat-row"><span class="k">Gait Phase</span><span class="v" id="t-phase">0.00</span></div>
+  <div class="stat-row"><span class="k">Cam Position</span><span class="v" id="t-cam">--</span></div>
+  <div class="stat-row"><span class="k">Gaze Vector Target</span><span class="v" id="t-target">0,1,2</span></div>
+  <div class="stat-row"><span class="k">Sensor Proximity</span><span class="v danger" id="t-proximity">ALERT</span></div>
+  <div class="toggle-row" style="display:flex;gap:6px;margin-top:12px">
+    <button class="tog" id="b-bones" style="flex:1;background:transparent;border:1px solid var(--border-hi);color:var(--fg-dim);padding:6px 8px;font-family:inherit;font-size:9px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .15s">Bones</button>
+    <button class="tog active" id="b-rotate" style="flex:1;background:rgba(114,243,66,.12);border:1px solid var(--accent);color:var(--accent);padding:6px 8px;font-family:inherit;font-size:9px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .15s;box-shadow:0 0 12px rgba(114,243,66,.3) inset">Auto-Cam</button>
+  </div>
+</div>
+
+<div class="panel" id="help">
+  <div class="ctrl-title" style="color:var(--accent);font-size:10px;letter-spacing:.2em;margin-bottom:10px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px">// User Override</div>
+  <div><span class="key">DRAG</span>orbit containment camera</div>
+  <div><span class="key">SCROLL</span>zoom optics</div>
+  <div><span class="key">CLICK</span>influence specimen gaze target</div>
+  <div><span class="key">SPACE</span>reveal structural skeleton</div>
+</div>
+
+<script>
+// =====================================================================
+// AUTONOMOUS PROCEDURAL ZOMBIE — DECAYING SDF RAYMARCHER
+// =====================================================================
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', {antialias:false, alpha:false});
+if(!gl){
+  document.body.innerHTML = '<div style="padding:40px;color:#ff3b3b;font-family:monospace">WebGL2 not supported in this frame.</div>';
+  throw new Error('No WebGL2');
+}
+
+const VS = `#version 300 es
+in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+const FS = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uCamPos;
+uniform vec3 uCamTarget;
+uniform vec3 uJoints[24];
+uniform float uDecay;
+uniform float uTwitch;
+uniform float uShowBones;
+uniform vec3 uTarget;
+uniform float uLurch;
+uniform vec3 uClickPos;
+uniform float uClickTime;
+
+out vec4 fragColor;
+
+float hash31(vec3 p){
+  p = fract(p * vec3(0.1031, 0.11369, 0.13787));
+  p += dot(p, p.yxz + 19.19);
+  return fract((p.x + p.y) * p.z);
+}
+float noise3(vec3 p){
+  vec3 i = floor(p), f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(
+    mix(mix(hash31(i+vec3(0,0,0)), hash31(i+vec3(1,0,0)), f.x),
+        mix(hash31(i+vec3(0,1,0)), hash31(i+vec3(1,1,0)), f.x), f.y),
+    mix(mix(hash31(i+vec3(0,0,1)), hash31(i+vec3(1,0,1)), f.x),
+        mix(hash31(i+vec3(0,1,1)), hash31(i+vec3(1,1,1)), f.x), f.y),
+    f.z);
+}
+float fbm3(vec3 p){
+  float v=0.0, a=0.5;
+  for(int i=0;i<4;i++){ v += a*noise3(p); p = p*2.02+1.7; a *= 0.5; }
+  return v;
+}
+
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/max(dot(ba,ba),1e-6), 0.0, 1.0);
+  return length(pa - ba*h) - r;
+}
+float sdSphere(vec3 p, float r){ return length(p) - r; }
+float sdEllipsoid(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/max(k1,1e-6);
+}
+float sdBox(vec3 p, vec3 b){
+  vec3 q = abs(p)-b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+float smin(float a, float b, float k){
+  float h = clamp(0.5+0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b,a,h) - k*h*(1.0-h);
+}
+float smax(float a, float b, float k){ return -smin(-a,-b,k); }
+
+mat3 headFrame(){
+  vec3 f = normalize(uJoints[5] - uJoints[4] + vec3(0.001));
+  vec3 r = normalize(cross(f, vec3(0.0,1.0,0.0)));
+  vec3 u = cross(r, f);
+  return mat3(r, u, f);
+}
+
+vec2 mapBody(vec3 p){
+  float flesh = 1e10;
+  flesh = smin(flesh, sdCapsule(p, uJoints[0], uJoints[1], 0.17), 0.06);
+  flesh = smin(flesh, sdCapsule(p, uJoints[1], uJoints[2], 0.19), 0.06);
+  flesh = smin(flesh, sdCapsule(p, uJoints[2], uJoints[3], 0.21), 0.06);
+  flesh = smin(flesh, sdCapsule(p, uJoints[3], uJoints[4], 0.09), 0.05);
+  flesh = smin(flesh, sdSphere(p - uJoints[7], 0.10), 0.05);
+  flesh = smin(flesh, sdSphere(p - uJoints[11], 0.10), 0.05);
+  flesh = smin(flesh, sdCapsule(p, uJoints[7], uJoints[8], 0.075), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[8], uJoints[9], 0.065), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[9], uJoints[10], 0.055), 0.03);
+  flesh = smin(flesh, sdCapsule(p, uJoints[11], uJoints[12], 0.075), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[12], uJoints[13], 0.065), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[13], uJoints[14], 0.055), 0.03);
+  flesh = smin(flesh, sdSphere(p - uJoints[15], 0.10), 0.05);
+  flesh = smin(flesh, sdSphere(p - uJoints[19], 0.10), 0.05);
+  flesh = smin(flesh, sdCapsule(p, uJoints[15], uJoints[16], 0.105), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[16], uJoints[17], 0.085), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[17], uJoints[18], 0.07), 0.03);
+  flesh = smin(flesh, sdCapsule(p, uJoints[19], uJoints[20], 0.105), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[20], uJoints[21], 0.085), 0.04);
+  flesh = smin(flesh, sdCapsule(p, uJoints[21], uJoints[22], 0.07), 0.03);
+  
+  mat3 H = headFrame();
+  vec3 hp = transpose(H) * (p - uJoints[5]);
+  float head = sdEllipsoid(hp, vec3(0.13, 0.16, 0.14));
+  float brow = sdEllipsoid(hp - vec3(0.0, 0.055, 0.09), vec3(0.12, 0.022, 0.05));
+  head = smin(head, brow, 0.025);
+  head = smin(head, sdEllipsoid(hp - vec3(-0.07, -0.01, 0.06), vec3(0.04, 0.045, 0.045)), 0.04);
+  head = smin(head, sdEllipsoid(hp - vec3(0.07, -0.01, 0.06), vec3(0.04, 0.045, 0.045)), 0.04);
+  head = smin(head, sdEllipsoid(hp - vec3(0.0, -0.02, 0.13), vec3(0.025, 0.035, 0.04)), 0.015);
+  float mouth = sdEllipsoid(hp - vec3(0.0, -0.058, 0.11), vec3(0.045, 0.022, 0.04));
+  head = smax(head, -mouth, 0.012);
+  head = smax(head, -sdSphere(hp - vec3(-0.055, 0.025, 0.10), 0.038), 0.012);
+  head = smax(head, -sdSphere(hp - vec3(0.055, 0.025, 0.10), 0.038), 0.012);
+  
+  float body = smin(flesh, head, 0.07);
+  
+  float disp = (fbm3(p*5.0) - 0.5) * 0.022;
+  disp += (noise3(p*22.0) - 0.5) * 0.012 * uDecay;
+  float tearDist = 1e10;
+  tearDist = min(tearDist, length(p - uJoints[8]) - 0.08);
+  tearDist = min(tearDist, length(p - uJoints[12]) - 0.08);
+  tearDist = min(tearDist, length(p - uJoints[10]) - 0.05);
+  tearDist = min(tearDist, length(p - uJoints[14]) - 0.05);
+  tearDist = min(tearDist, length(p - uJoints[16]) - 0.09);
+  tearDist = min(tearDist, length(p - uJoints[20]) - 0.09);
+  disp += smoothstep(0.12, 0.0, tearDist) * (noise3(p*30.0) - 0.5) * 0.05 * uDecay;
+  body += disp;
+  
+  vec3 eyeLPos = uJoints[5] + H * vec3(-0.055, 0.025, 0.11);
+  vec3 eyeRPos = uJoints[5] + H * vec3(0.055, 0.025, 0.11);
+  float eyes = min(sdSphere(p - eyeLPos, 0.020), sdSphere(p - eyeRPos, 0.020));
+  vec3 teethPos = uJoints[5] + H * vec3(0.0, -0.048, 0.13);
+  float teeth = sdBox(transpose(H) * (p - teethPos), vec3(0.035, 0.008, 0.012));
+  
+  vec2 res = vec2(body, 1.0);
+  if(head < flesh - 0.001) res = vec2(body, 2.0);
+  if(teeth < res.x) res = vec2(teeth, 6.0);
+  if(eyes < res.x) res = vec2(eyes, 3.0);
+  return res;
+}
+
+float sdGround(vec3 p){
+  float h = fbm3(p.xzx * 0.2) * 0.35 - 0.15;
+  h += sin(p.x*0.7+1.3) * cos(p.z*0.6) * 0.04;
+  return p.y - h;
+}
+
+float mapBones(vec3 p){
+  int pa[22] = int[22](0,1,2,3,4,5,3,7,8,9,3,11,12,13,0,15,16,17,0,19,20,21);
+  int pb[22] = int[22](1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22);
+  float d = 1e10;
+  for(int i=0;i<22;i++){
+    d = min(d, sdCapsule(p, uJoints[pa[i]], uJoints[pb[i]], 0.013));
+  }
+  for(int i=0;i<24;i++){
+    d = min(d, sdSphere(p - uJoints[i], 0.024));
+  }
+  return d;
+}
+
+vec2 map(vec3 p){
+  if(uShowBones > 0.5){
+    float bones = mapBones(p);
+    float ground = sdGround(p);
+    if(bones < ground) return vec2(bones, 4.0);
+    return vec2(ground, 0.0);
+  }
+  vec2 body = mapBody(p);
+  float ground = sdGround(p);
+  if(ground < body.x) return vec2(ground, 0.0);
+  return body;
+}
+
+vec3 calcNormal(vec3 p){
+  const float eps = 0.0012;
+  const vec2 h = vec2(1.0, -1.0);
+  return normalize(
+    h.xyy * map(p + h.xyy*eps).x +
+    h.yyx * map(p + h.yyx*eps).x +
+    h.yxy * map(p + h.yxy*eps).x +
+    h.xxx * map(p + h.xxx*eps).x
+  );
+}
+
+float softShadow(vec3 ro, vec3 rd, float mint, float maxt, float k){
+  float res = 1.0;
+  float t = mint;
+  for(int i=0;i<28;i++){
+    float h = map(ro + rd*t).x;
+    if(h < 0.001) return 0.0;
+    res = min(res, k*h/t);
+    t += clamp(h, 0.01, 0.25);
+    if(t > maxt) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+float calcAO(vec3 p, vec3 n){
+  float occ = 0.0, sca = 1.0;
+  for(int i=0;i<5;i++){
+    float h = 0.01 + 0.13*float(i)/4.0;
+    float d = map(p + n*h).x;
+    occ += (h-d)*sca;
+    sca *= 0.92;
+  }
+  return clamp(1.0 - 2.5*occ, 0.0, 1.0);
+}
+
+vec3 shade(vec3 p, vec3 n, float mat, vec3 rd){
+  vec3 lightDir = normalize(vec3(0.5, 0.75, 0.4));
+  vec3 moonDir = normalize(vec3(-0.35, 0.55, -0.5));
+  
+  // GROUND MATERIAL - Wet Mud & Puddles with Sky Reflection
+  if(mat < 0.5){
+    float crack = fbm3(p.xzx*0.8);
+    float fine = noise3(vec3(p.xz*8.0, 0.0));
+    
+    // Mud texture base
+    vec3 col = mix(vec3(0.015,0.018,0.015), vec3(0.04,0.045,0.035), crack);
+    col *= 0.7 + 0.3*fine;
+    
+    // Wetness/Puddle detection (flat smooth areas)
+    float puddleMask = smoothstep(0.4, 0.15, abs(crack - 0.5));
+    puddleMask *= smoothstep(0.1, 0.0, p.y); // Puddles pool at flat ground levels
+    
+    // Dynamic specular reflection on ground puddles (Fresnel layer)
+    float grSpec = pow(max(dot(reflect(rd, n), lightDir), 0.0), 64.0);
+    float grFresnel = pow(1.0 - max(dot(n, -rd), 0.0), 5.0);
+    
+    // Render puddle reflection (simulated sky mapping)
+    vec3 skyRef = mix(vec3(0.012, 0.018, 0.022), vec3(0.15, 0.22, 0.2), max(rd.y + 0.3, 0.0));
+    vec3 puddleCol = mix(col * 0.5, skyRef, 0.3 + 0.7 * grFresnel);
+    puddleCol += vec3(0.5, 0.6, 0.4) * grSpec;
+    
+    col = mix(col, puddleCol, puddleMask);
+    
+    // Grid alignment visual overlay (Diagnostic scanner grid)
+    vec2 g = abs(fract(p.xz*0.5)-0.5);
+    float grid = smoothstep(0.48, 0.5, max(g.x, g.y));
+    col += vec3(0.02,0.07,0.03) * grid * (0.2 + 0.8 * (1.0 - puddleMask));
+    
+    // Stalking prey coordinate ring visuals
+    vec2 td = p.xz - uTarget.xz;
+    float tdist = length(td);
+    float ring1 = smoothstep(0.018, 0.0, abs(tdist - 0.32 - 0.05*sin(uTime*4.0)));
+    float ring2 = smoothstep(0.018, 0.0, abs(tdist - 0.18));
+    float core = smoothstep(0.08, 0.0, tdist);
+    col += vec3(0.1, 1.0, 0.2) * (ring1 + ring2*0.6 + core*0.8) * 0.7;
+    
+    // Sensor click dynamic ripple ring
+    float rippleAge = uTime - uClickTime;
+    if(rippleAge > 0.0 && rippleAge < 1.2){
+      float r = rippleAge * 1.8;
+      float rd2 = length(p.xz - uClickPos.xz);
+      float wave = smoothstep(0.05, 0.0, abs(rd2 - r)) * (1.0 - rippleAge/1.2);
+      col += vec3(0.4, 1.0, 0.5) * wave * 1.5;
+    }
+    
+    col *= exp(-length(p.xz)*0.04);
+    col *= 0.4 + 0.4*max(dot(n, lightDir), 0.0);
+    return col;
+  }
+  
+  // Structural Bone Mode Shading
+  if(mat > 3.5 && mat < 4.5){
+    return vec3(0.2, 1.0, 0.4) * (0.6 + 0.4*sin(uTime * 6.0 + p.y*12.0));
+  }
+  
+  // Cybernetic/Scanner Eye Overlay
+  if(mat < 3.5){
+    float pulse = 0.8 + 0.2*sin(uTime*8.0);
+    return vec3(0.2, 1.8, 0.4) * pulse;
+  }
+  
+  // Teeth Shading
+  if(mat > 5.5){
+    vec3 col = vec3(0.55, 0.52, 0.40);
+    col *= 0.8 + 0.2*noise3(p*40.0);
+    col *= 0.3 + 0.7*max(dot(n, lightDir), 0.0);
+    return col;
+  }
+  
+  // ORGANIC TISSUE AND SKIN SHADING
+  float isHead = step(1.5, mat);
+  vec3 baseSkin = vec3(0.35, 0.44, 0.32);
+  vec3 decaySkin = vec3(0.20, 0.15, 0.11);
+  
+  float decay = fbm3(p*2.5 + 17.0);
+  decay = smoothstep(0.28, 0.72, decay) * uDecay;
+  vec3 col = mix(baseSkin, decaySkin, decay);
+  col *= 0.8 + 0.2*noise3(p*15.0);
+  
+  // Subcutaneous veins
+  float veins = fbm3(p*6.0 + 5.0);
+  veins = smoothstep(0.54, 0.70, veins);
+  col = mix(col, vec3(0.05, 0.02, 0.04), veins * 0.6);
+  
+  // Exposed muscle and dried blood
+  float blood = fbm3(p*3.0 - 8.0);
+  blood = smoothstep(0.55, 0.75, blood);
+  col = mix(col, vec3(0.12, 0.01, 0.01), blood * uDecay * 0.85);
+  
+  // Bone weathering & exposure
+  float boneDist = 1e10;
+  boneDist = min(boneDist, length(p - uJoints[16]) - 0.07);
+  boneDist = min(boneDist, length(p - uJoints[20]) - 0.07);
+  boneDist = min(boneDist, length(p - uJoints[8]) - 0.06);
+  boneDist = min(boneDist, length(p - uJoints[12]) - 0.06);
+  boneDist = min(boneDist, length(p - uJoints[10]) - 0.04);
+  boneDist = min(boneDist, length(p - uJoints[14]) - 0.04);
+  boneDist = min(boneDist, length(p - uJoints[5]) - 0.13);
+  float bone = smoothstep(0.045, 0.0, boneDist) * uDecay;
+  vec3 boneCol = vec3(0.68, 0.65, 0.52) * (0.8 + 0.2*noise3(p*35.0));
+  col = mix(col, boneCol, bone);
+  col = mix(col, col*vec3(0.88, 1.0, 0.9), isHead*0.4);
+  
+  mat3 H = headFrame();
+  vec3 hp = transpose(H) * (p - uJoints[5]);
+  float mouthDist = sdEllipsoid(hp - vec3(0.0, -0.058, 0.11), vec3(0.045, 0.022, 0.04));
+  if(mouthDist < 0.0 && isHead > 0.5){
+    col *= 0.05; // Dark cavity inside mouth
+  }
+  
+  // Realism Lighting Calculations
+  float diff = max(dot(n, lightDir), 0.0);
+  float ambient = 0.08 + 0.15*max(n.y, 0.0);
+  float back = max(dot(n, moonDir), 0.0) * 0.35;
+  
+  // Organic Backlit Subsurface Scattering Approximation (SSS)
+  // When backlit, tissue glows slightly red, especially on raw flesh
+  float sss = pow(clamp(dot(reflect(rd, n), -lightDir), 0.0, 1.0), 4.0);
+  vec3 sssCol = vec3(0.35, 0.04, 0.02) * sss * (0.3 + decay * 0.7);
+  
+  col *= ambient + diff * 0.75;
+  col += sssCol;
+  col += vec3(0.12, 0.16, 0.22) * back;
+  
+  // Rim lighting representing dark, cold moonlight reflection on damp skin
+  float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+  col += vec3(0.2, 0.26, 0.35) * rim * 0.45;
+  
+  // Specular Highlights: damp tissues (high specular) vs rough bone
+  vec3 hh = normalize(lightDir - rd);
+  float spec = pow(max(dot(n, hh), 0.0), 32.0);
+  
+  // Organic Slime specular mask: dynamic wet regions on wounds and skin folds
+  float slimeMask = mix(0.2, 1.0, noise3(p * 20.0)) * (1.0 - bone * 0.8);
+  col += vec3(0.4, 0.45, 0.38) * spec * slimeMask * 0.35;
+  
+  // Subdermal diffuse glow (wrapping back light)
+  float wrapLight = pow(max(0.0, dot(n, -lightDir)*0.5+0.5), 2.0);
+  col += vec3(0.15, 0.02, 0.02) * wrapLight * decay * 0.35;
+  
+  return col;
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+  vec3 ro = uCamPos;
+  vec3 forward = normalize(uCamTarget - ro);
+  vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
+  vec3 up = cross(right, forward);
+  float fov = 1.1;
+  vec3 rd = normalize(forward*fov + right*uv.x + up*uv.y);
+  
+  float t = 0.05;
+  float mat = -1.0;
+  bool hit = false;
+  for(int i=0;i<140;i++){
+    vec3 p = ro + rd*t;
+    vec2 res = map(p);
+    if(res.x < 0.001){ hit = true; mat = res.y; break; }
+    t += res.x * 0.9;
+    if(t > 40.0) break;
+  }
+  
+  vec3 col;
+  if(hit){
+    vec3 p = ro + rd*t;
+    vec3 n = calcNormal(p);
+    col = shade(p, n, mat, rd);
+    
+    // Shadows
+    if(mat > 0.5 && mat < 5.5 && abs(mat-3.0) > 0.5){
+      vec3 lightDir = normalize(vec3(0.5, 0.75, 0.4));
+      float sh = softShadow(p + n*0.01, lightDir, 0.02, 8.0, 14.0);
+      col *= 0.4 + 0.6*sh;
+    }
+    
+    // Ambient Occlusion
+    float ao = calcAO(p, n);
+    col *= 0.5 + 0.5*ao;
+    
+    // Atmospheric Distance Fog
+    float fog = 1.0 - exp(-t*0.04);
+    vec3 fogCol = vec3(0.02, 0.028, 0.025);
+    col = mix(col, fogCol, fog*0.85);
+    
+    // Atmospheric Volumetric Ground Fog
+    // Creates realistic rolling low-level mist sticking close to the damp floor
+    float groundFog = exp(-p.y * 1.6) * (1.0 - exp(-t * 0.15)) * 0.4;
+    col = mix(col, vec3(0.025, 0.035, 0.03), groundFog);
+    
+  } else {
+    // Sky gradient with stars and stellar glowing moon corona
+    float skyT = max(rd.y, 0.0);
+    vec3 sky = mix(vec3(0.005, 0.008, 0.01), vec3(0.02, 0.035, 0.03), skyT);
+    vec3 starP = rd * 200.0;
+    float star = step(0.9975, hash31(floor(starP)));
+    sky += vec3(0.4, 0.5, 0.35) * star * smoothstep(0.0, 0.3, rd.y) * 0.7;
+    vec3 moonDir = normalize(vec3(-0.35, 0.55, -0.5));
+    float md = max(dot(rd, moonDir), 0.0);
+    sky += vec3(0.45, 0.55, 0.5) * pow(md, 320.0) * 2.0;
+    sky += vec3(0.06, 0.08, 0.1) * pow(md, 6.0);
+    col = sky;
+  }
+  
+  // Film Vignette
+  vec2 vuv = gl_FragCoord.xy/uRes - 0.5;
+  float vig = 1.0 - dot(vuv, vuv)*1.2;
+  col *= clamp(vig, 0.25, 1.0);
+  
+  // Tonemapping and cinematic grade (2.2 Gamma correction)
+  col = col / (1.0 + col);
+  col = pow(col, vec3(1.0/2.2));
+  fragColor = vec4(col, 1.0);
+}
+`;
+
+function compileShader(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    console.error('Shader error:', gl.getShaderInfoLog(s));
+    throw new Error('compile failed');
+  }
+  return s;
+}
+
+const program = gl.createProgram();
+gl.attachShader(program, compileShader(gl.VERTEX_SHADER, VS));
+gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program, gl.LINK_STATUS)){
+  console.error(gl.getProgramInfoLog(program));
+  throw new Error('link failed');
+}
+gl.useProgram(program);
+
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(program, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const U = {
+  uRes: gl.getUniformLocation(program, 'uRes'),
+  uTime: gl.getUniformLocation(program, 'uTime'),
+  uCamPos: gl.getUniformLocation(program, 'uCamPos'),
+  uCamTarget: gl.getUniformLocation(program, 'uCamTarget'),
+  uJoints: gl.getUniformLocation(program, 'uJoints'),
+  uDecay: gl.getUniformLocation(program, 'uDecay'),
+  uTwitch: gl.getUniformLocation(program, 'uTwitch'),
+  uShowBones: gl.getUniformLocation(program, 'uShowBones'),
+  uTarget: gl.getUniformLocation(program, 'uTarget'),
+  uLurch: gl.getUniformLocation(program, 'uLurch'),
+  uClickPos: gl.getUniformLocation(program, 'uClickPos'),
+  uClickTime: gl.getUniformLocation(program, 'uClickTime'),
+};
+
+// State Engine & Parameter targets updated autonomously
+const params = {
+  walkSpeed: 1.0, twitch: 0.55, decay: 0.75,
+  track: 0.75, lurch: 1.0, showBones: false, autoRotate: true,
+};
+
+let camAngle = 0.7, camHeight = 0.35, camDist = 4.8;
+const camTarget = [0, 1.0, 0];
+let target = [0.0, 1.0, 1.8];
+let clickPos = [0, 0, 0];
+let clickTime = -10;
+
+const joints = new Float32Array(24 * 3);
+const localJ = new Float32Array(24 * 3);
+
+let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.4);
+function resize(){
+  const w = Math.max(2, Math.floor(window.innerWidth * pixelRatio));
+  const h = Math.max(2, Math.floor(window.innerHeight * pixelRatio));
+  canvas.width = w; canvas.height = h;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  gl.viewport(0, 0, w, h);
+}
+resize();
+window.addEventListener('resize', resize);
+
+function v3sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function v3norm(a){const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];}
+function v3cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+
+function setL(i,x,y,z){ localJ[i*3]=x; localJ[i*3+1]=y; localJ[i*3+2]=z; }
+function L(i,a){ return localJ[i*3+a]; }
+
+function updateSkeleton(time, walkPhase, params){
+  const t = time, w = walkPhase;
+  const lurch = Math.sin(t*0.7) * 0.06 * params.lurch;
+  const lurch2 = Math.sin(t*0.45 + 1.1) * 0.04 * params.lurch;
+  const tw = params.twitch;
+  const twT = (Math.sin(t*22.0) > 0.93 ? 1 : 0) * tw * 0.04;
+  const twH = (Math.sin(t*31.0) > 0.95 ? 1 : 0) * tw * 0.03;
+  const twA = (Math.sin(t*17.0+0.3) > 0.94 ? 1 : 0) * tw * 0.06;
+  const twB = (Math.sin(t*13.0+2.1) > 0.96 ? 1 : 0) * tw * 0.04;
+  
+  // Modulation representing staggered lopsided walk
+  const legSwingL = Math.sin(w) * 0.45;
+  const legSwingR = Math.sin(w + Math.PI) * 0.45;
+  const legLiftL = Math.max(0, Math.sin(w)) * 0.12;
+  const legLiftR = Math.max(0, Math.sin(w + Math.PI)) * 0.12;
+  
+  // Limp arm swings (unstable mechanical movement)
+  const armSwingL = Math.sin(w + Math.PI) * 0.25;
+  const armSwingR = Math.sin(w) * 0.18;
+  const bob = Math.abs(Math.sin(w)) * 0.04;
+  
+  const pelvisY = 1.0 + lurch*0.3 - bob;
+  setL(0, 0, pelvisY, 0);
+  setL(1, lurch*0.4, pelvisY + 0.22, 0.04 + lurch*0.5);
+  setL(2, lurch2*0.6, pelvisY + 0.48, 0.085);
+  setL(3, lurch2*0.7, pelvisY + 0.72, 0.065);
+  setL(4, lurch2*0.5 + twT, pelvisY + 0.88, 0.045);
+  
+  const headBase = [L(4,0), L(4,1) + 0.10, L(4,2) + 0.03];
+  const toTarget = [target[0]-headBase[0], target[1]-headBase[1], target[2]-headBase[2]];
+  const tLen = Math.hypot(toTarget[0],toTarget[1],toTarget[2]) || 1;
+  const targetDir = [toTarget[0]/tLen, toTarget[1]/tLen, toTarget[2]/tLen];
+  const defaultFwd = v3norm([0, 0.12, 1]);
+  const dotFwd = targetDir[0]*defaultFwd[0] + targetDir[1]*defaultFwd[1] + targetDir[2]*defaultFwd[2];
+  const angle = Math.acos(Math.max(-1, Math.min(1, dotFwd)));
+  const maxAng = Math.PI * 0.55;
+  const trackFactor = angle > maxAng ? Math.max(0, 1 - (angle - maxAng)/0.6) : 1;
+  const eTrack = params.track * trackFactor;
+  let headDir = v3norm([
+    defaultFwd[0]*(1-eTrack) + targetDir[0]*eTrack + twT*0.3,
+    defaultFwd[1]*(1-eTrack) + targetDir[1]*eTrack + twH,
+    defaultFwd[2]*(1-eTrack) + targetDir[2]*eTrack
+  ]);
+  setL(5, headBase[0] + headDir[0]*0.13, headBase[1] + headDir[1]*0.13, headBase[2] + headDir[2]*0.13);
+  setL(6, L(5,0) + headDir[0]*0.12, L(5,1) + headDir[1]*0.12, L(5,2) + headDir[2]*0.12);
+  setL(23, L(5,0), L(5,1) - 0.05, L(5,2) + 0.05);
+  
+  setL(7, L(3,0) - 0.27, L(3,1) - 0.04, L(3,2));
+  setL(8, L(7,0) + armSwingL*0.1, L(7,1) - 0.27, L(7,2) - 0.02 + armSwingL*0.1);
+  setL(9, L(8,0) - 0.02, L(8,1) - 0.25, L(8,2) - 0.02);
+  setL(10, L(9,0), L(9,1) - 0.12, L(9,2) + 0.02);
+  
+  setL(11, L(3,0) + 0.27, L(3,1) - 0.04, L(3,2));
+  const reachWorldDir = v3norm([
+    target[0] - L(11,0),
+    (target[1] + 0.3) - L(11,1),
+    target[2] - L(11,2)
+  ]);
+  const reachBlend = 0.45 * params.track;
+  const elbowDir = v3norm([
+    0.15*(1-reachBlend) + reachWorldDir[0]*reachBlend + twA*0.3,
+    0.05*(1-reachBlend) + reachWorldDir[1]*reachBlend + armSwingR*0.2,
+    0.85*(1-reachBlend) + reachWorldDir[2]*reachBlend
+  ]);
+  setL(12, L(11,0) + elbowDir[0]*0.27, L(11,1) + elbowDir[1]*0.27, L(11,2) + elbowDir[2]*0.27);
+  const wristDir = v3norm([
+    elbowDir[0]*0.6 + 0.08 + twB*0.4,
+    elbowDir[1]*0.3 - 0.08,
+    elbowDir[2]*0.9 + 0.18
+  ]);
+  setL(13, L(12,0) + wristDir[0]*0.22, L(12,1) + wristDir[1]*0.22, L(12,2) + wristDir[2]*0.22);
+  setL(14, L(13,0) + wristDir[0]*0.12, L(13,1) + wristDir[1]*0.12, L(13,2) + wristDir[2]*0.12);
+  
+  setL(15, L(0,0) - 0.13, L(0,1) - 0.04, L(0,2));
+  const klx = L(15,0) + legSwingL*0.18;
+  const kly = L(15,1) - 0.42 + legLiftL*0.4;
+  const klz = L(15,2) + legSwingL*0.12;
+  setL(16, klx, kly, klz);
+  setL(17, klx + legSwingL*0.08, kly - 0.42, klz + legSwingL*0.05 - 0.02);
+  setL(18, L(17,0), L(17,1), L(17,2) + 0.13);
+  
+  setL(19, L(0,0) + 0.13, L(0,1) - 0.04, L(0,2));
+  const krx = L(19,0) + legSwingR*0.18;
+  const kry = L(19,1) - 0.42 + legLiftR*0.4;
+  const krz = L(19,2) + legSwingR*0.12;
+  setL(20, krx, kry, krz);
+  setL(21, krx + legSwingR*0.08, kry - 0.42, krz + legSwingR*0.05 - 0.02);
+  setL(22, L(21,0), L(21,1), L(21,2) + 0.13);
+  
+  for(let i=0;i<24*3;i++) joints[i] = localJ[i];
+}
+
+function getCamPos(){
+  return [
+    camTarget[0] + Math.cos(camAngle) * camDist,
+    camTarget[1] + camHeight * camDist,
+    camTarget[2] + Math.sin(camAngle) * camDist
+  ];
+}
+
+let dragging = false, lastX = 0, lastY = 0;
+let mouseDownTime = 0, mouseDownPos = [0, 0];
+
+function getPointer(e){
+  if(e.touches && e.touches[0]) return [e.touches[0].clientX, e.touches[0].clientY];
+  if(e.changedTouches && e.changedTouches[0]) return [e.changedTouches[0].clientX, e.changedTouches[0].clientY];
+  return [e.clientX, e.clientY];
+}
+function onPointerDown(e){
+  dragging = true;
+  const p = getPointer(e);
+  lastX = p[0]; lastY = p[1];
+  mouseDownTime = performance.now();
+  mouseDownPos = [p[0], p[1]];
+}
+function onPointerMove(e){
+  if(!dragging) return;
+  const p = getPointer(e);
+  camAngle -= (p[0] - lastX) * 0.006;
+  camHeight += (p[1] - lastY) * 0.005;
+  camHeight = Math.max(-0.3, Math.min(1.4, camHeight));
+  lastX = p[0]; lastY = p[1];
+}
+function onPointerUp(e){
+  dragging = false;
+  const p = getPointer(e);
+  const dt = performance.now() - mouseDownTime;
+  const dist = Math.hypot(p[0]-mouseDownPos[0], p[1]-mouseDownPos[1]);
+  if(dt < 250 && dist < 6) {
+    setTargetFromScreen(p[0], p[1]);
+    userOverrideGaze = true;
+    overrideTime = performance.now();
+  }
+}
+canvas.addEventListener('mousedown', onPointerDown);
+window.addEventListener('mousemove', onPointerMove);
+window.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onPointerDown(e); }, {passive:false});
+canvas.addEventListener('touchmove', e => { e.preventDefault(); onPointerMove(e); }, {passive:false});
+canvas.addEventListener('touchend', e => { onPointerUp(e); });
+canvas.addEventListener('wheel', e => {
+  camDist += e.deltaY * 0.004;
+  camDist = Math.max(2.5, Math.min(10.0, camDist));
+  e.preventDefault();
+}, {passive:false});
+
+function setTargetFromScreen(sx, sy){
+  const rect = canvas.getBoundingClientRect();
+  const ndcx = ((sx - rect.left) / rect.width) * 2 - 1;
+  const ndcy = -(((sy - rect.top) / rect.height) * 2 - 1);
+  const aspect = rect.width / rect.height;
+  const camPos = getCamPos();
+  const forward = v3norm(v3sub(camTarget, camPos));
+  const right = v3norm(v3cross(forward, [0,1,0]));
+  const up = v3cross(right, forward);
+  const fov = 1.1;
+  const rd = v3norm([
+    forward[0]*fov + right[0]*ndcx*aspect + up[0]*ndcy,
+    forward[1]*fov + right[1]*ndcx*aspect + up[1]*ndcy,
+    forward[2]*fov + right[2]*ndcx*aspect + up[2]*ndcy
+  ]);
+  if(Math.abs(rd[1]) > 1e-6){
+    const tt = -camPos[1] / rd[1];
+    if(tt > 0){
+      const newT = [camPos[0]+rd[0]*tt, 1.0, camPos[2]+rd[2]*tt];
+      const d = Math.hypot(newT[0], newT[2]);
+      if(d > 5){ newT[0] = newT[0]/d*5; newT[2] = newT[2]/d*5; }
+      target = newT;
+      clickPos = [newT[0], 0, newT[2]];
+      clickTime = (performance.now() - startTime) / 1000;
+    }
+  }
+}
+
+window.addEventListener('keydown', e => {
+  if(e.code === 'Space'){
+    e.preventDefault();
+    params.showBones = !params.showBones;
+    document.getElementById('b-bones').classList.toggle('active', params.showBones);
+  } else if(e.code === 'KeyR'){
+    camAngle = 0.7; camHeight = 0.35; camDist = 4.8;
+  }
+});
+
+document.getElementById('b-bones').addEventListener('click', () => {
+  params.showBones = !params.showBones;
+  document.getElementById('b-bones').classList.toggle('active', params.showBones);
+});
+document.getElementById('b-rotate').addEventListener('click', () => {
+  params.autoRotate = !params.autoRotate;
+  document.getElementById('b-rotate').classList.toggle('active', params.autoRotate);
+});
+
+// =====================================================================
+// AUTONOMOUS PROCEDURAL NERVOUS SYSTEM
+// =====================================================================
+let currentBehavior = 'STALKING';
+let behaviorTimer = 0;
+let behaviorDampSpeed = 0.05; // Smoothing rate
+
+// Dynamic state targets
+let walkSpeedTarget = 0.8;
+let twitchTarget = 0.45;
+let decayTarget = 0.7;
+let lurchTarget = 1.1;
+let trackTarget = 0.75;
+
+let userOverrideGaze = false;
+let overrideTime = 0;
+
+function updateNervousSystem(dt, nowSec) {
+  behaviorTimer += dt;
+  
+  // Natural wandering behaviors (Transition every 4-8 seconds)
+  if (behaviorTimer > 6.0 + Math.sin(nowSec * 0.1)*2.0) {
+    behaviorTimer = 0;
+    const rolls = Math.random();
+    if (rolls < 0.45) {
+      currentBehavior = 'STALKING';
+      walkSpeedTarget = 0.7 + Math.random()*0.3;
+      twitchTarget = 0.35 + Math.random()*0.2;
+      decayTarget = 0.65 + Math.random()*0.15;
+      lurchTarget = 0.8 + Math.random()*0.4;
+      trackTarget = 0.7 + Math.random()*0.2;
+    } else if (rolls < 0.70) {
+      currentBehavior = 'SPASMODIC_FIT';
+      walkSpeedTarget = 0.1 + Math.random()*0.2;
+      twitchTarget = 0.9 + Math.random()*0.1; // Heavy twitches
+      decayTarget = 0.8 + Math.random()*0.2;
+      lurchTarget = 1.4 + Math.random()*0.4; // Extreme slouching
+      trackTarget = 0.2 + Math.random()*0.2; // Unfocused track
+    } else if (rolls < 0.90) {
+      currentBehavior = 'STAGGERING';
+      walkSpeedTarget = 0.4 + Math.random()*0.3;
+      twitchTarget = 0.5 + Math.random()*0.2;
+      decayTarget = 0.75 + Math.random()*0.15;
+      lurchTarget = 1.1 + Math.random()*0.3;
+      trackTarget = 0.8 + Math.random()*0.15;
+    } else {
+      currentBehavior = 'AGGRESSIVE';
+      walkSpeedTarget = 1.5 + Math.random()*0.4; // Running lunge
+      twitchTarget = 0.6 + Math.random()*0.3;
+      decayTarget = 0.5 + Math.random()*0.2;
+      lurchTarget = 1.6 + Math.random()*0.3; // Stretched jaw tracking
+      trackTarget = 0.95; // Locked focus
+    }
+  }
+
+  // Smooth Interpolation towards state values
+  params.walkSpeed += (walkSpeedTarget - params.walkSpeed) * behaviorDampSpeed;
+  params.twitch += (twitchTarget - params.twitch) * behaviorDampSpeed;
+  params.decay += (decayTarget - params.decay) * behaviorDampSpeed;
+  params.lurch += (lurchTarget - params.lurch) * behaviorDampSpeed;
+  params.track += (trackTarget - params.track) * behaviorDampSpeed;
+
+  // Simulate procedural tracking gaze vector wandering in 3D Space
+  if (!userOverrideGaze) {
+    const wanderX = Math.sin(nowSec * 0.45) * 1.5;
+    const wanderY = 1.0 + Math.sin(nowSec * 0.7) * 0.3;
+    const wanderZ = 1.5 + Math.cos(nowSec * 0.35) * 1.0;
+    
+    // Intermittently glares directly into the camera lens (Uncanny stalking aspect)
+    const directGlareChance = Math.sin(nowSec * 0.25);
+    if (directGlareChance > 0.65) {
+      const camPos = getCamPos();
+      target[0] += (camPos[0] - target[0]) * 0.08;
+      target[1] += (camPos[1] - target[1]) * 0.08;
+      target[2] += (camPos[2] - target[2]) * 0.08;
+    } else {
+      target[0] += (wanderX - target[0]) * 0.04;
+      target[1] += (wanderY - target[1]) * 0.04;
+      target[2] += (wanderZ - target[2]) * 0.04;
+    }
+  } else if (performance.now() - overrideTime > 5000) {
+    // Release user click override after 5s
+    userOverrideGaze = false;
+  }
+
+  // Draw EEG Telemetry
+  updateTelemetryHUD();
+}
+
+// Telemetry Waveform Visualizer
+const eegCanvas = document.getElementById('g-eeg');
+const eegCtx = eegCanvas.getContext('2d');
+const eegBuffer = Array(60).fill(0);
+
+function updateTelemetryHUD() {
+  document.getElementById('hud-state').textContent = currentBehavior;
+  document.getElementById('hud-twitch').textContent = (params.twitch * 15.0).toFixed(1) + ' Hz';
+  document.getElementById('hud-decay').textContent = params.decay.toFixed(2);
+  document.getElementById('hud-lurch').textContent = (params.lurch * 0.523).toFixed(2) + ' rad';
+  document.getElementById('hud-speed').textContent = (params.walkSpeed * 0.65).toFixed(2) + ' m/s';
+  
+  // Track proximity indicators
+  const prox = Math.hypot(target[0], target[2]);
+  const proxEl = document.getElementById('t-proximity');
+  if (prox < 1.0) {
+    proxEl.textContent = 'EXTREME';
+    proxEl.className = 'v danger';
+  } else if (prox < 2.2) {
+    proxEl.textContent = 'STALKING';
+    proxEl.className = 'v warn';
+  } else {
+    proxEl.textContent = 'SAFE DISTANCE';
+    proxEl.className = 'v';
+  }
+
+  // Append nerve signal wave buffer based on twitch parameter
+  const baseNoise = (Math.random() - 0.5) * params.twitch * 12.0;
+  const heartbeatSpasm = Math.sin(performance.now() * 0.01) > 0.95 ? (Math.random() * 24.0 * params.twitch) : 0;
+  eegBuffer.shift();
+  eegBuffer.push(baseNoise + heartbeatSpasm);
+
+  // Render EEG Canvas HUD graph
+  const w = eegCanvas.width = eegCanvas.clientWidth;
+  const h = eegCanvas.height = eegCanvas.clientHeight;
+  
+  eegCtx.clearRect(0,0,w,h);
+  eegCtx.strokeStyle = 'rgba(114, 243, 66, 0.7)';
+  eegCtx.lineWidth = 1.5;
+  eegCtx.beginPath();
+  
+  const step = w / (eegBuffer.length - 1);
+  for(let i=0; i<eegBuffer.length; i++) {
+    const lx = i * step;
+    const ly = h/2 + eegBuffer[i];
+    if (i === 0) eegCtx.moveTo(lx, ly);
+    else eegCtx.lineTo(lx, ly);
+  }
+  eegCtx.stroke();
+}
+
+// Telemetry profiling and clock handlers
+let frameCount = 0, lastFpsTime = performance.now(), fps = 0;
+function updateFPS(now){
+  frameCount++;
+  if(now - lastFpsTime > 500){
+    fps = Math.round(frameCount * 1000 / (now - lastFpsTime));
+    frameCount = 0;
+    lastFpsTime = now;
+    const el = document.getElementById('t-fps');
+    el.textContent = fps;
+    el.className = 'v' + (fps < 30 ? ' warn' : fps < 20 ? ' danger' : '');
+  }
+}
+
+let lastTime = 0, walkPhase = 0;
+const startTime = performance.now();
+
+function render(now){
+  const tSec = (now - startTime) / 1000;
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  
+  // Execute autonomous AI
+  updateNervousSystem(dt, tSec);
+  
+  if(params.autoRotate && !dragging) camAngle += dt * 0.08;
+  
+  // Organic stagger cycle (Non-uniform step timing)
+  const limpModulation = 1.0 + Math.sin(walkPhase * 0.5) * 0.35;
+  walkPhase += dt * params.walkSpeed * 2.5 * limpModulation;
+  
+  updateSkeleton(tSec, walkPhase, params);
+  
+  const camPos = getCamPos();
+  
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uTime, tSec);
+  gl.uniform3f(U.uCamPos, camPos[0], camPos[1], camPos[2]);
+  gl.uniform3f(U.uCamTarget, camTarget[0], camTarget[1], camTarget[2]);
+  gl.uniform3fv(U.uJoints, joints);
+  gl.uniform1f(U.uDecay, params.decay);
+  gl.uniform1f(U.uTwitch, params.twitch);
+  gl.uniform1f(U.uShowBones, params.showBones ? 1 : 0);
+  gl.uniform3f(U.uTarget, target[0], target[1], target[2]);
+  gl.uniform1f(U.uLurch, params.lurch);
+  gl.uniform3f(U.uClickPos, clickPos[0], clickPos[1], clickPos[2]);
+  gl.uniform1f(U.uClickTime, clickTime);
+  
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  
+  // Dynamic diagnostic HUD updates
+  if(frameCount % 10 === 0){
+    document.getElementById('t-frame').textContent = tSec.toFixed(1) + 's';
+    document.getElementById('t-phase').textContent = (walkPhase % (Math.PI*2)).toFixed(2);
+    document.getElementById('t-cam').textContent = 
+      camDist.toFixed(1)+'m / '+(camAngle*57.3).toFixed(0)+'°';
+    document.getElementById('t-target').textContent = 
+      target[0].toFixed(1)+','+target[1].toFixed(1)+','+target[2].toFixed(1);
+  }
+  
+  updateFPS(now);
+  requestAnimationFrame(render);
+}
+
+// Boot diagnostics pipeline
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

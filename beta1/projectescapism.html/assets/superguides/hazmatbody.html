@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Fidelity Occupancy Grid | Hazmat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #030304; color: #fff; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        .sys-panel {
+            position: relative; z-index: 10;
+            background: rgba(5, 6, 8, 0.95);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 200, 0, 0.15);
+            box-shadow: 20px 0 50px rgba(0,0,0,0.9);
+            width: 440px; height: 100vh;
+            display: flex; flex-direction: column;
+        }
+
+        .header-block { border-bottom: 1px solid rgba(255,200,0,0.2); padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+        .title-text { font-size: 1.3rem; font-weight: 900; color: #ffcc00; letter-spacing: 2px; text-transform: uppercase; }
+        
+        .progress-container { width: 100%; background: #1a1a20; border: 1px solid #333; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 10px; }
+        .progress-bar { height: 100%; width: 0%; background: #ffcc00; box-shadow: 0 0 10px rgba(255,200,0,0.6); transition: width 0.1s; }
+
+        .btn-action {
+            background: transparent; border: 1px solid #ffcc00; color: #ffcc00;
+            padding: 14px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;
+            cursor: pointer; transition: all 0.2s; width: 100%; margin-top: 10px; border-radius: 4px;
+        }
+        .btn-action:hover:not(:disabled) { background: #ffcc00; color: #000; box-shadow: 0 0 20px rgba(255,200,0,0.4); }
+        .btn-action:disabled { opacity: 0.3; border-color: #555; color: #555; cursor: not-allowed; }
+        
+        .btn-export { border-color: #00f0ff; color: #00f0ff; }
+        .btn-export:hover:not(:disabled) { background: #00f0ff; color: #000; box-shadow: 0 0 20px rgba(0,240,255,0.4); }
+
+        .readout-box { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 4px; font-size: 0.75rem; color: #aaa; }
+        .highlight { color: #fff; font-weight: bold; }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body class="flex">
+
+    <div class="sys-panel p-8">
+        <div class="header-block">
+            <div class="title-text">Density-Grid Compiler</div>
+            <div class="text-[10px] text-gray-500 tracking-widest mt-1">VOLUMETRIC REALISM ENGINE v2.0</div>
+        </div>
+
+        <div class="text-xs text-gray-400 mb-6 leading-relaxed border-l-2 border-yellow-500 pl-3">
+            <strong>ARCHITECTURE:</strong> Evaluates a massive scalar density volume (1.7+ million voxels). 
+            Integrates explicit boundary mathematics, Apollonian space-warping for synthetic rubber cloth physics, and hard-surface booleans. 
+            Extracts feature-preserved topology via localized Marching Cubes.
+        </div>
+
+        <div class="readout-box mb-6">
+            <div class="mb-2">GRID RESOLUTION: <span class="highlight">120 x 120 x 120</span></div>
+            <div class="mb-2">TOTAL VOXELS: <span class="highlight">1,728,000</span></div>
+            <div>STATUS: <span id="status-text" class="text-yellow-400">Awaiting Compilation...</span></div>
+            <div class="progress-container"><div id="progress-bar" class="progress-bar"></div></div>
+        </div>
+
+        <button id="btn-compile" class="btn-action">Compile High-Res Grid</button>
+        <button id="btn-export" class="btn-action btn-export" disabled>Export Watertight OBJ</button>
+    </div>
+
+    <canvas id="webgl-canvas"></canvas>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+        import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
+
+        // --- Core Scene Setup ---
+        const canvas = document.getElementById('webgl-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0.5, 4.0);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Advanced Studio Lighting ---
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x111122, 0.4);
+        scene.add(hemiLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        keyLight.position.set(5, 8, 5);
+        scene.add(keyLight);
+        
+        const rimLight = new THREE.DirectionalLight(0x00f0ff, 3.0);
+        rimLight.position.set(-5, 3, -8);
+        scene.add(rimLight);
+
+        const fillLight = new THREE.DirectionalLight(0xffcc00, 0.8);
+        fillLight.position.set(0, -2, 5);
+        scene.add(fillLight);
+
+        // --- Volumetric Grid Configuration ---
+        // 120^3 offers extremely high detail for cloth folds and respirator cuts.
+        const RES = 120;
+        
+        // PBR Material simulating heavy industrial rubber
+        const material = new THREE.MeshPhysicalMaterial({
+            color: 0xffb700,
+            roughness: 0.35,
+            metalness: 0.1,
+            clearcoat: 0.8,
+            clearcoatRoughness: 0.2,
+            side: THREE.DoubleSide
+        });
+
+        const effect = new MarchingCubes(RES, material, false, false, 500000);
+        effect.position.set(0, 0, 0);
+        effect.scale.set(1.4, 1.4, 1.4); // Scale the voxel bounds
+        effect.isolation = 0.5; // Surface extraction threshold
+        scene.add(effect);
+
+        // Smooth maximum for blending continuous organic fields (Cloth)
+        function smax(a, b, k) {
+            let h = Math.max(0, Math.min(1, 0.5 + 0.5 * (a - b) / k));
+            return b + (a - b) * h + k * h * (1.0 - h);
+        }
+
+        // Converts exact mathematical distance to a normalized density gradient [1 to 0]
+        function distToDensity(dist, falloff) {
+            if (dist > falloff) return 0.0;
+            if (dist < 0.0) return 1.0;
+            let x = 1.0 - (dist / falloff);
+            // Apply smoothstep interpolation for cleaner Marching Cubes normals
+            return x * x * (3.0 - 2.0 * x);
+        }
+
+        // --- Exact Volumetric Evaluators ---
+        function evalCapsule(px, py, pz, ax, ay, az, bx, by, bz, radius, falloff) {
+            let pax = px - ax, pay = py - ay, paz = pz - az;
+            let bax = bx - ax, bay = by - ay, baz = bz - az;
+            let h = Math.max(0, Math.min(1, (pax*bax + pay*bay + paz*baz) / (bax*bax + bay*bay + baz*baz)));
+            let dx = pax - bax * h, dy = pay - bay * h, dz = paz - baz * h;
+            let dist = Math.sqrt(dx*dx + dy*dy + dz*dz) - radius;
+            return distToDensity(dist, falloff);
+        }
+
+        function evalBox(px, py, pz, cx, cy, cz, rx, ry, rz, falloff) {
+            let qx = Math.abs(px - cx) - rx;
+            let qy = Math.abs(py - cy) - ry;
+            let qz = Math.abs(pz - cz) - rz;
+            let dist = Math.sqrt(Math.max(qx, 0)**2 + Math.max(qy, 0)**2 + Math.max(qz, 0)**2) + Math.min(Math.max(qx, Math.max(qy, qz)), 0.0);
+            return distToDensity(dist, falloff);
+        }
+
+        function evalCylinder(px, py, pz, cx, cy, cz, h, r, falloff, rotX = 0, rotY = 0) {
+            // Apply localized rotation
+            let nx = px - cx, ny = py - cy, nz = pz - cz;
+            
+            if (rotY !== 0) {
+                let s = Math.sin(rotY), c = Math.cos(rotY);
+                let tx = nx * c - nz * s;
+                let tz = nx * s + nz * c;
+                nx = tx; nz = tz;
+            }
+            if (rotX !== 0) {
+                let s = Math.sin(rotX), c = Math.cos(rotX);
+                let ty = ny * c - nz * s;
+                let tz = ny * s + nz * c;
+                ny = ty; nz = tz;
+            }
+
+            let dx = Math.sqrt(nx*nx + nz*nz) - r;
+            let dy = Math.abs(ny) - h;
+            let dist = Math.min(Math.max(dx, dy), 0.0) + Math.sqrt(Math.max(dx, 0)**2 + Math.max(dy, 0)**2);
+            return distToDensity(dist, falloff);
+        }
+
+        let compileState = { z: 0, isRunning: false };
+
+        function compileGridChunk() {
+            if (!compileState.isRunning) return;
+
+            const sliceSize = 4; // Process 4 Z-slices per frame to maintain UI responsiveness
+            const zMax = Math.min(compileState.z + sliceSize, RES);
+            const RES2 = RES * RES;
+            const smoothBlend = 0.07; // Drastically reduced blend radius for crisp articulation (was 0.15)
+
+            for (let z = compileState.z; z < zMax; z++) {
+                for (let y = 0; y < RES; y++) {
+                    for (let x = 0; x < RES; x++) {
+                        let idx = z * RES2 + y * RES + x;
+                        
+                        // Map 3D array index to normalized space [-1.0, 1.0]
+                        let wx = (x / RES) * 2.0 - 1.0;
+                        let wy = (y / RES) * 2.0 - 1.0;
+                        let wz = (z / RES) * 2.0 - 1.0;
+                        
+                        // --- 1. Procedural Cloth Warping (Apollonian Folds) ---
+                        // Gravity-biased sine waves simulate heavy rubber bunching at the joints
+                        let warpAmp = 0.012; // Reduced amplitude to stop marshmallow puffiness
+                        let foldY = Math.sin(wy * 25.0 + Math.abs(wx) * 10.0) * warpAmp;
+                        let foldX = Math.sin(wy * 35.0 + wz * 15.0) * (warpAmp * 0.5);
+                        
+                        let cx = wx + foldX;
+                        let cy = wy + foldY;
+                        let cz = wz;
+
+                        let density = 0.0;
+
+                        // --- 2. Organic / Cloth Envelope (Blended via smax) ---
+                        // Torso (Slimmer, higher, articulate spine)
+                        density = smax(density, evalCapsule(cx, cy, cz, 0, 0.0, 0, 0, 0.5, 0, 0.22, 0.05), smoothBlend);
+                        // Pelvis / Crotch Drop (Tightened)
+                        density = smax(density, evalCapsule(cx, cy, cz, 0, -0.2, 0.0, 0, 0.1, 0.0, 0.17, 0.05), smoothBlend);
+                        
+                        // Hood / Neck draping (Narrower)
+                        density = smax(density, evalCapsule(cx, cy, cz, 0, 0.4, -0.02, 0, 0.65, 0.0, 0.14, 0.05), smoothBlend);
+                        
+                        // Left Arm (Segmented Bicep & Forearm)
+                        density = smax(density, evalCapsule(cx, cy, cz, 0.26, 0.45, 0, 0.45, -0.05, 0.05, 0.07, 0.05), smoothBlend); // Bicep
+                        density = smax(density, evalCapsule(cx, cy, cz, 0.45, -0.05, 0.05, 0.42, -0.45, 0.15, 0.055, 0.04), smoothBlend); // Forearm
+                        
+                        // Right Arm (Segmented Bicep & Forearm)
+                        density = smax(density, evalCapsule(cx, cy, cz, -0.26, 0.45, 0, -0.45, -0.05, 0.05, 0.07, 0.05), smoothBlend); // Bicep
+                        density = smax(density, evalCapsule(cx, cy, cz, -0.45, -0.05, 0.05, -0.42, -0.45, 0.15, 0.055, 0.04), smoothBlend); // Forearm
+
+                        // Left Leg (Segmented Thigh & Calf)
+                        density = smax(density, evalCapsule(cx, cy, cz, 0.12, -0.15, 0, 0.15, -0.55, 0.05, 0.09, 0.05), smoothBlend); // Thigh
+                        density = smax(density, evalCapsule(cx, cy, cz, 0.15, -0.55, 0.05, 0.15, -0.9, 0, 0.07, 0.04), smoothBlend); // Calf
+                        
+                        // Right Leg (Segmented Thigh & Calf)
+                        density = smax(density, evalCapsule(cx, cy, cz, -0.12, -0.15, 0, -0.15, -0.55, 0.05, 0.09, 0.05), smoothBlend); // Thigh
+                        density = smax(density, evalCapsule(cx, cy, cz, -0.15, -0.55, 0.05, -0.15, -0.9, 0, 0.07, 0.04), smoothBlend); // Calf
+
+
+                        // --- 3. Hard Surface Elements (Strict Maximums, No Blending) ---
+                        let hardDensity = 0.0;
+
+                        // Respirator Base (Protruding snout, matched to thinner head)
+                        hardDensity = Math.max(hardDensity, evalCapsule(wx, wy, wz, 0, 0.5, 0.1, 0, 0.5, 0.25, 0.1, 0.05));
+                        
+                        // Respirator Twin Filters (Shifted inward)
+                        hardDensity = Math.max(hardDensity, evalCylinder(wx, wy, wz, 0.12, 0.45, 0.2, 0.06, 0.08, 0.02, 0, 0.4));
+                        hardDensity = Math.max(hardDensity, evalCylinder(wx, wy, wz, -0.12, 0.45, 0.2, 0.06, 0.08, 0.02, 0, -0.4));
+
+                        // Dual Oxygen Tanks (Back, pulled in tight against spine)
+                        hardDensity = Math.max(hardDensity, evalCylinder(wx, wy, wz, 0.12, 0.25, -0.23, 0.35, 0.07, 0.02));
+                        hardDensity = Math.max(hardDensity, evalCylinder(wx, wy, wz, -0.12, 0.25, -0.23, 0.35, 0.07, 0.02));
+                        
+                        // Tank Caps
+                        hardDensity = Math.max(hardDensity, evalCapsule(wx, wy, wz, 0.12, 0.6, -0.23, 0.12, 0.65, -0.23, 0.07, 0.02));
+                        hardDensity = Math.max(hardDensity, evalCapsule(wx, wy, wz, -0.12, 0.6, -0.23, -0.12, 0.65, -0.23, 0.07, 0.02));
+
+                        // Heavy Rubber Boots (Scaled down to fit calves)
+                        hardDensity = Math.max(hardDensity, evalBox(wx, wy, wz, 0.15, -0.92, 0.05, 0.07, 0.08, 0.14, 0.03));
+                        hardDensity = Math.max(hardDensity, evalBox(wx, wy, wz, -0.15, -0.92, 0.05, 0.07, 0.08, 0.14, 0.03));
+
+                        // Combine Cloth and Hard Surface
+                        density = Math.max(density, hardDensity);
+
+                        // --- 4. Boolean Subtraction (Carving the Visor) ---
+                        // Visor cut-out scaled to match thinner head
+                        let visorDensity = evalBox(wx, wy, wz, 0, 0.62, 0.2, 0.12, 0.06, 0.08, 0.02);
+                        if (visorDensity > 0) {
+                            density = Math.max(0, density - (visorDensity * 1.5)); 
+                        }
+
+                        // Commit to Marching Cubes grid
+                        effect.field[idx] = density;
+                    }
+                }
+            }
+
+            compileState.z = zMax;
+            
+            // Update UI Progress
+            const progressPct = (compileState.z / RES) * 100;
+            document.getElementById('progress-bar').style.width = `${progressPct}%`;
+
+            if (compileState.z < RES) {
+                requestAnimationFrame(compileGridChunk);
+            } else {
+                finalizeGrid();
+            }
+        }
+
+        function finalizeGrid() {
+            compileState.isRunning = false;
+            effect.update(); // Triggers the Marching Cubes polygonization algorithm natively
+            
+            document.getElementById('status-text').innerText = "Volume Compiled. Ready for Export.";
+            document.getElementById('status-text').className = "text-green-400 font-bold";
+            
+            document.getElementById('btn-compile').innerText = "Re-Compile Grid";
+            document.getElementById('btn-compile').disabled = false;
+            
+            document.getElementById('btn-export').disabled = false;
+        }
+
+        document.getElementById('btn-compile').addEventListener('click', () => {
+            compileState.z = 0;
+            compileState.isRunning = true;
+            document.getElementById('btn-compile').disabled = true;
+            document.getElementById('btn-export').disabled = true;
+            document.getElementById('status-text').innerText = "Evaluating Scalar Density...";
+            document.getElementById('status-text').className = "text-yellow-400";
+            requestAnimationFrame(compileGridChunk);
+        });
+
+        // Asset Extraction
+        document.getElementById('btn-export').addEventListener('click', () => {
+            const exporter = new OBJExporter();
+            // Export the explicitly polygonized Marching Cubes mesh
+            const result = exporter.parse(effect);
+            const blob = new Blob([result], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.style.display = 'none';
+            link.href = url;
+            link.download = `Hazmat_Volumetric_Asset_HighRes.obj`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>

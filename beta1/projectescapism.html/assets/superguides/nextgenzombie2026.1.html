@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NECROFIELD 3D // Volumetric Point-Swarm NPC</title>
+<style>
+:root {
+  --bg: #030204;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+  background: var(--bg); 
+  overflow: hidden; 
+  height: 100vh; 
+  cursor: grab; 
+}
+body:active { cursor: grabbing; }
+canvas { 
+  display: block; 
+  position: fixed; 
+  top: 0; 
+  left: 0; 
+  width: 100vw; 
+  height: 100vh;
+}
+</style>
+</head>
+<body>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+let scene, camera, renderer, controls, zombieMesh;
+let clock = new THREE.Clock();
+
+// Locked Seed for eerie consistency
+const currentSeed = 88123; 
+
+const P1 = 374761393, P2 = 668265263, P3 = 2246822519, P4 = 1442695041;
+function mulberry32(a) {
+    return function() {
+        a = (a + 0x6D2B79F5) | 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+const SDF = {
+    length: (x, y, z) => Math.sqrt(x*x + y*y + z*z),
+    smin: (a, b, k) => {
+        let h = Math.max(k - Math.abs(a - b), 0.0) / k;
+        return Math.min(a, b) - h * h * h * k * (1.0 / 6.0);
+    },
+    sdSphere: (px, py, pz, cx, cy, cz, r) => SDF.length(px-cx, py-cy, pz-cz) - r,
+    sdCapsule: (px, py, pz, ax, ay, az, bx, by, bz, r) => {
+        let pax = px - ax, pay = py - ay, paz = pz - az;
+        let bax = bx - ax, bay = by - ay, baz = bz - az;
+        let h = Math.max(0.0, Math.min(1.0, (pax*bax + pay*bay + paz*baz) / (bax*bax + bay*bay + baz*baz)));
+        return SDF.length(pax - bax * h, pay - bay * h, paz - baz * h) - r;
+    },
+    noise: (x, y, z) => {
+        return Math.sin(x*25.0)*Math.sin(y*25.0)*Math.sin(z*25.0) * 0.015;
+    }
+};
+
+function zombieSDF(x, y, z) {
+    // Heavy forward hunch
+    let bend = Math.sin(Math.max(0, y - 0.4) * 2.5) * 0.2;
+    let tz = z - bend;
+    let tx = x;
+
+    // Head (tilted and drooping)
+    let head = SDF.sdSphere(tx, y, tz, 0.0, 1.55, 0.15, 0.11);
+    
+    // Deep eye sockets
+    let eyes = SDF.sdSphere(Math.abs(tx), y, tz, 0.04, 1.57, 0.23, 0.035);
+    head = Math.max(head, -eyes);
+    
+    // Drooping jaw
+    let jaw = SDF.sdCapsule(tx, y, tz, 0.0, 1.52, 0.15, 0.0, 1.42, 0.2, 0.045);
+    head = SDF.smin(head, jaw, 0.03);
+
+    // Spine and emaciated torso
+    let spine = SDF.sdCapsule(tx, y, tz, 0.0, 1.4, 0.0, 0.0, 0.8, -0.05, 0.04);
+    let chest = SDF.sdCapsule(tx, y, tz, 0.0, 1.25, 0.05, 0.0, 1.05, 0.05, 0.12);
+    
+    // Stomach cavity
+    let wound = SDF.sdSphere(tx, y, tz, 0.0, 0.95, 0.12, 0.09);
+    let torso = SDF.smin(spine, chest, 0.08);
+    torso = Math.max(torso, -wound); // Subtractive wound
+
+    // Right Arm: Reaching out forward (z-axis)
+    let rArm1 = SDF.sdCapsule(x, y, z, -0.15, 1.3, 0.02, -0.2, 1.25, 0.3, 0.035);
+    let rArm2 = SDF.sdCapsule(x, y, z, -0.2, 1.25, 0.3, -0.15, 1.2, 0.6, 0.03);
+    
+    // Left Arm: Broken and dangling uselessly
+    let lArm1 = SDF.sdCapsule(x, y, z, 0.15, 1.3, 0.02, 0.25, 0.95, -0.05, 0.035);
+    let lArm2 = SDF.sdCapsule(x, y, z, 0.25, 0.95, -0.05, 0.2, 0.55, 0.0, 0.025);
+
+    let hips = SDF.sdCapsule(tx, y, tz, -0.08, 0.8, -0.05, 0.08, 0.8, -0.05, 0.07);
+
+    // Right Leg: Stiffly planted
+    let rLeg1 = SDF.sdCapsule(x, y, z, -0.08, 0.8, -0.05, -0.1, 0.4, 0.0, 0.045);
+    let rLeg2 = SDF.sdCapsule(x, y, z, -0.1, 0.4, 0.0, -0.1, 0.0, -0.05, 0.035);
+
+    // Left Leg: Dragging behind (bent knee)
+    let lLeg1 = SDF.sdCapsule(x, y, z, 0.08, 0.8, -0.05, 0.18, 0.4, -0.2, 0.045);
+    let lLeg2 = SDF.sdCapsule(x, y, z, 0.18, 0.4, -0.2, 0.25, 0.05, -0.1, 0.035);
+
+    // Fusion
+    let arms = SDF.smin(SDF.smin(rArm1, rArm2, 0.02), SDF.smin(lArm1, lArm2, 0.02), 0.02);
+    let legs = SDF.smin(SDF.smin(rLeg1, rLeg2, 0.03), SDF.smin(lLeg1, lLeg2, 0.03), 0.02);
+    
+    let body = SDF.smin(head, torso, 0.06);
+    body = SDF.smin(body, hips, 0.08);
+    body = SDF.smin(body, arms, 0.04);
+    body = SDF.smin(body, legs, 0.06);
+
+    // Organic rot/noise displacement
+    body += SDF.noise(tx, y, tz);
+
+    return body;
+}
+
+function make3DBodyTemplate(rng) {
+    const P = [];
+    // High density count to guarantee it looks like a solid body, not a "whatever"
+    const numPoints = 28000; 
+    let attempts = 0;
+    const maxAttempts = 2000000; // Increased attempt cap for thin surface sampling
+    
+    // Monte Carlo rejection sampling
+    while(P.length < numPoints && attempts < maxAttempts) {
+        attempts++;
+        let x = (rng() - 0.5) * 1.5;
+        let y = rng() * 1.8;
+        let z = (rng() - 0.5) * 1.5;
+        
+        let d = zombieSDF(x, y, z);
+        
+        // STRICT surface band. We ignore the entire inside of the body.
+        // This forms a crisp, hollow shell that perfectly defines the silhouette.
+        if (d < 0.005 && d > -0.015) {
+            P.push({ x, y, z });
+        }
+    }
+    return P;
+}
+
+function init() {
+    scene = new THREE.Scene();
+    // Suffocating, dark necrotic fog
+    scene.fog = new THREE.FogExp2(0x030204, 0.22);
+    
+    camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
+    // Adjusted camera slightly further back to see the whole creature reaching
+    camera.position.set(-2.5, 1.0, -4.5); 
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setClearColor(0x030204, 1);
+    document.body.appendChild(renderer.domElement);
+    
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 10;
+    controls.target.set(0, 0.8, 0);
+    // Slow, creepy cinematic rotation
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.6;
+    
+    generateZombie();
+    animate();
+}
+
+function generateZombie() {
+    const rng = mulberry32(currentSeed);
+    const template = make3DBodyTemplate(rng);
+    
+    const positions = [];
+    const depths = [];
+    const types = []; 
+    const seeds = [];
+    
+    // Base Flesh Shell
+    for(const p of template) {
+        positions.push(p.x, p.y, p.z);
+        depths.push(0.0);
+        types.push(0.0); // 0 = Rotting Flesh
+        seeds.push(rng());
+    }
+    
+    // Solid writhing tentacles bursting from the back
+    const numTentacles = 7; 
+    for (let i = 0; i < numTentacles; i++) {
+        // Anchor tentacles directly to the back of the spine
+        const rootY = 0.8 + rng() * 0.5; 
+        const rootX = (rng() - 0.5) * 0.15;
+        const rootZ = -0.1; 
+        
+        // Direction pushing backward and slightly down
+        const dirX = (rng() - 0.5) * 1.5;
+        const dirY = (rng() - 0.5) * 1.0; 
+        const dirZ = -1.0 - rng() * 1.0; 
+        
+        let curX = rootX, curY = rootY, curZ = rootZ;
+        const numPoints = 60 + Math.floor(rng() * 40); 
+        
+        let bendX = (rng() - 0.5) * 0.1;
+        let bendY = (rng() - 0.5) * 0.1;
+        let bendZ = (rng() - 0.5) * 0.1;
+
+        // Shared procedural seed to lock the entire tentacle's motion together solidly
+        const tentacleSeed = rng() * 100.0;
+
+        for (let j = 0; j < numPoints; j++) {
+            const len = Math.sqrt(dirX*dirX + dirY*dirY + dirZ*dirZ) || 1;
+            const dX = dirX/len + bendX * j * 0.04;
+            const dY = dirY/len + bendY * j * 0.04;
+            const dZ = dirZ/len + bendZ * j * 0.04;
+            
+            const nLen = Math.sqrt(dX*dX + dY*dY + dZ*dZ) || 1;
+
+            curX += (dX / nLen) * 0.035;
+            curY += (dY / nLen) * 0.035;
+            curZ += (dZ / nLen) * 0.035;
+
+            // Tentacles taper towards the ends
+            const thickness = 0.12 * (1.0 - (j / numPoints));
+            
+            // Generate dense radial clusters to form a solid muscular tube
+            const clusterPoints = 35; 
+            for(let k = 0; k < clusterPoints; k++) {
+                let radius = thickness * (0.2 + 0.8 * Math.sqrt(rng())); 
+                let theta = rng() * Math.PI * 2;
+                let phi = Math.acos(2 * rng() - 1);
+                
+                let rx = radius * Math.sin(phi) * Math.cos(theta);
+                let ry = radius * Math.sin(phi) * Math.sin(theta);
+                let rz = radius * Math.cos(phi);
+                
+                positions.push(curX + rx, curY + ry, curZ + rz);
+                depths.push(j * 0.1); 
+                types.push(3.0); // 3 = Tentacle
+                seeds.push(tentacleSeed); 
+            }
+        }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(depths, 1));
+    geo.setAttribute('aType', new THREE.Float32BufferAttribute(types, 1));
+    geo.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+    
+    const mat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uPixelRatio: { value: renderer.getPixelRatio() }
+        },
+        vertexShader: `
+            uniform float uTime;
+            uniform float uPixelRatio;
+            
+            attribute float aDepth;
+            attribute float aType;
+            attribute float aSeed;
+            
+            varying float vDepth;
+            varying float vType;
+            varying float vSeed;
+            
+            void main() {
+                vec3 pos = position;
+                
+                // Flesh breathing/heaving motion
+                if (aType < 1.0) {
+                    if (pos.y > 0.5) {
+                        float heave = sin(uTime * 1.5) * 0.015;
+                        pos.z += heave * clamp((pos.y - 0.5) / 1.0, 0.0, 1.0);
+                        pos.x += heave * 0.5;
+                    }
+                    float sway = sin(uTime * 0.5) * 0.02;
+                    pos.x += sway * (pos.y + 0.5);
+                } 
+                
+                // Solid, heavy tentacle writhing
+                if (aType > 2.5) {
+                    float t = uTime * 0.5; 
+                    float phaseX = aSeed * 2.13;
+                    float phaseY = aSeed * 3.45;
+                    
+                    float bend = aDepth * 0.15; // Stiffness
+                    
+                    // Locked motion using the shared tentacle seed
+                    pos.x += sin(t + bend + phaseX) * bend * 0.2;
+                    pos.y += cos(t * 0.9 + bend + phaseY) * bend * 0.2;
+                }
+                
+                vDepth = aDepth;
+                vType = aType;
+                vSeed = aSeed;
+                
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                
+                // Overlapping points to form a solid pseudo-mesh
+                float size = 4.5;
+                if (aType > 2.5) size = 5.5; // Tentacles slightly thicker points
+                
+                gl_PointSize = size * uPixelRatio * (1.0 / -mvPosition.z) * 60.0;
+            }
+        `,
+        fragmentShader: `
+            uniform float uTime;
+            
+            varying float vDepth;
+            varying float vType;
+            varying float vSeed;
+            
+            void main() {
+                // Procedural Normal-Mapped Sphere Illusion
+                vec2 uv = gl_PointCoord - vec2(0.5);
+                float dist = length(uv);
+                if (dist > 0.5) discard; // Perfect circle
+                
+                // Reconstruct depth for cheap lighting
+                float z = sqrt(0.25 - dist * dist);
+                vec3 normal = normalize(vec3(uv.x, -uv.y, z));
+                
+                // Cinematic directional light from upper right
+                vec3 lightDir = normalize(vec3(0.6, 0.8, 0.5));
+                float diff = max(dot(normal, lightDir), 0.0);
+                float ambient = 0.12; 
+                
+                vec3 color;
+                
+                if (vType > 2.5) {
+                    // Tentacles: Deep, slimy, fleshy crimson/black
+                    float d = clamp(vDepth / 8.0, 0.0, 1.0);
+                    vec3 rootCol = vec3(0.04, 0.01, 0.02); 
+                    vec3 tipCol = vec3(0.45, 0.05, 0.08);  
+                    color = mix(rootCol, tipCol, d);
+                } else {
+                    // Zombie Flesh: Pale, necrotic greenish-grey
+                    float rot = sin(vSeed * 100.0) * 0.5 + 0.5;
+                    vec3 paleFlesh = vec3(0.18, 0.19, 0.17);
+                    vec3 rottingGreen = vec3(0.12, 0.15, 0.10);
+                    color = mix(paleFlesh, rottingGreen, rot);
+                }
+                
+                // Apply diffuse lighting
+                color = color * (ambient + diff * 0.85);
+                
+                // Specular highlights (makes it look slimy and organic)
+                vec3 viewDir = vec3(0.0, 0.0, 1.0);
+                vec3 halfDir = normalize(lightDir + viewDir);
+                float specAngle = max(dot(normal, halfDir), 0.0);
+                
+                float specPower = 16.0;
+                float specStrength = 0.1;
+                
+                if (vType > 2.5) { 
+                    specPower = 32.0; 
+                    specStrength = 0.6; // Tentacles are very shiny/slimy
+                }
+                
+                float spec = pow(specAngle, specPower);
+                color += vec3(0.8, 0.9, 0.9) * spec * specStrength;
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `,
+        transparent: true,
+        depthTest: true,
+        depthWrite: true, // We want strict depth writing so it looks completely solid
+        alphaTest: 0.5,
+        blending: THREE.NormalBlending
+    });
+    
+    zombieMesh = new THREE.Points(geo, mat);
+    // Face the zombie slightly towards the camera by default
+    zombieMesh.rotation.y = Math.PI * 0.15; 
+    scene.add(zombieMesh);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    
+    if (zombieMesh) {
+        zombieMesh.material.uniforms.uTime.value = t;
+    }
+    
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+init();
+
+</script>
+</body>
+</html>
