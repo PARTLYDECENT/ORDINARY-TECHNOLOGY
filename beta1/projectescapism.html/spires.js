@@ -27,9 +27,9 @@
             super();
 
             this.scaleMultiplier = config.scale || 1.0;
-            this.baseHeight = config.height || 35.0;
-            this.radiusBottom = (config.radiusBottom || 2.2) * this.scaleMultiplier;
-            this.radiusTop = (config.radiusTop || 0.6) * this.scaleMultiplier;
+            this.baseHeight = config.height || 90.0;
+            this.radiusBottom = (config.radiusBottom || 7.5) * this.scaleMultiplier;
+            this.radiusTop = (config.radiusTop || 2.0) * this.scaleMultiplier;
 
             // Erratic instance-specific variables
             this.time = Math.random() * 100.0;

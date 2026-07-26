@@ -108,10 +108,10 @@ const DesertMapManager = (function () {
             // Random rotation for variety
             fortress.rotation.y = Math.floor(Math.random() * 4) * (Math.PI / 2); // 90 degree increments for brutalist alignment
 
-            // 1. MAIN PLATED BASE
-            const baseWidth = 12 + Math.random() * 6;
-            const baseHeight = 7 + Math.random() * 5;
-            const baseDepth = 12 + Math.random() * 6;
+            // 1. MAIN PLATED BASE (Scale expanded to colossal proportions)
+            const baseWidth = 32 + Math.random() * 16;
+            const baseHeight = 22 + Math.random() * 10;
+            const baseDepth = 32 + Math.random() * 16;
 
             const baseGeo = new THREE.BoxGeometry(baseWidth, baseHeight, baseDepth);
             const baseMesh = new THREE.Mesh(baseGeo, this.wallMat);
@@ -120,10 +120,10 @@ const DesertMapManager = (function () {
             baseMesh.receiveShadow = true;
             fortress.add(baseMesh);
 
-            // 2. UPPER OBSERVATION TOWER
-            const towerWidth = baseWidth * 0.6;
-            const towerHeight = 9 + Math.random() * 7;
-            const towerDepth = baseDepth * 0.6;
+            // 2. UPPER OBSERVATION TOWER (Towering high into the sky)
+            const towerWidth = baseWidth * 0.55;
+            const towerHeight = 45 + Math.random() * 25;
+            const towerDepth = baseDepth * 0.55;
             const towerGeo = new THREE.BoxGeometry(towerWidth, towerHeight, towerDepth);
             const towerMesh = new THREE.Mesh(towerGeo, this.wallMat);
             towerMesh.position.y = baseHeight + towerHeight / 2;
@@ -132,20 +132,20 @@ const DesertMapManager = (function () {
             fortress.add(towerMesh);
 
             // 3. SCI-FI ENERGY CELL / WINDOW BAND (between base and tower)
-            const bandHeight = 0.6;
-            const bandGeo = new THREE.BoxGeometry(towerWidth + 0.1, bandHeight, towerDepth + 0.1);
+            const bandHeight = 1.5;
+            const bandGeo = new THREE.BoxGeometry(towerWidth + 0.3, bandHeight, towerDepth + 0.3);
             const bandMesh = new THREE.Mesh(bandGeo, this.glowMat);
-            bandMesh.position.y = baseHeight + 0.3;
+            bandMesh.position.y = baseHeight + 0.75;
             fortress.add(bandMesh);
 
             // 4. VERTICAL GLOWING STRIP DETAILS
             for (let side of [-1, 1]) {
-                const stripGeo = new THREE.BoxGeometry(0.3, baseHeight * 0.8, baseDepth + 0.05);
+                const stripGeo = new THREE.BoxGeometry(0.8, baseHeight * 0.8, baseDepth + 0.1);
                 const stripMesh = new THREE.Mesh(stripGeo, this.glowMat);
                 stripMesh.position.set(side * (baseWidth / 2), baseHeight / 2, 0);
                 fortress.add(stripMesh);
 
-                const stripGeo2 = new THREE.BoxGeometry(baseWidth + 0.05, baseHeight * 0.8, 0.3);
+                const stripGeo2 = new THREE.BoxGeometry(baseWidth + 0.1, baseHeight * 0.8, 0.8);
                 const stripMesh2 = new THREE.Mesh(stripGeo2, this.glowMat);
                 stripMesh2.position.set(0, baseHeight / 2, side * (baseDepth / 2));
                 fortress.add(stripMesh2);
@@ -156,18 +156,18 @@ const DesertMapManager = (function () {
                 const buttress = new THREE.Group();
                 buttress.rotation.y = angle;
 
-                const bGeo = new THREE.BoxGeometry(2.5, baseHeight * 0.65, 4.5);
+                const bGeo = new THREE.BoxGeometry(6.0, baseHeight * 0.65, 10.0);
                 const bMesh = new THREE.Mesh(bGeo, this.trimMat);
-                bMesh.position.set(0, (baseHeight * 0.65) / 2, baseDepth / 2 + 1.2);
+                bMesh.position.set(0, (baseHeight * 0.65) / 2, baseDepth / 2 + 3.0);
                 bMesh.castShadow = true;
                 bMesh.receiveShadow = true;
                 buttress.add(bMesh);
 
                 // Angle cut detail on buttress
-                const bTipGeo = new THREE.CylinderGeometry(0, 1.6, 2.2, 4);
+                const bTipGeo = new THREE.CylinderGeometry(0, 4.0, 5.0, 4);
                 const bTip = new THREE.Mesh(bTipGeo, this.wallMat);
                 bTip.rotation.y = Math.PI / 4;
-                bTip.position.set(0, baseHeight * 0.65 + 1.1, baseDepth / 2 + 1.2);
+                bTip.position.set(0, baseHeight * 0.65 + 2.5, baseDepth / 2 + 3.0);
                 buttress.add(bTip);
 
                 fortress.add(buttress);
@@ -177,33 +177,38 @@ const DesertMapManager = (function () {
             const antennaRoot = new THREE.Group();
             antennaRoot.position.set(0, baseHeight + towerHeight, 0);
 
-            const mastGeo = new THREE.CylinderGeometry(0.12, 0.25, 6, 8);
+            const mastGeo = new THREE.CylinderGeometry(0.3, 0.6, 14, 8);
             const mast = new THREE.Mesh(mastGeo, this.trimMat);
-            mast.position.y = 3;
+            mast.position.y = 7;
             mast.castShadow = true;
             antennaRoot.add(mast);
 
             // Glowing antenna beacon light
-            const beaconGeo = new THREE.SphereGeometry(0.3, 8, 8);
+            const beaconGeo = new THREE.SphereGeometry(0.8, 8, 8);
             const beacon = new THREE.Mesh(beaconGeo, this.glowMat);
-            beacon.position.y = 6.0;
+            beacon.position.y = 14.0;
             antennaRoot.add(beacon);
 
             // Radar dish
-            const dishGeo = new THREE.CylinderGeometry(1.4, 0.1, 0.5, 16);
+            const dishGeo = new THREE.CylinderGeometry(3.5, 0.3, 1.2, 16);
             const dish = new THREE.Mesh(dishGeo, this.wallMat);
-            dish.position.set(0, 4.0, 0.6);
+            dish.position.set(0, 9.0, 1.5);
             dish.rotation.x = 0.5; // Tilted
             antennaRoot.add(dish);
 
             fortress.add(antennaRoot);
 
+            // 7. MOUNT HOSTILE TOWER TURRET ATOP THE SUMMIT
+            if (window.HostileTowerTurret) {
+                const turretPos = new THREE.Vector3(worldX, h + baseHeight + towerHeight, worldZ);
+                new window.HostileTowerTurret(this.scene, window.player, turretPos);
+            }
+
             // Add to chunk
             chunkGroup.add(fortress);
 
             // Mark the costField to be completely impassable
-            // We block out a grid around this cell in costField
-            const rCells = 2; // radius of blocked cells
+            const rCells = 4; // radius of blocked cells for enlarged footprint
             const midX = lx;
             const midZ = lz;
             for (let dx = -rCells; dx <= rCells; dx++) {
@@ -231,8 +236,8 @@ const DesertMapManager = (function () {
 
             let ammoCount = 0;
 
-            // Scatter 2 massive advanced fortresses per chunk, but none on the starting chunk (0,0) to keep spawn clear!
-            const targetFortresses = 0;
+            // Scatter massive fortresses per chunk
+            const targetFortresses = (cx === 0 && cz === 0) ? 1 : 2;
             const chosenCells = [];
 
             if (targetFortresses > 0) {
@@ -271,9 +276,9 @@ const DesertMapManager = (function () {
                 }
             }
 
-            // Spawn 3-4 procedural 4D spires per chunk to distort the horizon (disabled in desolation)
+            // Spawn 3-4 massive procedural spires per chunk
             if (window.ProceduralSpire) {
-                const numSpires = 0;
+                const numSpires = 3;
                 for (let s = 0; s < numSpires; s++) {
                     const lx = 4 + Math.random() * (this.config.gridSize - 8);
                     const lz = 4 + Math.random() * (this.config.gridSize - 8);
@@ -293,8 +298,8 @@ const DesertMapManager = (function () {
                     // Ground the spire perfectly on sand dune height
                     const h = TerrainGen.getHeight(wx, wz);
 
-                    const scale = 0.8 + Math.random() * 0.7;
-                    const height = 24.0 + Math.random() * 16.0;
+                    const scale = 2.2 + Math.random() * 1.0;
+                    const height = 80.0 + Math.random() * 40.0;
 
                     const spire = new window.ProceduralSpire({
                         scale: scale,

@@ -135,129 +135,55 @@ class SDFGUI {
                 return length(pa - ba*h);
             }
 
-            // --- Morphing Crosshair Helpers ---
-            float crosshairForms(vec2 p) {
-                float cycle = 56.0;
-                float t = mod(uTime * 1.5, cycle);
-                float state = floor(t / (cycle / 8.0));
-                float progress = fract(t / (cycle / 8.0));
-                progress = smoothstep(0.0, 1.0, progress);
-
-                // Form 0: Classic Cross (+)
-                float d0 = min(sdBox(p, vec2(12.0, 1.2)), sdBox(p, vec2(1.2, 12.0)));
-                
-                // Form 1: Tactical X (x)
-                vec2 p1 = p * mat2(0.707, -0.707, 0.707, 0.707);
-                float d1 = min(sdBox(p1, vec2(10.0, 1.5)), sdBox(p1, vec2(1.5, 10.0)));
-                
-                // Form 2: Bio-Diamond (v)
-                float d2 = abs(length(p) - 8.0) - 1.0;
-                d2 = max(d2, -sdBox(p, vec2(4.0))); // hollow
-                
-                // Form 3: Triple-Blade / Biohazard
-                float d3 = 100.0;
-                for(int i=0; i<3; i++) {
-                    float ang = float(i) * 2.094; // 120 deg
-                    vec2 tp = p * mat2(cos(ang), sin(ang), -sin(ang), cos(ang));
-                    d3 = min(d3, sdCapsule(tp, vec2(4.0, 0.0), vec2(14.0, 0.0), 1.0));
-                }
-                
-                // Form 4: Hex-Grid Focus
-                float d4 = abs(max(abs(p.x)*0.866 + p.y*0.5, abs(p.y)) - 10.0) - 1.2;
-
-                // Form 5: 12-sided Dodecagon Reticle (dodecadhedron)
-                float maxD5 = -100.0;
-                for(int i=0; i<6; i++) {
-                    float a = float(i) * 0.523598; // PI / 6
-                    float dPlane = abs(p.x * cos(a) + p.y * sin(a)) - 9.5;
-                    maxD5 = max(maxD5, dPlane);
-                }
-                float d5 = abs(maxD5) - 1.2;
-
-                // Form 6: Glitch Reticle (Horizontal Offset Analog Tearing)
-                float glitchOffset = sin(p.y * 3.0 + uTime * 45.0) * cos(p.y * 12.0 - uTime * 30.0) * 4.0;
-                if (sin(uTime * 15.0) <= 0.0) {
-                    glitchOffset = 0.0;
-                }
-                vec2 pGlitch = p + vec2(glitchOffset, 0.0);
-                float d6 = abs(sdBox(pGlitch, vec2(11.0, 11.0))) - 0.8;
-                float d6_lines = min(sdBox(pGlitch - vec2(0.0, 5.0), vec2(13.0, 0.5)), sdBox(pGlitch + vec2(0.0, 5.0), vec2(13.0, 0.5)));
-                d6 = min(d6, d6_lines);
-
-                // Form 7: Cybermatic Quad-Aperture (Concentric Cyber Rings)
-                float ring1 = abs(length(p) - 11.0) - 0.8;
-                float ring2 = abs(length(p) - 6.0) - 0.5;
-                float ticks = min(sdBox(p, vec2(15.0, 0.8)), sdBox(p, vec2(0.8, 15.0)));
-                float d7 = min(max(ring1, -ticks), ring2);
-
-                float res = 0.0;
-                if (state == 0.0) res = mix(d0, d1, progress);
-                else if (state == 1.0) res = mix(d1, d2, progress);
-                else if (state == 2.0) res = mix(d2, d3, progress);
-                else if (state == 3.0) res = mix(d3, d4, progress);
-                else if (state == 4.0) res = mix(d4, d5, progress);
-                else if (state == 5.0) res = mix(d5, d6, progress);
-                else if (state == 6.0) res = mix(d6, d7, progress);
-                else res = mix(d7, d0, progress);
-
-                // Frantic micro-vibrations
-                res += fbm(p * 0.5 + uTime * 10.0) * 1.5;
-                return res;
+            // --- Green Heart Crosshair ---
+            float sdHeart(vec2 p) {
+                p.x = abs(p.x);
+                if( p.y + p.x > 1.0 )
+                    return sqrt(dot(p - vec2(0.25, 0.75), p - vec2(0.25, 0.75))) - 0.353553;
+                return sqrt(min(dot(p - vec2(0.0, 1.0), p - vec2(0.0, 1.0)),
+                                dot(p - 0.5 * max(p.x + p.y, 0.0), p - 0.5 * max(p.x + p.y, 0.0)))) * sign(p.x - p.y);
             }
 
             float organicCrosshair(vec2 p) {
-                float d = crosshairForms(p);
-                float inner = sdCircle(p, 1.5 + sin(uTime * 12.0) * 0.8);
-                return smin(d, inner, 3.0);
+                vec2 hp = (p + vec2(0.0, 6.5)) / 15.0;
+                float dH = sdHeart(hp) * 15.0;
+                float centerDot = sdCircle(p, 1.2);
+                float heartOutline = abs(dH) - 1.2;
+                return min(heartOutline, centerDot);
             }
 
-
-            // === ORGANIC MORPHING CROSSHAIR ===
             vec3 getCrosshairColor(float tTime) {
-                float cycle = 56.0;
-                float t = mod(tTime * 1.5, cycle);
-                float state = floor(t / (cycle / 8.0));
-                float progress = fract(t / (cycle / 8.0));
-                progress = smoothstep(0.0, 1.0, progress);
-
-                vec3 colCurrent = vec3(0.0, 1.0, 0.4); // State 0: Green
-                if (state == 1.0) colCurrent = vec3(1.0, 0.45, 0.0); // State 1: Orange
-                else if (state == 2.0) colCurrent = vec3(0.0, 0.6, 1.0); // State 2: Blue
-                else if (state == 3.0) colCurrent = vec3(1.0, 0.45, 0.0); // State 3: Orange
-                else if (state == 4.0) colCurrent = vec3(0.0, 0.6, 1.0); // State 4: Blue
-                else if (state == 5.0) colCurrent = vec3(0.0, 1.0, 0.4); // State 5: Green
-                else if (state == 6.0) colCurrent = vec3(1.0, 0.45, 0.0); // State 6: Orange
-                else if (state == 7.0) colCurrent = vec3(0.0, 0.6, 1.0); // State 7: Blue
-
-                vec3 colNext = vec3(0.0, 1.0, 0.4); // Next: Green
-                float nextState = mod(state + 1.0, 8.0);
-                if (nextState == 1.0) colNext = vec3(1.0, 0.45, 0.0);
-                else if (nextState == 2.0) colNext = vec3(0.0, 0.6, 1.0);
-                else if (nextState == 3.0) colNext = vec3(1.0, 0.45, 0.0);
-                else if (nextState == 4.0) colNext = vec3(0.0, 0.6, 1.0);
-                else if (nextState == 5.0) colNext = vec3(0.0, 1.0, 0.4);
-                else if (nextState == 6.0) colNext = vec3(1.0, 0.45, 0.0);
-                else if (nextState == 7.0) colNext = vec3(0.0, 0.6, 1.0);
-
-                return mix(colCurrent, colNext, progress);
+                return vec3(0.0, 1.0, 0.45); // Vibrant Green
             }
 
             vec4 renderCrosshair(vec2 px) {
                 vec3 col = vec3(0.0);
                 float alpha = 0.0;
 
-                float dCross = organicCrosshair(px);
-                float crossGlow = 1.0 - smoothstep(0.0, 10.0, dCross);
-                float crossCore = 1.0 - smoothstep(0.0, 1.5, dCross);
+                vec2 hp = (px + vec2(0.0, 6.5)) / 15.0;
+                float dHeart = sdHeart(hp) * 15.0;
+                float centerDot = sdCircle(px, 1.2);
 
-                if (crossGlow > 0.0) {
-                    vec3 crossColor = getCrosshairColor(uTime);
+                float heartOutline = abs(dHeart) - 1.2;
+                float heartShape = min(heartOutline, centerDot);
+
+                float crossGlow = 1.0 - smoothstep(0.0, 8.0, max(0.0, dHeart));
+                float strokeEdge = 1.0 - smoothstep(0.0, 1.5, heartShape);
+                float fillGlow = 1.0 - smoothstep(-10.0, 0.0, dHeart);
+
+                if (crossGlow > 0.0 || strokeEdge > 0.0) {
+                    vec3 crossColor = vec3(0.0, 1.0, 0.45);
                     if (length(uCrossColorOverride) > 0.0) {
                         crossColor = uCrossColorOverride;
                     }
-                    vec3 finalColor = mix(crossColor * 0.75, vec3(1.0), crossCore * 0.65);
-                    col = finalColor * crossGlow * 0.95;
-                    alpha = crossGlow * 0.95;
+                    vec3 finalColor = crossColor * (0.35 * fillGlow + 0.25 * crossGlow);
+                    finalColor = mix(finalColor, crossColor, strokeEdge);
+                    
+                    float dotEdge = 1.0 - smoothstep(0.0, 1.2, centerDot);
+                    finalColor = mix(finalColor, vec3(1.0), dotEdge);
+
+                    col = finalColor;
+                    alpha = clamp(strokeEdge * 0.95 + fillGlow * 0.35 + dotEdge, 0.0, 1.0);
                 }
 
                 return vec4(col, alpha);

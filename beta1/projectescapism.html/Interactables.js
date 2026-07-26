@@ -507,7 +507,326 @@ class DefenseTurret {
         }
         if (this.group) {
             this.scene.remove(this.group);
+
+class HostileTowerTurret {
+    constructor(scene, player, position) {
+        this.scene = scene;
+        this.player = player;
+        this.position = position.clone();
+        this.active = true;
+        this.health = 350;
+        this.maxHealth = 350;
+
+        this.range = 120.0;
+        this.shootTimer = 0.0;
+        this.fireRate = 0.65; // Seconds per shot
+        this.damage = 15;
+
+        this.group = null;
+        this.turretHead = null;
+        this.scannerLight = null;
+        this.laserBeam = null;
+        this.marker = null;
+
+        this.init();
+
+        if (!window.hostileTowerTurrets) {
+            window.hostileTowerTurrets = [];
+        }
+        window.hostileTowerTurrets.push(this);
+    }
+
+    init() {
+        this.group = new THREE.Group();
+        this.group.position.copy(this.position);
+
+        // Heavy Reinforced Base Pedestal
+        const baseGeo = new THREE.CylinderGeometry(1.2, 1.8, 2.5, 12);
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x1f1f24, metalness: 0.9, roughness: 0.4 });
+        const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+        baseMesh.position.y = 1.25;
+        baseMesh.castShadow = true;
+        baseMesh.receiveShadow = true;
+        this.group.add(baseMesh);
+
+        // Glowing Armor Band
+        const ringGeo = new THREE.CylinderGeometry(1.85, 1.85, 0.4, 12);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xff1100, transparent: true, opacity: 0.8 });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.position.y = 1.0;
+        this.group.add(ringMesh);
+
+        // Swiveling Turret Head Group
+        this.turretHead = new THREE.Group();
+        this.turretHead.position.set(0, 2.5, 0);
+
+        // Main Heavy Head Chassis
+        const headGeo = new THREE.BoxGeometry(2.2, 1.6, 2.8);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x3d3d45, metalness: 0.85, roughness: 0.5 });
+        const headMesh = new THREE.Mesh(headGeo, headMat);
+        headMesh.castShadow = true;
+        this.turretHead.add(headMesh);
+
+        // Slanted Top Plate
+        const capGeo = new THREE.CylinderGeometry(0.8, 1.3, 0.6, 6);
+        const capMesh = new THREE.Mesh(capGeo, baseMat);
+        capMesh.position.set(0, 1.1, 0);
+        this.turretHead.add(capMesh);
+
+        // Dual Heavy Plasma Cannons
+        const barrelGeo = new THREE.CylinderGeometry(0.2, 0.22, 3.2, 12);
+        barrelGeo.rotateX(Math.PI / 2);
+        const barrelMat = new THREE.MeshStandardMaterial({ color: 0x111115, metalness: 0.95, roughness: 0.3 });
+
+        this.barrelL = new THREE.Mesh(barrelGeo, barrelMat);
+        this.barrelL.position.set(-0.7, 0.0, 1.6);
+        this.barrelR = new THREE.Mesh(barrelGeo, barrelMat);
+        this.barrelR.position.set(0.7, 0.0, 1.6);
+        this.turretHead.add(this.barrelL);
+        this.turretHead.add(this.barrelR);
+
+        // Cannon Muzzle Heat Vents
+        for (let b of [this.barrelL, this.barrelR]) {
+            const ventGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.6, 12);
+            ventGeo.rotateX(Math.PI / 2);
+            const ventMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+            const vent = new THREE.Mesh(ventGeo, ventMat);
+            vent.position.set(0, 0, 1.4);
+            b.add(vent);
+        }
+
+        // Red Optic Core Eye & Light
+        const eyeGeo = new THREE.SphereGeometry(0.35, 12, 12);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0022 });
+        const eyeMesh = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeMesh.position.set(0, 0.3, 1.45);
+        this.turretHead.add(eyeMesh);
+
+        this.scannerLight = new THREE.PointLight(0xff0022, 5.0, 25.0);
+        this.scannerLight.position.set(0, 0.3, 1.5);
+        this.turretHead.add(this.scannerLight);
+
+        // Red Targeting Laser Beam
+        const laserGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0.3, 1.5),
+            new THREE.Vector3(0, 0.3, 40.0)
+        ]);
+        const laserMat = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.65 });
+        this.laserBeam = new THREE.Line(laserGeo, laserMat);
+        this.turretHead.add(this.laserBeam);
+
+        this.group.add(this.turretHead);
+        this.scene.add(this.group);
+
+        this.marker = this.createMarker();
+    }
+
+    createMarker() {
+        const div = document.createElement('div');
+        div.className = 'obj-marker';
+        div.style.position = 'absolute';
+        div.style.pointerEvents = 'none';
+        div.style.transform = 'translate(-50%, -50%)';
+        div.style.color = '#ff0033';
+        div.style.fontFamily = 'monospace';
+        div.style.fontSize = '9px';
+        div.style.zIndex = '9998';
+
+        div.innerHTML = `
+            <div class="marker-panel" style="background: rgba(30, 0, 0, 0.95); padding: 3px 6px; border: 1px solid #ff0033; border-radius: 2px; font-weight: bold; text-shadow: 0 0 6px #ff0033; white-space: nowrap;">
+                ⚠️ TOWER TURRET [HOSTILE]
+                <div style="width: 100%; height: 3px; background: rgba(255,0,0,0.3); margin-top: 2px; border-radius: 1px; overflow: hidden;">
+                    <div class="turret-hp-bar" style="width: 100%; height: 100%; background: #ff0033;"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(div);
+        return div;
+    }
+
+    update(delta, elapsedTime, camera) {
+        if (!this.active) return;
+
+        const targetPlayer = this.player || window.player;
+        if (!targetPlayer) return;
+
+        const pPos = targetPlayer.position.clone();
+        pPos.y += 1.6; // target center body height
+        const turretPos = new THREE.Vector3();
+        this.turretHead.getWorldPosition(turretPos);
+
+        const dist = turretPos.distanceTo(pPos);
+
+        if (dist <= this.range) {
+            // Face target smoothly
+            const dir = pPos.clone().sub(turretPos).normalize();
+            
+            // Calculate yaw and pitch angle
+            const targetYaw = Math.atan2(dir.x, dir.z);
+            const targetPitch = Math.asin(Math.max(-1.0, Math.min(1.0, dir.y)));
+
+            // Smooth interpolation
+            this.turretHead.rotation.y += (targetYaw - this.turretHead.rotation.y) * 0.1;
+            this.turretHead.rotation.x += (-targetPitch - this.turretHead.rotation.x) * 0.1;
+
+            if (this.scannerLight) {
+                this.scannerLight.intensity = 4.0 + Math.sin(elapsedTime * 20.0) * 2.0;
+            }
+
+            // Shoot timer
+            this.shootTimer += delta;
+            if (this.shootTimer >= this.fireRate) {
+                this.shootTimer = 0.0;
+                this.fireAtPlayer(turretPos, pPos);
+            }
+        } else {
+            // Idle sweep rotation
+            this.turretHead.rotation.y += delta * 0.5;
+            this.turretHead.rotation.x = Math.sin(elapsedTime * 1.5) * 0.1;
+            if (this.scannerLight) {
+                this.scannerLight.intensity = 3.0;
+            }
+        }
+
+        // Marker update
+        if (this.marker && camera) {
+            const camPos = this.position.clone().applyMatrix4(camera.matrixWorldInverse);
+            const isBehind = camPos.z > 0;
+            
+            let vec = this.position.clone().project(camera);
+            if (isBehind) {
+                vec.x = -vec.x;
+                vec.y = -vec.y;
+            }
+            
+            const borderMargin = 0.08;
+            const limitX = 1.0 - borderMargin;
+            const limitY = 1.0 - borderMargin;
+            const isOffscreen = isBehind || vec.x < -limitX || vec.x > limitX || vec.y < -limitY || vec.y > limitY;
+            
+            this.marker.style.display = isOffscreen ? 'none' : 'block';
+            if (!isOffscreen) {
+                const x = (vec.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vec.y * 0.5 + 0.5) * window.innerHeight - 50;
+                this.marker.style.left = `${x}px`;
+                this.marker.style.top = `${y}px`;
+            }
+
+            // Health bar update
+            const hpBar = this.marker.querySelector('.turret-hp-bar');
+            if (hpBar) {
+                hpBar.style.width = Math.max(0, (this.health / this.maxHealth) * 100) + '%';
+            }
+        }
+    }
+
+    fireAtPlayer(muzzlePos, targetPos) {
+        if (!window.godMode) {
+            window.playerHealth = Math.max(0, (window.playerHealth || 200) - this.damage);
+            if (window.player) window.player.health = window.playerHealth;
+
+            // Damage vignette flash
+            const damageVignette = document.getElementById('damage-vignette');
+            if (damageVignette) {
+                damageVignette.style.opacity = '0.9';
+                setTimeout(() => { damageVignette.style.opacity = '0'; }, 150);
+            }
+        }
+
+        // Play SFX
+        if (window.SFX && typeof window.SFX.triggerPistol === 'function') {
+            window.SFX.triggerPistol();
+        }
+
+        // Muzzle particles
+        if (window.emitParticle) {
+            window.emitParticle(
+                muzzlePos.x, muzzlePos.y, muzzlePos.z,
+                (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3,
+                1.0, 0.1, 0.0, // Red muzzle flash
+                16.0, 0.2
+            );
+        }
+
+        // Plasma Laser Tracer Line
+        const laserMat = new THREE.LineBasicMaterial({ color: 0xff0022, linewidth: 3 });
+        const points = [muzzlePos, targetPos];
+        const laserGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(laserGeo, laserMat);
+        this.scene.add(line);
+        
+        setTimeout(() => {
+            this.scene.remove(line);
+            laserGeo.dispose();
+            laserMat.dispose();
+        }, 80);
+    }
+
+    takeDamage(amount) {
+        if (!this.active || this.health <= 0) return;
+        this.health -= amount;
+
+        // Spark particles
+        if (window.emitParticle) {
+            const worldPos = new THREE.Vector3();
+            this.turretHead.getWorldPosition(worldPos);
+            for (let i = 0; i < 6; i++) {
+                window.emitParticle(
+                    worldPos.x, worldPos.y, worldPos.z,
+                    (Math.random() - 0.5) * 6, Math.random() * 5, (Math.random() - 0.5) * 6,
+                    1.0, 0.8, 0.0, // Orange sparks
+                    10.0, 0.25
+                );
+            }
+        }
+
+        if (this.health <= 0) {
+            this.destroy();
+        }
+    }
+
+    destroy() {
+        if (!this.active) return;
+        this.active = false;
+
+        // Explosion SFX & Visuals
+        if (window.SFX && typeof window.SFX.triggerExplosion === 'function') {
+            window.SFX.triggerExplosion();
+        }
+
+        const worldPos = new THREE.Vector3();
+        this.turretHead.getWorldPosition(worldPos);
+
+        // Fire & smoke particles
+        if (window.emitParticle) {
+            for (let i = 0; i < 35; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 7;
+                window.emitParticle(
+                    worldPos.x, worldPos.y, worldPos.z,
+                    Math.cos(angle) * speed, 2 + Math.random() * 6, Math.sin(angle) * speed,
+                    1.0, 0.2, 0.0,
+                    18.0, 1.0
+                );
+            }
+        }
+
+        this.dispose();
+    }
+
+    dispose() {
+        this.active = false;
+        if (this.marker) {
+            this.marker.remove();
+            this.marker = null;
+        }
+        if (this.group) {
+            this.scene.remove(this.group);
             this.group = null;
+        }
+        if (window.hostileTowerTurrets) {
+            const idx = window.hostileTowerTurrets.indexOf(this);
+            if (idx !== -1) window.hostileTowerTurrets.splice(idx, 1);
         }
     }
 }
@@ -595,11 +914,23 @@ class InteractableManager {
         const camera = window.activeCamera || window.cameraFPS;
         this.cells.forEach(cell => cell.update(delta, elapsedTime, camera));
         this.turrets.forEach(turret => turret.update(delta, elapsedTime, camera));
+        if (window.hostileTowerTurrets) {
+            for (let i = window.hostileTowerTurrets.length - 1; i >= 0; i--) {
+                const ht = window.hostileTowerTurrets[i];
+                if (ht && ht.active) {
+                    ht.update(delta, elapsedTime, camera);
+                }
+            }
+        }
     }
 
     dispose() {
         this.cells.forEach(cell => cell.dispose());
         this.turrets.forEach(turret => turret.dispose());
+        if (window.hostileTowerTurrets) {
+            window.hostileTowerTurrets.slice().forEach(ht => ht.dispose());
+            window.hostileTowerTurrets = [];
+        }
         this.cells = [];
         this.turrets = [];
     }
@@ -608,3 +939,4 @@ class InteractableManager {
 window.InteractableManager = InteractableManager;
 window.ExplosiveCell = ExplosiveCell;
 window.DefenseTurret = DefenseTurret;
+window.HostileTowerTurret = HostileTowerTurret;

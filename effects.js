@@ -320,4 +320,219 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', resetIdleTimer, { passive: true });
     resetIdleTimer();
 
+    // ==========================================
+    // 5. HIGH-FREQUENCY HIEROGLYPH MORPHER (1 WINDOW AT A TIME)
+    // ==========================================
+    const HIEROGLYPH_GLYPHS = [
+        '𓀀', '𓀁', '𓁀', '𓁁', '𓁂', '𓁃', '𓁄', '𓁅', '𓁆', '𓁇', '𓁈', '𓁉', '𓁊', 
+        '𓁋', '𓁌', '𓁍', '𓁎', '𓁏', '𓁐', '𓁑', '𓁒', '𓁓', '𓁔', '𓁕', '𓁖', '𓁗', 
+        '𓁘', '𓁙', '𓁚', '𓁛', '𓁜', '𓁝', '𓁞', '𓁟', '𓁠', '𓁡', '𓁢', '𓁣', '𓁤', 
+        '𓁥', '𓁦', '𓁧', '𓁨', '𓁩', '𓁪', '𓁫', '𓁬', '𓁭', '𓁮', '𓁯', '𓁰', '𓁱', 
+        '𓁲', '𓁳', '𓁴', '𓁵', '𓁶', '𓁷', '𓁸', '𓁹', '𓁺', '𓁻', '𓁼', '𓁽', '𓁾', 
+        '𓁿', '𓂀', '𓃠', '𓅓', '𓆣', '𓇢', '𓈖', '𓉔', '𓊝', '𓋹', '𓌕', '𓍯', '𓎛', 
+        '𓏏', '𓐍', '☤', '☫', '☸', '⚡', '❖', '✦', 'Ϡ', 'Ψ', 'Ω', '◈', '∆', '∑'
+    ];
+
+    const glyphStyle = document.createElement('style');
+    glyphStyle.innerHTML = `
+        .glyph-word {
+            display: inline-block;
+            transition: color 0.25s ease, text-shadow 0.25s ease, transform 0.25s ease;
+            cursor: pointer;
+            will-change: transform, text-shadow;
+        }
+        .glyph-word.hieroglyph-active {
+            color: #ffffff !important;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.95), 
+                         0 0 16px rgba(255, 255, 255, 0.85), 
+                         0 0 30px rgba(255, 255, 255, 0.6) !important;
+            transform: scale(1.08) translateY(-1px);
+            letter-spacing: 1.5px;
+        }
+        .window-glyph-active {
+            border-color: rgba(255, 255, 255, 0.6) !important;
+            box-shadow: 0 0 35px rgba(255, 255, 255, 0.35), inset 0 0 15px rgba(255, 255, 255, 0.15) !important;
+            transition: border-color 0.4s ease, box-shadow 0.4s ease !important;
+        }
+    `;
+    document.head.appendChild(glyphStyle);
+
+    function getRandomHieroglyph() {
+        return HIEROGLYPH_GLYPHS[Math.floor(Math.random() * HIEROGLYPH_GLYPHS.length)];
+    }
+
+    window.setupHieroglyphMorphing = function() {
+        // Target all window containers
+        const windowElements = document.querySelectorAll(
+            '.archive-entry, .showcase-item, .tentacle-os-frame, .os-tool-window, .hardpoint, .sidebar-ad, .terminal-frame, .game-container'
+        );
+
+        if (!windowElements || windowElements.length === 0) return;
+
+        const windowMap = new Map();
+
+        windowElements.forEach((win) => {
+            const targets = win.querySelectorAll('.entry-title, .entry-content, .showcase-title, .showcase-description, .ad-title, .hardpoint-title, h1, h2, h3, p');
+            const spans = [];
+
+            targets.forEach(target => {
+                if (target.dataset.glyphProcessed) return;
+                target.dataset.glyphProcessed = 'true';
+
+                const processNode = (node) => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const text = node.textContent;
+                        if (!text.trim()) return;
+
+                        const fragment = document.createDocumentFragment();
+                        const words = text.split(/(\s+)/);
+
+                        words.forEach(part => {
+                            if (/\s+/.test(part) || !part.trim()) {
+                                fragment.appendChild(document.createTextNode(part));
+                            } else {
+                                const span = document.createElement('span');
+                                span.className = 'glyph-word';
+                                span.textContent = part;
+                                span.dataset.original = part;
+                                fragment.appendChild(span);
+                                spans.push(span);
+
+                                // Mouseover trigger for tactile morphing
+                                span.addEventListener('mouseenter', () => {
+                                    morphSingleWord(span, 2200);
+                                });
+                            }
+                        });
+
+                        node.parentNode.replaceChild(fragment, node);
+                    } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
+                        Array.from(node.childNodes).forEach(processNode);
+                    }
+                };
+
+                Array.from(target.childNodes).forEach(processNode);
+            });
+
+            if (spans.length > 0) {
+                windowMap.set(win, spans);
+            }
+        });
+
+        function morphSingleWord(span, holdDuration = 2200) {
+            if (span.dataset.morphing === 'true') return;
+            span.dataset.morphing = 'true';
+
+            const original = span.dataset.original || span.textContent;
+            const length = original.length;
+
+            let frame = 0;
+            const scrambleFrames = 5;
+
+            const scrambleInterval = setInterval(() => {
+                let scrambled = '';
+                for (let i = 0; i < length; i++) {
+                    scrambled += getRandomHieroglyph();
+                }
+                span.textContent = scrambled;
+                span.classList.add('hieroglyph-active');
+
+                frame++;
+                if (frame >= scrambleFrames) {
+                    clearInterval(scrambleInterval);
+
+                    setTimeout(() => {
+                        let unscrambleFrame = 0;
+                        const unscrambleInterval = setInterval(() => {
+                            let current = '';
+                            for (let i = 0; i < length; i++) {
+                                if (i <= unscrambleFrame) {
+                                    current += original[i];
+                                } else {
+                                    current += getRandomHieroglyph();
+                                }
+                            }
+                            span.textContent = current;
+                            unscrambleFrame++;
+
+                            if (unscrambleFrame > length) {
+                                clearInterval(unscrambleInterval);
+                                span.textContent = original;
+                                span.classList.remove('hieroglyph-active');
+                                span.dataset.morphing = 'false';
+                            }
+                        }, 35);
+                    }, holdDuration);
+                }
+            }, 45);
+        }
+
+        let currentActiveWindow = null;
+
+        // SINGLE WINDOW AT A TIME HIGH-FREQUENCY MORPHER
+        function triggerSingleWindowMorph() {
+            // Find all visible windows that contain word spans
+            const visibleWindows = Array.from(windowMap.keys()).filter(win => {
+                const rect = win.getBoundingClientRect();
+                return rect.top < window.innerHeight + 150 && rect.bottom > -150;
+            });
+
+            if (visibleWindows.length === 0) {
+                setTimeout(triggerSingleWindowMorph, 800);
+                return;
+            }
+
+            // Remove glow from previous window
+            if (currentActiveWindow) {
+                currentActiveWindow.classList.remove('window-glyph-active');
+            }
+
+            // Pick EXACTLY 1 visible window
+            const targetWindow = visibleWindows[Math.floor(Math.random() * visibleWindows.length)];
+            currentActiveWindow = targetWindow;
+            
+            const wordSpans = windowMap.get(targetWindow);
+
+            if (wordSpans && wordSpans.length > 0) {
+                targetWindow.classList.add('window-glyph-active');
+
+                // Pick 3 to 8 random words inside THIS SINGLE WINDOW
+                const count = Math.min(wordSpans.length, Math.floor(Math.random() * 6) + 3);
+                const chosenSpans = [];
+
+                for (let i = 0; i < count; i++) {
+                    const randomSpan = wordSpans[Math.floor(Math.random() * wordSpans.length)];
+                    if (randomSpan && !chosenSpans.includes(randomSpan) && randomSpan.dataset.morphing !== 'true') {
+                        chosenSpans.push(randomSpan);
+                    }
+                }
+
+                const holdTime = 1400 + Math.random() * 1200;
+                chosenSpans.forEach((span, idx) => {
+                    setTimeout(() => {
+                        morphSingleWord(span, holdTime);
+                    }, idx * 100);
+                });
+            }
+
+            // Trigger next single window morph FREQUENTLY (every 1.0s to 1.6s)
+            const nextWindowDelay = 1000 + Math.random() * 600;
+            setTimeout(triggerSingleWindowMorph, nextWindowDelay);
+        }
+
+        // Start frequent single window morph loop
+        triggerSingleWindowMorph();
+    };
+
+    window.setupHieroglyphMorphing();
+
 });
+
+// Global fallback launcher in case DOMContentLoaded fired early
+if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    setTimeout(() => {
+        if (typeof window.setupHieroglyphMorphing === 'function') {
+            window.setupHieroglyphMorphing();
+        }
+    }, 200);
+}
