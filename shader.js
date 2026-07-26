@@ -378,6 +378,19 @@
                 this.mousePos.y = 1.0 - (event.clientY - rect.top) / this.canvas.height;
             });
 
+            // Context Loss & Restoration Handling
+            this.canvas.addEventListener('webglcontextlost', (e) => {
+                e.preventDefault();
+                this.paused = true;
+                console.warn('⚠️ WebGL Context Lost on Background Shader');
+            }, false);
+
+            this.canvas.addEventListener('webglcontextrestored', () => {
+                console.log('🔄 WebGL Context Restored, reinitializing shader...');
+                this.init();
+                this.paused = false;
+            }, false);
+
             // Mutual Exclusion Events
             window.addEventListener('spatial-web-3d-active', () => {
                 this.paused = true;
@@ -388,13 +401,12 @@
                 if (this.paused) {
                     this.paused = false;
                     console.log("▶️ Background Shader Resumed");
-                    this.render();
                 }
             });
         }
 
         resizeCanvas() {
-            if (!this.gl) return;
+            if (!this.gl || this.gl.isContextLost()) return;
             const displayWidth = window.innerWidth;
             const displayHeight = window.innerHeight;
 
@@ -406,10 +418,12 @@
         }
 
         render() {
-            if (this.paused) return; // Stop rendering when paused
+            if (this.paused) {
+                requestAnimationFrame(this.render.bind(this));
+                return;
+            }
 
-            if (!this.gl || !this.programInfo || !this.buffers) {
-                console.warn('Shader not ready, retrying...');
+            if (!this.gl || this.gl.isContextLost() || !this.programInfo || !this.buffers) {
                 requestAnimationFrame(this.render.bind(this));
                 return;
             }
@@ -423,30 +437,37 @@
                 this.gl.clear(this.gl.COLOR_BUFFER_BIT);
                 this.gl.useProgram(this.programInfo.program);
 
-                // Set uniforms
-                this.gl.uniform2f(this.programInfo.uniformLocations.resolution, this.gl.canvas.width, this.gl.canvas.height);
-                this.gl.uniform1f(this.programInfo.uniformLocations.time, currentTime);
-                this.gl.uniform2f(this.programInfo.uniformLocations.mouse, this.mousePos.x, this.mousePos.y);
+                // Set uniforms safely
+                if (this.programInfo.uniformLocations.resolution) {
+                    this.gl.uniform2f(this.programInfo.uniformLocations.resolution, this.gl.canvas.width, this.gl.canvas.height);
+                }
+                if (this.programInfo.uniformLocations.time) {
+                    this.gl.uniform1f(this.programInfo.uniformLocations.time, currentTime);
+                }
+                if (this.programInfo.uniformLocations.mouse) {
+                    this.gl.uniform2f(this.programInfo.uniformLocations.mouse, this.mousePos.x, this.mousePos.y);
+                }
 
-                // Position attribute
+                // Position attributes
                 const attribs = this.programInfo.attribLocations;
 
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
-                this.gl.vertexAttribPointer(attribs.vertexPosition, 2, this.gl.FLOAT, false, 0, 0);
-                this.gl.enableVertexAttribArray(attribs.vertexPosition);
+                if (attribs.vertexPosition !== -1 && this.buffers.position) {
+                    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+                    this.gl.vertexAttribPointer(attribs.vertexPosition, 2, this.gl.FLOAT, false, 0, 0);
+                    this.gl.enableVertexAttribArray(attribs.vertexPosition);
+                }
 
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
-                this.gl.vertexAttribPointer(attribs.textureCoord, 2, this.gl.FLOAT, false, 0, 0);
-                this.gl.enableVertexAttribArray(attribs.textureCoord);
+                if (attribs.textureCoord !== -1 && this.buffers.textureCoord) {
+                    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
+                    this.gl.vertexAttribPointer(attribs.textureCoord, 2, this.gl.FLOAT, false, 0, 0);
+                    this.gl.enableVertexAttribArray(attribs.textureCoord);
+                }
 
-                // Draw the quad
+                // Draw the quad safely
                 this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
 
-                // Check for GL errors
-                const error = this.gl.getError();
-                if (error !== this.gl.NO_ERROR) {
-                    console.error('WebGL Error:', error);
-                }
+                // Clear any transient error status
+                this.gl.getError();
             } catch (e) {
                 console.error('Render error:', e);
             }
