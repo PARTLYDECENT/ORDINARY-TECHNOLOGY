@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 select-none overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KFC RUN - Procedural 3D Chicken Escape</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        kfc: { red: '#e4002b', dark: '#a0001e', gold: '#ffb800' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Three.js, OrbitControls, SimplexNoise & Tone.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', system-ui, -apple-system, sans-serif; touch-action: none; }
+        canvas { display: block; }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .pulse-warning {
+            animation: pulse-red 0.8s infinite alternate;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: inset 0 0 20px rgba(228, 0, 43, 0.2); }
+            100% { box-shadow: inset 0 0 60px rgba(228, 0, 43, 0.7); }
+        }
+
+        .speed-lines {
+            background: repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(255, 255, 255, 0.05) 10px, rgba(255, 255, 255, 0.05) 20px);
+        }
+    </style>
+</head>
+<body class="h-full relative select-none bg-slate-950">
+
+    <div id="canvas-container" class="relative w-full h-full"></div>
+
+    <!-- Speed Overlay Lines FX -->
+    <div id="speed-fx" class="pointer-events-none absolute inset-0 speed-lines opacity-0 transition-opacity duration-300"></div>
+    
+    <!-- Proximity Danger Screen Flash Overlay -->
+    <div id="danger-overlay" class="pointer-events-none absolute inset-0 transition-all duration-300"></div>
+
+    <!-- MAIN IN-GAME HUD -->
+    <div id="hud-panel" class="hidden absolute top-4 left-4 right-4 z-20 flex justify-between items-start pointer-events-none">
+        
+        <!-- Score & Multiplier -->
+        <div class="glass-panel px-5 py-3 rounded-2xl flex items-center gap-4 shadow-2xl pointer-events-auto">
+            <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-2xl">
+                <i class="fa-solid fa-wheat-awn"></i>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Distance Run</div>
+                <div class="text-2xl font-black text-white tracking-tight"><span id="hud-score">0</span> <span class="text-xs font-normal text-amber-400">m</span></div>
+            </div>
+        </div>
+
+        <!-- Center Real-Time 3D Rear-View Mirror Widget & Danger Meter -->
+        <div class="flex flex-col items-center gap-2">
+            <!-- 3D Rear View Mirror Viewport -->
+            <div class="glass-panel px-3 py-2 rounded-2xl border border-red-500/50 flex flex-col items-center shadow-2xl pointer-events-auto bg-slate-950/90 relative overflow-hidden w-60">
+                <div class="text-[10px] text-red-400 font-black uppercase tracking-widest flex items-center gap-1.5 mb-1 z-10">
+                    <i class="fa-solid fa-eye animate-pulse"></i> LIVE REAR-VIEW MIRROR
+                </div>
+                <div class="w-full h-16 bg-slate-900 rounded-lg relative overflow-hidden border border-red-900/60 shadow-inner">
+                    <!-- Real-Time Render Canvas for Backward Facing Camera -->
+                    <canvas id="mirror-canvas" class="w-full h-full rounded-lg scale-x-[-1] object-cover"></canvas>
+                    <span id="mirror-dist-text" class="absolute bottom-1 right-1.5 text-[9px] font-extrabold text-white bg-slate-950/90 px-1.5 py-0.5 rounded-full border border-red-500/40 z-10 shadow">14m</span>
+                </div>
+            </div>
+
+            <!-- Proximity Bar -->
+            <div class="glass-panel px-5 py-2 rounded-xl flex flex-col items-center shadow-2xl w-60 pointer-events-auto">
+                <div class="flex justify-between w-full text-[10px] font-bold uppercase mb-1">
+                    <span class="text-red-400 flex items-center gap-1"><i class="fa-solid fa-truck-fast"></i> Truck Gap</span>
+                    <span id="proximity-text" class="text-amber-400">SAFE</span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                    <div id="proximity-bar" class="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-red-600 rounded-full w-full transition-all duration-200"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Corn Multiplier & Boost Gauge -->
+        <div class="glass-panel px-5 py-3 rounded-2xl flex items-center gap-3 shadow-2xl pointer-events-auto">
+            <div class="text-right">
+                <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Corn Collected</div>
+                <div class="text-xl font-black text-amber-400"><span id="hud-corn">0</span> 🌽</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Touch Controls Overlay -->
+    <div id="mobile-controls" class="hidden absolute bottom-6 left-4 right-4 z-20 flex justify-between items-center pointer-events-auto md:hidden">
+        <div class="flex gap-3">
+            <button id="btn-touch-left" class="w-16 h-16 glass-panel rounded-2xl text-amber-400 text-2xl font-black flex items-center justify-center active:scale-90 transition-transform bg-slate-800/80 border border-slate-700">
+                A
+            </button>
+            <button id="btn-touch-right" class="w-16 h-16 glass-panel rounded-2xl text-amber-400 text-2xl font-black flex items-center justify-center active:scale-90 transition-transform bg-slate-800/80 border border-slate-700">
+                D
+            </button>
+        </div>
+        <button id="btn-touch-jump" class="w-20 h-20 bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 rounded-3xl text-2xl font-black flex flex-col items-center justify-center shadow-lg active:scale-90 transition-transform">
+            <i class="fa-solid fa-angles-up"></i>
+            <span class="text-[10px] uppercase tracking-wider font-extrabold">FLUTTER</span>
+        </button>
+    </div>
+
+    <!-- MAIN START GAME SCREEN -->
+    <div id="start-screen" class="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 sm:p-8 text-center shadow-2xl border border-red-500/30 relative overflow-hidden">
+            
+            <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center text-white text-4xl shadow-xl mb-4 border border-red-400/50 animate-bounce">
+                <i class="fa-solid fa-truck-fast"></i>
+            </div>
+
+            <h1 class="text-3xl sm:text-4xl font-black text-white tracking-tight uppercase mb-1">
+                KFC <span class="text-red-500">RUN!</span>
+            </h1>
+            <p class="text-amber-400 text-xs font-bold uppercase tracking-widest mb-6">Escape The Fried Chicken Truck!</p>
+
+            <div class="bg-slate-900/80 rounded-2xl p-4 text-left text-xs text-slate-300 space-y-3 mb-6 border border-slate-800">
+                <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">A / D</span>
+                    <span>Press <strong class="text-white">A</strong> (Left) and <strong class="text-white">D</strong> (Right) to switch lanes.</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">W</span>
+                    <span>Press <strong class="text-white">SPACE / W</strong> to jump over Hay Bales, Barricades & Oil Barrels.</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">🌽</span>
+                    <span>Eat <strong class="text-amber-400">Golden Corn</strong> for speed boosts and to push the KFC truck back!</span>
+                </div>
+            </div>
+
+            <button id="btn-start-game" class="w-full py-4 rounded-2xl bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white font-black text-lg tracking-wider uppercase shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3">
+                <i class="fa-solid fa-play"></i> RUN FOR YOUR LIFE!
+            </button>
+
+            <div class="mt-4 flex justify-between items-center text-xs text-slate-400 border-t border-slate-800 pt-3">
+                <span>High Score: <strong id="val-high-score" class="text-amber-400 font-bold">0 m</strong></span>
+                <button id="btn-sound-toggle" class="hover:text-white transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-volume-high" id="start-sound-icon"></i> Sound ON
+                </button>
+            </div>
+
+            <a href="../game.html" class="w-full py-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white font-bold text-xs tracking-wider uppercase border border-slate-800 transition-all flex items-center justify-center gap-2 mt-3">
+                <i class="fa-solid fa-arrow-left"></i> Return to Game Hub
+            </a>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameover-screen" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-red-950/80 backdrop-blur-xl">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 sm:p-8 text-center shadow-2xl border border-red-500/50">
+            
+            <div class="w-20 h-20 mx-auto rounded-3xl bg-red-600 text-white text-4xl flex items-center justify-center shadow-xl mb-4 border border-red-400">
+                <i class="fa-solid fa-drumstick-bite"></i>
+            </div>
+
+            <h2 class="text-3xl font-black text-red-500 tracking-tight uppercase mb-1">YOU GOT RECIPE'D!</h2>
+            <p id="gameover-quote" class="text-slate-300 text-xs italic mb-6">"You became Extra Crispy Original Recipe..."</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-800">
+                    <div class="text-xs text-slate-400 uppercase font-bold">Distance Run</div>
+                    <div class="text-2xl font-black text-white" id="go-score">0 m</div>
+                </div>
+                <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-800">
+                    <div class="text-xs text-slate-400 uppercase font-bold">Corn Eaten</div>
+                    <div class="text-2xl font-black text-amber-400" id="go-corn">0 🌽</div>
+                </div>
+            </div>
+
+            <button id="btn-restart-game" class="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-red-600 text-white font-black text-lg tracking-wider uppercase shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 mb-3">
+                <i class="fa-solid fa-rotate-right"></i> TRY AGAIN!
+            </button>
+
+            <a href="../game.html" class="w-full py-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white font-bold text-xs tracking-wider uppercase border border-slate-800 transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrow-left"></i> Return to Game Hub
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Game Engine States & Logic Variables
+        let scene, camera, renderer;
+        let mirrorCamera, mirrorRenderer;
+        let chickenGroup, kfcTruckGroup;
+        let chickenBones = {};
+        let featherInstancedMesh;
+
+        // Gameplay Track Lanes (-2.8 = Left, 0 = Middle, 2.8 = Right)
+        const LANES = [-2.8, 0, 2.8];
+        let currentLaneIdx = 1;
+        let targetX = 0;
+        let currentX = 0;
+
+        // Physics State
+        let chickenY = 0;
+        let chickenVelY = 0;
+        let isJumping = false;
+        const GRAVITY = -28.0;
+        const JUMP_IMPULSE = 11.5;
+
+        // Run Parameters
+        let isPlaying = false;
+        let distanceRun = 0;
+        let cornEaten = 0;
+        let gameSpeed = 16.0;
+        const BASE_SPEED = 16.0;
+        const MAX_SPEED = 32.0;
+
+        // Truck Chaser Mechanics (truckDistance: 1.8 = Caught/Dead, 22.0 = Max Safe Distance)
+        let truckDistance = 14.0; 
+        const MIN_TRUCK_DIST = 1.8;
+        const MAX_TRUCK_DIST = 22.0;
+
+        // Dynamic Spawning Systems
+        let obstacles = [];
+        let collectibles = [];
+        let roadTiles = [];
+
+        // Audio state
+        let soundEnabled = true;
+        let cluckSynth, hornSynth, boostSynth, crashSynth;
+
+        // High Score
+        let highScore = parseInt(localStorage.getItem('kfc_run_highscore') || '0');
+        document.getElementById('val-high-score').innerText = highScore + ' m';
+
+        // Quotes on Game Over
+        const FUNNY_QUOTES = [
+            "The Colonel caught up and turned you into 11 Herbs & Spices!",
+            "Finger Lickin' Good... for the KFC Truck!",
+            "You were 2 seconds away from becoming Extra Crispy!",
+            "The Colonel always gets his bucket!",
+            "Cluck around and find out!"
+        ];
+
+        function initAudio() {
+            if (cluckSynth || !Tone) return;
+
+            Tone.start();
+
+            // Chicken Cluck Membrane
+            cluckSynth = new Tone.MembraneSynth({
+                pitchDecay: 0.08,
+                octaves: 4,
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.001, decay: 0.12, sustain: 0.01, release: 0.1 }
+            }).toDestination();
+            cluckSynth.volume.value = -6;
+
+            // Truck Loud Horn HornSynth
+            hornSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.05, decay: 0.2, sustain: 0.8, release: 0.3 }
+            }).toDestination();
+            hornSynth.volume.value = -10;
+
+            // Corn Pickup Chime
+            boostSynth = new Tone.Synth({
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 }
+            }).toDestination();
+
+            // Crash / Hit Noise Synth
+            crashSynth = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.005, decay: 0.25, sustain: 0 }
+            }).toDestination();
+            crashSynth.volume.value = -4;
+        }
+
+        function playSound(type) {
+            if (!soundEnabled || !Tone) return;
+            initAudio();
+
+            if (type === 'cluck') {
+                const notes = ["C4", "E4", "G4"];
+                cluckSynth.triggerAttackRelease(notes[Math.floor(Math.random() * notes.length)], "16n");
+            } else if (type === 'corn') {
+                boostSynth.triggerAttackRelease("C6", "16n");
+            } else if (type === 'crash') {
+                crashSynth.triggerAttackRelease("8n");
+            } else if (type === 'horn') {
+                hornSynth.triggerAttackRelease(["F3", "A3", "C4"], "4n");
+            }
+        }
+
+        function createProceduralChicken() {
+            const group = new THREE.Group();
+
+            // Torso Core Bone
+            const torso = new THREE.Group();
+            torso.position.y = 1.2;
+            group.add(torso);
+            chickenBones.torso = torso;
+
+            // Organic Torso Body
+            const torsoGeo = new THREE.SphereGeometry(0.65, 24, 20);
+            torsoGeo.scale(0.85, 0.95, 1.3);
+            const torsoMat = new THREE.MeshStandardMaterial({ color: 0x5a180c, roughness: 0.7 });
+            const torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
+            torsoMesh.castShadow = true;
+            torso.add(torsoMesh);
+
+            // Neck & Head
+            const neck = new THREE.Group();
+            neck.position.set(0, 0.4, 0.45);
+            torso.add(neck);
+            chickenBones.neck = neck;
+
+            const head = new THREE.Group();
+            head.position.set(0, 0.45, 0.1);
+            neck.add(head);
+            chickenBones.head = head;
+
+            const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), torsoMat);
+            headMesh.castShadow = true;
+            head.add(headMesh);
+
+            // Beak
+            const beakMat = new THREE.MeshStandardMaterial({ color: 0xdfa048, roughness: 0.3 });
+            const beak = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.25, 12), beakMat);
+            beak.rotation.x = Math.PI / 2 + 0.15;
+            beak.position.set(0, 0.02, 0.24);
+            head.add(beak);
+
+            // Comb & Wattle
+            const combMat = new THREE.MeshPhysicalMaterial({ color: 0xd61828, roughness: 0.3, clearcoat: 0.5 });
+            const comb = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.35), combMat);
+            comb.position.set(0, 0.22, 0.02);
+            head.add(comb);
+
+            const wattle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), combMat);
+            wattle.scale.set(0.4, 1.3, 0.7);
+            wattle.position.set(0, -0.15, 0.16);
+            head.add(wattle);
+
+            // Wings
+            ['left', 'right'].forEach(side => {
+                const isLeft = side === 'left';
+                const sign = isLeft ? -1 : 1;
+                const wing = new THREE.Group();
+                wing.position.set(sign * 0.55, 0.1, 0.1);
+                
+                const wingMesh = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.8, 8), torsoMat);
+                wingMesh.rotation.x = Math.PI / 2;
+                wingMesh.rotation.z = sign * 0.3;
+                wingMesh.scale.set(0.2, 1.0, 0.5);
+                wing.add(wingMesh);
+
+                torso.add(wing);
+                chickenBones[`wing_${side}`] = wing;
+            });
+
+            // Tail
+            const tail = new THREE.Group();
+            tail.position.set(0, 0.2, -0.6);
+            const tailMat = new THREE.MeshStandardMaterial({ color: 0x0a1c13, roughness: 0.4 });
+            for(let i = 0; i < 5; i++) {
+                const feather = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.12), tailMat);
+                feather.rotation.x = -0.6 - (i * 0.1);
+                feather.rotation.y = (i - 2) * 0.15;
+                feather.position.set((i - 2) * 0.04, 0.2, -i * 0.05);
+                tail.add(feather);
+            }
+            torso.add(tail);
+            chickenBones.tail = tail;
+
+            // Legs
+            const legMat = new THREE.MeshStandardMaterial({ color: 0xe8a735, roughness: 0.5 });
+            ['left', 'right'].forEach(side => {
+                const sign = side === 'left' ? -1 : 1;
+                const thigh = new THREE.Group();
+                thigh.position.set(sign * 0.25, -0.3, 0);
+                
+                const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.6), legMat);
+                shin.position.y = -0.3;
+                shin.castShadow = true;
+                thigh.add(shin);
+
+                torso.add(thigh);
+                chickenBones[`leg_${side}`] = thigh;
+            });
+
+            // Feather Instancing Layer
+            buildInstancedFeathers(torsoMesh, group);
+
+            return group;
+        }
+
+        function buildInstancedFeathers(torsoMesh, group) {
+            const featherCount = 600;
+            const featherGeo = new THREE.PlaneGeometry(0.1, 0.24);
+            featherGeo.translate(0, 0.12, 0);
+
+            const featherMat = new THREE.MeshStandardMaterial({
+                color: 0x5a180c,
+                roughness: 0.6,
+                side: THREE.DoubleSide
+            });
+
+            featherInstancedMesh = new THREE.InstancedMesh(featherGeo, featherMat, featherCount);
+            const dummy = new THREE.Object3D();
+            const colorBuffer = new Float32Array(featherCount * 3);
+
+            const cBody = new THREE.Color(0x5a180c);
+            const cHackle = new THREE.Color(0xb85112);
+
+            for (let i = 0; i < featherCount; i++) {
+                const u = Math.random();
+                const v = Math.random();
+                const theta = u * Math.PI * 2;
+                const phi = Math.acos(2 * v - 1);
+
+                const radius = 0.62;
+                const x = radius * 0.85 * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * 1.3 * Math.cos(phi);
+
+                dummy.position.set(x, y + 1.2, z);
+
+                const normal = new THREE.Vector3(x, y, z).normalize();
+                dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+                dummy.rotateX(Math.PI / 2 - 0.2);
+                dummy.scale.setScalar(0.7 + Math.random() * 0.4);
+
+                dummy.updateMatrix();
+                featherInstancedMesh.setMatrixAt(i, dummy.matrix);
+
+                let finalColor = cBody.clone();
+                if (y > 0.2 && z > 0.1) finalColor.lerp(cHackle, 0.8);
+
+                colorBuffer[i * 3] = finalColor.r;
+                colorBuffer[i * 3 + 1] = finalColor.g;
+                colorBuffer[i * 3 + 2] = finalColor.b;
+            }
+
+            featherInstancedMesh.geometry.setAttribute('color', new THREE.InstancedBufferAttribute(colorBuffer, 3));
+            featherInstancedMesh.material.vertexColors = true;
+            featherInstancedMesh.castShadow = true;
+            group.add(featherInstancedMesh);
+        }
+
+        function createKFCTruck() {
+            const truck = new THREE.Group();
+
+            // Freight Container
+            const containerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+            const containerGeo = new THREE.BoxGeometry(3.2, 2.6, 5.5);
+            const containerMesh = new THREE.Mesh(containerGeo, containerMat);
+            containerMesh.position.set(0, 2.0, -3.0);
+            containerMesh.castShadow = true;
+            truck.add(containerMesh);
+
+            // KFC Red Striped Trim
+            const stripeMat = new THREE.MeshStandardMaterial({ color: 0xe4002b, roughness: 0.3 });
+            const stripe1 = new THREE.Mesh(new THREE.BoxGeometry(3.25, 0.4, 5.51), stripeMat);
+            stripe1.position.set(0, 2.0, -3.0);
+            truck.add(stripe1);
+
+            // KFC Side Text Panels
+            const logoGeo = new THREE.BoxGeometry(0.05, 1.2, 3.2);
+            const logoMesh = new THREE.Mesh(logoGeo, stripeMat);
+            logoMesh.position.set(1.61, 2.2, -3.0);
+            truck.add(logoMesh);
+
+            const logoMeshLeft = logoMesh.clone();
+            logoMeshLeft.position.x = -1.61;
+            truck.add(logoMeshLeft);
+
+            // Front Cabin
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0xe4002b, roughness: 0.3, metalness: 0.2 });
+            const cabinGeo = new THREE.BoxGeometry(3.0, 2.0, 2.2);
+            const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+            cabinMesh.position.set(0, 1.5, 0.8);
+            cabinMesh.castShadow = true;
+            truck.add(cabinMesh);
+
+            // Windshield
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x111122, roughness: 0.1, metalness: 0.8 });
+            const windshield = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.9), glassMat);
+            windshield.position.set(0, 1.8, 1.91);
+            truck.add(windshield);
+
+            // Glowing Headlights
+            const lightGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 16);
+            lightGeo.rotateX(Math.PI / 2);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+            
+            [-1.1, 1.1].forEach(x => {
+                const light = new THREE.Mesh(lightGeo, lightMat);
+                light.position.set(x, 1.0, 1.91);
+                truck.add(light);
+
+                // Spotlight Beams pointing at chicken
+                const spotLight = new THREE.SpotLight(0xfffaee, 3.5, 30, Math.PI / 5, 0.4);
+                spotLight.position.set(x, 1.0, 1.95);
+                spotLight.target.position.set(x, 0.5, 8.0);
+                truck.add(spotLight);
+                truck.add(spotLight.target);
+            });
+
+            // Grille
+            const grilleMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.2 });
+            const grille = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.7, 0.1), grilleMat);
+            grille.position.set(0, 0.9, 1.91);
+            truck.add(grille);
+
+            // Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.5, 20);
+            wheelGeo.rotateZ(Math.PI / 2);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+
+            [
+                [-1.5, 0.65, 0.8], [1.5, 0.65, 0.8],
+                [-1.5, 0.65, -2.2], [1.5, 0.65, -2.2],
+                [-1.5, 0.65, -4.2], [1.5, 0.65, -4.2]
+            ].forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.position.set(...pos);
+                wheel.castShadow = true;
+                truck.add(wheel);
+            });
+
+            // Exhaust Stack Pipe
+            const pipeGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.8, 12);
+            const pipeMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9 });
+            const exhaustPipe = new THREE.Mesh(pipeGeo, pipeMat);
+            exhaustPipe.position.set(1.4, 2.8, -0.4);
+            truck.add(exhaustPipe);
+
+            return truck;
+        }
+
+        function createRoadTile(zPos) {
+            const tileGroup = new THREE.Group();
+            tileGroup.position.z = zPos;
+
+            // Main Asphalt Highway (3 Lanes wide)
+            const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e222b, roughness: 0.8 });
+            const roadMesh = new THREE.Mesh(new THREE.PlaneGeometry(10, 40), roadMat);
+            roadMesh.rotation.x = -Math.PI / 2;
+            roadMesh.receiveShadow = true;
+            tileGroup.add(roadMesh);
+
+            // Lane Divider Stripe Lines
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+            [-1.4, 1.4].forEach(x => {
+                for (let i = -18; i < 18; i += 6) {
+                    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 3.0), stripeMat);
+                    stripe.rotation.x = -Math.PI / 2;
+                    stripe.position.set(x, 0.01, i);
+                    tileGroup.add(stripe);
+                }
+            });
+
+            // Grass Sides
+            const grassMat = new THREE.MeshStandardMaterial({ color: 0x2d4a1d, roughness: 0.9 });
+            [-15, 15].forEach(x => {
+                const grass = new THREE.Mesh(new THREE.PlaneGeometry(20, 40), grassMat);
+                grass.rotation.x = -Math.PI / 2;
+                grass.position.set(x, -0.02, 0);
+                grass.receiveShadow = true;
+                tileGroup.add(grass);
+            });
+
+            // Side Guardrails
+            const railMat = new THREE.MeshStandardMaterial({ color: 0x8899a6, metalness: 0.6 });
+            [-4.8, 4.8].forEach(x => {
+                const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 40), railMat);
+                rail.position.set(x, 0.3, 0);
+                tileGroup.add(rail);
+            });
+
+            // Scenery Trees along side
+            [-8, 8].forEach(x => {
+                for(let j = -15; j < 18; j += 12) {
+                    const tree = createPineTree();
+                    tree.position.set(x + (Math.random() - 0.5) * 4, 0, j + (Math.random() - 0.5) * 4);
+                    tileGroup.add(tree);
+                }
+            });
+
+            scene.add(tileGroup);
+            roadTiles.push(tileGroup);
+        }
+
+        function createPineTree() {
+            const tree = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a2e18, roughness: 0.9 });
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8), trunkMat);
+            trunk.position.y = 0.75;
+            tree.add(trunk);
+
+            const leavesMat = new THREE.MeshStandardMaterial({ color: 0x1b381e, roughness: 0.8 });
+            for (let i = 0; i < 3; i++) {
+                const cone = new THREE.Mesh(new THREE.ConeGeometry(1.2 - i * 0.3, 1.8, 8), leavesMat);
+                cone.position.y = 1.8 + i * 1.0;
+                cone.castShadow = true;
+                tree.add(cone);
+            }
+            return tree;
+        }
+
+        function spawnObstacle(zPos) {
+            const lane = LANES[Math.floor(Math.random() * LANES.length)];
+            const type = Math.random() > 0.5 ? 'haybale' : 'barrel';
+
+            let obsGroup = new THREE.Group();
+            obsGroup.position.set(lane, 0, zPos);
+            obsGroup.userData = { type, radius: 0.8, hit: false };
+
+            if (type === 'haybale') {
+                const hayMat = new THREE.MeshStandardMaterial({ color: 0xd4a337, roughness: 0.9 });
+                const hay = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.2, 16), hayMat);
+                hay.rotation.z = Math.PI / 2;
+                hay.position.y = 0.6;
+                hay.castShadow = true;
+                obsGroup.add(hay);
+            } else {
+                const barrelMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.4 });
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.4, 16), barrelMat);
+                barrel.position.y = 0.7;
+                barrel.castShadow = true;
+                obsGroup.add(barrel);
+            }
+
+            scene.add(obsGroup);
+            obstacles.push(obsGroup);
+        }
+
+        function spawnCorn(zPos) {
+            const lane = LANES[Math.floor(Math.random() * LANES.length)];
+            const cornGroup = new THREE.Group();
+            cornGroup.position.set(lane, 0.8, zPos);
+            cornGroup.userData = { radius: 0.7, collected: false };
+
+            const cornMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 });
+            const cornMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.7, 12), cornMat);
+            cornMesh.rotation.x = 0.3;
+            cornMesh.castShadow = true;
+            cornGroup.add(cornMesh);
+
+            // Glowing indicator
+            const light = new THREE.PointLight(0xfacc15, 1.5, 3);
+            light.position.y = 0.2;
+            cornGroup.add(light);
+
+            scene.add(cornGroup);
+            collectibles.push(cornGroup);
+        }
+
+        function initMirrorRenderer() {
+            const mirrorCanvas = document.getElementById('mirror-canvas');
+            if (!mirrorCanvas) return;
+
+            // Backward facing camera for the Rear View Mirror HUD
+            mirrorCamera = new THREE.PerspectiveCamera(55, 240 / 64, 0.1, 100);
+
+            mirrorRenderer = new THREE.WebGLRenderer({ 
+                canvas: mirrorCanvas, 
+                antialias: true,
+                powerPreference: 'high-performance' 
+            });
+            mirrorRenderer.setSize(240, 64, false);
+            mirrorRenderer.shadowMap.enabled = false; // Optimize performance
+            mirrorRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+        }
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.018);
+
+            // Forward-facing third-person chase camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 120);
+            camera.position.set(0, 3.8, -5.2);
+            camera.lookAt(0, 1.4, 12.0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            container.appendChild(renderer.domElement);
+
+            // Environment Lighting
+            const ambient = new THREE.AmbientLight(0x64748b, 0.7);
+            scene.add(ambient);
+
+            const moonLight = new THREE.DirectionalLight(0x94a3b8, 1.2);
+            moonLight.position.set(10, 20, 10);
+            moonLight.castShadow = true;
+            moonLight.shadow.mapSize.width = 1024;
+            moonLight.shadow.mapSize.height = 1024;
+            scene.add(moonLight);
+
+            // Spawn Chicken & Truck
+            chickenGroup = createProceduralChicken();
+            scene.add(chickenGroup);
+
+            kfcTruckGroup = createKFCTruck();
+            scene.add(kfcTruckGroup);
+
+            // Initial Road Chunk Tiles
+            for (let i = 0; i < 6; i++) {
+                createRoadTile(i * 40 - 40);
+            }
+
+            // Init secondary mirror view camera
+            initMirrorRenderer();
+
+            window.addEventListener('resize', onWindowResize);
+            setupInputListeners();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function setupInputListeners() {
+            // STRICT A / D KEYBOARD CONTROLS (Removed Arrow Keys)
+            window.addEventListener('keydown', (e) => {
+                if (!isPlaying) return;
+                const key = e.key.toLowerCase();
+
+                if (key === 'a' && currentLaneIdx > 0) {
+                    currentLaneIdx--;
+                    playSound('cluck');
+                } else if (key === 'd' && currentLaneIdx < 2) {
+                    currentLaneIdx++;
+                    playSound('cluck');
+                } else if ((key === ' ' || key === 'w') && !isJumping) {
+                    chickenVelY = JUMP_IMPULSE;
+                    isJumping = true;
+                    playSound('cluck');
+                }
+            });
+
+            // Touch UI Buttons for A, D & Jump
+            document.getElementById('btn-touch-left').addEventListener('pointerdown', () => {
+                if (isPlaying && currentLaneIdx > 0) { currentLaneIdx--; playSound('cluck'); }
+            });
+            document.getElementById('btn-touch-right').addEventListener('pointerdown', () => {
+                if (isPlaying && currentLaneIdx < 2) { currentLaneIdx++; playSound('cluck'); }
+            });
+            document.getElementById('btn-touch-jump').addEventListener('pointerdown', () => {
+                if (isPlaying && !isJumping) { chickenVelY = JUMP_IMPULSE; isJumping = true; playSound('cluck'); }
+            });
+
+            // Menu Buttons
+            document.getElementById('btn-start-game').addEventListener('click', startGame);
+            document.getElementById('btn-restart-game').addEventListener('click', startGame);
+
+            document.getElementById('btn-sound-toggle').addEventListener('click', () => {
+                soundEnabled = !soundEnabled;
+                const icon = document.getElementById('start-sound-icon');
+                if (soundEnabled) {
+                    icon.className = 'fa-solid fa-volume-high';
+                    document.getElementById('btn-sound-toggle').innerHTML = `<i class="fa-solid fa-volume-high"></i> Sound ON`;
+                } else {
+                    icon.className = 'fa-solid fa-volume-xmark';
+                    document.getElementById('btn-sound-toggle').innerHTML = `<i class="fa-solid fa-volume-xmark"></i> Sound OFF`;
+                }
+            });
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.add('hidden');
+            document.getElementById('hud-panel').classList.remove('hidden');
+            document.getElementById('mobile-controls').classList.remove('hidden');
+
+            // Reset Game Logic State
+            distanceRun = 0;
+            cornEaten = 0;
+            currentLaneIdx = 1;
+            targetX = LANES[1];
+            currentX = targetX;
+            chickenY = 0;
+            chickenVelY = 0;
+            isJumping = false;
+            gameSpeed = BASE_SPEED;
+            truckDistance = 14.0;
+            isPlaying = true;
+
+            // Clear Old Spawns
+            obstacles.forEach(o => scene.remove(o));
+            collectibles.forEach(c => scene.remove(c));
+            obstacles = [];
+            collectibles = [];
+
+            // Spawn Initial Hazards down the road
+            for (let z = 35; z < 220; z += 18) {
+                if (Math.random() > 0.4) spawnObstacle(z);
+                if (Math.random() > 0.5) spawnCorn(z + 8);
+            }
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            playSound('crash');
+
+            if (distanceRun > highScore) {
+                highScore = Math.floor(distanceRun);
+                localStorage.setItem('kfc_run_highscore', highScore.toString());
+                document.getElementById('val-high-score').innerText = highScore + ' m';
+            }
+
+            document.getElementById('go-score').innerText = Math.floor(distanceRun) + ' m';
+            document.getElementById('go-corn').innerText = cornEaten + ' 🌽';
+            document.getElementById('gameover-quote').innerText = `"${FUNNY_QUOTES[Math.floor(Math.random() * FUNNY_QUOTES.length)]}"`;
+
+            document.getElementById('hud-panel').classList.add('hidden');
+            document.getElementById('mobile-controls').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.remove('hidden');
+        }
+
+        function updateGame(delta) {
+            if (!isPlaying) return;
+
+            // Increase speed progressively over distance
+            gameSpeed = Math.min(MAX_SPEED, BASE_SPEED + (distanceRun * 0.015));
+            distanceRun += gameSpeed * delta;
+
+            // Lane Lateral Motion & Banking tilt
+            targetX = LANES[currentLaneIdx];
+            const laneDiff = targetX - currentX;
+            currentX += laneDiff * delta * 15.0;
+            chickenGroup.position.x = currentX;
+            chickenGroup.rotation.y = laneDiff * 0.12; // Bank chicken into turns
+
+            // Vertical Jump Physics
+            if (isJumping) {
+                chickenVelY += GRAVITY * delta;
+                chickenY += chickenVelY * delta;
+                if (chickenY <= 0) {
+                    chickenY = 0;
+                    chickenVelY = 0;
+                    isJumping = false;
+                }
+            }
+            chickenGroup.position.y = chickenY;
+
+            // Chicken Running Gait Animation
+            const runCycle = distanceRun * 0.4;
+            const { torso, leg_left, leg_right, wing_left, wing_right, head } = chickenBones;
+            
+            torso.position.y = 1.2 + Math.abs(Math.sin(runCycle)) * 0.12;
+            leg_left.rotation.x = Math.sin(runCycle) * 0.7;
+            leg_right.rotation.x = -Math.sin(runCycle) * 0.7;
+
+            if (isJumping) {
+                wing_left.rotation.z = -0.8 + Math.sin(runCycle * 3) * 0.4;
+                wing_right.rotation.z = 0.8 - Math.sin(runCycle * 3) * 0.4;
+            } else {
+                wing_left.rotation.z = -0.2;
+                wing_right.rotation.z = 0.2;
+            }
+
+            // Head Bobbing
+            head.rotation.x = Math.sin(runCycle) * 0.15;
+
+            // Update Road Tile Scrolling
+            roadTiles.forEach(tile => {
+                tile.position.z -= gameSpeed * delta;
+                if (tile.position.z < -60) {
+                    tile.position.z += 240; // Recycle back to front
+                }
+            });
+
+            // Update KFC Truck Position Behind Chicken
+            truckDistance = Math.max(0, truckDistance - delta * 0.15); // Slowly creeps closer
+            kfcTruckGroup.position.set(currentX * 0.6, 0, -truckDistance);
+
+            // Random Truck Horn Honk when close
+            if (truckDistance < 6.0 && Math.random() < 0.005) {
+                playSound('horn');
+            }
+
+            // Check Game Over Condition
+            if (truckDistance <= MIN_TRUCK_DIST) {
+                gameOver();
+                return;
+            }
+
+            // Update Obstacles Motion & Collision Check
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z -= gameSpeed * delta;
+
+                // Collision Detection with Chicken Box
+                if (!obs.userData.hit && Math.abs(obs.position.z) < 0.8 && Math.abs(obs.position.x - currentX) < 0.9) {
+                    if (chickenY < 0.8) { // Didn't jump high enough!
+                        obs.userData.hit = true;
+                        playSound('crash');
+                        truckDistance = Math.max(MIN_TRUCK_DIST, truckDistance - 3.5); // Truck gains ground!
+                        
+                        // Flash danger visual overlay
+                        const overlay = document.getElementById('danger-overlay');
+                        overlay.className = 'absolute inset-0 bg-red-600/40 pointer-events-none transition-all duration-300';
+                        setTimeout(() => overlay.className = 'absolute inset-0 pointer-events-none transition-all duration-300', 300);
+                    }
+                }
+
+                // Recycle offscreen obstacles
+                if (obs.position.z < -12) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    spawnObstacle(160 + Math.random() * 30);
+                }
+            }
+
+            // Update Corn Collectibles Motion & Collision
+            for (let i = collectibles.length - 1; i >= 0; i--) {
+                const corn = collectibles[i];
+                corn.position.z -= gameSpeed * delta;
+                corn.rotation.y += delta * 3.0; // Spin animation
+
+                if (!corn.userData.collected && Math.abs(corn.position.z) < 0.9 && Math.abs(corn.position.x - currentX) < 1.0) {
+                    corn.userData.collected = true;
+                    cornEaten++;
+                    playSound('corn');
+                    truckDistance = Math.min(MAX_TRUCK_DIST, truckDistance + 1.6); // Push truck back!
+                    scene.remove(corn);
+                    collectibles.splice(i, 1);
+                } else if (corn.position.z < -12) {
+                    scene.remove(corn);
+                    collectibles.splice(i, 1);
+                    spawnCorn(150 + Math.random() * 40);
+                }
+            }
+
+            // Main Forward Chase Camera Tracking (Behind Chicken looking forward)
+            camera.position.x = currentX * 0.65;
+            camera.position.y = 3.6 + chickenY * 0.25 + Math.sin(runCycle) * 0.03;
+            camera.position.z = -5.0 + chickenY * 0.15;
+            camera.lookAt(currentX * 0.75, 1.3 + chickenY * 0.2, 12.0);
+
+            // Live 3D Rear-View Mirror Camera Tracking (Slightly ahead of chicken, looking backward at truck)
+            if (mirrorCamera) {
+                mirrorCamera.position.set(currentX * 0.8, 1.8 + chickenY * 0.2, 0.8);
+                mirrorCamera.lookAt(currentX * 0.5, 1.4, -truckDistance - 5.0);
+            }
+
+            // Update UI HUD Text & Proximity Meter
+            document.getElementById('hud-score').innerText = Math.floor(distanceRun);
+            document.getElementById('hud-corn').innerText = cornEaten;
+
+            const proximityPct = Math.max(0, Math.min(100, ((truckDistance - MIN_TRUCK_DIST) / (MAX_TRUCK_DIST - MIN_TRUCK_DIST)) * 100));
+            const proxBar = document.getElementById('proximity-bar');
+            proxBar.style.width = `${proximityPct}%`;
+
+            // Rear-View Mirror Distance Text
+            const mirrorDistText = document.getElementById('mirror-dist-text');
+            mirrorDistText.innerText = `${Math.round(truckDistance)}m`;
+
+            const proxText = document.getElementById('proximity-text');
+            if (proximityPct < 30) {
+                proxText.innerText = "DANGER!";
+                proxText.className = "text-red-500 font-extrabold pulse-warning";
+            } else if (proximityPct < 60) {
+                proxText.innerText = "WARNING";
+                proxText.className = "text-amber-400 font-bold";
+            } else {
+                proxText.innerText = "SAFE";
+                proxText.className = "text-emerald-400 font-bold";
+            }
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            updateGame(delta);
+
+            // Render main chase camera
+            renderer.render(scene, camera);
+
+            // Render live 3D rear-view mirror viewport
+            if (mirrorRenderer && mirrorCamera && isPlaying) {
+                mirrorRenderer.render(scene, mirrorCamera);
+            }
+        }
+
+        window.onload = function() {
+            initScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
