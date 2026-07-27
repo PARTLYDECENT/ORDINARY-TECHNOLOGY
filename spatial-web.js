@@ -295,6 +295,20 @@ function setupWarpEffect() {
 function setupAudio() { }
 
 function createInfiniteGrid() {
+    // 1. Obsidian Black Floor Plane under the grid
+    const blackFloorGeo = new THREE.PlaneGeometry(2, 2, 1, 1);
+    const blackFloorMat = new THREE.MeshBasicMaterial({
+        color: 0x020204,
+        side: THREE.DoubleSide
+    });
+    const blackFloor = new THREE.Mesh(blackFloorGeo, blackFloorMat);
+    blackFloor.rotation.x = -Math.PI / 2;
+    blackFloor.scale.set(100000, 100000, 1);
+    blackFloor.position.y = -50.5;
+    blackFloor.name = "obsidianBlackFloor";
+    scene.add(blackFloor);
+
+    // 2. Infinite Orange Grid Plane
     const geometry = new THREE.PlaneGeometry(2, 2, 1, 1);
     const material = new THREE.ShaderMaterial({
         side: THREE.DoubleSide,
@@ -303,7 +317,7 @@ function createInfiniteGrid() {
             time: { value: 0 },
             gridScale: { value: 100 },
             gridThickness: { value: 1.5 },
-            gridColor: { value: new THREE.Color(0xD16847) },
+            gridColor: { value: new THREE.Color(0xFF6600) }, // Neon Orange Grid
             fadeDistance: { value: 5000 },
             pulseSpeed: { value: 0.5 }
         },
@@ -338,7 +352,7 @@ function createInfiniteGrid() {
                 float pulse = sin(time * pulseSpeed + coord.x * 0.5 + coord.y * 0.5) * 0.3 + 0.7;
                 
                 vec3 color = gridColor * pulse;
-                float alpha = gridStrength * fade * 0.6;
+                float alpha = gridStrength * fade * 0.8;
                 
                 gl_FragColor = vec4(color, alpha);
             }

@@ -188,20 +188,21 @@
 
             vec3 col = vec3(0.0);
 
-            // Sky
+            // Sky & Dark Void Atmosphere
             if(m < 0.0) {
                 float sky = max(0.0, rd.y);
-                col = mix(vec3(0.04, 0.0, 0.12), vec3(0.0), pow(sky, 0.5));
+                col = mix(vec3(0.02, 0.01, 0.03), vec3(0.003, 0.003, 0.005), pow(sky, 0.5));
                 if (rd.y > 0.0) col += pow(hash(uv * 50.0), 50.0); // Stars
                 
-                // Horizon Glow
+                // Subtle Horizon Amber Glow
                 float horizon = smoothstep(0.12, 0.0, abs(rd.y));
-                col += vec3(0.0, 0.45, 0.75) * horizon * 0.6;
+                col += vec3(0.85, 0.35, 0.0) * horizon * 0.4;
             } else {
                 vec3 p = ro + rd * t;
                 vec3 n = calcNormal(p);
                 
-                vec3 baseColor = vec3(0.02, 0.0, 0.04);
+                // PURE OBSIDIAN BLACK FLOOR SURFACE BASE UNDER ORANGE GRID
+                vec3 blackFloor = vec3(0.003, 0.003, 0.005);
 
                 if (m == 0.0) {
                     // Floor grid lines
@@ -210,36 +211,41 @@
                     float line = min(grid.x, grid.y);
                     
                     float gridIntensity = smoothstep(0.018 + dw, 0.004, line);
-                    vec3 gridColor = vec3(0.0, 1.0, 0.85) * 1.5;
-                    col = mix(baseColor, gridColor, gridIntensity);
+                    
+                    // VIBRANT NEON ORANGE GRID LINES
+                    vec3 orangeGridColor = vec3(1.0, 0.42, 0.0) * 2.5;
+                    
+                    // Mix pitch black floor underneath with bright orange grid lines on top!
+                    col = mix(blackFloor, orangeGridColor, gridIntensity);
 
-                    float ambient = 0.5;
-                    col *= ambient + 0.5 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0)));
+                    float ambient = 0.6;
+                    col *= ambient + 0.4 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0)));
                 } else {
-                    // Complex Morphing Wireframe Objects
-                    vec3 shapeColor = vec3(0.0, 1.0, 0.85); // Default Cyan
+                    // ALL OBSIDIAN BLACK BOXES AND STUFF GEOMETRY
+                    vec3 blackBoxColor = vec3(0.005, 0.004, 0.007); // Pure obsidian black geometry!
                     
-                    if (m == 2.0) shapeColor = vec3(1.0, 0.0, 0.65); // Tesseract: Electric Magenta
-                    else if (m == 3.0) shapeColor = vec3(0.6, 0.2, 1.0); // Merkaba: Quantum Violet
-                    else if (m == 4.0) shapeColor = vec3(0.0, 0.8, 1.0); // Torus Matrix: Deep Cyan
-                    else if (m == 5.0) shapeColor = vec3(1.0, 0.8, 0.2); // Crystal Prism: Amber Gold
-
-                    col = shapeColor * 1.6;
-
-                    // Volumetric depth glow
-                    float glow = smoothstep(-1.0, 2.5, p.y);
-                    col += vec3(0.2, 0.8, 1.0) * glow * 0.4;
+                    // Razor-sharp Orange Edge Rim Highlight
+                    float rim = 1.0 - max(0.0, dot(-rd, n));
+                    rim = pow(rim, 3.5);
+                    vec3 edgeHighlight = vec3(1.0, 0.42, 0.0) * rim * 2.0; // Orange edge rim
                     
-                    // 3D Lighting & Specular Pulse
+                    col = blackBoxColor + edgeHighlight;
+
+                    // Subtle dark ambient under 3D boxes
+                    float baseGlow = smoothstep(-1.0, 1.2, p.y);
+                    col += vec3(0.2, 0.08, 0.0) * (1.0 - baseGlow) * 0.2;
+                    
+                    // 3D Lighting & Specular Accent
                     vec3 ld = normalize(vec3(0.5, 0.9, -0.5));
                     float diff = max(0.0, dot(n, ld));
-                    col *= 0.75 + 0.5 * diff;
+                    col += vec3(0.05, 0.03, 0.01) * diff;
                 }
             }
             
-            // Fog
+            // Pitch Black Atmospheric Fog
             float fogFactor = 1.0 - exp(-t * 0.038);
-            col = mix(col, vec3(0.02, 0.0, 0.04), fogFactor);
+            vec3 fogColor = vec3(0.003, 0.003, 0.005);
+            col = mix(col, fogColor, fogFactor);
             
             // Vignette & Gamma
             float vignette = smoothstep(1.5, 0.4, length(uv * 0.5));
