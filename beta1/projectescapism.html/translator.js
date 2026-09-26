@@ -270,6 +270,18 @@ self.onmessage = function (e) {
     TerrainGen.endgamePulseTime = config.endgamePulseTime || 0.0;
     TerrainGen.playerPos = data.playerPos;
 
+    // Arrays representing state
+    const zState = data.zState;
+    const zPosX = data.zPosX;
+    const zPosZ = data.zPosZ;
+    const zRotY = data.zRotY;
+    const zType = data.zType;
+    const zBehavior = data.zBehavior;
+    const zSpeedMul = data.zSpeedMul;
+    const zStateTimer = data.zStateTimer;
+    const zCooldown = data.zCooldown;
+    const zHP = data.zHP;
+
     // Initialize previous state buffers to detect spawning
     if (!self.prevZState) {
         self.prevZState = new Uint8Array(config.maxZombies || 250);
@@ -286,18 +298,6 @@ self.onmessage = function (e) {
         }
         self.prevZState[j] = zState[j];
     }
-
-    // Arrays representing state
-    const zState = data.zState;
-    const zPosX = data.zPosX;
-    const zPosZ = data.zPosZ;
-    const zRotY = data.zRotY;
-    const zType = data.zType;
-    const zBehavior = data.zBehavior;
-    const zSpeedMul = data.zSpeedMul;
-    const zStateTimer = data.zStateTimer;
-    const zCooldown = data.zCooldown;
-    const zHP = data.zHP;
 
     // --- Single Nightmare Boss Election System ---
     let currentBossAlive = false;

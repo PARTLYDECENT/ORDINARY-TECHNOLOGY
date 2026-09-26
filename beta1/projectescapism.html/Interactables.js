@@ -507,6 +507,10 @@ class DefenseTurret {
         }
         if (this.group) {
             this.scene.remove(this.group);
+            this.group = null;
+        }
+    }
+}
 
 class HostileTowerTurret {
     constructor(scene, player, position) {
