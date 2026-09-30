@@ -14,7 +14,7 @@
         }
     `;
 
-    // Fragment Shader - 3D Infinite Grid World with Advanced Morphing Complex Shapes
+    // Fragment Shader - 3D Infinite Grid World with Advanced Morphing Complex Shapes and Color Phases
     const fsSource = `
         precision highp float;
         
@@ -79,6 +79,30 @@
             return min(d1, d2);
         }
 
+        // Fractal Cross Edge
+        float sdCrossEdge(vec3 p, float s, float e) {
+            float d1 = sdBoxEdge(p, vec3(s, s*0.2, s*0.2), e);
+            float d2 = sdBoxEdge(p, vec3(s*0.2, s, s*0.2), e);
+            float d3 = sdBoxEdge(p, vec3(s*0.2, s*0.2, s), e);
+            return min(min(d1, d2), d3);
+        }
+
+        // Gyroid wireframe
+        float sdGyroid(vec3 p, float scale, float e) {
+            p *= scale;
+            float d = dot(sin(p), cos(p.zxy));
+            return abs(d) / scale - e;
+        }
+
+        // Twist Deformation
+        vec3 opTwist(vec3 p, float k) {
+            float c = cos(k*p.y);
+            float s = sin(k*p.y);
+            mat2  m = mat2(c,-s,s,c);
+            vec3  q = vec3(m*p.xz,p.y);
+            return q.xzy;
+        }
+
         vec2 map(vec3 p) {
             // 1. Terrain Plane
             float dG = p.y + 1.0;
@@ -93,9 +117,10 @@
             float h1 = hash(id + vec2(1.0, 2.0));
             float h2 = hash(id + vec2(3.0, 4.0));
             float shapeType = hash(id + vec2(5.0, 6.0));
+            float colorPhase = hash(id + vec2(7.0, 8.0));
             
-            // ~18% cell active rate for balanced density
-            if (h1 > 0.18) {
+            // ~20% cell active rate for balanced density
+            if (h1 > 0.20) {
                 return vec2(dG, 0.0); // ID 0: Terrain
             }
 
@@ -116,14 +141,21 @@
             float e = 0.018; 
             
             // 3. Shape Selection & Smooth Morphing Engine
-            float shapeSelector = floor(shapeType * 5.0);
+            // Expanded to 8 shape categories
+            float shapeSelector = floor(shapeType * 8.0);
             float morphPhase = sin(uTime * 0.7 + h1 * 6.28) * 0.5 + 0.5;
+
+            // Apply twist based on height for certain shapes
+            vec3 twistedP = opTwist(localP, 1.5 * sin(uTime*0.5 + h2));
 
             float dBox = sdBoxEdge(localP, vec3(bSize, currentH, bSize), e);
             float dTesseract = sdTesseractEdge(localP, currentH * 0.75, e, uTime * 0.9 + h2 * 5.0);
             float dMerkaba = sdMerkabaEdge(localP, currentH * 0.85, e, uTime * 1.1 + h1 * 4.0);
             float dTorus = sdTorusEdge(localP, vec2(bSize * 0.95, currentH * 0.45), e);
             float dOcta = sdOctahedronEdge(localP, bSize * 1.35, e);
+            float dCross = sdCrossEdge(localP, bSize * 1.2, e);
+            float dGyroidBox = max(sdGyroid(localP, 5.0, e*1.5), max(abs(localP.x)-bSize, max(abs(localP.y)-currentH, abs(localP.z)-bSize)));
+            float dTwistedBox = sdBoxEdge(twistedP, vec3(bSize*0.8, currentH, bSize*0.8), e);
 
             // Morphing between base simple cube and complex geometric shapes
             float dObj = dBox;
@@ -135,6 +167,12 @@
                 dObj = mix(dBox, dTorus, smoothstep(0.1, 0.9, morphPhase));
             } else if (shapeSelector == 4.0) {
                 dObj = mix(dBox, dOcta, smoothstep(0.1, 0.9, morphPhase));
+            } else if (shapeSelector == 5.0) {
+                dObj = mix(dBox, dCross, smoothstep(0.1, 0.9, morphPhase));
+            } else if (shapeSelector == 6.0) {
+                dObj = mix(dBox, dTwistedBox, smoothstep(0.1, 0.9, morphPhase));
+            } else if (shapeSelector == 7.0) {
+                dObj = mix(dBox, dGyroidBox, smoothstep(0.1, 0.9, morphPhase));
             }
             
             // Tiered Lattices
@@ -152,7 +190,8 @@
             }
             
             if (dG < dObj) return vec2(dG, 0.0); 
-            return vec2(dObj, 1.0 + shapeSelector); // Pass shape ID for custom color spectrums
+            // Pass shape color phase id in fractional part, flag as object (>0)
+            return vec2(dObj, 1.0 + colorPhase); 
         }
 
         vec3 calcNormal(vec3 p) {
@@ -160,6 +199,22 @@
             return normalize(vec3(map(p+e.xyy).x - map(p-e.xyy).x,
                                   map(p+e.yxy).x - map(p-e.yxy).x,
                                   map(p+e.yyx).x - map(p-e.yyx).x));
+        }
+
+        // Phased Neon Color Generator
+        vec3 neonColor(float t) {
+            vec3 c1 = vec3(1.0, 0.3, 0.0); // Bright Orange
+            vec3 c2 = vec3(0.0, 0.8, 1.0); // Cyber Cyan
+            vec3 c3 = vec3(0.9, 0.0, 1.0); // Deep Magenta
+            vec3 c4 = vec3(0.2, 1.0, 0.3); // Neon Lime
+            vec3 c5 = vec3(0.4, 0.0, 1.0); // Electric Purple
+            
+            float phase = fract(t);
+            if(phase < 0.2) return mix(c1, c2, phase*5.0);
+            if(phase < 0.4) return mix(c2, c3, (phase-0.2)*5.0);
+            if(phase < 0.6) return mix(c3, c4, (phase-0.4)*5.0);
+            if(phase < 0.8) return mix(c4, c5, (phase-0.6)*5.0);
+            return mix(c5, c1, (phase-0.8)*5.0);
         }
 
         void main() {
@@ -194,14 +249,16 @@
                 col = mix(vec3(0.02, 0.01, 0.03), vec3(0.003, 0.003, 0.005), pow(sky, 0.5));
                 if (rd.y > 0.0) col += pow(hash(uv * 50.0), 50.0); // Stars
                 
-                // Subtle Horizon Amber Glow
+                // Dynamic Horizon Glow synced with time
+                float horizonPhase = uTime * 0.05;
+                vec3 horizonColor = neonColor(horizonPhase);
                 float horizon = smoothstep(0.12, 0.0, abs(rd.y));
-                col += vec3(0.85, 0.35, 0.0) * horizon * 0.4;
+                col += horizonColor * horizon * 0.4;
             } else {
                 vec3 p = ro + rd * t;
                 vec3 n = calcNormal(p);
                 
-                // PURE OBSIDIAN BLACK FLOOR SURFACE BASE UNDER ORANGE GRID
+                // PURE OBSIDIAN BLACK FLOOR SURFACE BASE
                 vec3 blackFloor = vec3(0.003, 0.003, 0.005);
 
                 if (m == 0.0) {
@@ -212,33 +269,40 @@
                     
                     float gridIntensity = smoothstep(0.018 + dw, 0.004, line);
                     
-                    // VIBRANT NEON ORANGE GRID LINES
-                    vec3 orangeGridColor = vec3(1.0, 0.42, 0.0) * 2.5;
+                    // VIBRANT PHASED GRID COLOR
+                    // Colors shift based on time and Z depth to create rolling waves of color
+                    float wavePhase = uTime * 0.15 + p.z * 0.02 + p.x * 0.01;
+                    vec3 currentGridColor = neonColor(wavePhase) * 2.5;
                     
-                    // Mix pitch black floor underneath with bright orange grid lines on top!
-                    col = mix(blackFloor, orangeGridColor, gridIntensity);
+                    // Mix pitch black floor underneath with rolling colored grid lines on top
+                    col = mix(blackFloor, currentGridColor, gridIntensity);
 
                     float ambient = 0.6;
                     col *= ambient + 0.4 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0)));
                 } else {
-                    // ALL OBSIDIAN BLACK BOXES AND STUFF GEOMETRY
-                    vec3 blackBoxColor = vec3(0.005, 0.004, 0.007); // Pure obsidian black geometry!
+                    // ALL OBSIDIAN BLACK BOXES AND GEOMETRY
+                    vec3 blackBoxColor = vec3(0.005, 0.004, 0.007); 
                     
-                    // Razor-sharp Orange Edge Rim Highlight
+                    // Shape color phase extracted from material ID
+                    float shapePhaseOffset = fract(m) * 10.0;
+                    float objPhase = uTime * 0.2 + shapePhaseOffset + p.z * 0.01;
+                    vec3 currentEdgeColor = neonColor(objPhase);
+
+                    // Razor-sharp Colored Edge Rim Highlight
                     float rim = 1.0 - max(0.0, dot(-rd, n));
                     rim = pow(rim, 3.5);
-                    vec3 edgeHighlight = vec3(1.0, 0.42, 0.0) * rim * 2.0; // Orange edge rim
+                    vec3 edgeHighlight = currentEdgeColor * rim * 2.0; 
                     
                     col = blackBoxColor + edgeHighlight;
 
                     // Subtle dark ambient under 3D boxes
                     float baseGlow = smoothstep(-1.0, 1.2, p.y);
-                    col += vec3(0.2, 0.08, 0.0) * (1.0 - baseGlow) * 0.2;
+                    col += vec3(0.1, 0.05, 0.1) * (1.0 - baseGlow) * 0.2;
                     
                     // 3D Lighting & Specular Accent
                     vec3 ld = normalize(vec3(0.5, 0.9, -0.5));
                     float diff = max(0.0, dot(n, ld));
-                    col += vec3(0.05, 0.03, 0.01) * diff;
+                    col += vec3(0.05, 0.03, 0.05) * diff;
                 }
             }
             

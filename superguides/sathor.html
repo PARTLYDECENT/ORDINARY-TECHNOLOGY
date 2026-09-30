@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>The Serpent — procedural specimen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#ece4d0; --dim:#b0a68d; --accent:#d9a441; }
+  html,body{margin:0;height:100%;overflow:hidden;background:#141008;}
+  body{font-family:'IBM Plex Mono',monospace;}
+  canvas{display:block;cursor:crosshair;}
+  #hud{position:fixed;inset:0;pointer-events:none;color:var(--ink);opacity:0;transition:opacity 1.4s ease .5s;user-select:none;}
+  #hud.on{opacity:1;}
+  #hud header{position:absolute;top:26px;left:30px;text-shadow:0 1px 12px rgba(15,10,4,.65);}
+  .overline{font-size:10px;letter-spacing:.34em;color:var(--dim);}
+  h1{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:34px;margin:7px 0 12px;letter-spacing:.01em;}
+  .rule{width:44px;height:1px;background:var(--accent);margin-bottom:16px;}
+  .tele{list-style:none;margin:0;padding:0;font-size:11.5px;line-height:2.0;}
+  .tele span{display:inline-block;width:118px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;font-size:9.5px;}
+  .tele b{font-weight:500;letter-spacing:.08em;}
+  .tele b.warn{color:#d0754a;}
+  #hud footer{position:absolute;bottom:22px;left:30px;font-size:10px;letter-spacing:.13em;color:var(--dim);text-shadow:0 1px 10px rgba(15,10,4,.7);}
+  #hud footer b{color:var(--ink);font-weight:500;}
+  #mute{position:absolute;right:26px;bottom:20px;pointer-events:auto;display:flex;align-items:center;gap:9px;
+    background:rgba(24,19,12,.42);border:1px solid rgba(236,228,208,.22);color:var(--dim);
+    font:10px 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;
+    padding:9px 13px;cursor:pointer;backdrop-filter:blur(6px);border-radius:2px;}
+  #mute:hover{color:var(--ink);border-color:rgba(236,228,208,.5);}
+  #mute svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  #mute svg .body{fill:currentColor;}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="hud">
+  <header>
+    <div class="overline">FIELD STUDY &middot; PROCEDURAL LOCOMOTION</div>
+    <h1>The Serpent</h1>
+    <div class="rule"></div>
+    <ul class="tele">
+      <li><span>behaviour</span><b id="stState">FORAGING</b></li>
+      <li><span>velocity</span><b id="stVel">0.00 u/s</b></li>
+      <li><span>prey afield</span><b id="stPrey">0</b></li>
+      <li><span>tongue flicks</span><b id="stFlick">0</b></li>
+    </ul>
+  </header>
+  <footer>
+    <b>click terrain</b> drop prey &nbsp;&middot;&nbsp; <b>click serpent</b> provoke &nbsp;&middot;&nbsp; <b>drag</b> orbit &nbsp;&middot;&nbsp; <b>scroll</b> zoom
+  </footer>
+  <button id="mute">
+    <svg id="icoOn" viewBox="0 0 24 24"><path class="body" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+    <svg id="icoOff" viewBox="0 0 24 24" style="display:none"><path class="body" d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+    <span id="sndLabel">sound</span>
+  </button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ================= helpers ================= */
+const TAU = Math.PI * 2;
+const clamp = THREE.MathUtils.clamp;
+const mix = (a, b, t) => a + (b - a) * t;
+const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const sstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+function wrapPI(a){ while(a > Math.PI) a -= TAU; while(a < -Math.PI) a += TAU; return a; }
+function hash2(i, j){
+  let n = (i * 374761393 + j * 668265263) | 0;
+  n = Math.imul(n ^ (n >>> 13), 1274126177); n ^= n >>> 16;
+  return (n >>> 0) / 4294967296;
+}
+function vnoise(x, y){
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return (a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy) * 2 - 1;
+}
+function fbm(x, y, oct){
+  let v = 0, a = 0.5, f = 1, n = 0;
+  for(let o = 0; o < oct; o++){ v += a * vnoise(x * f, y * f); n += a; a *= 0.5; f *= 2.03; }
+  return v / n;
+}
+/* value noise, periodic on both axes — used so the skin texture tiles seamlessly */
+function vnoiseP(x, y, px, py, salt){
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  const X0 = ((xi % px) + px) % px, X1 = (X0 + 1) % px;
+  const Y0 = ((yi % py) + py) % py, Y1 = (Y0 + 1) % py;
+  const h = (i, j) => hash2(i + salt * 1013, j);
+  const a = h(X0, Y0), b = h(X1, Y0), c = h(X0, Y1), d = h(X1, Y1);
+  return (a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy) * 2 - 1;
+}
+function fbmP(u, v, fx, fy, oct, salt){
+  let s = 0, a = 0.5, f = 1, n = 0;
+  for(let o = 0; o < oct; o++){
+    s += a * vnoiseP(u * fx * f, v * fy * f, Math.round(fx * f), Math.round(fy * f), salt + o * 57);
+    n += a; a *= 0.55; f *= 2;
+  }
+  return s / n;
+}
+
+/* ================= renderer / scene ================= */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xdfc49e, 55, 230);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 800);
+const camA = new THREE.Vector3(30, 16, 38), camB = new THREE.Vector3(9.5, 5, 13.5);
+camera.position.copy(camA);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.minDistance = 3.5; controls.maxDistance = 70;
+controls.maxPolarAngle = 1.52;
+controls.target.set(0, 1.5, 0);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+
+/* sky dome */
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { sunDir: { value: new THREE.Vector3(0.52, 0.58, 0.32).normalize() } },
+  vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `varying vec3 vP; uniform vec3 sunDir;
+    void main(){
+      vec3 d = normalize(vP);
+      vec3 c = mix(vec3(0.89,0.77,0.60), vec3(0.45,0.60,0.74), smoothstep(-0.02,0.45,d.y));
+      float s = max(dot(d,sunDir),0.0);
+      c += vec3(1.0,0.85,0.6) * (pow(s,600.0)*1.2 + pow(s,12.0)*0.14);
+      gl_FragColor = vec4(c,1.0);
+    }`
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(420, 32, 18), skyMat));
+
+/* lights */
+scene.add(new THREE.HemisphereLight(0xbfd2e4, 0x9a8563, 0.5));
+const sun = new THREE.DirectionalLight(0xffdfb0, 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -32; sun.shadow.camera.right = 32;
+sun.shadow.camera.top = 32; sun.shadow.camera.bottom = -32;
+sun.shadow.camera.near = 5; sun.shadow.camera.far = 130;
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
+scene.add(sun); scene.add(sun.target);
+
+/* ================= terrain ================= */
+function terrainH(x, z){
+  let h = fbm(x * 0.018 + 11.3, z * 0.018 + 7.6, 4) * 7.5 + fbm(x * 0.07 + 3.1, z * 0.07 + 9.4, 2) * 1.1;
+  const d = Math.hypot(x, z);
+  h *= 0.45 + 0.55 * sstep(8, 45, d);
+  const rim = sstep(80, 125, d);
+  h += rim * rim * 16;
+  return h;
+}
+const obstacles = [];
+
+const tGeo = new THREE.PlaneGeometry(260, 260, 150, 150);
+tGeo.rotateX(-Math.PI / 2);
+{
+  const p = tGeo.attributes.position;
+  for(let i = 0; i < p.count; i++) p.setY(i, terrainH(p.getX(i), p.getZ(i)));
+  tGeo.computeVertexNormals();
+  const nrm = tGeo.attributes.normal;
+  const cols = new Float32Array(p.count * 3);
+  const cSand = new THREE.Color(0xc3ae86), cOlive = new THREE.Color(0x8b8a58), cRock = new THREE.Color(0x83776a);
+  const c = new THREE.Color();
+  for(let i = 0; i < p.count; i++){
+    const x = p.getX(i), z = p.getZ(i), ny = nrm.getY(i);
+    const veg = fbm(x * 0.045 + 21.7, z * 0.045 + 4.2, 3);
+    c.copy(cSand).lerp(cOlive, sstep(-0.2, 0.55, veg));
+    c.lerp(cRock, sstep(0.20, 0.45, 1 - ny));
+    c.multiplyScalar(0.9 + vnoise(x * 0.31, z * 0.27) * 0.1);
+    cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+  }
+  tGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+}
+const dc = document.createElement('canvas'); dc.width = dc.height = 256;
+{
+  const dctx = dc.getContext('2d');
+  const img = dctx.createImageData(256, 256);
+  for(let i = 0; i < img.data.length; i += 4){
+    const v = 205 + (Math.random() * 50) | 0;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+  }
+  dctx.putImageData(img, 0, 0);
+}
+const detailTex = new THREE.CanvasTexture(dc);
+detailTex.wrapS = detailTex.wrapT = THREE.RepeatWrapping;
+detailTex.repeat.set(46, 46);
+detailTex.colorSpace = THREE.SRGBColorSpace;
+detailTex.anisotropy = 4;
+const terrain = new THREE.Mesh(tGeo, new THREE.MeshStandardMaterial({
+  vertexColors: true, map: detailTex, roughness: 0.96, metalness: 0, envMapIntensity: 0.2
+}));
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+/* rocks */
+for(let i = 0; i < 16; i++){
+  const g = new THREE.DodecahedronGeometry(1, 1);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  for(let vi = 0; vi < p.count; vi++){
+    v.fromBufferAttribute(p, vi);
+    const m = 1 + 0.35 * vnoise(v.x * 1.7 + i * 13.1, v.y * 1.7 + v.z * 1.7);
+    v.multiplyScalar(m); p.setXYZ(vi, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  const s = rand(0.7, 2.0);
+  const rock = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setHSL(0.08 + rand(-0.02, 0.02), rand(0.08, 0.16), rand(0.32, 0.45)),
+    roughness: 0.9, envMapIntensity: 0.25
+  }));
+  const a = rand(TAU), rr = rand(20, 105);
+  const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+  rock.position.set(x, terrainH(x, z) + s * 0.15, z);
+  rock.scale.set(s * rand(0.8, 1.3), s * rand(0.55, 0.85), s * rand(0.8, 1.3));
+  rock.rotation.set(rand(0.3), rand(TAU), rand(0.3));
+  rock.castShadow = rock.receiveShadow = true;
+  scene.add(rock);
+  obstacles.push({ x, z, r: s * 1.15 });
+}
+
+/* dry grass */
+{
+  const bladeGeo = new THREE.BufferGeometry();
+  bladeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    -0.045, 0, 0,  0.045, 0, 0,  -0.018, 0.34, 0.07,  0.018, 0.34, 0.07,  0, 0.66, 0.16
+  ]), 3));
+  bladeGeo.setIndex([0, 1, 3, 0, 3, 2, 2, 3, 4]);
+  bladeGeo.computeVertexNormals();
+  const grass = new THREE.InstancedMesh(bladeGeo,
+    new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide, envMapIntensity: 0.2 }), 900);
+  const dummy = new THREE.Object3D(), gc = new THREE.Color();
+  for(let i = 0; i < 900; i++){
+    let rr = Math.sqrt(Math.random()) * 112; if(rr < 3) rr += 6;
+    const a = rand(TAU), x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+    dummy.position.set(x, terrainH(x, z) - 0.02, z);
+    dummy.rotation.set(rand(-0.18, 0.18), rand(TAU), rand(-0.18, 0.18));
+    const s = rand(0.6, 1.7);
+    dummy.scale.set(s, s * rand(0.8, 1.3), s);
+    dummy.updateMatrix();
+    grass.setMatrixAt(i, dummy.matrix);
+    gc.setHSL(0.13 + rand(-0.03, 0.03), rand(0.25, 0.4), rand(0.28, 0.42));
+    grass.setColorAt(i, gc);
+  }
+  grass.instanceColor.needsUpdate = true;
+  grass.receiveShadow = true;
+  grass.frustumCulled = false;
+  scene.add(grass);
+}
+
+/* dust motes */
+const DUST_N = 160;
+const dustGeo = new THREE.BufferGeometry();
+const dustPos = new Float32Array(DUST_N * 3), dustVel = [];
+for(let i = 0; i < DUST_N; i++){
+  dustPos[i * 3] = rand(-48, 48); dustPos[i * 3 + 1] = rand(0.2, 10); dustPos[i * 3 + 2] = rand(-48, 48);
+  dustVel.push([rand(-0.22, 0.22), rand(-0.06, 0.1), rand(-0.22, 0.22)]);
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+const dustTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 2, 32, 32, 30);
+  g.addColorStop(0, 'rgba(255,246,228,0.85)'); g.addColorStop(0.4, 'rgba(255,246,228,0.25)'); g.addColorStop(1, 'rgba(255,246,228,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+  map: dustTex, size: 0.42, transparent: true, opacity: 0.45, depthWrite: false, color: 0xfff2dc
+}));
+dust.frustumCulled = false;
+scene.add(dust);
+
+/* ================= snake skin (procedural scale texture) ================= */
+function skinColor(u, v){
+  const dv = Math.min(v, 1 - v);       // 0 at dorsal centre
+  const belly = Math.abs(v - 0.5);     // 0 at ventral centre
+  const n = fbmP(u, v, 7, 5, 4, 1) * 0.72 + fbmP(u, v, 17, 13, 3, 7) * 0.28;
+  const t = n * 0.5 + 0.5;
+  const k = sstep(0.32, 0.78, t);
+  let r = mix(156, 66, k), g = mix(143, 60, k), b = mix(84, 38, k);
+  const core = sstep(0.36, 0.18, t);                    // deep blotch cores
+  r = mix(r, 36, core); g = mix(g, 30, core); b = mix(b, 18, core);
+  const rim = Math.exp(-Math.pow((t - 0.46) / 0.05, 2)); // cream reticulation
+  r = mix(r, 216, rim * 0.75); g = mix(g, 201, rim * 0.75); b = mix(b, 158, rim * 0.75);
+  const dd = 1 - 0.22 * sstep(0.30, 0.06, dv);           // dorsal darkening
+  r *= dd; g *= dd; b *= dd;
+  const stripe = sstep(0.035, 0.012, dv);                // thin dorsal stripe
+  r = mix(r, 30, stripe * 0.8); g = mix(g, 26, stripe * 0.8); b = mix(b, 16, stripe * 0.8);
+  const lat = sstep(0.20, 0.13, belly);                  // light flanks
+  r = mix(r, 190, lat * 0.5); g = mix(g, 178, lat * 0.5); b = mix(b, 140, lat * 0.5);
+  return [r, g, b];
+}
+function buildSkinCanvases(){
+  const S = 1024, cols = 44, rows = 30;
+  const cc = document.createElement('canvas'); cc.width = cc.height = S;
+  const bc = document.createElement('canvas'); bc.width = bc.height = S;
+  const c = cc.getContext('2d'), b = bc.getContext('2d');
+  c.fillStyle = '#6e663d'; c.fillRect(0, 0, S, S);
+  b.fillStyle = '#7d7d7d'; b.fillRect(0, 0, S, S);
+  const sw = S / cols, sh = S / rows;
+
+  const stamp = (x, y, fill) => {
+    c.fillStyle = fill;
+    c.beginPath(); c.ellipse(x, y, sw * 0.74, sh * 0.60, 0, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(22,17,8,0.30)'; c.lineWidth = 1.3; c.stroke();
+    const g = b.createRadialGradient(x, y - sh * 0.18, sw * 0.06, x, y, sw * 0.78);
+    g.addColorStop(0, '#b8b8b8'); g.addColorStop(0.75, '#8a8a8a'); g.addColorStop(1, '#4e4e4e');
+    b.fillStyle = g;
+    b.beginPath(); b.ellipse(x, y, sw * 0.74, sh * 0.60, 0, 0, TAU); b.fill();
+  };
+  for(let r2 = 0; r2 < rows; r2++){
+    const v = (r2 + 0.5) / rows;
+    if(Math.abs(v - 0.5) < 0.145) continue; // ventral zone drawn as a band
+    for(let ci = 0; ci < cols; ci++){
+      const u = (ci + ((r2 % 2) ? 0.5 : 0)) / cols;
+      const x = u * S, y = v * S;
+      const n = skinColor(u % 1, v);
+      const j = 0.9 + hash2(ci, r2) * 0.2;
+      const fill = `rgb(${clamp(n[0]*j,0,255)|0},${clamp(n[1]*j,0,255)|0},${clamp(n[2]*j,0,255)|0})`;
+      stamp(x, y, fill);
+      if(x < sw) stamp(x + S, y, fill);
+      if(x > S - sw) stamp(x - S, y, fill);
+      if(r2 === 0) stamp(x, y + S, fill);
+      if(r2 === rows - 1) stamp(x, y - S, fill);
+    }
+  }
+  /* ventral band */
+  for(let ci = 0; ci < cols; ci++){
+    const x = ci * sw, j = 0.94 + hash2(ci, 991) * 0.10;
+    c.fillStyle = `rgb(${222*j|0},${208*j|0},${182*j|0})`;
+    c.fillRect(x + 0.5, S * 0.355, sw - 1, S * 0.29);
+    c.strokeStyle = 'rgba(122,102,72,0.55)'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(x + 0.5, S * 0.355); c.lineTo(x + 0.5, S * 0.645); c.stroke();
+    for(let k = 0; k < 3; k++){
+      c.fillStyle = 'rgba(110,100,80,0.18)';
+      c.fillRect(x + rand(4, sw - 6), S * (0.37 + Math.random() * 0.26), rand(2, 5), rand(1, 3));
+    }
+    b.fillStyle = '#999999'; b.fillRect(x + 1, S * 0.355, sw - 2, S * 0.29);
+    b.strokeStyle = '#5f5f5f'; b.lineWidth = 2;
+    b.beginPath(); b.moveTo(x + 1, S * 0.355); b.lineTo(x + 1, S * 0.645); b.stroke();
+  }
+  c.fillStyle = 'rgba(110,102,61,0.5)'; c.fillRect(0, S * 0.345, S, S * 0.014); c.fillRect(0, S * 0.641, S, S * 0.014);
+  return { cc, bc };
+}
+const { cc, bc } = buildSkinCanvases();
+const skinTex = new THREE.CanvasTexture(cc);
+skinTex.wrapS = skinTex.wrapT = THREE.RepeatWrapping;
+skinTex.colorSpace = THREE.SRGBColorSpace;
+skinTex.anisotropy = maxAniso;
+const bumpTex = new THREE.CanvasTexture(bc);
+bumpTex.wrapS = bumpTex.wrapT = THREE.RepeatWrapping;
+bumpTex.anisotropy = 4;
+
+const bodyMat = new THREE.MeshPhysicalMaterial({
+  map: skinTex, bumpMap: bumpTex, bumpScale: 0.7,
+  roughness: 0.58, clearcoat: 0.4, clearcoatRoughness: 0.5,
+  side: THREE.DoubleSide, envMapIntensity: 0.45
+});
+const headTex = skinTex.clone(); headTex.repeat.set(3, 2); headTex.needsUpdate = true;
+const headBump = bumpTex.clone(); headBump.repeat.set(3, 2); headBump.needsUpdate = true;
+const headMat = bodyMat.clone();
+headMat.map = headTex; headMat.bumpMap = headBump; headMat.color = new THREE.Color(0xe6dfd0);
+
+/* ================= snake body ================= */
+const SPINE_N = 96, RADIAL = 22, SEG_LEN = 0.14;
+const BODY_LEN = (SPINE_N - 1) * SEG_LEN;
+const U_REP = BODY_LEN / 2.1;
+const R_PROFILE = [[0,0.26],[0.035,0.30],[0.10,0.40],[0.25,0.475],[0.45,0.46],[0.65,0.37],[0.82,0.25],[0.93,0.12],[1,0.018]];
+function radiusAt(t){
+  for(let i = 1; i < R_PROFILE.length; i++){
+    if(t <= R_PROFILE[i][0]){
+      const [t0, r0] = R_PROFILE[i - 1], [t1, r1] = R_PROFILE[i];
+      let u = (t - t0) / (t1 - t0); u = u * u * (3 - 2 * u);
+      return r0 + (r1 - r0) * u;
+    }
+  }
+  return 0.018;
+}
+
+const snake = {
+  pos: new THREE.Vector3(0, 0, 0), heading: rand(TAU), phase: 0, speed: 0,
+  state: 'forage', path: [],
+  spine: Array.from({ length: SPINE_N }, () => new THREE.Vector3()),
+  wanderTarget: new THREE.Vector3(20, 0, 10), wanderTimer: 0,
+  targetPos: new THREE.Vector3(),
+  defense: 0, defenseTimer: 0,
+  strike: null, strikeCooldown: 0, swallowTimer: 0,
+  bulges: [], jaw: 0
+};
+snake.pos.y = terrainH(0, 0);
+
+/* pre-fill the trailing path with a resting S-curve so the body exists on frame one */
+{
+  const h = snake.heading;
+  const f = new THREE.Vector3(Math.sin(h), 0, Math.cos(h));
+  const r = new THREE.Vector3(f.z, 0, -f.x);
+  for(let s = 0; s <= 18; s += 0.03){
+    const p = new THREE.Vector3().copy(snake.pos).addScaledVector(f, -s).addScaledVector(r, Math.sin(s * 1.5) * 0.55);
+    p.y = terrainH(p.x, p.z);
+    snake.path.push(p);
+  }
+}
+
+const snakeGeo = new THREE.BufferGeometry();
+{
+  const n = SPINE_N * RADIAL;
+  snakeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  snakeGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const uv = new Float32Array(n * 2);
+  let p = 0;
+  for(let i = 0; i < SPINE_N; i++)
+    for(let j = 0; j < RADIAL; j++){ uv[p++] = i / (SPINE_N - 1) * U_REP; uv[p++] = j / RADIAL; }
+  snakeGeo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  const idx = [];
+  for(let i = 0; i < SPINE_N - 1; i++)
+    for(let j = 0; j < RADIAL; j++){
+      const a = i * RADIAL + j, b = i * RADIAL + (j + 1) % RADIAL;
+      const c = (i + 1) * RADIAL + j, d = (i + 1) * RADIAL + (j + 1) % RADIAL;
+      idx.push(a, c, b, b, c, d);
+    }
+  snakeGeo.setIndex(idx);
+}
+const snakeMesh = new THREE.Mesh(snakeGeo, bodyMat);
+snakeMesh.castShadow = snakeMesh.receiveShadow = true;
+snakeMesh.frustumCulled = false;
+scene.add(snakeMesh);
+
+const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6),
+  new THREE.MeshStandardMaterial({ color: 0x2e2818, roughness: 0.7 }));
+scene.add(tailTip);
+
+/* ================= snake head ================= */
+const headGroup = new THREE.Group();
+scene.add(headGroup);
+let jawPivot, tongueGroup, tongueBase;
+{
+  const prof = [[0.28,-0.55],[0.315,-0.40],[0.32,-0.18],[0.30,0.02],[0.26,0.18],[0.195,0.32],[0.105,0.43],[0.045,0.49],[0.001,0.515]];
+  const headGeo = new THREE.LatheGeometry(prof.map(p => new THREE.Vector2(Math.max(p[0], 0.001), p[1])), 26);
+  headGeo.rotateX(Math.PI / 2);
+  headGeo.scale(1.32, 0.95, 1.02);
+  headGeo.computeVertexNormals();
+  const skull = new THREE.Mesh(headGeo, headMat);
+  skull.castShadow = skull.receiveShadow = true;
+  headGroup.add(skull);
+
+  /* lower jaw (hidden inside the skull until it hinges open for a strike) */
+  jawPivot = new THREE.Group(); jawPivot.position.set(0, -0.14, 0.05);
+  const jawGeo = new THREE.CapsuleGeometry(0.095, 0.26, 4, 10);
+  jawGeo.rotateX(Math.PI / 2);
+  const jaw = new THREE.Mesh(jawGeo, new THREE.MeshStandardMaterial({ color: 0x6b2418, roughness: 0.55, envMapIntensity: 0.4 }));
+  jaw.scale.set(1.25, 0.6, 1); jaw.position.set(0, -0.01, 0.12);
+  jawPivot.add(jaw);
+  const toothMat = new THREE.MeshStandardMaterial({ color: 0xded6c4, roughness: 0.35 });
+  for(const [tx, tz] of [[-0.05,0.05],[0.05,0.05],[-0.09,0.18],[0.09,0.18]]){
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.013, 0.055, 6), toothMat);
+    tooth.position.set(tx, 0.05, tz);
+    jawPivot.add(tooth);
+  }
+  headGroup.add(jawPivot);
+
+  /* mouth line */
+  const mouthMat = new THREE.MeshStandardMaterial({ color: 0x1f1610, roughness: 0.6 });
+  for(const s of [-1, 1]){
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, -0.055, 0.505),
+      new THREE.Vector3(0.145 * s, -0.09, 0.40),
+      new THREE.Vector3(0.305 * s, -0.085, 0.23),
+      new THREE.Vector3(0.375 * s, -0.075, 0.06)
+    ]);
+    headGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.014, 6), mouthMat));
+  }
+
+  /* eyes: gold iris, vertical slit pupil, dark eye scale */
+  const eyeMat = new THREE.MeshPhysicalMaterial({ color: 0xb97f24, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1.2 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x1a120b, roughness: 0.35 });
+  for(const s of [-1, 1]){
+    const eyeC = new THREE.Vector3(0.245 * s, 0.06, 0.30);
+    const dir = new THREE.Vector3(0.72 * s, 0.30, 0.62).normalize();
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 10), eyeMat);
+    eye.position.copy(eyeC); eye.castShadow = true;
+    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.08, 0.03), darkMat);
+    pupil.position.copy(eyeC).addScaledVector(dir, 0.068);
+    pupil.lookAt(dir);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.012, 8, 18), darkMat);
+    ring.position.copy(eyeC).addScaledVector(dir, 0.045);
+    ring.lookAt(dir);
+    headGroup.add(eye, pupil, ring);
+  }
+
+  /* nostrils */
+  for(const s of [-1, 1]){
+    const n = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), darkMat);
+    n.position.set(0.06 * s, 0.038, 0.45);
+    headGroup.add(n);
+  }
+
+  /* forked tongue */
+  tongueGroup = new THREE.Group();
+  tongueGroup.position.set(0, -0.07, 0.50);
+  const tMat = new THREE.MeshStandardMaterial({ color: 0x351018, roughness: 0.4 });
+  const baseGeo = new THREE.CylinderGeometry(0.014, 0.018, 0.42, 6);
+  baseGeo.rotateX(Math.PI / 2); baseGeo.translate(0, 0, 0.21);
+  tongueBase = new THREE.Mesh(baseGeo, tMat);
+  tongueGroup.add(tongueBase);
+  for(const s of [-1, 1]){
+    const fGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.16, 5);
+    fGeo.rotateX(Math.PI / 2); fGeo.translate(0, 0, 0.08);
+    const fork = new THREE.Mesh(fGeo, tMat);
+    fork.position.set(0.028 * s, 0, 0.42);
+    fork.rotation.y = -0.35 * s;
+    tongueGroup.add(fork);
+  }
+  tongueGroup.visible = false;
+  tongueGroup.scale.set(1, 1, 0.02);
+  headGroup.add(tongueGroup);
+}
+const headFwd = new THREE.Vector3(Math.sin(snake.heading), 0, Math.cos(snake.heading));
+
+/* ================= prey ================= */
+const mice = [];
+const vv = (x, y, z) => new THREE.Vector3(x, y, z);
+class Mouse{
+  constructor(p){
+    this.group = new THREE.Group();
+    this.seed = rand(100);
+    this.heading = rand(TAU);
+    this.alive = true; this.dying = false; this.gone = false;
+    this.falling = true; this.vy = 0; this.squash = 0; this.timer = rand(2);
+    const fur = new THREE.MeshStandardMaterial({ color: 0x8d8174, roughness: 0.95, envMapIntensity: 0.3 });
+    const pink = new THREE.MeshStandardMaterial({ color: 0xc79a90, roughness: 0.8 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x1c1712, roughness: 0.5 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), fur);
+    body.scale.set(1, 0.85, 1.55); body.position.y = 0.13; body.castShadow = true;
+    this.front = new THREE.Group(); this.front.position.set(0, 0.02, 0.18);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 9), fur);
+    head.scale.set(0.85, 0.8, 1.15); head.position.set(0, 0.13, 0.10); head.castShadow = true;
+    const earGeo = new THREE.SphereGeometry(0.055, 8, 6);
+    this.earL = new THREE.Mesh(earGeo, pink); this.earL.scale.set(1, 1, 0.35); this.earL.position.set(-0.075, 0.235, 0.06);
+    this.earR = new THREE.Mesh(earGeo, pink); this.earR.scale.set(1, 1, 0.35); this.earR.position.set(0.075, 0.235, 0.06);
+    const eL = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), dark); eL.position.set(-0.055, 0.16, 0.185);
+    const eR = eL.clone(); eR.position.x = 0.055;
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 5), pink); nose.position.set(0, 0.115, 0.225);
+    this.front.add(head, this.earL, this.earR, eL, eR, nose);
+    const tCurve = new THREE.CatmullRomCurve3([vv(0,0,0), vv(0,-0.03,-0.18), vv(0.03,-0.05,-0.36)]);
+    this.tail = new THREE.Group(); this.tail.position.set(0, 0.10, -0.22);
+    this.tail.add(new THREE.Mesh(new THREE.TubeGeometry(tCurve, 8, 0.013, 5), pink));
+    this.group.add(body, this.front, this.tail);
+    this.groundY = terrainH(p.x, p.z);
+    this.group.position.set(p.x, this.groundY + 2.6, p.z);
+    scene.add(this.group);
+  }
+  update(dt, t, threat){
+    const g = this.group;
+    if(this.dying){
+      g.scale.multiplyScalar(Math.max(0, 1 - dt * 9));
+      if(g.scale.x < 0.04){ this.gone = true; scene.remove(g); }
+      return;
+    }
+    if(this.falling){
+      this.vy -= 20 * dt;
+      g.position.y += this.vy * dt;
+      if(g.position.y <= this.groundY){ g.position.y = this.groundY; this.falling = false; this.squash = 1; }
+      g.rotation.y = this.heading;
+      return;
+    }
+    this.groundY = terrainH(g.position.x, g.position.z);
+    let speed = 0;
+    const dT = g.position.distanceTo(threat);
+    if(dT < 8){ // flee
+      const want = Math.atan2(g.position.x - threat.x, g.position.z - threat.z);
+      this.heading += wrapPI(want - this.heading) * Math.min(1, dt * 6) + Math.sin(t * 3 + this.seed) * 0.8 * dt;
+      speed = 2.1;
+    } else { // graze
+      this.timer -= dt;
+      if(this.timer <= 0){ this.heading += rand(-1.4, 1.4); this.timer = rand(1, 3); }
+      speed = Math.sin(t * 0.7 + this.seed) > 0.25 ? 0.5 : 0;
+    }
+    if(speed > 0){
+      g.position.x += Math.sin(this.heading) * speed * dt;
+      g.position.z += Math.cos(this.heading) * speed * dt;
+      const bd = Math.hypot(g.position.x, g.position.z);
+      if(bd > 100) this.heading = Math.atan2(-g.position.x, -g.position.z) + rand(-0.5, 0.5);
+    }
+    g.position.y = this.groundY + Math.abs(Math.sin(t * 9 + this.seed)) * 0.03 * speed;
+    g.rotation.y = this.heading;
+    this.squash *= Math.exp(-dt * 6);
+    g.scale.set(1 + 0.2 * this.squash, 1 - 0.3 * this.squash, 1 + 0.2 * this.squash);
+    this.front.rotation.x = Math.sin(t * 2.3 + this.seed) * 0.12 * (speed > 0 ? 0.4 : 1);
+    const eL = 1 + 0.28 * Math.max(0, Math.sin(t * 6.3 + this.seed * 3));
+    const eR = 1 + 0.28 * Math.max(0, Math.sin(t * 6.3 + this.seed * 3 + 2.1));
+    this.earL.scale.set(eL, eL, 0.35); this.earR.scale.set(eR, eR, 0.35);
+    this.tail.rotation.y = Math.sin(t * 1.8 + this.seed) * 0.4;
+  }
+  consume(){ this.dying = true; }
+}
+mice.push(new Mouse(vv(9, 0, 7)));
+mice.push(new Mouse(vv(-14, 0, 16)));
+
+/* ================= audio (all synthesized) ================= */
+let AC = null, master = null, muted = false;
+function ensureAudio(){
+  if(AC) return;
+  try{
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = 0.9; master.connect(AC.destination);
+    const nb = makeNoise(4);
+    const src = AC.createBufferSource(); src.buffer = nb; src.loop = true;
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220; lp.Q.value = 0.4;
+    const wg = AC.createGain(); wg.gain.value = 0.05;
+    const lfo = AC.createOscillator(); lfo.frequency.value = 0.07;
+    const lg = AC.createGain(); lg.gain.value = 0.025;
+    lfo.connect(lg); lg.connect(wg.gain);
+    src.connect(lp); lp.connect(wg); wg.connect(master);
+    src.start(); lfo.start();
+  }catch(e){ /* audio unavailable — stay silent */ }
+}
+function makeNoise(sec){
+  const n = AC.sampleRate * sec, b = AC.createBuffer(1, n, AC.sampleRate), d = b.getChannelData(0);
+  for(let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+function playNoise(dur, type, freq, q, gain, attack){
+  if(!AC || muted) return;
+  const src = AC.createBufferSource(); src.buffer = makeNoise(Math.min(dur + 0.1, 2));
+  const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = AC.createGain(); const t0 = AC.currentTime;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f); f.connect(g); g.connect(master);
+  src.start(t0); src.stop(t0 + dur + 0.05);
+}
+function sfxHiss(){ playNoise(1.8, 'bandpass', 2600, 0.7, 0.5, 0.18); playNoise(1.8, 'lowpass', 420, 0.5, 0.15, 0.2); }
+function sfxStrike(){ playNoise(0.28, 'bandpass', 900, 1.2, 0.28, 0.02); }
+function sfxGulp(){
+  if(!AC || muted) return;
+  const o = AC.createOscillator(); o.type = 'sine';
+  const g = AC.createGain(); const t0 = AC.currentTime;
+  o.frequency.setValueAtTime(170, t0); o.frequency.exponentialRampToValueAtTime(55, t0 + 0.22);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + 0.3);
+}
+
+/* ================= behaviour ================= */
+let flicks = 0;
+function facing(m){
+  const fx = Math.sin(snake.heading), fz = Math.cos(snake.heading);
+  const tx = m.group.position.x - snake.pos.x, tz = m.group.position.z - snake.pos.z;
+  const l = Math.hypot(tx, tz) || 1;
+  return (fx * tx + fz * tz) / l;
+}
+function beginStrike(m){
+  snake.state = 'strike';
+  const dir = new THREE.Vector3().subVectors(m.group.position, snake.pos).setY(0);
+  if(dir.lengthSq() < 0.001) dir.set(Math.sin(snake.heading), 0, Math.cos(snake.heading));
+  dir.normalize();
+  snake.strike = { mouse: m, t: 0, dur: 0.42, dir };
+  snake.heading = Math.atan2(dir.x, dir.z);
+  sfxStrike();
+}
+function capture(m){
+  m.consume();
+  snake.state = 'swallow'; snake.swallowTimer = 2.4; snake.strikeCooldown = 1.6;
+  snake.bulges.push({ s: 0.4, amp: 0.02, max: 0.21, digesting: false });
+  sfxGulp();
+}
+function updateBulges(dt){
+  for(const b of snake.bulges){
+    if(!b.digesting){
+      b.amp = Math.min(b.max, b.amp + dt * 0.5);
+      b.s += dt * 0.55;
+      if(b.s > BODY_LEN * 0.30) b.digesting = true;
+    } else {
+      b.amp *= Math.exp(-dt / 26);
+    }
+  }
+  snake.bulges = snake.bulges.filter(b => b.amp > 0.012);
+}
+
+function updateSnake(dt, t){
+  snake.strikeCooldown = Math.max(0, snake.strikeCooldown - dt);
+  if(snake.defenseTimer > 0) snake.defenseTimer -= dt;
+  snake.defense += ((snake.defenseTimer > 0 ? 1 : 0) - snake.defense) * Math.min(1, dt * 2.5);
+  updateBulges(dt);
+
+  let prey = null, pd = 1e9;
+  for(const m of mice){
+    if(!m.alive || m.dying) continue;
+    const d = m.group.position.distanceTo(snake.pos);
+    if(d < pd){ pd = d; prey = m; }
+  }
+
+  let targetSpeed = 1.6, maxTurn = 1.9, wigAmp = 1.0;
+
+  if(snake.state === 'strike'){
+    const st = snake.strike;
+    st.t += dt;
+    const k = st.t / st.dur;
+    if(!st.mouse.alive || k >= 1){
+      snake.state = (prey && pd < 30) ? 'hunt' : 'forage';
+      snake.strike = null; snake.strikeCooldown = 0.9;
+    } else {
+      const sp = 11.5 * (1 - 0.35 * k);
+      snake.pos.addScaledVector(st.dir, sp * dt);
+      snake.heading = Math.atan2(st.dir.x, st.dir.z);
+      snake.speed = sp;
+      snake.jaw = sstep(0.06, 0.25, k) * (1 - sstep(0.85, 1, k));
+      if(snake.pos.distanceTo(st.mouse.group.position) < 1.15){
+        capture(st.mouse); snake.strike = null;
+      }
+    }
+  }
+
+  if(snake.state !== 'strike'){
+    const digesting = snake.bulges.some(b => b.digesting && b.amp > 0.05);
+    const jawT = snake.state === 'swallow' ? 0.25 * clamp(snake.swallowTimer / 2.4, 0, 1) : 0;
+    snake.jaw += (jawT - snake.jaw) * Math.min(1, dt * 6);
+
+    if(snake.state === 'swallow'){
+      snake.swallowTimer -= dt;
+      targetSpeed = 1.0; maxTurn = 1.2; wigAmp = 0.9;
+      snake.targetPos.copy(snake.wanderTarget);
+      if(snake.swallowTimer <= 0){ snake.state = 'forage'; snake.wanderTimer = 0; }
+    } else if(prey && pd < 2.6 && snake.strikeCooldown <= 0 && facing(prey) > 0.35){
+      beginStrike(prey);
+    } else if(prey && pd < 30 && snake.defense <= 0.5){
+      snake.state = 'hunt';
+      targetSpeed = 3.4 * (digesting ? 0.7 : 1); maxTurn = 3.0; wigAmp = 0.85;
+      snake.targetPos.copy(prey.group.position);
+    } else if(snake.defense > 0.5){
+      snake.state = 'defense';
+      targetSpeed = 0.12; maxTurn = 1.2; wigAmp = 1.2;
+      snake.targetPos.set(
+        snake.pos.x + Math.sin(snake.heading) * 4, 0,
+        snake.pos.z + Math.cos(snake.heading) * 4);
+    } else {
+      snake.state = 'forage';
+      snake.wanderTimer -= dt;
+      const dxw = snake.wanderTarget.x - snake.pos.x, dzw = snake.wanderTarget.z - snake.pos.z;
+      if(snake.wanderTimer <= 0 || Math.hypot(dxw, dzw) < 3){
+        const a = rand(TAU), rr = rand(14, 72);
+        snake.wanderTarget.set(Math.cos(a) * rr, 0, Math.sin(a) * rr);
+        snake.wanderTimer = rand(8, 14);
+      }
+      targetSpeed = digesting ? 1.0 : 1.6;
+      snake.targetPos.copy(snake.wanderTarget);
+    }
+
+    if(snake.state !== 'strike'){
+      /* steer toward target + avoid rocks + stay in the valley */
+      const dx = snake.targetPos.x - snake.pos.x, dz = snake.targetPos.z - snake.pos.z;
+      const desired0 = Math.atan2(dx, dz);
+      let sx = Math.sin(desired0), sz = Math.cos(desired0);
+      for(const o of obstacles){
+        const ox = snake.pos.x - o.x, oz = snake.pos.z - o.z;
+        const d = Math.hypot(ox, oz), rr = o.r + 2.3;
+        if(d < rr && d > 1e-4){
+          const w = (rr - d) / rr * 2.5;
+          sx += ox / d * w; sz += oz / d * w;
+        }
+      }
+      const bd = Math.hypot(snake.pos.x, snake.pos.z);
+      if(bd > 80){ sx += -snake.pos.x / bd * 2.5; sz += -snake.pos.z / bd * 2.5; }
+      const desired = Math.atan2(sx, sz);
+      snake.heading += clamp(wrapPI(desired - snake.heading), -maxTurn * dt, maxTurn * dt);
+
+      /* serpentine: lateral oscillation of the heading — the body inherits the S */
+      snake.phase += snake.speed * dt * 1.5;
+      const eff = snake.heading + Math.sin(snake.phase) * wigAmp * clamp(snake.speed / 1.6, 0, 1);
+      snake.speed += (targetSpeed - snake.speed) * Math.min(1, dt * 2.2);
+      snake.pos.x += Math.sin(eff) * snake.speed * dt;
+      snake.pos.z += Math.cos(eff) * snake.speed * dt;
+    }
+  }
+  snake.pos.y = terrainH(snake.pos.x, snake.pos.z);
+
+  /* trail: push head, resample spine at fixed arc-length, trim */
+  snake.path.unshift(snake.pos.clone());
+  const sp = snake.spine;
+  sp[0].copy(snake.path[0]);
+  let si = 1, acc = 0, targetD = SEG_LEN, cut = snake.path.length;
+  for(let i = 1; i < snake.path.length; i++){
+    const a = snake.path[i - 1], b = snake.path[i];
+    const d = a.distanceTo(b);
+    if(d > 1e-6){
+      while(acc + d >= targetD && si < SPINE_N){
+        sp[si].lerpVectors(a, b, (targetD - acc) / d);
+        si++; targetD += SEG_LEN;
+      }
+      acc += d;
+    }
+    if(acc > 16.5){ cut = i + 1; break; }
+  }
+  snake.path.length = Math.min(cut, snake.path.length);
+  while(si < SPINE_N){ sp[si].copy(sp[si - 1]); si++; }
+}
+
+/* ================= skin the spine ================= */
+const UP = new THREE.Vector3(0, 1, 0);
+const _tan = new THREE.Vector3(), _N = new THREE.Vector3(), _B = new THREE.Vector3();
+function frameAt(i){
+  const sp = snake.spine;
+  const i0 = Math.max(0, i - 1), i1 = Math.min(SPINE_N - 1, i + 1);
+  _tan.subVectors(sp[i1], sp[i0]);
+  if(_tan.lengthSq() < 1e-10) _tan.set(Math.sin(snake.heading), 0, Math.cos(snake.heading));
+  _tan.normalize();
+  _N.copy(UP).addScaledVector(_tan, -UP.dot(_tan));
+  if(_N.lengthSq() < 1e-6) _N.set(1, 0, 0);
+  _N.normalize();
+  _B.crossVectors(_N, _tan).normalize();
+}
+
+function buildSnakeGeometry(t){
+  const sp = snake.spine, def = snake.defense;
+  const swK = snake.state === 'swallow' ? clamp(snake.swallowTimer / 2.4, 0, 1) : 0;
+
+  /* rest the belly on the ground */
+  for(let i = 0; i < SPINE_N; i++){
+    const tt = i / (SPINE_N - 1);
+    sp[i].y = terrainH(sp[i].x, sp[i].z) + radiusAt(tt) * 0.88;
+  }
+  /* defensive rear-up: lift the anterior body, sway the neck, puff the throat */
+  if(def > 0.003 || swK > 0.003){
+    for(let i = 0; i < SPINE_N; i++){
+      frameAt(i);
+      const eN = sstep(0, 1, 1 - i / 16);
+      const eL = sstep(0, 1, 1 - i / 20);
+      sp[i].y += 1.45 * def * Math.pow(eL, 1.4) + 0.4 * swK * sstep(0, 1, 1 - i / 8);
+      const sway = Math.sin(t * 2.1 + i * 0.55) * 0.42 * def * eN;
+      sp[i].addScaledVector(_B, sway);
+    }
+  }
+
+  const posA = snakeGeo.attributes.position, norA = snakeGeo.attributes.normal;
+  let p = 0;
+  for(let i = 0; i < SPINE_N; i++){
+    frameAt(i);
+    const Bx = _B.x, By = _B.y, Bz = _B.z, Nx = _N.x, Ny = _N.y, Nz = _N.z;
+    const tt = i / (SPINE_N - 1);
+    let R = radiusAt(tt);
+    const sArc = tt * BODY_LEN;
+    let add = 0;
+    for(const b of snake.bulges){
+      const d = sArc - b.s;
+      add += b.amp * Math.exp(-(d * d) / (2 * 0.42 * 0.42));
+    }
+    R += Math.min(add, 0.30);
+    if(def > 0.003) R *= 1 + 0.16 * sstep(0, 1, 1 - i / 16) * def;
+    const cx = sp[i].x, cy = sp[i].y, cz = sp[i].z;
+    for(let j = 0; j < RADIAL; j++){
+      const th = Math.PI / 2 + j / RADIAL * TAU; // j=0 dorsal, j=11 ventral
+      let lat = Math.cos(th), vert = Math.sin(th);
+      if(vert < 0) vert *= 0.85; // slightly flattened belly
+      const nx = Bx * lat + Nx * vert, ny = By * lat + Ny * vert, nz = Bz * lat + Nz * vert;
+      posA.setXYZ(p, cx + nx * R, cy + ny * R, cz + nz * R);
+      const il = 1 / Math.hypot(nx, ny, nz);
+      norA.setXYZ(p, nx * il, ny * il, nz * il);
+      p++;
+    }
+  }
+  posA.needsUpdate = true; norA.needsUpdate = true;
+  tailTip.position.copy(sp[SPINE_N - 1]);
+}
+
+/* ================= head pose, tongue, jaw ================= */
+const _m4 = new THREE.Matrix4(), _qT = new THREE.Quaternion();
+const ZERO = new THREE.Vector3(), _look = new THREE.Vector3();
+let tongueT = -1, tongueNext = 1.2;
+function updateHead(dt, t){
+  const sp = snake.spine;
+  _tan.subVectors(sp[0], sp[2]).normalize();
+  headFwd.lerp(_tan, Math.min(1, dt * 14)).normalize();
+  _m4.lookAt(headFwd, ZERO, UP);
+  _qT.setFromRotationMatrix(_m4);
+  headGroup.quaternion.slerp(_qT, Math.min(1, dt * 10));
+  headGroup.position.lerp(_look.copy(sp[0]).addScaledVector(headFwd, 0.12).add({ x: 0, y: 0.06, z: 0 }), Math.min(1, dt * 20));
+  headGroup.rotateZ(Math.sin(t * 1.4) * 0.04);
+  headGroup.rotateX(-0.35 * snake.defense); // chin up when provoked
+
+  jawPivot.rotation.x = snake.jaw * 0.55;
+
+  tongueNext -= dt;
+  if(tongueNext <= 0 && tongueT < 0){
+    tongueT = 0; flicks++;
+    tongueNext = (snake.state === 'hunt' || snake.state === 'strike') ? rand(0.45, 1.1) : rand(1.4, 3.8);
+  }
+  if(tongueT >= 0){
+    tongueT += dt / 0.85;
+    if(tongueT > 1){ tongueT = -1; tongueGroup.visible = false; }
+    else{
+      const out = sstep(0, 0.22, tongueT) * (1 - sstep(0.62, 0.95, tongueT));
+      tongueGroup.visible = out > 0.02 && snake.jaw < 0.2;
+      tongueGroup.scale.set(1, 1, Math.max(0.02, out));
+      tongueGroup.rotation.y = Math.sin(tongueT * 34) * 0.3 * out;
+      tongueGroup.rotation.x = -0.18;
+    }
+  }
+}
+
+/* ================= interaction ================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function provoke(){ snake.defenseTimer = 5; sfxHiss(); }
+let downX = 0, downY = 0;
+renderer.domElement.addEventListener('pointerdown', e => {
+  ensureAudio();
+  downX = e.clientX; downY = e.clientY;
+});
+renderer.domElement.addEventListener('pointerup', e => {
+  if(Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // was a drag
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if(ray.intersectObject(headGroup, true).length || ray.intersectObject(snakeMesh, false).length){
+    provoke();
+    return;
+  }
+  const ht = ray.intersectObject(terrain);
+  if(ht.length){
+    const p = ht[0].point;
+    if(Math.hypot(p.x, p.z) < 105){
+      for(const o of obstacles){ // nudge out of rocks
+        const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz);
+        if(d < o.r + 0.8 && d > 1e-4){ p.x = o.x + dx / d * (o.r + 1); p.z = o.z + dz / d * (o.r + 1); }
+      }
+      if(mice.length >= 5){
+        const old = mice.shift();
+        old.alive = false; old.gone = true; scene.remove(old.group);
+      }
+      mice.push(new Mouse(p.clone()));
+    }
+  }
+});
+
+const muteBtn = document.getElementById('mute');
+const icoOn = document.getElementById('icoOn'), icoOff = document.getElementById('icoOff');
+const sndLabel = document.getElementById('sndLabel');
+muteBtn.addEventListener('click', () => {
+  ensureAudio();
+  muted = !muted;
+  if(master) master.gain.value = muted ? 0 : 0.9;
+  icoOn.style.display = muted ? 'none' : 'block';
+  icoOff.style.display = muted ? 'block' : 'none';
+  sndLabel.textContent = muted ? 'muted' : 'sound';
+});
+
+/* ================= HUD ================= */
+const stState = document.getElementById('stState'), stVel = document.getElementById('stVel');
+const stPrey = document.getElementById('stPrey'), stFlick = document.getElementById('stFlick');
+function displayState(){
+  if(snake.state === 'strike') return 'STRIKING';
+  if(snake.state === 'swallow') return 'SWALLOWING';
+  if(snake.defense > 0.5) return 'DEFENSIVE';
+  if(snake.state === 'hunt') return 'HUNTING';
+  if(snake.bulges.some(b => b.digesting && b.amp > 0.05)) return 'DIGESTING';
+  return 'FORAGING';
+}
+let hudTimer = 0;
+function hudTick(dt){
+  hudTimer -= dt;
+  if(hudTimer > 0) return;
+  hudTimer = 0.2;
+  const s = displayState();
+  stState.textContent = s;
+  stState.classList.toggle('warn', s === 'DEFENSIVE');
+  stVel.textContent = snake.speed.toFixed(2) + ' u/s';
+  stPrey.textContent = String(mice.filter(m => m.alive && !m.dying).length);
+  stFlick.textContent = String(flicks);
+  snakeGeo.computeBoundingSphere();
+}
+requestAnimationFrame(() => document.getElementById('hud').classList.add('on'));
+
+/* ================= loop ================= */
+const clock = new THREE.Clock();
+let intro = 0;
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function updateDust(dt, t){
+  const sx = snake.pos.x, sz = snake.pos.z;
+  for(let i = 0; i < DUST_N; i++){
+    const i3 = i * 3;
+    dustPos[i3]     += (dustVel[i][0] + Math.sin(t * 0.5 + i) * 0.12) * dt;
+    dustPos[i3 + 1] += dustVel[i][1] * dt + Math.sin(t * 0.8 + i * 2.1) * 0.02 * dt;
+    dustPos[i3 + 2] += (dustVel[i][2] + Math.cos(t * 0.4 + i) * 0.12) * dt;
+    if(dustPos[i3] - sx > 48) dustPos[i3] -= 96; else if(dustPos[i3] - sx < -48) dustPos[i3] += 96;
+    if(dustPos[i3 + 2] - sz > 48) dustPos[i3 + 2] -= 96; else if(dustPos[i3 + 2] - sz < -48) dustPos[i3 + 2] += 96;
+    if(dustPos[i3 + 1] > 11) dustPos[i3 + 1] = 0.2; else if(dustPos[i3 + 1] < 0) dustPos[i3 + 1] = 10.8;
+  }
+  dustGeo.attributes.position.needsUpdate = true;
+}
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  updateSnake(dt, t);
+  buildSnakeGeometry(t);
+  updateHead(dt, t);
+
+  for(const m of mice) m.update(dt, t, snake.pos);
+  for(let i = mice.length - 1; i >= 0; i--) if(mice[i].gone) mice.splice(i, 1);
+
+  updateDust(dt, t);
+
+  sun.position.set(snake.pos.x + 26, snake.pos.y + 38, snake.pos.z + 16);
+  sun.target.position.copy(snake.pos);
+  sun.target.updateMatrixWorld();
+
+  if(intro < 1){
+    intro = Math.min(1, intro + dt / 2.8);
+    camera.position.lerpVectors(camA, camB, sstep(0, 1, intro));
+    controls.enabled = intro >= 1;
+  }
+  _look.copy(snake.spine[0]).addScaledVector(headFwd, 1.2);
+  _look.y += 0.5;
+  controls.target.lerp(_look, Math.min(1, dt * 2.5));
+  controls.update();
+
+  hudTick(dt);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

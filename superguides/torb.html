@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Ultra Procedural Tentacle Orb — Specimen Prime Ω</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,300..600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #eae5da;
+    --paper-grad: radial-gradient(120% 100% at 50% 45%, #f1ede4 0%, #ded8ca 52%, #c3bca9 100%);
+    --ink: #221e17;
+    --muted: #847d6e;
+    --accent: #9e3d22;
+    --accent-glow: rgba(158, 61, 34, 0.4);
+    --panel-bg: rgba(234, 229, 218, 0.82);
+    --border-line: rgba(34, 30, 23, 0.16);
+    --ekg-stroke: #221e17;
+  }
+
+  body.theme-abyss {
+    --paper: #05080f;
+    --paper-grad: radial-gradient(120% 100% at 50% 45%, #0a1120 0%, #05080f 65%, #010204 100%);
+    --ink: #e8f0ff;
+    --muted: #5e7299;
+    --accent: #2de2e6;
+    --accent-glow: rgba(45, 226, 230, 0.45);
+    --panel-bg: rgba(7, 13, 26, 0.84);
+    --border-line: rgba(70, 100, 160, 0.22);
+    --ekg-stroke: #2de2e6;
+  }
+
+  body.theme-emerald {
+    --paper: #030d0a;
+    --paper-grad: radial-gradient(120% 100% at 50% 45%, #061914 0%, #030d0a 65%, #010403 100%);
+    --ink: #dcf7ec;
+    --muted: #4e806e;
+    --accent: #00ffaa;
+    --accent-glow: rgba(0, 255, 170, 0.45);
+    --panel-bg: rgba(4, 16, 12, 0.84);
+    --border-line: rgba(40, 140, 100, 0.25);
+    --ekg-stroke: #00ffaa;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+  body {
+    background: var(--paper-grad);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    transition: background 0.6s ease, color 0.5s ease;
+    user-select: none;
+  }
+
+  #stage { position: fixed; inset: 0; cursor: grab; z-index: 1; }
+  #stage.grabbing { cursor: grabbing; }
+  #stage.provoking { cursor: crosshair; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .vignette {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: radial-gradient(92% 92% at 50% 46%, transparent 52%, rgba(20, 16, 10, 0.28) 100%);
+  }
+
+  .grain {
+    position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0.055; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  }
+
+  /* HUD Plates */
+  .plate {
+    position: fixed; z-index: 10; pointer-events: none; font-size: 10px; letter-spacing: 0.12em; line-height: 1.8;
+  }
+  .plate-tl { top: 22px; left: 26px; pointer-events: auto; }
+  .plate-tr { top: 22px; right: 26px; text-align: right; color: var(--muted); pointer-events: auto; }
+  .plate-bl { bottom: 20px; left: 26px; color: var(--muted); }
+  .plate-br { bottom: 20px; right: 26px; text-align: right; pointer-events: auto; }
+
+  .plate-tl h1 {
+    margin: 0; font-family: 'Fraunces', serif; font-style: italic; font-weight: 400;
+    font-size: clamp(20px, 2.4vw, 30px); letter-spacing: 0.01em; line-height: 1.05; color: var(--ink);
+  }
+  .plate-tl .sub {
+    margin: 4px 0 0 0; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.22em; color: var(--muted);
+  }
+
+  /* Interactive Docks & Controls */
+  .btn-bar { display: flex; gap: 7px; margin-top: 10px; align-items: center; }
+  .btn-chip {
+    background: var(--panel-bg); color: var(--ink);
+    border: 1px solid var(--border-line);
+    padding: 4px 10px; border-radius: 999px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.4, 1);
+  }
+  .btn-chip:hover {
+    border-color: var(--ink); transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  }
+  .btn-chip.active {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+
+  /* Behavioral animation dock */
+  .anim-dock {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; max-width: 440px; pointer-events: auto;
+  }
+  .anim-btn {
+    background: var(--panel-bg); color: var(--ink);
+    border: 1px solid var(--border-line);
+    padding: 4px 9px; border-radius: 999px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 8.5px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.4, 1);
+  }
+  .anim-btn:hover {
+    border-color: var(--ink); transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  }
+  .anim-btn.active {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+    box-shadow: 0 0 14px var(--accent-glow);
+  }
+  .anim-btn .kbd {
+    font-size: 7.5px; opacity: 0.6; border: 1px solid currentColor;
+    border-radius: 3px; padding: 0.5px 3.5px; line-height: 1;
+  }
+
+  /* Real-Time EKG Oscilloscope & Telemetry */
+  .telemetry-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-line);
+    border-radius: 8px; padding: 10px 14px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
+    margin-top: 8px;
+  }
+  .ekg-box { display: flex; align-items: center; gap: 10px; }
+  #ekgCanvas { width: 140px; height: 32px; display: block; border-bottom: 1px solid var(--border-line); }
+  .bpm-val { font-size: 15px; font-weight: 600; min-width: 44px; text-align: right; }
+  .status-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 8.5px;
+    text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600;
+    background: rgba(34, 30, 23, 0.08); color: var(--ink);
+  }
+  .status-badge.agitated { background: var(--accent); color: #fff; }
+
+  /* Tuning drawer */
+  #tuningDrawer {
+    position: fixed; right: 26px; top: 76px; width: 220px;
+    background: var(--panel-bg); border: 1px solid var(--border-line);
+    border-radius: 8px; padding: 14px; z-index: 20;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    display: none; flex-direction: column; gap: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  }
+  #tuningDrawer.open { display: flex; }
+  .tune-row { display: flex; flex-direction: column; gap: 4px; font-size: 9px; text-transform: uppercase; }
+  .tune-row input[type=range] { width: 100%; accent-color: var(--ink); }
+
+  @media (max-width: 768px) {
+    .plate-tr { display: none; }
+    .plate-tl { top: 16px; left: 16px; }
+    .plate-bl { display: none; }
+    .plate-br { bottom: 16px; right: 16px; }
+    .anim-dock { max-width: 280px; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div id="stage"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- Top Left: Title, Theme & Tuning -->
+<header class="plate plate-tl">
+  <h1>Umbra medusae</h1>
+  <div class="sub">Specimen Prime Ω · Bioluminescent Abyssal Cephalopod</div>
+  <div class="btn-bar">
+    <button id="themeToggle" class="btn-chip" title="Cycle visual palette">
+      <span>◐</span> <span id="themeName">Archival</span>
+    </button>
+    <button id="audioToggle" class="btn-chip" title="Toggle bio-acoustics">
+      <span>🔊</span> <span>Audio</span>
+    </button>
+    <button id="tuningToggle" class="btn-chip" title="Specimen morphology tuning">
+      <span>⚙</span> <span>Tuning</span>
+    </button>
+  </div>
+  <div class="anim-dock" id="animDock">
+    <button class="anim-btn active" data-anim="drift"><span class="kbd">1</span> Drift</button>
+    <button class="anim-btn" data-anim="swim"><span class="kbd">2</span> Jet Propulsion</button>
+    <button class="anim-btn" data-anim="bloom"><span class="kbd">3</span> Radial Bloom</button>
+    <button class="anim-btn" data-anim="cocoon"><span class="kbd">4</span> Cocoon</button>
+    <button class="anim-btn" data-anim="vortex"><span class="kbd">5</span> Vortex</button>
+    <button class="anim-btn" data-anim="spasm"><span class="kbd">6</span> Spasm</button>
+  </div>
+</header>
+
+<!-- Top Right: Morphometrics -->
+<div class="plate plate-tr" aria-hidden="true">
+  <div>NUCLEUS: <b style="color:var(--ink);">24,000</b> PARTICLES (TRI-STRATUM)</div>
+  <div>APPENDAGES: <b style="color:var(--ink);">32</b> CATMULL-ROM CORDS</div>
+  <div>SUCKERS: <b>VENTRAL TUBERCLES</b> · TIP PHOTOPHORES: <b>ACTIVE</b></div>
+</div>
+
+<!-- Bottom Left: Input Instructions -->
+<div class="plate plate-bl">
+  DRAG TO ORBIT · SCROLL TO APPROACH · HOLD CLICK / SPACEBAR TO PROVOKE
+</div>
+
+<!-- Bottom Right: Live Cardiac & Nervous Telemetry -->
+<div class="plate plate-br">
+  <div class="telemetry-card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-size:8px; text-transform:uppercase; color:var(--muted);">CARDIAC OSCILLOSCOPE</span>
+      <span class="status-badge" id="statusBadge">DORMANT</span>
+    </div>
+    <div class="ekg-box">
+      <canvas id="ekgCanvas" width="140" height="32"></canvas>
+      <div class="bpm-val"><span id="bpmNum">56</span><span style="font-size:8px; font-weight:400; color:var(--muted); margin-left:2px;">BPM</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tuning Modal / Drawer -->
+<div id="tuningDrawer">
+  <div style="font-weight:600; font-size:10px; border-bottom:1px solid var(--border-line); padding-bottom:4px; margin-bottom:4px;">
+    MORPHOLOGY TUNING
+  </div>
+  <div class="tune-row">
+    <span>Writhe Frequency</span>
+    <input type="range" id="tuneWrithe" min="0.3" max="2.5" step="0.1" value="1.0">
+  </div>
+  <div class="tune-row">
+    <span>Curvature Curl</span>
+    <input type="range" id="tuneCurl" min="0.2" max="2.2" step="0.1" value="1.0">
+  </div>
+  <div class="tune-row">
+    <span>Respiration Rate</span>
+    <input type="range" id="tuneBreath" min="0.4" max="2.2" step="0.1" value="1.0">
+  </div>
+  <div class="tune-row">
+    <span>Clearcoat Sheen</span>
+    <input type="range" id="tuneGloss" min="0.0" max="1.0" step="0.05" value="0.9">
+  </div>
+</div>
+
+<script>
+let audioCtx = null;
+let audioEnabled = false;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  audioEnabled = !audioEnabled;
+  document.getElementById('audioToggle').classList.toggle('active', audioEnabled);
+}
+
+function playCardiacThump() {
+  if (!audioEnabled || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(54, now);
+  osc.frequency.exponentialRampToValueAtTime(26, now + 0.16);
+  gain.gain.setValueAtTime(0.18, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + 0.19);
+}
+
+function playBehaviorTone(mode) {
+  if (!audioEnabled || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (mode === 'swim') {
+    const osc = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(80, now);
+    osc.frequency.exponentialRampToValueAtTime(32, now + 0.6);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(320, now);
+    filter.frequency.exponentialRampToValueAtTime(80, now + 0.6);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + 0.7);
+  } else if (mode === 'bloom') {
+    [130.81, 164.81, 196.00].forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+      gain.gain.setValueAtTime(0.06, now + idx * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now + idx * 0.04); osc.stop(now + 0.85);
+    });
+  } else if (mode === 'cocoon') {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(90, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.7);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + 0.8);
+  } else if (mode === 'spasm') {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(460, now + 0.3);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + 0.36);
+  }
+}
+
+document.getElementById('audioToggle').addEventListener('click', initAudio);
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+renderer.outputEncoding = THREE.sRGBEncoding;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xd8d2c3, 11, 24);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 75);
+camera.position.set(0, 0.6, 11.2);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 4.2;
+controls.maxDistance = 19;
+controls.target.set(0, -0.15, 0);
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.45;
+
+const hemiLight = new THREE.HemisphereLight(0xfff5e6, 0x5a554a, 0.75);
+scene.add(hemiLight);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+keyLight.position.set(5, 7, 4);
+scene.add(keyLight);
+
+const rimLight = new THREE.DirectionalLight(0xcfdcff, 1.4);
+rimLight.position.set(-6, -2, -5);
+scene.add(rimLight);
+
+const creature = new THREE.Group();
+scene.add(creature);
+
+const P_COUNT = 24000;
+const bodyPos = new Float32Array(P_COUNT * 3);
+const bodySeed = new Float32Array(P_COUNT);
+const GA = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+
+for (let i = 0; i < P_COUNT; i++) {
+  const y = 1 - 2 * (i + 0.5) / P_COUNT;
+  const r = Math.sqrt(Math.max(0, 1 - y * y));
+  const a = i * GA;
+  // Dense multi-shell: internal singularity + mid lattice + outer undulating mantle
+  const layer = Math.random();
+  let rad = 0.98;
+  if (layer < 0.22) {
+    rad = 0.35 + 0.45 * Math.pow(Math.random(), 1.5);
+  } else if (layer < 0.65) {
+    rad = 0.80 + 0.18 * Math.random();
+  } else {
+    rad = 0.98 + 0.08 * (Math.random() - 0.5);
+  }
+  bodyPos[i * 3 + 0] = Math.cos(a) * r * rad;
+  bodyPos[i * 3 + 1] = y * rad;
+  bodyPos[i * 3 + 2] = Math.sin(a) * r * rad;
+  bodySeed[i] = Math.random();
+}
+
+const bodyGeo = new THREE.BufferGeometry();
+bodyGeo.setAttribute('position', new THREE.BufferAttribute(bodyPos, 3));
+bodyGeo.setAttribute('aSeed', new THREE.BufferAttribute(bodySeed, 1));
+
+const bodyMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  uniforms: {
+    uTime: { value: 0 },
+    uProvoke: { value: 0 },
+    uSize: { value: 20 * renderer.getPixelRatio() },
+    uScale: { value: 1.0 },
+    uLight: { value: new THREE.Vector3(5, 7, 4).normalize() },
+    uColorCore: { value: new THREE.Color(1.0, 0.99, 0.96) }
+  },
+  vertexShader: `
+    uniform float uTime, uProvoke, uSize, uScale;
+    uniform vec3 uLight;
+    attribute float aSeed;
+    varying float vShade;
+    varying float vAlpha;
+    varying float vLayer;
+
+    void main() {
+      vec3 n = normalize(position);
+      float len = length(position);
+      float t = uTime;
+      float sd = aSeed;
+
+      // Respiration wave + traveling cellular ripple
+      float w = sin(position.x * 3.4 + t * 0.9) * sin(position.y * 2.8 - t * 0.7) * sin(position.z * 3.6 + t * 0.8);
+      float breath = 0.038 * sin(t * 0.85 + sd * 6.2831);
+      float ripple = 0.024 * w + 0.015 * sin(7.0 * position.y + t * 1.6 + sd * 4.0);
+      float agitation = uProvoke * 0.07 * sin(t * 16.0 + sd * 40.0);
+
+      vec3 p = position * (1.0 + breath + ripple + agitation) * uScale;
+
+      vec4 world = modelMatrix * vec4(p, 1.0);
+      vec3 nW = normalize(mat3(modelMatrix) * n);
+      vec3 toCam = cameraPosition - world.xyz;
+      float dist = length(toCam);
+
+      float diff = 0.5 + 0.5 * dot(nW, uLight);
+      float facing = clamp(dot(nW, toCam / max(0.001, dist)), 0.0, 1.0);
+      float rim = smoothstep(0.05, 0.45, facing);
+
+      vShade = mix(0.40, 1.15, diff) * mix(0.65, 1.0, rim);
+      vAlpha = 0.92 * smoothstep(22.0, 11.0, dist) * smoothstep(2.5, 4.5, dist);
+      vLayer = len;
+
+      vec4 mv = viewMatrix * world;
+      gl_PointSize = clamp(uSize * (0.65 + 0.85 * fract(sd * 17.3)) / max(0.001, -mv.z), 1.0, 32.0);
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uColorCore;
+    varying float vShade;
+    varying float vAlpha;
+    varying float vLayer;
+
+    void main() {
+      vec2 coord = gl_PointCoord - 0.5;
+      float d = length(coord);
+      if (d > 0.5) discard;
+      float alpha = smoothstep(0.5, 0.12, d) * vAlpha;
+      vec3 col = uColorCore * vShade;
+      if (vLayer < 0.6) {
+        col += vec3(0.08, 0.08, 0.12);
+      }
+      gl_FragColor = vec4(col, alpha);
+    }
+  `
+});
+
+const bodyMesh = new THREE.Points(bodyGeo, bodyMat);
+bodyMesh.frustumCulled = false;
+creature.add(bodyMesh);
+
+const TOTAL_TENTACLES = 32;
+const SPANS = 9;
+const PER_SPAN = 6;
+const S = SPANS * PER_SPAN; // 54 sample rings
+const RAD = 10;            // 10 radial slices
+
+const tentacleMat = new THREE.MeshPhysicalMaterial({
+  color: 0x12100e,
+  roughness: 0.32,
+  metalness: 0.0,
+  clearcoat: 0.9,
+  clearcoatRoughness: 0.22,
+  side: THREE.DoubleSide
+});
+
+const cosA = new Float32Array(RAD + 1);
+const sinA = new Float32Array(RAD + 1);
+for (let j = 0; j <= RAD; j++) {
+  const ang = (j / RAD) * Math.PI * 2;
+  cosA[j] = Math.cos(ang);
+  sinA[j] = Math.sin(ang);
+}
+
+function crEval(p0, p1, p2, p3, t, out) {
+  const t2 = t * t, t3 = t2 * t;
+  out.x = 0.5 * (2 * p1.x + (p2.x - p0.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (3 * p1.x - p0.x - 3 * p2.x + p3.x) * t3);
+  out.y = 0.5 * (2 * p1.y + (p2.y - p0.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (3 * p1.y - p0.y - 3 * p2.y + p3.y) * t3);
+  out.z = 0.5 * (2 * p1.z + (p2.z - p0.z) * t + (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * t2 + (3 * p1.z - p0.z - 3 * p2.z + p3.z) * t3);
+}
+
+const tentacles = [];
+const tipPhotophorePositions = new Float32Array(TOTAL_TENTACLES * 3);
+
+for (let k = 0; k < TOTAL_TENTACLES; k++) {
+  const y = 1 - 2 * (k + 0.5) / TOTAL_TENTACLES;
+  const r = Math.sqrt(Math.max(0, 1 - y * y));
+  const a = k * GA;
+  const dirBase = new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r).normalize();
+
+  // Natural deep-sea downward droop
+  const T0 = dirBase.clone().addScaledVector(new THREE.Vector3(0, -1, 0), 0.42 + Math.random() * 0.32).normalize();
+  const upRef = Math.abs(T0.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const N0 = new THREE.Vector3().crossVectors(T0, upRef).normalize();
+  const B0 = new THREE.Vector3().crossVectors(T0, N0).normalize();
+
+  const vcount = (S + 1) * (RAD + 1);
+  const posAttr = new THREE.BufferAttribute(new Float32Array(vcount * 3), 3);
+  const normAttr = new THREE.BufferAttribute(new Float32Array(vcount * 3), 3);
+  posAttr.setUsage(THREE.DynamicDrawUsage);
+  normAttr.setUsage(THREE.DynamicDrawUsage);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', posAttr);
+  geo.setAttribute('normal', normAttr);
+
+  const idx = [];
+  for (let i = 0; i < S; i++) {
+    for (let j = 0; j < RAD; j++) {
+      const a1 = i * (RAD + 1) + j;
+      const b1 = a1 + 1;
+      const c1 = a1 + RAD + 1;
+      const d1 = c1 + 1;
+      idx.push(a1, b1, d1, a1, d1, c1);
+    }
+  }
+  geo.setIndex(idx);
+
+  const mesh = new THREE.Mesh(geo, tentacleMat);
+  mesh.frustumCulled = false;
+  creature.add(mesh);
+
+  // Tentacle classification: 16 muscular arms, 10 sensory tendrils, 6 filament whips
+  const isPrimary = k < 16;
+  const isSensory = k >= 16 && k < 26;
+
+  tentacles.push({
+    index: k,
+    type: isPrimary ? 0 : (isSensory ? 1 : 2),
+    dir: dirBase, T0, N0, B0,
+    mesh, posAttr, normAttr,
+    cp: Array.from({ length: SPANS + 1 }, () => new THREE.Vector3()),
+    pts: Array.from({ length: S + 1 }, () => new THREE.Vector3()),
+    len: isPrimary ? (2.4 + Math.random() * 0.9) : (isSensory ? (1.7 + Math.random() * 0.6) : (2.9 + Math.random() * 1.1)),
+    rBase: isPrimary ? (0.076 + Math.random() * 0.02) : (isSensory ? 0.038 : 0.025),
+    phase: Math.random() * Math.PI * 2,
+    phase2: Math.random() * Math.PI * 2,
+    waveFreq: 3.5 + Math.random() * 2.2,
+    waveSpeed: 0.9 + Math.random() * 0.6,
+    curlBase: 0.75 + Math.random() * 0.6,
+    curlSign: Math.random() < 0.5 ? -1 : 1,
+    prevN: new THREE.Vector3(0, 1, 0),
+    prevTan: new THREE.Vector3(),
+    base: new THREE.Vector3(),
+    inited: false
+  });
+}
+
+const photophoreGeo = new THREE.BufferGeometry();
+photophoreGeo.setAttribute('position', new THREE.BufferAttribute(tipPhotophorePositions, 3));
+
+const photophoreMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  uniforms: {
+    uProvoke: { value: 0 },
+    uColor: { value: new THREE.Color(0.8, 0.92, 1.0) }
+  },
+  vertexShader: `
+    uniform float uProvoke;
+    varying float vAlpha;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = clamp((18.0 + uProvoke * 22.0) / max(0.001, -mv.z), 4.0, 36.0);
+      vAlpha = 0.7 + 0.3 * sin(position.y * 8.0);
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uColor;
+    varying float vAlpha;
+    void main() {
+      float d = length(gl_PointCoord - 0.5);
+      if (d > 0.5) discard;
+      float a = smoothstep(0.5, 0.02, d) * vAlpha;
+      gl_FragColor = vec4(uColor, a);
+    }
+  `
+});
+
+const photophoreMesh = new THREE.Points(photophoreGeo, photophoreMat);
+photophoreMesh.frustumCulled = false;
+creature.add(photophoreMesh);
+
+const _reachVec = new THREE.Vector3();
+const _vD = new THREE.Vector3();
+const _t0 = new THREE.Vector3();
+const _t1 = new THREE.Vector3();
+const _nn = new THREE.Vector3();
+const _bb = new THREE.Vector3();
+const _quat = new THREE.Quaternion();
+
+let modWrithe = 1.0, modCurl = 1.0, modBreath = 1.0;
+
+function writeTentacleRing(t, ringIdx, pt, tan, normal, time) {
+  _bb.crossVectors(tan, normal);
+  const s = ringIdx / S;
+  const sCurve = Math.pow(1.0 - s, 0.72);
+  const rootBulge = 1.0 + 0.36 * Math.exp(-s * 6.5);
+  const fleshWobble = 1.0 + 0.05 * Math.sin(s * 8.0 - time * 1.5 + t.phase);
+
+  // Ventral sucker tubercles (along inner belly of primary arms)
+  let sucker = 0.0;
+  if (t.type === 0 && s > 0.12 && s < 0.88) {
+    const noduleWave = Math.sin(s * 36.0 - time * 0.4);
+    if (noduleWave > 0.4) {
+      sucker = 0.32 * Math.pow((noduleWave - 0.4) / 0.6, 2.0);
+    }
+  }
+
+  const baseR = t.rBase * sCurve * rootBulge * fleshWobble;
+  const pa = t.posAttr.array;
+  const na = t.normAttr.array;
+  let o = ringIdx * (RAD + 1) * 3;
+
+  for (let j = 0; j <= RAD; j++) {
+    const ca = cosA[j];
+    const sa = sinA[j];
+    // Modulate ventral sucker expansion along normal axis
+    const suckerExt = (ca > 0.2) ? (sucker * ca) : 0.0;
+    const r = baseR + suckerExt * t.rBase;
+
+    const nx = normal.x * ca + _bb.x * sa;
+    const ny = normal.y * ca + _bb.y * sa;
+    const nz = normal.z * ca + _bb.z * sa;
+
+    pa[o] = pt.x + nx * r;
+    pa[o + 1] = pt.y + ny * r;
+    pa[o + 2] = pt.z + nz * r;
+
+    na[o] = nx;
+    na[o + 1] = ny;
+    na[o + 2] = nz;
+    o += 3;
+  }
+}
+
+let currentAnim = 'drift';
+const animBlends = {
+  drift: 1.0,
+  swim: 0.0,
+  bloom: 0.0,
+  cocoon: 0.0,
+  vortex: 0.0,
+  spasm: 0.0
+};
+let swimCycleTime = 0;
+let creatureVelocityY = 0;
+let creatureBaseY = 0;
+
+function setAnimationMode(mode) {
+  if (!animBlends.hasOwnProperty(mode)) return;
+  currentAnim = mode;
+  document.querySelectorAll('.anim-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.anim === mode);
+  });
+  playBehaviorTone(mode);
+}
+
+document.getElementById('animDock').addEventListener('click', (e) => {
+  const btn = e.target.closest('.anim-btn');
+  if (btn && btn.dataset.anim) {
+    setAnimationMode(btn.dataset.anim);
+  }
+});
+
+function updateTentaclePhysics(t, time, provoke, reachTarget, reachWeight, growFactor) {
+  const currentLength = t.len * (0.3 + 0.7 * growFactor)
+                      * (1.0 - 0.35 * Math.max(0, provoke))
+                      * (1.0 + 0.035 * Math.sin(time * 0.85 + t.phase))
+                      * (1.0 + animBlends.bloom * 0.35 - animBlends.cocoon * 0.15);
+  const segLen = currentLength / SPANS;
+
+  t.base.copy(t.dir).multiplyScalar(0.92 * (1.0 - 0.12 * provoke - animBlends.cocoon * 0.08));
+  t.cp[0].copy(t.base);
+
+  _reachVec.subVectors(reachTarget, t.base).normalize();
+  const reachPitch = _reachVec.dot(t.N0) * 0.7 * reachWeight;
+  const reachYaw   = _reachVec.dot(t.B0) * 0.7 * reachWeight;
+  const tipCurl = (t.curlBase * modCurl + provoke * 2.6) * (0.6 + 0.4 * Math.sin(time * 0.4 + t.phase2));
+
+  // Jet swim kinematics
+  const swimPeriod = 1.8;
+  const swimPhase = (swimCycleTime % swimPeriod) / swimPeriod;
+  const isPowerStroke = swimPhase < 0.38;
+  const swimStreamline = isPowerStroke ? Math.pow(Math.sin((swimPhase / 0.38) * Math.PI), 1.5) : (1.0 - (swimPhase - 0.38) / 0.62) * 0.4;
+
+  for (let i = 1; i <= SPANS; i++) {
+    const s = (i - 0.5) / SPANS;
+    const s2 = s * s;
+
+    let pitch = Math.sin(s * t.waveFreq - time * (t.waveSpeed * modWrithe) + t.phase) * 0.35 * s
+              + t.curlSign * tipCurl * s2
+              + reachPitch * s
+              + 0.05 * Math.sin(s * 9.0 - time * 1.2);
+
+    let yaw = Math.cos(s * (t.waveFreq * 0.85) - time * (t.waveSpeed * modWrithe * 0.9) + t.phase2) * 0.32 * s
+            + reachYaw * s
+            + 0.04 * Math.sin(s * 7.0 + time * 0.9);
+
+    // 1. JET SWIM: Streamline tentacles backward
+    if (animBlends.swim > 0.001) {
+      const trailAngle = (t.dir.y + 1.0) * 0.8;
+      const swimPitchMod = -trailAngle * (1.2 * swimStreamline + 0.35) * s;
+      pitch = pitch * (1.0 - animBlends.swim * 0.85) + swimPitchMod * animBlends.swim;
+      yaw = yaw * (1.0 - animBlends.swim * 0.85);
+    }
+
+    // 2. RADIAL BLOOM: Flare outwards
+    if (animBlends.bloom > 0.001) {
+      const bloomFlare = 1.45 * Math.sin(s * Math.PI * 0.65);
+      pitch += bloomFlare * animBlends.bloom;
+      yaw += Math.sin(time * 0.8 + s * 4.0) * 0.25 * animBlends.bloom;
+    }
+
+    // 3. COCOON SHIELD: Encase inward
+    if (animBlends.cocoon > 0.001) {
+      const cocoonCurl = -2.2 * s2;
+      pitch = pitch * (1.0 - animBlends.cocoon * 0.9) + cocoonCurl * animBlends.cocoon;
+      yaw = yaw * (1.0 - animBlends.cocoon * 0.85) + (t.curlSign * 0.45 * s) * animBlends.cocoon;
+    }
+
+    // 4. VORTEX MAW: Azimuthal swirl
+    if (animBlends.vortex > 0.001) {
+      const vortexSpin = (time * 3.2 + s * 5.0) * (t.type === 2 ? 1.4 : 1.0);
+      pitch += (0.55 * Math.sin(vortexSpin) * s) * animBlends.vortex;
+      yaw += (1.6 * s + 0.4 * Math.cos(vortexSpin)) * animBlends.vortex;
+    }
+
+    // 5. NEURAL SPASM: High-frequency jitter
+    if (animBlends.spasm > 0.001) {
+      pitch += (Math.sin(time * 48.0 + t.index * 13.0 + i * 4.0) * 0.42 * s) * animBlends.spasm;
+      yaw += (Math.cos(time * 42.0 + t.index * 17.0 + i * 5.0) * 0.42 * s) * animBlends.spasm;
+    }
+
+    _vD.copy(t.T0).multiplyScalar(Math.cos(pitch)).addScaledVector(t.N0, Math.sin(pitch));
+    _vD.applyAxisAngle(t.T0, yaw);
+    _vD.y -= (0.11 * s2) * (1.0 - animBlends.swim * 0.7); // gravity droop
+
+    t.cp[i].copy(t.cp[i - 1]).addScaledVector(_vD.normalize(), segLen);
+  }
+
+  // Sample Catmull-Rom spline points
+  let idx = 0;
+  for (let sp = 0; sp < SPANS; sp++) {
+    const p0 = t.cp[Math.max(0, sp - 1)];
+    const p1 = t.cp[sp];
+    const p2 = t.cp[sp + 1];
+    const p3 = t.cp[Math.min(SPANS, sp + 2)];
+    for (let k = 0; k < PER_SPAN; k++) {
+      crEval(p0, p1, p2, p3, k / PER_SPAN, t.pts[idx++]);
+    }
+  }
+  t.pts[S].copy(t.cp[SPANS]);
+
+  // Update photophore coordinate at tip
+  const tipO = t.index * 3;
+  tipPhotophorePositions[tipO] = t.pts[S].x;
+  tipPhotophorePositions[tipO + 1] = t.pts[S].y;
+  tipPhotophorePositions[tipO + 2] = t.pts[S].z;
+
+  // Zero-twist Parallel Transport Frame
+  _t0.subVectors(t.pts[1], t.pts[0]).normalize();
+  if (!t.inited) {
+    _nn.set(0, 1, 0);
+    if (Math.abs(_t0.y) > 0.95) _nn.set(1, 0, 0);
+    _nn.projectOnPlane(_t0).normalize();
+    t.prevTan.copy(_t0);
+    t.inited = true;
+  } else {
+    _nn.copy(t.prevN).projectOnPlane(_t0);
+    if (_nn.lengthSq() < 1e-8) _nn.copy(t.B0);
+    _nn.normalize();
+  }
+
+  writeTentacleRing(t, 0, t.pts[0], _t0, _nn, time);
+  t.prevTan.copy(_t0);
+
+  for (let i = 1; i <= S; i++) {
+    _t1.subVectors(t.pts[Math.min(i + 1, S)], t.pts[i - 1]);
+    if (_t1.lengthSq() < 1e-10) _t1.copy(t.prevTan);
+    else _t1.normalize();
+
+    _quat.setFromUnitVectors(t.prevTan, _t1);
+    _nn.applyQuaternion(_quat).normalize();
+    writeTentacleRing(t, i, t.pts[i], _t1, _nn, time);
+    t.prevTan.copy(_t1);
+  }
+
+  t.prevN.copy(_nn);
+  t.posAttr.needsUpdate = true;
+  t.normAttr.needsUpdate = true;
+}
+
+const pointer = new THREE.Vector2(0, 0);
+const raycaster = new THREE.Raycaster();
+const reachSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 3.0);
+const reachGoal = new THREE.Vector3(0, -2.5, 0);
+const reachCur = new THREE.Vector3(0, -2.5, 0);
+const _hitPoint = new THREE.Vector3();
+let reachWeight = 0, pointerActive = false;
+
+let provoke = 0, provokeVelocity = 0, provokeTarget = 0;
+let holdTimer = null, downCoords = null, wasDragged = false;
+
+window.addEventListener('pointermove', (e) => {
+  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  pointerActive = true;
+  if (downCoords && !wasDragged && Math.hypot(e.clientX - downCoords.x, e.clientY - downCoords.y) > 7) {
+    wasDragged = true;
+    clearTimeout(holdTimer);
+  }
+});
+
+const cvs = renderer.domElement;
+cvs.addEventListener('pointerdown', (e) => {
+  downCoords = { x: e.clientX, y: e.clientY };
+  wasDragged = false;
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(() => {
+    if (!wasDragged) {
+      provokeTarget = 1.0;
+      stage.classList.add('provoking');
+    }
+  }, 220);
+  stage.classList.add('grabbing');
+});
+
+function releaseProvoke(e) {
+  clearTimeout(holdTimer);
+  holdTimer = null;
+  provokeTarget = 0.0;
+  downCoords = null;
+  stage.classList.remove('grabbing', 'provoking');
+  if (e && e.pointerType !== 'mouse') pointerActive = false;
+}
+
+window.addEventListener('pointerup', releaseProvoke);
+window.addEventListener('pointercancel', releaseProvoke);
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    clearTimeout(holdTimer);
+    provokeTarget = 1.0;
+    stage.classList.add('provoking');
+  } else if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+    const modes = ['drift', 'swim', 'bloom', 'cocoon', 'vortex', 'spasm'];
+    setAnimationMode(modes[parseInt(e.key) - 1]);
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') {
+    provokeTarget = 0.0;
+    stage.classList.remove('provoking');
+  }
+});
+
+const ekgCvs = document.getElementById('ekgCanvas');
+const ekgCtx = ekgCvs.getContext('2d');
+const bpmNum = document.getElementById('bpmNum');
+const statusBadge = document.getElementById('statusBadge');
+
+const ekgPoints = new Array(70).fill(16);
+let ekgPhase = 0;
+let currentBPM = 56;
+let nextHeartbeat = 0;
+
+function updateTelemetry(time, dt) {
+  let state = currentAnim.toUpperCase();
+  if (provokeTarget > 0.5 || provoke > 0.4) {
+    state = 'AGITATED';
+  } else if (Math.abs(provokeVelocity) > 0.3 || provoke > 0.08) {
+    state = 'RECOVERING';
+  } else if (reachWeight > 0.3 && currentAnim === 'drift') {
+    state = 'CURIOUS';
+  }
+
+  statusBadge.textContent = state;
+  statusBadge.className = (state === 'AGITATED' || state === 'SPASM') ? 'status-badge agitated' : 'status-badge';
+
+  const targetBPM = 54 + (provoke * 85) + (animBlends.swim * 42) + (animBlends.spasm * 72) - (animBlends.cocoon * 22);
+  currentBPM += (targetBPM - currentBPM) * 3.0 * dt;
+  bpmNum.textContent = Math.round(currentBPM);
+
+  // EKG wave synthesis
+  ekgPhase += dt * (currentBPM / 60) * 8.0;
+  let waveY = 16;
+  const p = ekgPhase % 8.0;
+  if (p > 1.0 && p < 1.4) waveY = 16 - 3;         // P wave
+  else if (p > 1.9 && p < 2.05) waveY = 16 + 2;   // Q wave
+  else if (p >= 2.05 && p < 2.3) waveY = 16 - 13; // R spike
+  else if (p >= 2.3 && p < 2.5) waveY = 16 + 6;   // S wave
+  else if (p > 3.2 && p < 3.8) waveY = 16 - 4;    // T wave
+
+  ekgPoints.push(waveY);
+  ekgPoints.shift();
+
+  // Draw EKG
+  const style = getComputedStyle(document.body);
+  const strokeCol = style.getPropertyValue('--ekg-stroke').trim() || '#221e17';
+
+  ekgCtx.clearRect(0, 0, ekgCvs.width, ekgCvs.height);
+  ekgCtx.beginPath();
+  ekgCtx.strokeStyle = strokeCol;
+  ekgCtx.lineWidth = 1.5;
+  const step = ekgCvs.width / (ekgPoints.length - 1);
+  for (let i = 0; i < ekgPoints.length; i++) {
+    const x = i * step;
+    const y = ekgPoints[i];
+    if (i === 0) ekgCtx.moveTo(x, y);
+    else ekgCtx.lineTo(x, y);
+  }
+  ekgCtx.stroke();
+
+  // Audio heartbeat sync
+  if (time > nextHeartbeat) {
+    playCardiacThump();
+    nextHeartbeat = time + (60 / currentBPM);
+  }
+}
+
+const themes = [
+  { name: 'Archival', bodyClass: '', fog: 0xd8d2c3, tentColor: 0x12100e },
+  { name: 'Abyssal', bodyClass: 'theme-abyss', fog: 0x05080f, tentColor: 0x070c14 },
+  { name: 'Emerald', bodyClass: 'theme-emerald', fog: 0x030d0a, tentColor: 0x04100c }
+];
+let themeIdx = 0;
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  themeIdx = (themeIdx + 1) % themes.length;
+  const th = themes[themeIdx];
+  document.body.className = th.bodyClass;
+  document.getElementById('themeName').textContent = th.name;
+  scene.fog.color.setHex(th.fog);
+  tentacleMat.color.setHex(th.tentColor);
+});
+
+// Tuning drawer events
+const tuningToggle = document.getElementById('tuningToggle');
+const tuningDrawer = document.getElementById('tuningDrawer');
+tuningToggle.addEventListener('click', () => {
+  tuningDrawer.classList.toggle('open');
+  tuningToggle.classList.toggle('active');
+});
+
+document.getElementById('tuneWrithe').addEventListener('input', (e) => modWrithe = parseFloat(e.target.value));
+document.getElementById('tuneCurl').addEventListener('input', (e) => modCurl = parseFloat(e.target.value));
+document.getElementById('tuneBreath').addEventListener('input', (e) => modBreath = parseFloat(e.target.value));
+document.getElementById('tuneGloss').addEventListener('input', (e) => {
+  tentacleMat.clearcoat = parseFloat(e.target.value);
+});
+
+const clock = new THREE.Clock();
+let animTime = 0, introProgress = 0;
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.04);
+  introProgress = Math.min(1.0, introProgress + dt / 2.0);
+  const growFactor = 1.0 - Math.pow(1.0 - introProgress, 3);
+
+  // Smooth behavioral animation blend weights
+  for (const mode in animBlends) {
+    const target = (mode === currentAnim) ? 1.0 : 0.0;
+    animBlends[mode] += (target - animBlends[mode]) * (1.0 - Math.exp(-4.5 * dt));
+  }
+
+  // Underdamped spring provocation response
+  provokeVelocity += (provokeTarget - provoke) * 48 * dt;
+  provokeVelocity *= Math.exp(-8.0 * dt);
+  provoke += provokeVelocity * dt;
+  provoke = Math.max(-0.15, Math.min(1.2, provoke));
+
+  animTime += dt * (1.0 + 1.25 * Math.max(0, provoke) + animBlends.swim * 0.5 + animBlends.spasm * 1.2) * modBreath;
+
+  // Hydrodynamic swimming physics
+  if (animBlends.swim > 0.05) {
+    swimCycleTime += dt * 1.4;
+    const swimCyclePhase = (swimCycleTime % 1.8) / 1.8;
+    if (swimCyclePhase < 0.25) {
+      creatureVelocityY += (1.4 - creatureVelocityY) * 8.0 * dt;
+    } else {
+      creatureVelocityY *= Math.exp(-2.2 * dt);
+    }
+  } else {
+    creatureVelocityY *= Math.exp(-3.5 * dt);
+  }
+  creatureBaseY += creatureVelocityY * dt * animBlends.swim;
+  creatureBaseY *= Math.exp(-0.8 * dt); // Soft origin restoration
+
+  controls.update();
+
+  // Floating body drift + swim locomotion
+  creature.rotation.y = 0.08 * Math.sin(animTime * 0.12) + (animBlends.vortex * animTime * 0.8);
+  creature.rotation.x = 0.05 * Math.sin(animTime * 0.09 + 1.2) - (animBlends.swim * 0.25);
+  creature.rotation.z = 0.03 * Math.sin(animTime * 0.15 + 0.6);
+  creature.position.y = Math.sin(animTime * 0.65) * 0.08 + (creatureBaseY * 0.7);
+  creature.updateMatrixWorld(true);
+
+  // Pointer sensory tracking
+  if (pointerActive) {
+    raycaster.setFromCamera(pointer, camera);
+    if (!raycaster.ray.intersectSphere(reachSphere, _hitPoint)) {
+      raycaster.ray.closestPointToPoint(reachSphere.center, _hitPoint);
+    }
+    creature.worldToLocal(_hitPoint);
+    reachGoal.copy(_hitPoint);
+  }
+  reachCur.lerp(reachGoal, 1.0 - Math.exp(-3.2 * dt));
+  reachWeight += ((pointerActive ? 1 : 0) - reachWeight) * (1.0 - Math.exp(-2.2 * dt));
+
+  // Update shaders
+  bodyMat.uniforms.uTime.value = animTime;
+  bodyMat.uniforms.uProvoke.value = Math.max(0, provoke + animBlends.spasm * 0.7);
+  photophoreMat.uniforms.uProvoke.value = Math.max(0, provoke + animBlends.spasm * 0.8 + animBlends.bloom * 0.5);
+
+  // Update all 32 tentacles
+  for (let i = 0; i < TOTAL_TENTACLES; i++) {
+    updateTentaclePhysics(tentacles[i], animTime, provoke, reachCur, reachWeight, growFactor);
+  }
+  photophoreGeo.attributes.position.needsUpdate = true;
+
+  updateTelemetry(animTime, dt);
+  renderer.render(scene, camera);
+});
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  bodyMat.uniforms.uSize.value = 20 * renderer.getPixelRatio();
+}
+window.addEventListener('resize', onResize);
+</script>
+</body>
+</html>
