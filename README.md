@@ -229,6 +229,7 @@ ORDINARY-TECHNOLOGY/
 ├── tentacle1.js            # Tentacle OS logic (ES Module)
 ├── tentacle_orb.js         # GPU-animated tentacle orb system
 ├── tentacle_orb_three.js   # Three.js tentacle orb integration
+├── tentacleos.js           # Procedural Exotic Console logic
 ├── shader.js               # Background WebGL shader system
 ├── shader2.js              # Secondary shader effects
 ├── banner.js               # Announcement banner logic
@@ -237,6 +238,9 @@ ORDINARY-TECHNOLOGY/
 ├── ordinary.js             # Core utility functions
 ├── script.js               # Legacy script utilities
 ├── entity*.js              # Entity/organism system (6 files)
+├── sdf-entity.js           # SDF Entity logic
+├── sathor-grid.js          # Sathor grid Three.js module
+├── ufo_fleet.js            # UFO fleet animation script
 ├── hgt25.js                # Void Symbiote entity
 ├── procedural-textures.js  # Runtime texture generation
 ├── translator.js           # Localization system
@@ -270,10 +274,17 @@ ORDINARY-TECHNOLOGY/
 ├── entity-debug.html       # Entity system debugger
 ├── easteregg.html          # Easter egg page
 ├── egg[1-9].html           # Hidden easter egg pages
+├── ageofwar.html           # Arcade console embed (Age of War)
+├── doom.html               # Arcade console embed (Doom)
+├── kingdomrush.html        # Arcade console embed (Kingdom Rush)
+├── laststand.html          # Arcade console embed (Last Stand)
+├── robofauna.html          # Robofauna SDF simulation
+├── step1.html              # Retro Console Conspiracy ARG step
 │
 ├── aerospace-piano/        # Haptic piano web app
 ├── beta1/                  # Project Escapism beta
 ├── celeritas 2/            # Celeritas project
+├── fluidlake/              # Fluidlake simulation & truck builder
 ├── micro-ascension/        # Micro Ascension game
 ├── micro-life-iso/         # Isometric micro-life sim
 ├── ordinary-recycling/     # Recycling training game
@@ -339,6 +350,10 @@ ORDINARY-TECHNOLOGY/
 | **Celeritas 2** | Project | Speed/light-themed project |
 | **Neural Breach** | Puzzle Game | In-page canvas-based node puzzle |
 | **Liquid Music** | Audio Player | Frequency-based music interface |
+| **Robofauna** | SDF Simulation | Procedural robotic fauna rendering and simulation |
+| **Fluidlake** | 3D Studio & Game | Studio and truck builder application |
+| **Arcade Classics** | Arcade Emulation | Emulations of Doom, Age of War, Kingdom Rush, and Last Stand |
+| **Retro Conspiracy** | ARG / Puzzle | Terminal-based puzzle and conspiracy experience |
 
 ---
 
@@ -381,6 +396,28 @@ The site functions as a tech news aggregator with articles covering:
 - Project Aquarium: Cross-Lingual AI Agents (DeepMind)
 - Autonomous Vehicle Legislation (AB 1777)
 - Artemis Program Lunar Operations
+
+---
+
+## 🔮 Procedural & Hidden Systems
+
+ORDINARY TECHNOLOGY contains a wide range of creative, experimental, and nonstandard modules:
+
+### 1. Alien Biome Generator (`easteregg.html`)
+An interactive procedural 3D world generator that uses fractal noise, quantum math, and procedural functions to generate alien biomes (Crystalline, Fungal, Metallic, Plasma, Fractal, Organic, Quantum). Users can tweak gravity, complexity, and the 'alien factor', and export the generated worlds to `.PLY` format for 3D viewing.
+
+### 2. Meta-Programming & Esoteric Code (`mental.js`)
+A meta-script filled with code snippets in esoteric languages (Brainfuck, Malbolge, Shakespeare, Piet, Whitespace, LOLCODE), encrypted headers, and intentionally chaotic shaders. It serves as a playful homage to deep programming culture.
+
+### 3. Weapon Lab Lore (`forum.html`)
+A 3D weapon viewer with Babylon.js containing classified prototype data, environment toggles (hologram, X-ray), and a 'lab' UI with scanlines, overlays, and secret weapon lore.
+
+### 4. Audio/Visual Experimentation (`liquidMusic.html` & `videoPlayer.html`)
+- **Liquid Music:** A music player with real-time filter controls, visualizers, and neural network-inspired backgrounds. Supports recording and switching between visualizer modes.
+- **Custom Video Player:** Features keyboard shortcuts, filter cycling (e.g., X-ray, psychedelic, neon glow), and advanced UI overlays.
+
+### 5. Hidden, Playful, and Meta Content
+Multiple `egg[1-9].html` files and console commands unlock hidden games, visualizations, and effects. Some are only accessible via special input or rapid clicking. The project is self-aware, referencing its own structure and the nature of computation.
 
 ---
 
