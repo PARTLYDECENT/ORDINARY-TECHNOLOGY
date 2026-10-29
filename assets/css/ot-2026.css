@@ -1,0 +1,922 @@
+/* =====================================================================
+   ORDINARY TECHNOLOGY // 2026 ENHANCEMENT LAYER
+   Progressive enhancement on top of the existing index.html styling.
+   Techniques: cross-document View Transitions, CSS scroll-driven
+   animations, @property animated borders, oklch/color-mix tokens,
+   text-wrap balance/pretty, content-visibility, native <dialog>.
+   Everything is feature-gated and respects prefers-reduced-motion.
+   ===================================================================== */
+
+/* ---------- Tokens ---------- */
+@property --ot-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+:root {
+  --ot-ember: #ff6b3f;
+  --ot-copper: #e89b6a;
+  --ot-signal: #00ffaa;
+  --ot-ice: #7fd8ff;
+  --ot-ink: #05050b;
+  --ot-glass: rgba(10, 10, 18, 0.62);
+  --ot-hair: rgba(255, 255, 255, 0.09);
+  --ot-hair-strong: rgba(255, 255, 255, 0.16);
+  --ot-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ot-ease-spring: linear(0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001);
+  --ot-dock-h: 54px;
+}
+
+@supports (color: oklch(0.7 0.18 40)) {
+  :root {
+    --ot-ember: oklch(0.71 0.19 38);
+    --ot-signal: oklch(0.89 0.19 165);
+  }
+}
+
+/* ---------- Cross-document view transitions (Chrome/Edge/Safari 18+) ---------- */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.38s;
+  animation-timing-function: var(--ot-ease);
+}
+
+/* ---------- Global refinements ---------- */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--ot-dock-h) + 36px);
+  color-scheme: dark;
+  scrollbar-color: rgba(255, 107, 63, 0.45) #05050b;
+  scrollbar-width: thin;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ot-ember) 70%, transparent);
+  color: #fff;
+}
+
+h1, h2, h3, .showcase-title, .entry-title, .dossier-title, .mission-title {
+  text-wrap: balance;
+}
+
+p, .entry-content, .showcase-description, .dossier-text p {
+  text-wrap: pretty;
+  hanging-punctuation: first;
+}
+
+.news-tab-count, .stat-value, .ot-stat-num, #ot-dock-clock, .card-date-pill {
+  font-variant-numeric: tabular-nums;
+}
+
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--ot-signal);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Rendering perf: skip offscreen layout for heavy, static-ish sections */
+#neural-hub-2026,
+#aerospace-launchpad {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+
+/* ---------- Scroll progress rail ---------- */
+#ot-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 10001;
+  pointer-events: none;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--ot-progress, 0));
+  background: linear-gradient(90deg, var(--ot-ember), var(--ot-copper) 55%, var(--ot-signal));
+  box-shadow: 0 0 12px rgba(255, 107, 63, 0.7);
+}
+
+@supports (animation-timeline: scroll()) {
+  #ot-progress {
+    transform: scaleX(0);
+    animation: ot-progress linear both;
+    animation-timeline: scroll(root block);
+  }
+  @keyframes ot-progress { to { transform: scaleX(1); } }
+}
+
+/* ---------- Floating command dock (Linear / Vercel style) ---------- */
+#ot-dock {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 9000;
+  height: var(--ot-dock-h);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 999px;
+  background: var(--ot-glass);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  border: 1px solid var(--ot-hair-strong);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  transition: translate 0.5s var(--ot-ease), opacity 0.35s ease;
+  max-width: calc(100vw - 24px);
+}
+
+#ot-dock.ot-hidden {
+  translate: -50% calc(-100% - 30px);
+  opacity: 0;
+}
+
+/* Animated conic "beam" border */
+#ot-dock::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--ot-angle), transparent 0 70%, var(--ot-ember) 80%, var(--ot-signal) 88%, transparent 96%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ot-spin 6s linear infinite;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+@keyframes ot-spin { to { --ot-angle: 360deg; } }
+
+.ot-dock-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid var(--ot-hair);
+  color: #fff;
+  font-family: var(--font-display, 'Oxanium', sans-serif);
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.ot-dock-brand .ot-glyph {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 30% 30%, #fff 0 8%, transparent 9%),
+    conic-gradient(from 210deg, var(--ot-ember), var(--ot-copper), var(--ot-signal), var(--ot-ember));
+  box-shadow: 0 0 14px rgba(255, 107, 63, 0.55);
+}
+
+.ot-dock-links {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ot-dock-links::-webkit-scrollbar { display: none; }
+
+.ot-dock-indicator {
+  position: absolute;
+  top: 50%;
+  height: 32px;
+  translate: 0 -50%;
+  left: var(--ind-x, 0px);
+  width: var(--ind-w, 0px);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 18px rgba(255, 107, 63, 0.22);
+  transition: left 0.5s var(--ot-ease-spring), width 0.5s var(--ot-ease-spring), opacity 0.3s;
+  pointer-events: none;
+  opacity: var(--ind-o, 0);
+}
+
+.ot-dock-link {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  background: none;
+  border: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.25s ease;
+}
+
+.ot-dock-link:hover { color: #fff; }
+.ot-dock-link.is-active { color: #fff; }
+
+.ot-dock-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--ot-hair);
+}
+
+#ot-dock-clock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+#ot-dock-clock::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ot-signal);
+  box-shadow: 0 0 10px var(--ot-signal);
+  animation: ot-blink 1.6s ease-in-out infinite;
+}
+
+@keyframes ot-blink { 50% { opacity: 0.25; } }
+
+.ot-kbd-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ot-hair-strong);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.ot-kbd-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.ot-kbd-btn kbd {
+  font: inherit;
+  font-size: 0.62rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+@media (max-width: 1080px) {
+  #ot-dock-clock { display: none; }
+}
+
+@media (max-width: 760px) {
+  #ot-dock { top: auto; bottom: 14px; }
+  #ot-dock.ot-hidden { translate: -50% calc(100% + 30px); }
+  .ot-dock-brand span:last-child { display: none; }
+  .ot-kbd-btn kbd { display: none; }
+}
+
+/* ---------- Live headline ticker ---------- */
+#ot-ticker {
+  position: relative;
+  z-index: 99;
+  display: flex;
+  align-items: stretch;
+  height: 38px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(8, 8, 14, 0.96), rgba(4, 4, 8, 0.96));
+  border-bottom: 1px solid var(--ot-hair);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.ot-ticker-label {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #05050b;
+  background: linear-gradient(135deg, #fff, #ffd8be);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  padding-right: 26px;
+  z-index: 2;
+}
+
+.ot-ticker-label::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff2b2b;
+  box-shadow: 0 0 8px #ff2b2b;
+  animation: ot-blink 1s ease-in-out infinite;
+}
+
+.ot-ticker-viewport {
+  flex: 1;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+
+.ot-ticker-track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+  align-items: center;
+  animation: ot-marquee var(--ot-ticker-dur, 70s) linear infinite;
+}
+
+#ot-ticker:hover .ot-ticker-track { animation-play-state: paused; }
+
+@keyframes ot-marquee { to { transform: translateX(-50%); } }
+
+.ot-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 28px;
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.ot-ticker-item:hover { color: #fff; }
+
+.ot-ticker-item b {
+  color: var(--ot-ember);
+  font-weight: 700;
+}
+
+.ot-ticker-item::after {
+  content: '◆';
+  margin-left: 28px;
+  font-size: 0.5rem;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* ---------- Hero banner: scroll-driven depth ---------- */
+.banner-container {
+  isolation: isolate;
+}
+
+.banner-container::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 32%;
+  background: linear-gradient(180deg, transparent, var(--background, #050511));
+  pointer-events: none;
+  z-index: 2;
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .banner-container .banner-image {
+      animation: ot-hero-depth linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 90vh;
+      transform-origin: 50% 30%;
+    }
+    @keyframes ot-hero-depth {
+      to { scale: 1.12; translate: 0 8%; opacity: 0.35; filter: blur(2px) saturate(1.2); }
+    }
+  }
+}
+
+/* ---------- Spotlight cards (pointer-tracked glow + border light) ---------- */
+.ot-spot-host {
+  position: relative;
+  isolation: isolate;
+}
+
+.ot-spot {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 140, 70, 0.13), transparent 42%);
+}
+
+.ot-spot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 190, 140, 0.9), rgba(0, 255, 170, 0.35) 30%, transparent 60%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.ot-spot-host:hover > .ot-spot { opacity: 1; }
+
+.tool-card .ot-spot { background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 140, 70, 0.14), transparent 60%); }
+
+/* ---------- Showcase: newsroom bento with featured lead story ---------- */
+#main-showcase-grid {
+  grid-auto-flow: row dense;
+}
+
+@media (min-width: 1100px) {
+  #main-showcase-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #main-showcase-grid .showcase-item.ot-featured {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+
+  #main-showcase-grid .showcase-item.ot-featured .showcase-image {
+    flex: 1 1 auto;
+    aspect-ratio: auto;
+    min-height: 360px;
+  }
+
+  #main-showcase-grid .showcase-item.ot-featured .showcase-title {
+    font-size: clamp(1.6rem, 2.2vw, 2.15rem);
+    line-height: 1.15;
+  }
+
+  #main-showcase-grid .showcase-item.ot-featured .showcase-content {
+    flex: none;
+    padding: 2rem 2.2rem 2.2rem;
+  }
+
+  #main-showcase-grid .showcase-item.ot-featured .showcase-content > p:not(.news-snippet) {
+    font-size: 1.02rem;
+    max-width: 68ch;
+  }
+
+  #main-showcase-grid .showcase-item.ot-featured .card-sector-pill::before {
+    content: 'LEAD STORY · ';
+    color: var(--ot-ember);
+  }
+}
+
+/* Featured beam border */
+.showcase-item.ot-featured::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--ot-angle), transparent 0 65%, rgba(255, 107, 63, 0.9) 78%, rgba(0, 255, 170, 0.7) 86%, transparent 95%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ot-spin 7s linear infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Sticky, glassy filter bar */
+.news-tabs-bar {
+  position: sticky;
+  top: calc(var(--ot-dock-h) + 24px);
+  z-index: 60;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+}
+
+@media (max-width: 760px) {
+  .news-tabs-bar {
+    top: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+  .news-tab-btn { flex: none; }
+}
+
+/* View-transition choreography for tab filtering + dossier */
+::view-transition-group(*) {
+  animation-duration: 0.48s;
+  animation-timing-function: var(--ot-ease);
+}
+
+::view-transition-group(ot-dossier-hero) {
+  animation-duration: 0.55s;
+  animation-timing-function: var(--ot-ease-spring);
+}
+
+::view-transition-old(ot-dossier-hero),
+::view-transition-new(ot-dossier-hero) {
+  height: 100%;
+  object-fit: cover;
+  overflow: clip;
+}
+
+/* ---------- Metrics strip ---------- */
+.ot-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  max-width: 980px;
+  margin: 0.4rem auto 2rem;
+  border: 1px solid var(--ot-hair);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ot-hair);
+}
+
+.ot-metric {
+  padding: 1rem 1.2rem;
+  background: rgba(6, 6, 12, 0.88);
+  text-align: left;
+}
+
+.ot-stat-num {
+  display: block;
+  font-family: var(--font-display, 'Oxanium', sans-serif);
+  font-weight: 800;
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  letter-spacing: 0.5px;
+  color: #fff;
+  line-height: 1.1;
+  background: linear-gradient(180deg, #fff 30%, #ffc9a8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ot-stat-label {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.64rem;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 720px) {
+  .ot-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- Scroll-driven entrances (no conflict with .scroll-reveal) ---------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .hub-category,
+    .project-card,
+    .ot-metric {
+      animation: ot-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+
+    @keyframes ot-rise {
+      from { opacity: 0; translate: 0 48px; scale: 0.97; }
+      to { opacity: 1; translate: 0 0; scale: 1; }
+    }
+
+    /* Ken-Burns settle on story imagery as it scrolls in */
+    .showcase-image img {
+      animation: ot-settle linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 50%;
+    }
+
+    @keyframes ot-settle {
+      from { scale: 1.14; }
+      to { scale: 1; }
+    }
+  }
+}
+
+/* Observer-driven entrance for archive entries (they already run !important morph animations) */
+@media (prefers-reduced-motion: no-preference) {
+  .archive-entry.ot-io-pending {
+    opacity: 0;
+    translate: 0 40px;
+  }
+  .archive-entry.ot-io-in {
+    opacity: 1;
+    translate: 0 0;
+    transition: opacity 0.7s var(--ot-ease), translate 0.8s var(--ot-ease), border-color 0.3s ease, box-shadow 0.3s ease !important;
+    transition-delay: var(--ot-delay, 0ms) !important;
+  }
+}
+
+/* ---------- Command palette (native <dialog>) ---------- */
+#ot-palette {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(560px, 78vh);
+  margin: 12vh auto auto;
+  padding: 0;
+  border: 1px solid var(--ot-hair-strong);
+  border-radius: 16px;
+  background: rgba(8, 8, 14, 0.94);
+  backdrop-filter: blur(24px) saturate(160%);
+  color: #fff;
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 107, 63, 0.1), 0 0 60px rgba(255, 107, 63, 0.14);
+  overflow: hidden;
+  font-family: var(--font-sans, 'Space Grotesk', sans-serif);
+}
+
+#ot-palette[open] {
+  display: flex;
+  flex-direction: column;
+  animation: ot-pop 0.32s var(--ot-ease-spring);
+}
+
+#ot-palette::backdrop {
+  background: rgba(2, 2, 6, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+@keyframes ot-pop {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+}
+
+.ot-pal-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--ot-hair);
+}
+
+.ot-pal-search svg { flex: none; opacity: 0.55; }
+
+#ot-pal-input {
+  flex: 1;
+  background: none;
+  border: 0;
+  outline: none;
+  color: #fff;
+  font: inherit;
+  font-size: 1.02rem;
+}
+
+#ot-pal-input::placeholder { color: rgba(255, 255, 255, 0.38); }
+
+.ot-pal-esc {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--ot-hair-strong);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+#ot-pal-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ot-pal-group {
+  padding: 10px 10px 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6rem;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ot-pal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.92rem;
+}
+
+.ot-pal-item .ot-pal-ico {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ot-hair);
+  font-size: 0.9rem;
+}
+
+.ot-pal-item .ot-pal-hint {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+}
+
+.ot-pal-item[aria-selected='true'] {
+  background: linear-gradient(90deg, rgba(255, 107, 63, 0.18), rgba(255, 255, 255, 0.04));
+  color: #fff;
+  box-shadow: inset 2px 0 0 var(--ot-ember);
+}
+
+.ot-pal-empty {
+  padding: 28px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.9rem;
+}
+
+.ot-pal-foot {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--ot-hair);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- Dossier modal polish ---------- */
+#intel-dossier-modal.open .dossier-dialog {
+  animation: ot-pop 0.4s var(--ot-ease-spring);
+}
+
+.dossier-hero img {
+  view-transition-name: none;
+}
+
+/* ---------- Magnetic targets ---------- */
+.ot-magnetic {
+  transition: translate 0.45s var(--ot-ease-spring);
+  will-change: translate;
+}
+
+/* ---------- Section rhythm ---------- */
+#interactive-showcase,
+#data-archives,
+#neural-hub-2026,
+#aerospace-launchpad,
+#transmission-hub {
+  scroll-margin-top: calc(var(--ot-dock-h) + 36px);
+}
+
+#interactive-showcase::before,
+#data-archives::before {
+  content: '';
+  position: absolute;
+  inset: -40px -10vw auto;
+  height: 420px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 60% at 50% 0%, rgba(255, 107, 63, 0.12), transparent 70%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.07) 1px, transparent 0) 0 0 / 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 10%, #000, transparent 75%);
+  mask-image: radial-gradient(ellipse 60% 70% at 50% 10%, #000, transparent 75%);
+}
+
+/* ---------- Access Panel, Transmission Hub & Shader Grid Refinements ---------- */
+.container.breathing-container {
+  max-width: 1360px !important;
+  margin: 4rem auto !important;
+  padding: 3rem 2.5rem !important;
+  border-radius: 20px !important;
+  background: linear-gradient(165deg, rgba(14, 14, 24, 0.85) 0%, rgba(5, 5, 11, 0.94) 100%) !important;
+  border: 1px solid var(--ot-hair-strong) !important;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(20px);
+}
+
+.container.breathing-container .button-container {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)) !important;
+  gap: 0.85rem !important;
+  margin-top: 1.75rem !important;
+}
+
+.container.breathing-container .button {
+  width: 100% !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace) !important;
+  font-size: 0.76rem !important;
+  letter-spacing: 1.6px !important;
+}
+
+#transmission-hub {
+  max-width: 1440px;
+  margin: 4rem auto;
+  padding: 3.5rem 2rem;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(8, 8, 16, 0.85), rgba(4, 4, 10, 0.95));
+  border: 1px solid var(--ot-hair);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+#transmission-hub .space-age-container {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)) !important;
+  gap: 1.25rem !important;
+  padding: 1.5rem !important;
+  background: rgba(6, 6, 12, 0.75) !important;
+  border: 1px solid var(--ot-hair-strong) !important;
+  border-radius: 16px !important;
+  animation: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 50px rgba(0, 0, 0, 0.6) !important;
+}
+
+#transmission-hub .space-age-container iframe {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--ot-hair) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+.ot-mirror-bar {
+  display: flex;
+  justify-content: center;
+  margin: 2rem auto;
+}
+
+.ot-mirror-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  background: rgba(14, 14, 24, 0.85);
+  border: 1px solid var(--ot-hair-strong);
+  color: #fff;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.3s var(--ot-ease);
+}
+
+.ot-mirror-btn:hover {
+  border-color: var(--ot-ember);
+  box-shadow: 0 0 25px rgba(255, 107, 63, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  transform: translateY(-2px);
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  #ot-dock::before,
+  .showcase-item.ot-featured::after { animation: none; }
+  .ot-ticker-track { animation-duration: 240s; }
+  .ot-magnetic { translate: none !important; }
+  ::view-transition-group(*) { animation-duration: 0s !important; }
+}
