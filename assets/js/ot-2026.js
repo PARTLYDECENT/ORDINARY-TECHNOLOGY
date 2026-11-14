@@ -208,7 +208,7 @@
 
   function initMagnetic() {
     if (!finePointer || reduceMotion) return;
-    const targets = $$('.showcase-button, .news-tab-btn, .container .button, .launch-btn, .mission-btn, .ot-kbd-btn');
+    const targets = $$('.showcase-button, .news-tab-btn, .container .button, .launch-btn, .mission-btn, .ot-kbd-btn, .ot-hero-pill');
     targets.forEach((el) => {
       el.classList.add('ot-magnetic');
       el.addEventListener('pointermove', (e) => {
@@ -393,6 +393,12 @@
       const cat = b.dataset.showcaseTab;
       if (label && cat) cmds.push({ group: 'Filters', ico: '⧉', label: `Show ${label.textContent.trim()}`, hint: 'filter', run: () => { window.filterShowcaseTabs(cat, b); $('#interactive-showcase').scrollIntoView({ behavior: 'smooth' }); } });
     });
+    $$('#neural-hub-2026 .tool-card').forEach((card) => {
+      const name = $('.tool-name', card)?.textContent.trim();
+      const tag = $('.tool-tag', card)?.textContent.trim() || 'tool';
+      const href = card.getAttribute('href');
+      if (name && href) cmds.push({ group: 'Neural Hub', ico: '◈', label: name, hint: tag, run: () => window.open(href, '_blank', 'noopener') });
+    });
     cmds.push(
       { group: 'Actions', ico: '⤒', label: 'Back to top', hint: 'scroll', run: () => scrollTo({ top: 0, behavior: 'smooth' }) },
       { group: 'Actions', ico: '⌘', label: 'Open Tentacle OS console', hint: 'os', run: () => { $('#tentacle-os')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => $('#os-cli-input')?.focus(), 600); } },
@@ -505,10 +511,274 @@
   }
 
   /* ------------------------------------------------------------------
+     11. Hero command bar (quick telemetry + navigation)
+     ------------------------------------------------------------------ */
+  function initHeroBar() {
+    const heroBanner = $('#css3d-container > .banner-container');
+    if (!heroBanner) return;
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const bar = document.createElement('div');
+    bar.id = 'ot-hero-bar';
+    bar.setAttribute('role', 'region');
+    bar.setAttribute('aria-label', 'Quick node navigation');
+    bar.innerHTML = `
+      <div class="ot-hero-status">
+        <span class="ot-hero-pulse" aria-hidden="true"></span>
+        <span>NODE // ORDINARY-TECH · SINGULARITY 2026</span>
+      </div>
+      <div class="ot-hero-actions">
+        <button type="button" class="ot-hero-pill ot-primary" data-hero-go="#interactive-showcase">Breakthroughs ↓</button>
+        <button type="button" class="ot-hero-pill" data-hero-sims>Sim Labs</button>
+        <button type="button" class="ot-hero-pill" data-hero-go="#neural-hub-2026">Neural Hub</button>
+        <button type="button" class="ot-hero-pill" data-hero-pal>Palette (${isMac ? '⌘K' : 'Ctrl K'})</button>
+      </div>`;
+    heroBanner.after(bar);
+
+    bar.addEventListener('click', (e) => {
+      const go = e.target.closest('[data-hero-go]');
+      if (go) {
+        const target = $(go.dataset.heroGo);
+        target?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        return;
+      }
+      if (e.target.closest('[data-hero-sims]')) {
+        const simBtn = $('#interactive-showcase [data-showcase-tab="sim-labs"]');
+        if (simBtn && window.filterShowcaseTabs) window.filterShowcaseTabs('sim-labs', simBtn);
+        $('#interactive-showcase')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        return;
+      }
+      if (e.target.closest('[data-hero-pal]')) openPalette();
+    });
+  }
+
+  /* ------------------------------------------------------------------
+     12. Dossier modal evolution (Prev/Next, copy link, archive log reader)
+     ------------------------------------------------------------------ */
+  function initDossierEnhancements() {
+    const modal = $('#intel-dossier-modal');
+    const dialog = modal && $('.dossier-dialog', modal);
+    const body = modal && $('.dossier-body', modal);
+    if (!modal || !dialog || !body) return;
+
+    const topbar = document.createElement('div');
+    topbar.className = 'ot-dossier-topbar';
+    topbar.innerHTML = `<span>ARCHIVE TELEMETRY // LOG INSPECTOR</span><button type="button" class="dossier-close-btn">[ ESC // CLOSE ]</button>`;
+    topbar.querySelector('.dossier-close-btn').addEventListener('click', () => window.closeIntelDossier && window.closeIntelDossier());
+    dialog.prepend(topbar);
+
+    const nav = document.createElement('div');
+    nav.className = 'ot-dossier-nav';
+    nav.innerHTML = `
+      <div class="ot-dossier-nav-group">
+        <button type="button" class="ot-dossier-btn" data-d-prev>← Prev</button>
+        <span class="ot-dossier-counter" data-d-count></span>
+        <button type="button" class="ot-dossier-btn" data-d-next>Next →</button>
+      </div>
+      <div class="ot-dossier-nav-group">
+        <button type="button" class="ot-dossier-btn" data-d-copy>Copy Link</button>
+      </div>`;
+    body.appendChild(nav);
+
+    const prevBtn = $('[data-d-prev]', nav);
+    const nextBtn = $('[data-d-next]', nav);
+    const copyBtn = $('[data-d-copy]', nav);
+    const countEl = $('[data-d-count]', nav);
+
+    const dossiers = window.INTEL_DOSSIERS || (typeof INTEL_DOSSIERS !== 'undefined' ? INTEL_DOSSIERS : null);
+    const dossierKeys = dossiers ? Object.keys(dossiers) : [];
+    const archiveEntries = $$('section#data-archives .archive-entry');
+
+    let mode = 'dossier';
+    let currentIdx = -1;
+
+    const updateNavUI = (idx, total, showCopy) => {
+      currentIdx = idx;
+      prevBtn.disabled = total <= 1;
+      nextBtn.disabled = total <= 1;
+      countEl.textContent = total > 0 ? `${idx + 1} / ${total}` : '';
+      copyBtn.style.display = showCopy ? '' : 'none';
+      copyBtn.textContent = 'Copy Link';
+    };
+
+    const origOpen = window.openIntelDossier;
+    const origClose = window.closeIntelDossier;
+
+    if (typeof origOpen === 'function') {
+      window.openIntelDossier = function (key) {
+        mode = 'dossier';
+        modal.classList.remove('ot-no-hero');
+        origOpen(key);
+        const idx = dossierKeys.indexOf(key);
+        updateNavUI(Math.max(0, idx), dossierKeys.length, true);
+        if (history.replaceState) history.replaceState(null, '', `#dossier=${encodeURIComponent(key)}`);
+      };
+    }
+
+    if (typeof origClose === 'function') {
+      window.closeIntelDossier = function () {
+        origClose();
+        if (location.hash.startsWith('#dossier=') && history.replaceState) {
+          history.replaceState(null, '', location.pathname + location.search);
+        }
+      };
+    }
+
+    function openArchiveEntry(idx) {
+      const entry = archiveEntries[idx];
+      if (!entry) return;
+      mode = 'archive';
+      modal.classList.add('ot-no-hero');
+      const stamp = $('.entry-timestamp', entry)?.textContent.trim() || 'ARCHIVE LOG';
+      const type = $('.entry-type', entry)?.textContent.trim() || 'DISPATCH';
+      const title = $('.entry-title', entry)?.textContent.trim() || 'ARCHIVE ENTRY';
+      const dateline = $('.entry-dateline', entry)?.textContent.trim() || '';
+      const paras = $$('.entry-content p', entry).map((p) => p.innerHTML);
+      const metricsBox = $('.entry-metrics-box', entry)?.innerHTML || '';
+
+      $('#dossier-modal-meta').textContent = `${type} // ${stamp}`;
+      $('#dossier-modal-title').textContent = title;
+      $('#dossier-modal-text').innerHTML =
+        (dateline ? `<p style="color:var(--ot-ember);font-family:var(--font-mono,monospace);font-size:0.78rem;letter-spacing:1.4px;">${dateline}</p>` : '') +
+        paras.map((p) => `<p>${p}</p>`).join('') +
+        (metricsBox ? `<div class="entry-metrics-box" style="margin-top:1rem;">${metricsBox}</div>` : '');
+      $('#dossier-modal-metrics').innerHTML = '';
+      modal.classList.add('open');
+      updateNavUI(idx, archiveEntries.length, false);
+    }
+
+    archiveEntries.forEach((entry, idx) => {
+      const link = $('.entry-link', entry);
+      if (!link) return;
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        openArchiveEntry(idx);
+      });
+    });
+
+    const step = (dir) => {
+      if (mode === 'dossier' && dossierKeys.length) {
+        const next = (currentIdx + dir + dossierKeys.length) % dossierKeys.length;
+        window.openIntelDossier(dossierKeys[next]);
+      } else if (mode === 'archive' && archiveEntries.length) {
+        const next = (currentIdx + dir + archiveEntries.length) % archiveEntries.length;
+        openArchiveEntry(next);
+      }
+    };
+
+    prevBtn.addEventListener('click', () => step(-1));
+    nextBtn.addEventListener('click', () => step(1));
+    copyBtn.addEventListener('click', () => {
+      const url = location.href;
+      navigator.clipboard?.writeText(url).then(() => {
+        copyBtn.textContent = 'Copied ✓';
+        setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 1800);
+      }).catch(() => {});
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!modal.classList.contains('open')) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    });
+
+    if (location.hash.startsWith('#dossier=')) {
+      const key = decodeURIComponent(location.hash.slice('#dossier='.length));
+      if (dossiers && dossiers[key] && window.openIntelDossier) {
+        setTimeout(() => window.openIntelDossier(key), 150);
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------------
+     13. Neural Hub 2026 live filter & search
+     ------------------------------------------------------------------ */
+  function initNeuralHubFilter() {
+    const hub = $('#neural-hub-2026');
+    const header = hub && $('.hub-header', hub);
+    if (!hub || !header) return;
+
+    const cards = $$('.tool-card', hub);
+    const categories = $$('.hub-category', hub);
+    if (!cards.length) return;
+
+    const controls = document.createElement('div');
+    controls.className = 'ot-hub-controls';
+    controls.innerHTML = `
+      <div class="ot-hub-search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" class="ot-hub-search" placeholder="Filter ${cards.length} frontier models &amp; AI tools…" aria-label="Filter Neural Hub tools">
+      </div>
+      <div class="ot-hub-pills" role="group" aria-label="Filter by tier">
+        <button type="button" class="ot-hub-pill is-active" data-tier="all">All</button>
+        <button type="button" class="ot-hub-pill" data-tier="free">Free</button>
+        <button type="button" class="ot-hub-pill" data-tier="premium">Premium</button>
+        <button type="button" class="ot-hub-pill" data-tier="enterprise">Enterprise</button>
+      </div>
+      <span class="ot-hub-count">Showing ${cards.length} / ${cards.length}</span>`;
+    header.after(controls);
+
+    const input = $('.ot-hub-search', controls);
+    const pills = $$('.ot-hub-pill', controls);
+    const countEl = $('.ot-hub-count', controls);
+    let tier = 'all';
+
+    const apply = () => {
+      const q = input.value.trim().toLowerCase();
+      let shown = 0;
+      cards.forEach((c) => {
+        const text = c.textContent.toLowerCase();
+        const tagEl = $('.tool-tag', c);
+        const matchesTier = tier === 'all' || (tagEl && (tagEl.classList.contains(`tag-${tier}`) || tagEl.textContent.toLowerCase().includes(tier)));
+        const matchesQuery = !q || text.includes(q);
+        const visible = matchesTier && matchesQuery;
+        c.classList.toggle('ot-tool-hidden', !visible);
+        if (visible) shown++;
+      });
+      categories.forEach((cat) => {
+        const hasVisible = $$('.tool-card:not(.ot-tool-hidden)', cat).length > 0;
+        cat.classList.toggle('ot-cat-hidden', !hasVisible);
+      });
+      countEl.textContent = `Showing ${shown} / ${cards.length}`;
+    };
+
+    input.addEventListener('input', apply);
+    pills.forEach((p) => p.addEventListener('click', () => {
+      tier = p.dataset.tier;
+      pills.forEach((b) => b.classList.toggle('is-active', b === p));
+      apply();
+    }));
+  }
+
+  /* ------------------------------------------------------------------
+     14. Back-to-top circular progress button
+     ------------------------------------------------------------------ */
+  function initBackToTop() {
+    const btn = document.createElement('button');
+    btn.id = 'ot-btt';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Back to top');
+    btn.innerHTML = '<span>↑</span>';
+    document.body.appendChild(btn);
+
+    btn.addEventListener('click', () => scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }));
+
+    let ticking = false;
+    const update = () => {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const pct = max > 0 ? Math.min(100, Math.max(0, (scrollY / max) * 100)) : 0;
+      btn.style.setProperty('--ot-btt-pct', `${pct.toFixed(1)}%`);
+      btn.classList.toggle('is-visible', scrollY > 600);
+      ticking = false;
+    };
+    addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+    update();
+  }
+
+  /* ------------------------------------------------------------------
      Boot
      ------------------------------------------------------------------ */
   const boot = () => {
-    const steps = [initProgress, initDock, initTicker, initMetrics, initFilters, initDossierTransition, initSpotlight, initMagnetic, initArchiveReveal, initPalette, initImageHints];
+    const steps = [initProgress, initDock, initTicker, initHeroBar, initMetrics, initFilters, initDossierEnhancements, initDossierTransition, initNeuralHubFilter, initSpotlight, initMagnetic, initArchiveReveal, initPalette, initBackToTop, initImageHints];
     steps.forEach((fn) => { try { fn(); } catch (err) { console.warn('[OT-2026]', fn.name, err); } });
     document.documentElement.classList.add('ot-2026');
   };

@@ -152,8 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     scrollWrapper.style.filter = 'none';
                 }
             } else {
-                scrollWrapper.style.transform = \`skewY(\${payload.scroll.skew}deg)\`;
-                scrollWrapper.style.filter = \`drop-shadow(\${payload.scroll.rgbShift}px 0 0 rgba(255,0,85,0.4)) drop-shadow(-\${payload.scroll.rgbShift}px 0 0 rgba(0,255,170,0.4))\`;
+                scrollWrapper.style.transform = `skewY(${payload.scroll.skew}deg)`;
+                scrollWrapper.style.filter = `drop-shadow(${payload.scroll.rgbShift}px 0 0 rgba(255,0,85,0.4)) drop-shadow(-${payload.scroll.rgbShift}px 0 0 rgba(0,255,170,0.4))`;
             }
         }
 

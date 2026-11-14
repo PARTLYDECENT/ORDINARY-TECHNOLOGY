@@ -79,7 +79,7 @@ function loop() {
                 mouseY >= c.rect.top && mouseY <= c.rect.bottom) {
                 const tiltX = (c.rect.centerY - cy) / 40;
                 const tiltY = (cx - c.rect.centerX) / 40;
-                return { id: c.id, transform: \`perspective(1000px) rotateX(\${tiltX}deg) rotateY(\${tiltY}deg) scale3d(1.02, 1.02, 1.02)\` };
+                return { id: c.id, transform: `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale3d(1.02, 1.02, 1.02)` };
             } else {
                 return { id: c.id, transform: 'perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)' };
             }
@@ -101,7 +101,7 @@ function loop() {
                 const currentTy = p.ty * (1 + (1 - p.life));
                 payload.particles.push({
                     id: p.id,
-                    transform: \`translate(calc(-50% + \${currentTx}px), calc(-50% + \${currentTy}px)) rotate(\${p.rot + (1-p.life)*90}deg) scale(\${0.5 + p.life*0.5})\`,
+                    transform: `translate(calc(-50% + ${currentTx}px), calc(-50% + ${currentTy}px)) rotate(${p.rot + (1-p.life)*90}deg) scale(${0.5 + p.life*0.5})`,
                     opacity: p.life,
                     x: p.x, y: p.y, char: p.char
                 });

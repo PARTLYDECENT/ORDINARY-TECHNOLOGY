@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Eco-Sorter | DELFINO CLEANUP PROTOCOL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(180deg, #0b1947 0%, #1e4b8f 42%, #ff9a62 82%, #ffd180 100%);
+            user-select: none;
+            touch-action: none;
+            font-family: 'Fredoka', sans-serif;
+        }
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .sunshine-shadow {
+            text-shadow: 0 4px 0 rgba(0, 80, 140, 0.5), 0 8px 20px rgba(0, 212, 255, 0.6);
+        }
+        .instruction-fade {
+            animation: fadeOut 3.5s forwards;
+            animation-delay: 5s;
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; visibility: hidden; }
+        }
+        .bin-indicator {
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-family: 'Fredoka', sans-serif;
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(8px);
+        }
+        .bin-indicator.active {
+            transform: scale(1.18) translateY(-10px);
+            border: 3px solid #ffffff;
+            box-shadow: 0 12px 25px -4px rgba(0, 195, 255, 0.7), 0 0 20px rgba(255, 255, 255, 0.9);
+        }
+        .floating-score {
+            position: absolute;
+            left: 50%;
+            top: 42%;
+            transform: translate(-50%, -50%);
+            font-family: 'Fredoka', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            pointer-events: none;
+            animation: floatUp 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            text-shadow: 0px 4px 0px rgba(0,0,0,0.25), 0 0 25px rgba(255, 255, 255, 0.8);
+            z-index: 100;
+            -webkit-text-stroke: 2px white;
+        }
+        @keyframes floatUp {
+            0% { transform: translate(-50%, -20%) scale(0.3) rotate(-8deg); opacity: 0; }
+            25% { transform: translate(-50%, -60%) scale(1.25) rotate(4deg); opacity: 1; }
+            100% { transform: translate(-50%, -160px) scale(0.95) rotate(0deg); opacity: 0; }
+        }
+
+        /* F.L.U.D.D. / Aria Tropical Comms Subtitle */
+        .aria-subtitle {
+            position: absolute;
+            bottom: 118px;
+            left: 50%;
+            transform: translateX(-50%) translateY(15px);
+            background: linear-gradient(135deg, rgba(0, 110, 210, 0.88), rgba(0, 200, 235, 0.88));
+            color: #ffffff;
+            padding: 12px 28px;
+            border-radius: 9999px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border: 3px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 10px 30px rgba(0, 140, 255, 0.45), inset 0 2px 10px rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 1000;
+            text-align: center;
+            width: 88%;
+            max-width: 620px;
+            backdrop-filter: blur(12px);
+        }
+        .aria-subtitle.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0px);
+        }
+
+        /* Tropical Glass Card */
+        .sunshine-card {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(230, 248, 255, 0.85));
+            backdrop-filter: blur(20px);
+            border: 4px solid #ffffff;
+            box-shadow: 0 25px 50px -12px rgba(0, 90, 160, 0.45), 0 0 40px rgba(0, 225, 255, 0.4);
+        }
+
+        .bubble-btn {
+            background: linear-gradient(180deg, #ffdd00 0%, #ff9900 100%);
+            border: 4px solid #ffffff;
+            box-shadow: 0 8px 0 #cc6600, 0 15px 25px rgba(255, 153, 0, 0.5);
+            transition: all 0.15s ease;
+        }
+        .bubble-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 0 #cc6600, 0 20px 30px rgba(255, 153, 0, 0.65);
+        }
+        .bubble-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 #cc6600, 0 5px 10px rgba(255, 153, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Floating Score Container -->
+    <div id="fx-container" class="fixed inset-0 pointer-events-none z-50"></div>
+
+    <!-- Aria / F.L.U.D.D. Subtitle -->
+    <div class="aria-subtitle" id="aria-subtitle"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between hidden">
+        <!-- Top Bar -->
+        <div class="p-4 sm:p-6 flex justify-between items-start">
+            <div class="bg-white/30 backdrop-blur-md border-2 border-white/80 rounded-3xl px-5 py-3 shadow-lg flex flex-col">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl sm:text-3xl">☀️</span>
+                    <span class="text-white font-black text-2xl sm:text-3xl sunshine-shadow tracking-wide">
+                        SHINES <span id="score-display" class="text-yellow-300">0</span>
+                    </span>
+                </div>
+                <span id="combo-display" class="text-xs sm:text-sm font-bold text-cyan-950 bg-yellow-300/90 px-3 py-0.5 rounded-full mt-1 self-start opacity-0 transition-all duration-300 transform scale-90">
+                    ✨ SUNSHINE COMBO x1!
+                </span>
+            </div>
+
+            <!-- Camera & Lives Right Cluster -->
+            <div class="flex flex-col items-end gap-2">
+                <div class="bg-white/30 backdrop-blur-md border-2 border-white/80 rounded-full px-4 py-2 shadow-lg text-xl sm:text-2xl flex gap-1" id="lives-display">
+                    ❤️❤️❤️
+                </div>
+                <button id="cam-toggle-btn" class="pointer-events-auto bg-cyan-600/80 hover:bg-cyan-500 text-white text-xs font-bold px-3.5 py-2 rounded-full border-2 border-white shadow-md backdrop-blur-md transition active:scale-95 flex items-center gap-1.5">
+                    <span>🎥</span> <span id="cam-label">Angle: Elevated</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Instructions -->
+        <div class="absolute inset-0 flex items-center justify-center instruction-fade pointer-events-none">
+            <div class="bg-cyan-900/65 text-white px-7 py-3.5 rounded-full backdrop-blur-md text-base sm:text-lg font-bold tracking-wide border-2 border-white/70 shadow-2xl flex items-center gap-3">
+                <span>🌴</span> Tap Left / Right, Use A & D, or Drag to Orbit <span>🌊</span>
+            </div>
+        </div>
+
+        <!-- Bottom Interactive Controls + Bin Legend -->
+        <div class="p-4 sm:p-6 w-full flex flex-col items-center gap-3 mb-1">
+            <!-- Quick Rotate Buttons for Mobile / Desktop ease -->
+            <div class="flex justify-between w-full max-w-xl px-2 pointer-events-auto">
+                <button id="rot-left-btn" class="bg-white/40 hover:bg-white/70 active:scale-90 transition border-2 border-white text-cyan-950 font-black px-5 py-2.5 rounded-2xl shadow-lg backdrop-blur-md flex items-center gap-2 text-sm sm:text-base">
+                    ◀ Rotate Left (A)
+                </button>
+                <button id="rot-right-btn" class="bg-white/40 hover:bg-white/70 active:scale-90 transition border-2 border-white text-cyan-950 font-black px-5 py-2.5 rounded-2xl shadow-lg backdrop-blur-md flex items-center gap-2 text-sm sm:text-base">
+                    Rotate Right (D) ▶
+                </button>
+            </div>
+
+            <!-- Bin Legend -->
+            <div class="flex flex-wrap justify-center gap-2 sm:gap-4 pointer-events-auto">
+                <div id="ind-0" data-bin="0" class="bin-indicator cursor-pointer bg-blue-700/95 text-white px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2 active">
+                    <div class="w-3.5 h-3.5 bg-sky-300 rounded-sm shadow-inner border border-white"></div> Paper
+                </div>
+                <div id="ind-1" data-bin="1" class="bin-indicator cursor-pointer bg-amber-400/95 text-slate-950 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2">
+                    <div class="w-3 h-4 bg-yellow-100 rounded-full shadow-inner border border-slate-900"></div> Plastic
+                </div>
+                <div id="ind-2" data-bin="2" class="bin-indicator cursor-pointer bg-emerald-700/95 text-white px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2">
+                    <div class="w-4 h-4 bg-emerald-300 rounded-full shadow-inner border border-white" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div> Glass
+                </div>
+                <div id="ind-3" data-bin="3" class="bin-indicator cursor-pointer bg-rose-600/95 text-white px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold shadow-lg flex items-center gap-2">
+                    <div class="w-4 h-4 bg-rose-200 rounded-full shadow-inner border border-white"></div> Organic
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 z-40">
+        <div class="sunshine-card text-slate-900 p-7 sm:p-9 rounded-[2.5rem] max-w-md w-full text-center relative overflow-hidden">
+            <div class="text-5xl mb-2 animate-bounce">☀️🏝️</div>
+            <h1 class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-indigo-600 to-blue-900 mb-1 tracking-tight">
+                ISLE ECO-SORT
+            </h1>
+            <p class="text-slate-600 mb-6 font-bold text-xs sm:text-sm tracking-widest uppercase">
+                🌊 Delfino Reef Cleanup Protocol 🌊
+            </p>
+            
+            <div class="grid grid-cols-2 gap-3 mb-7 text-xs sm:text-sm font-bold">
+                <div class="bg-blue-600/15 p-3 rounded-2xl border-2 border-blue-600/50 flex flex-col items-center">
+                    <div class="text-blue-700 font-black mb-0.5">📦 COBALT PIPE</div>
+                    <div class="text-slate-700">Cardboard Boxes</div>
+                </div>
+                <div class="bg-amber-400/20 p-3 rounded-2xl border-2 border-amber-500/60 flex flex-col items-center">
+                    <div class="text-amber-600 font-black mb-0.5">🧴 GOLD PIPE</div>
+                    <div class="text-slate-700">Plastic Bottles</div>
+                </div>
+                <div class="bg-emerald-600/15 p-3 rounded-2xl border-2 border-emerald-600/50 flex flex-col items-center">
+                    <div class="text-emerald-700 font-black mb-0.5">🍾 JADE PIPE</div>
+                    <div class="text-slate-700">Glass Bottles</div>
+                </div>
+                <div class="bg-rose-600/15 p-3 rounded-2xl border-2 border-rose-500/50 flex flex-col items-center">
+                    <div class="text-rose-600 font-black mb-0.5">🍎 CORAL PIPE</div>
+                    <div class="text-slate-700">Tropical Apples</div>
+                </div>
+            </div>
+
+            <button id="start-btn" class="bubble-btn w-full text-slate-950 font-black text-2xl py-4 rounded-3xl tracking-wider uppercase cursor-pointer">
+                ☀️ Dive In!
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="absolute inset-0 flex items-center justify-center bg-cyan-950/60 backdrop-blur-md p-4 hidden z-40">
+        <div class="sunshine-card p-8 rounded-[2.5rem] max-w-sm w-full text-center">
+            <div class="text-5xl mb-2">🌊🐚</div>
+            <h2 class="text-3xl sm:text-4xl font-black text-rose-500 mb-1">REEF CLOUDY!</h2>
+            <p class="text-cyan-700 mb-5 font-bold text-sm">LAGOON PURIFICATION PAUSED</p>
+            
+            <div class="bg-sky-100 border-2 border-sky-300 rounded-3xl py-4 px-6 mb-6">
+                <div class="text-5xl sm:text-6xl font-black text-amber-500 mb-1" id="final-score">0</div>
+                <p class="text-cyan-700 text-xs font-bold uppercase tracking-widest">Total Shine Sprites Collected</p>
+            </div>
+            
+            <button id="restart-btn" class="bubble-btn w-full text-cyan-950 font-black text-xl py-4 rounded-3xl tracking-wider uppercase cursor-pointer">
+                🔄 Wash Again!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- F.L.U.D.D. / ARIA TROPICAL DIALOGUE & AUDIO ---
+        const ariaSubtitle = document.getElementById('aria-subtitle');
+        const ariaDialogue = {
+            gameStart: [
+                "F.L.U.D.D. SYSTEM ONLINE! LET'S CLEAN UP DELFINO LAGOON!",
+                "SUNSHINE RADAR ACTIVE! SORT THE REEF DEBRIS INTO THE PIPES!",
+                "TROPICAL FILTRATION READY! KEEP THE CRYSTAL WATER SPARKLING!"
+            ],
+            correct: [
+                "SHINE SPRITE ENERGY UP!",
+                "SPARKLING CLEAN CATCH!",
+                "LAGOON PURITY INCREASING!",
+                "SUPER REFRESHING SORT!"
+            ],
+            wrong: [
+                "OOPS! GOOP CONTAMINATION IN THE LAGOON!",
+                "WRONG PIPE! WATCH THE COLOR RESONANCE!",
+                "WATER CLARITY DROPPING! STAY SHARP!"
+            ],
+            powerup: [
+                "SHINE SPRITE COLLECTED! EXTRA HEART RESTORED!",
+                "GOLDEN SUNSHINE POWER! MAXIMUM TROPICAL HARMONY!",
+                "SUPER SHINE RESONANCE! LAGOON BLESSED!"
+            ],
+            combo2: ["DOUBLE SPLASH SYNERGY!", "TROPICAL BREEZE COMBO X2!"],
+            combo3: ["TRIPLE SUNSHINE WAVE!", "DOLPHIN HARMONY X3!"],
+            combo4: ["SUPER DELFINO OVERDRIVE! UNSTOPPABLE!", "ULTRA SHINE CASCADE!"],
+            gameOver: [
+                "SHADOW MARIO GOOP OVERWHELMED THE REEF! REBOOTING F.L.U.D.D.!",
+                "LAGOON CLEANUP COMPLETE! READY FOR ANOTHER SUNNY RUN?"
+            ]
+        };
+
+        window.ariaRandom = function (type, delay = 0) {
+            if (!ariaDialogue[type]) return;
+            const quotes = ariaDialogue[type];
+            const quote = quotes[Math.floor(Math.random() * quotes.length)];
+            setTimeout(() => {
+                ariaSubtitle.textContent = "💧 " + quote;
+                ariaSubtitle.classList.add('visible');
+                if (window.AriaNarrator) {
+                    window.AriaNarrator.speak(quote, null, () => {
+                        setTimeout(() => { if (ariaSubtitle.textContent.includes(quote)) ariaSubtitle.classList.remove('visible'); }, 1200);
+                    });
+                } else {
+                    setTimeout(() => {
+                        if (ariaSubtitle.textContent.includes(quote)) ariaSubtitle.classList.remove('visible');
+                    }, 2800);
+                }
+            }, delay);
+        };
+
+        // Tropical Marimba / Steel-Drum / Chime WebAudio Synthesizer
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSFX(type) {
+            initAudio();
+            const now = audioCtx.currentTime;
+            if (type === 'correct') {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.slice(0, 2).forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+                    osc.frequency.exponentialRampToValueAtTime(freq * 1.02, now + idx * 0.06 + 0.14);
+                    gain.gain.setValueAtTime(0.12, now + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.18);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.06);
+                    osc.stop(now + idx * 0.06 + 0.19);
+                });
+            } else if (type === 'combo') {
+                const notes = [587.33, 739.99, 880.00, 1174.66];
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+                    gain.gain.setValueAtTime(0.11, now + idx * 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.22);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.05);
+                    osc.stop(now + idx * 0.05 + 0.23);
+                });
+            } else if (type === 'powerup') {
+                const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.055);
+                    gain.gain.setValueAtTime(0.14, now + idx * 0.055);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.055 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.055);
+                    osc.stop(now + idx * 0.055 + 0.32);
+                });
+            } else if (type === 'wrong') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(210, now);
+                osc.frequency.linearRampToValueAtTime(95, now + 0.28);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.31);
+            } else if (type === 'swish') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(320, now);
+                osc.frequency.exponentialRampToValueAtTime(640, now + 0.09);
+                gain.gain.setValueAtTime(0.06, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.11);
+            }
+        }
+
+        function spawnFloatingScore(text, color = '#fde047') {
+            const container = document.getElementById('fx-container');
+            const el = document.createElement('div');
+            el.className = 'floating-score';
+            el.style.color = color;
+            el.textContent = text;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 1100);
+        }
+
+        // --- GAME STATE ---
+        let score = 0;
+        let lives = 3;
+        let combo = 0;
+        let gameActive = false;
+        let baseSpeed = 0.075;
+        let currentSpeed = baseSpeed;
+        let spawnRate = 115;
+        let frameCount = 0;
+        let clock = new THREE.Clock();
+
+        // --- THREE.JS PBR & SUNSHINE WORLD SETUP ---
+        const canvas = document.getElementById('game-canvas');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x1b3b6f, 0.0085);
+
+        // Elevated Hero View Angle with interactive orbit support
+        const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camPresets = [
+            { name: 'Elevated', pos: new THREE.Vector3(0, 10.8, 14.2), look: new THREE.Vector3(0, 0.8, 1.5) },
+            { name: 'Isometric', pos: new THREE.Vector3(6.5, 11.5, 13.5), look: new THREE.Vector3(0, 0.6, 1.8) },
+            { name: 'Top-Splash', pos: new THREE.Vector3(0, 14.5, 10.5), look: new THREE.Vector3(0, 0.2, 2.5) }
+        ];
+        let currentCamPreset = 0;
+        let camOrbitOffset = 0;
+        let targetCamOrbitOffset = 0;
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.92;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+
+        // Procedural Tropical Equirectangular Environment Map for balanced PBR reflections
+        function createTropicalEnvMap() {
+            const envCanvas = document.createElement('canvas');
+            envCanvas.width = 512;
+            envCanvas.height = 256;
+            const ctx = envCanvas.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 0, 256);
+            grad.addColorStop(0.0, '#0a1931');
+            grad.addColorStop(0.38, '#185adb');
+            grad.addColorStop(0.49, '#ff9a62');
+            grad.addColorStop(0.55, '#073b4c');
+            grad.addColorStop(1.0, '#041c32');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 256);
+
+            // Warm sunset solar disk in reflection
+            ctx.fillStyle = '#ffd166';
+            ctx.beginPath();
+            ctx.arc(256, 95, 22, 0, Math.PI * 2);
+            ctx.fill();
+
+            const texture = new THREE.CanvasTexture(envCanvas);
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.encoding = THREE.sRGBEncoding;
+            return texture;
+        }
+        scene.environment = createTropicalEnvMap();
+
+        // --- TROPICAL SUNSHINE LIGHTING (BALANCED CONTRAST) ---
+        const hemiLight = new THREE.HemisphereLight(0xfff0d4, 0x0a2440, 0.65);
+        hemiLight.position.set(0, 30, 0);
+        scene.add(hemiLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffedd8, 1.1);
+        sunLight.position.set(14, 24, 12);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 1;
+        sunLight.shadow.camera.far = 60;
+        const d = 14;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.bias = -0.0005;
+        scene.add(sunLight);
+
+        // Subtle warm rim light from the front-below
+        const lagoonLight = new THREE.PointLight(0xff9f43, 0.65, 22);
+        lagoonLight.position.set(0, 1, 8);
+        scene.add(lagoonLight);
+
+        // --- DEEP SAPPHIRE DELFINO OCEAN & WAVES ---
+        const oceanGeo = new THREE.PlaneGeometry(180, 180, 70, 70);
+        oceanGeo.rotateX(-Math.PI / 2);
+        const oceanPosAttr = oceanGeo.attributes.position;
+        const oceanBaseY = new Float32Array(oceanPosAttr.count);
+        for (let i = 0; i < oceanPosAttr.count; i++) {
+            oceanBaseY[i] = oceanPosAttr.getY(i);
+        }
+
+        const oceanMat = new THREE.MeshPhysicalMaterial({
+            color: 0x035397,
+            emissive: 0x011f3b,
+            emissiveIntensity: 0.35,
+            roughness: 0.18,
+            metalness: 0.12,
+            transmission: 0.45,
+            transparent: true,
+            opacity: 0.94,
+            clearcoat: 0.9,
+            clearcoatRoughness: 0.12,
+            reflectivity: 0.85,
+            flatShading: true
+        });
+        const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+        oceanMesh.position.y = -3.85;
+        oceanMesh.receiveShadow = true;
+        scene.add(oceanMesh);
+
+        // Deeper rich coral-sand seabed for darker water depth contrast
+        const seabedGeo = new THREE.PlaneGeometry(180, 180);
+        seabedGeo.rotateX(-Math.PI / 2);
+        const seabedMat = new THREE.MeshStandardMaterial({ color: 0x0b2545, roughness: 0.95 });
+        const seabed = new THREE.Mesh(seabedGeo, seabedMat);
+        seabed.position.y = -6.2;
+        scene.add(seabed);
+
+        // Foam shoreline rings around the central island
+        const foamRings = [];
+        for (let i = 0; i < 3; i++) {
+            const ringGeo = new THREE.RingGeometry(8.5 + i * 0.9, 8.68 + i * 0.9, 64);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0x72efdd,
+                transparent: true,
+                opacity: 0.35 - i * 0.09,
+                side: THREE.DoubleSide
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.y = -3.65;
+            scene.add(ring);
+            foamRings.push({ mesh: ring, baseScale: 1 + i * 0.08, phase: i * 1.4 });
+        }
+
+        // --- CENTRAL SANDY ISLAND & TERRACOTTA / SLATE PLAZA ---
+        const islandGroup = new THREE.Group();
+        scene.add(islandGroup);
+
+        // Warm toasted golden-amber beach sand mound
+        const sandGeo = new THREE.CylinderGeometry(7.2, 9.2, 2.2, 48);
+        const sandMat = new THREE.MeshStandardMaterial({
+            color: 0xd99b52,
+            roughness: 0.85,
+            metalness: 0.02
+        });
+        const sandMound = new THREE.Mesh(sandGeo, sandMat);
+        sandMound.position.y = -3.8;
+        sandMound.receiveShadow = true;
+        islandGroup.add(sandMound);
+
+        // Dark Volcanic Basalt / Slate Plaza Deck so bright colored pipes pop dramatically
+        const plazaGeo = new THREE.CylinderGeometry(5.9, 6.3, 0.9, 36);
+        const plazaMat = new THREE.MeshPhysicalMaterial({
+            color: 0x2b2d42,
+            roughness: 0.45,
+            metalness: 0.15,
+            clearcoat: 0.25
+        });
+        const plaza = new THREE.Mesh(plazaGeo, plazaMat);
+        plaza.position.y = -2.65;
+        plaza.receiveShadow = true;
+        islandGroup.add(plaza);
+
+        // Warm terracotta & gold trim ring inset on the dark plaza
+        const channelGeo = new THREE.TorusGeometry(4.0, 0.24, 16, 64);
+        channelGeo.rotateX(Math.PI / 2);
+        const channelMat = new THREE.MeshPhysicalMaterial({
+            color: 0xf4a261,
+            emissive: 0xe76f51,
+            emissiveIntensity: 0.2,
+            roughness: 0.3,
+            metalness: 0.35,
+            clearcoat: 0.8
+        });
+        const channelRing = new THREE.Mesh(channelGeo, channelMat);
+        channelRing.position.y = -2.2;
+        islandGroup.add(channelRing);
+
+        // --- SWAYING TROPICAL PALM TREES & DISTANT ARCHIPELAGO ---
+        const palmTrees = [];
+        function createPalmTree(x, y, z, scale = 1, leanAngle = 0.2) {
+            const treeGroup = new THREE.Group();
+            treeGroup.position.set(x, y, z);
+            treeGroup.scale.setScalar(scale);
+
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6f4518, roughness: 0.85 });
+            const segments = 6;
+            let currY = 0;
+            let currX = 0;
+            for (let i = 0; i < segments; i++) {
+                const segGeo = new THREE.CylinderGeometry(0.28 - i * 0.03, 0.34 - i * 0.03, 0.95, 10);
+                const seg = new THREE.Mesh(segGeo, trunkMat);
+                seg.position.set(currX, currY + 0.45, 0);
+                seg.rotation.z = -leanAngle * (i / segments);
+                seg.castShadow = true;
+                treeGroup.add(seg);
+                currY += 0.85;
+                currX += Math.sin(leanAngle * (i / segments)) * 0.4;
+            }
+
+            // Crown of deep tropical jungle-green fronds + coconuts (distinct from turquoise/ocean)
+            const crownGroup = new THREE.Group();
+            crownGroup.position.set(currX, currY, 0);
+            treeGroup.add(crownGroup);
+
+            const frondMat = new THREE.MeshPhysicalMaterial({
+                color: 0x2d6a4f,
+                emissive: 0x1b4332,
+                emissiveIntensity: 0.1,
+                roughness: 0.35,
+                clearcoat: 0.5,
+                side: THREE.DoubleSide
+            });
+
+            const numFronds = 7;
+            for (let i = 0; i < numFronds; i++) {
+                const angle = (i / numFronds) * Math.PI * 2;
+                const frondPivot = new THREE.Group();
+                frondPivot.rotation.y = angle;
+
+                const leafGeo = new THREE.BoxGeometry(2.4, 0.08, 0.65);
+                leafGeo.translate(1.2, 0, 0);
+                const leaf = new THREE.Mesh(leafGeo, frondMat);
+                leaf.rotation.z = -0.35;
+                leaf.castShadow = true;
+                frondPivot.add(leaf);
+                crownGroup.add(frondPivot);
+            }
+
+            // Coconuts
+            const cocoMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.6 });
+            for (let c = 0; c < 3; c++) {
+                const coco = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), cocoMat);
+                const ca = (c / 3) * Math.PI * 2;
+                coco.position.set(Math.cos(ca) * 0.25, -0.15, Math.sin(ca) * 0.25);
+                crownGroup.add(coco);
+            }
+
+            scene.add(treeGroup);
+            palmTrees.push({ group: treeGroup, crown: crownGroup, phase: Math.random() * Math.PI * 2 });
+        }
+
+        createPalmTree(-6.2, -3.0, -2.5, 1.05, 0.35);
+        createPalmTree(6.4, -3.0, -2.0, 0.95, -0.35);
+        createPalmTree(-4.8, -3.0, -5.2, 0.8, 0.25);
+        createPalmTree(5.2, -3.0, -5.0, 0.85, -0.25);
+
+        // Distant Tropical Atolls & Floating Shine Sprite Tower
+        function createDistantIsland(x, z, radius, height) {
+            const g = new THREE.Group();
+            g.position.set(x, -3.9, z);
+            const m = new THREE.Mesh(
+                new THREE.ConeGeometry(radius, height, 24),
+                new THREE.MeshStandardMaterial({ color: 0x4a2545, roughness: 0.8 })
+            );
+            m.position.y = height / 2;
+            g.add(m);
+            const beach = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius * 1.05, radius * 1.25, 0.8, 24),
+                sandMat
+            );
+            beach.position.y = 0.3;
+            g.add(beach);
+            scene.add(g);
+        }
+        createDistantIsland(-24, -28, 8, 9);
+        createDistantIsland(28, -24, 10, 12);
+        createDistantIsland(0, -38, 13, 15);
+
+        // Floating Golden Shine Sun Emblem in the background sky
+        const shineEmblemGroup = new THREE.Group();
+        shineEmblemGroup.position.set(0, 12.5, -24);
+        scene.add(shineEmblemGroup);
+
+        const shineMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffb703,
+            emissive: 0xfb8500,
+            emissiveIntensity: 0.45,
+            metalness: 0.7,
+            roughness: 0.18,
+            clearcoat: 1.0
+        });
+        const shineCore = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.55, 20, 48), shineMat);
+        shineEmblemGroup.add(shineCore);
+        for (let r = 0; r < 8; r++) {
+            const ray = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.6, 8), shineMat);
+            const a = (r / 8) * Math.PI * 2;
+            ray.position.set(Math.cos(a) * 3.5, Math.sin(a) * 3.5, 0);
+            ray.rotation.z = a - Math.PI / 2;
+            shineEmblemGroup.add(ray);
+        }
+
+        // Puff Clouds floating across the horizon (warm sunset-tinted)
+        const clouds = [];
+        const cloudMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffe5d9,
+            roughness: 0.55,
+            clearcoat: 0.1,
+            transparent: true,
+            opacity: 0.82
+        });
+        for (let c = 0; c < 8; c++) {
+            const cg = new THREE.Group();
+            const puffs = 3 + Math.floor(Math.random() * 3);
+            for (let p = 0; p < puffs; p++) {
+                const puff = new THREE.Mesh(new THREE.SphereGeometry(1.1 + Math.random() * 0.7, 16, 16), cloudMat);
+                puff.position.set((p - puffs / 2) * 1.1, Math.random() * 0.4, (Math.random() - 0.5) * 0.6);
+                cg.add(puff);
+            }
+            cg.position.set((Math.random() - 0.5) * 55, 10 + Math.random() * 8, -15 - Math.random() * 25);
+            scene.add(cg);
+            clouds.push({ group: cg, speed: 0.015 + Math.random() * 0.02 });
+        }
+
+        // --- CAROUSEL & GLOSSY PBR DELFINO PIPES (BINS) ---
+        const carousel = new THREE.Group();
+        carousel.position.y = -1.6;
+        scene.add(carousel);
+
+        // Central rotating Delfino Gear Hub
+        const hubGeo = new THREE.CylinderGeometry(1.6, 1.9, 1.2, 24);
+        const hubMat = new THREE.MeshPhysicalMaterial({
+            color: 0xd90429,
+            metalness: 0.45,
+            roughness: 0.2,
+            clearcoat: 1.0
+        });
+        const hubMesh = new THREE.Mesh(hubGeo, hubMat);
+        hubMesh.position.y = -0.3;
+        hubMesh.castShadow = true;
+        carousel.add(hubMesh);
+
+        let targetRotation = 0;
+        let currentRotation = 0;
+
+        // High-contrast, unmistakable 4-color palette (Cobalt Blue, Cyber Gold, Deep Jade Green, Crimson Coral)
+        const binTypes = [
+            { id: 0, name: 'Paper', color: 0x1d4ed8, rimColor: 0x60a5fa, darkBase: 0x1e3a8a, hex: '#3b82f6' },
+            { id: 1, name: 'Plastic', color: 0xf59e0b, rimColor: 0xfde047, darkBase: 0x92400e, hex: '#fbbf24' },
+            { id: 2, name: 'Glass', color: 0x059669, rimColor: 0x34d399, darkBase: 0x064e3b, hex: '#10b981' },
+            { id: 3, name: 'Organic', color: 0xe11d48, rimColor: 0xfb7185, darkBase: 0x881337, hex: '#f43f5e' }
+        ];
+
+        const binDistance = 4.0;
+        const bins = [];
+
+        function createPBRBin(binInfo, x, z) {
+            const group = new THREE.Group();
+
+            // Connecting spoke arm from hub to bin
+            const spokeGeo = new THREE.BoxGeometry(0.45, 0.35, binDistance);
+            const spokeMat = new THREE.MeshStandardMaterial({ color: 0x4a4e69, metalness: 0.6, roughness: 0.3 });
+            const spoke = new THREE.Mesh(spokeGeo, spokeMat);
+            spoke.position.set(x * 0.5, -0.5, z * 0.5);
+            if (Math.abs(x) > 0) spoke.rotation.y = Math.PI / 2;
+            group.add(spoke);
+
+            const binContainer = new THREE.Group();
+            binContainer.position.set(x, 0, z);
+            group.add(binContainer);
+
+            // Rich Saturated Pipe Body
+            const bodyGeo = new THREE.CylinderGeometry(1.42, 1.18, 2.35, 32, 1, true);
+            const bodyMat = new THREE.MeshPhysicalMaterial({
+                color: binInfo.color,
+                roughness: 0.22,
+                metalness: 0.18,
+                clearcoat: 0.9,
+                clearcoatRoughness: 0.12,
+                side: THREE.DoubleSide
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            binContainer.add(body);
+
+            // White Contrast Stripe Band around the middle of each pipe
+            const bandGeo = new THREE.CylinderGeometry(1.33, 1.29, 0.38, 32, 1, true);
+            const bandMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.25,
+                metalness: 0.1
+            });
+            const band = new THREE.Mesh(bandGeo, bandMat);
+            band.position.y = 0.05;
+            binContainer.add(band);
+
+            // Dark Base Collar at the bottom of the pipe for grounding
+            const baseCollarGeo = new THREE.TorusGeometry(1.22, 0.16, 14, 36);
+            baseCollarGeo.rotateX(Math.PI / 2);
+            const baseCollarMat = new THREE.MeshStandardMaterial({
+                color: binInfo.darkBase,
+                roughness: 0.35,
+                metalness: 0.3
+            });
+            const baseCollar = new THREE.Mesh(baseCollarGeo, baseCollarMat);
+            baseCollar.position.y = -1.02;
+            binContainer.add(baseCollar);
+
+            // Thick Mario-Pipe Lip Torus Rim at top
+            const rimGeo = new THREE.TorusGeometry(1.42, 0.24, 18, 48);
+            rimGeo.rotateX(Math.PI / 2);
+            const rimMat = new THREE.MeshPhysicalMaterial({
+                color: binInfo.rimColor,
+                emissive: binInfo.color,
+                emissiveIntensity: 0.15,
+                roughness: 0.15,
+                metalness: 0.2,
+                clearcoat: 1.0
+            });
+            const rim = new THREE.Mesh(rimGeo, rimMat);
+            rim.position.y = 1.15;
+            rim.castShadow = true;
+            binContainer.add(rim);
+
+            // Deep Dark Inner Pipe Mouth with subtle colored glow so falling items contrast against it
+            const vortexGeo = new THREE.CircleGeometry(1.32, 32);
+            vortexGeo.rotateX(-Math.PI / 2);
+            const vortexMat = new THREE.MeshBasicMaterial({
+                color: binInfo.darkBase
+            });
+            const vortex = new THREE.Mesh(vortexGeo, vortexMat);
+            vortex.position.y = 0.85;
+            binContainer.add(vortex);
+
+            // Solid bottom cap
+            const bottomGeo = new THREE.CylinderGeometry(1.18, 1.18, 0.25, 32);
+            const bottom = new THREE.Mesh(bottomGeo, baseCollarMat);
+            bottom.position.y = -1.1;
+            binContainer.add(bottom);
+
+            return {
+                root: group,
+                container: binContainer,
+                rimMat: rimMat,
+                bounceScale: 1.0,
+                bounceVel: 0
+            };
+        }
+
+        bins.push(createPBRBin(binTypes[0], 0, binDistance));
+        bins.push(createPBRBin(binTypes[1], binDistance, 0));
+        bins.push(createPBRBin(binTypes[2], 0, -binDistance));
+        bins.push(createPBRBin(binTypes[3], -binDistance, 0));
+        bins.forEach(b => carousel.add(b.root));
+
+        // Vertical drop stream beam to clarify perspective in elevated 3D view
+        const beamGeo = new THREE.CylinderGeometry(1.25, 1.25, 11, 32, 1, true);
+        const beamMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.08,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const dropBeam = new THREE.Mesh(beamGeo, beamMat);
+        dropBeam.position.set(0, 5.2, binDistance);
+        scene.add(dropBeam);
+
+        // --- REALISTIC 3D OBJECT MODELS (NO RINGS) ---
+        const activeTrash = [];
+
+        function createTrashModel(typeId) {
+            const group = new THREE.Group();
+
+            if (typeId === 0) {
+                // 0: PAPER - Cardboard Shipping Box with Blue Recycling Label & Packing Tape
+                const boxMat = new THREE.MeshStandardMaterial({
+                    color: 0xc89b6e,
+                    roughness: 0.85,
+                    metalness: 0.05
+                });
+                const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.15, 1.3), boxMat);
+                box.castShadow = true;
+                box.receiveShadow = true;
+                group.add(box);
+
+                // Cobalt blue parcel band wrap so the player immediately associates it with the Blue Pipe
+                const bandMat = new THREE.MeshPhysicalMaterial({
+                    color: 0x2563eb,
+                    roughness: 0.3,
+                    clearcoat: 0.6
+                });
+                const band = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.45, 1.34), bandMat);
+                band.castShadow = true;
+                group.add(band);
+
+                // Top packing tape strip & folded flaps seam
+                const tapeMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.4 });
+                const topTape = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.06, 0.28), tapeMat);
+                topTape.position.y = 0.56;
+                group.add(topTape);
+
+                // White shipping sticker on side
+                const labelMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+                const sticker = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.38, 1.36), labelMat);
+                sticker.position.set(0.2, 0.15, 0);
+                group.add(sticker);
+
+            } else if (typeId === 1) {
+                // 1: PLASTIC - Crinkled / Ribbed Plastic Soda/Detergent Bottle with Cap & Label
+                const plasticMat = new THREE.MeshPhysicalMaterial({
+                    color: 0xfbbf24,
+                    roughness: 0.12,
+                    metalness: 0.1,
+                    clearcoat: 1.0,
+                    transmission: 0.25,
+                    transparent: true,
+                    opacity: 0.96
+                });
+
+                // Main bottle cylinder body
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 1.15, 24), plasticMat);
+                body.position.y = -0.2;
+                body.castShadow = true;
+                group.add(body);
+
+                // Moulded grip rings on plastic bottle
+                for (let r = -1; r <= 1; r += 2) {
+                    const ridge = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.045, 10, 24), plasticMat);
+                    ridge.rotation.x = Math.PI / 2;
+                    ridge.position.y = -0.2 + r * 0.38;
+                    group.add(ridge);
+                }
+
+                // Rounded bottle shoulder
+                const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.52, 0.42, 24), plasticMat);
+                shoulder.position.y = 0.58;
+                shoulder.castShadow = true;
+                group.add(shoulder);
+
+                // Bottle neck
+                const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.26, 20), plasticMat);
+                neck.position.y = 0.9;
+                group.add(neck);
+
+                // Bright white/orange screw cap
+                const capMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.3 });
+                const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.2, 20), capMat);
+                cap.position.y = 1.08;
+                cap.castShadow = true;
+                group.add(cap);
+
+                // White & yellow wrap-around brand label
+                const labelMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 });
+                const label = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.54, 0.46, 24), labelMat);
+                label.position.y = -0.2;
+                group.add(label);
+
+            } else if (typeId === 2) {
+                // 2: GLASS - Translucent Emerald Sea-Glass Bottle / Jug with Cork Stopper
+                const glassMat = new THREE.MeshPhysicalMaterial({
+                    color: 0x10b981,
+                    emissive: 0x065f46,
+                    emissiveIntensity: 0.18,
+                    roughness: 0.05,
+                    metalness: 0.1,
+                    transmission: 0.65,
+                    transparent: true,
+                    opacity: 0.92,
+                    clearcoat: 1.0
+                });
+
+                // Bulbous glass flask base
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.46, 1.05, 10), glassMat);
+                base.position.y = -0.28;
+                base.castShadow = true;
+                group.add(base);
+
+                // Faceted glass shoulder
+                const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.56, 0.5, 10), glassMat);
+                cone.position.y = 0.49;
+                cone.castShadow = true;
+                group.add(cone);
+
+                // Long glass neck with lip
+                const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.42, 12), glassMat);
+                neck.position.y = 0.92;
+                group.add(neck);
+
+                const lip = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.055, 10, 20), glassMat);
+                lip.rotation.x = Math.PI / 2;
+                lip.position.y = 1.1;
+                group.add(lip);
+
+                // Cork stopper sticking out the top
+                const corkMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.9 });
+                const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.15, 0.28, 12), corkMat);
+                cork.position.y = 1.22;
+                group.add(cork);
+
+            } else if (typeId === 3) {
+                // 3: ORGANIC - Juicy Crimson-Coral Tropical Apple / Berry with Stem & Green Leaf
+                const fruitMat = new THREE.MeshPhysicalMaterial({
+                    color: 0xe11d48,
+                    emissive: 0x881337,
+                    emissiveIntensity: 0.15,
+                    roughness: 0.18,
+                    metalness: 0.05,
+                    clearcoat: 0.95
+                });
+
+                // Main apple body (slightly squashed sphere)
+                const appleBody = new THREE.Mesh(new THREE.SphereGeometry(0.78, 28, 24), fruitMat);
+                appleBody.scale.set(1.06, 0.92, 1.06);
+                appleBody.position.y = -0.08;
+                appleBody.castShadow = true;
+                group.add(appleBody);
+
+                // Woody stem on top
+                const stemMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.85 });
+                const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.45, 10), stemMat);
+                stem.position.set(0, 0.72, 0);
+                stem.rotation.z = 0.22;
+                stem.castShadow = true;
+                group.add(stem);
+
+                // Bright green tropical leaf attached to stem
+                const leafMat = new THREE.MeshPhysicalMaterial({
+                    color: 0x4ade80,
+                    roughness: 0.3,
+                    clearcoat: 0.6
+                });
+                const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 10), leafMat);
+                leaf.scale.set(1.5, 0.25, 0.75);
+                leaf.position.set(0.32, 0.76, 0);
+                leaf.rotation.z = 0.35;
+                leaf.castShadow = true;
+                group.add(leaf);
+
+            } else {
+                // 4: GOLDEN SHINE SPRITE - Iconic 3D Sunburst Star with Crown & Eyes
+                const goldMat = new THREE.MeshPhysicalMaterial({
+                    color: 0xffea00,
+                    emissive: 0xff8800,
+                    emissiveIntensity: 0.55,
+                    metalness: 0.8,
+                    roughness: 0.12,
+                    clearcoat: 1.0
+                });
+
+                // Plump golden center core
+                const core = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 24), goldMat);
+                core.scale.set(1, 1, 0.55);
+                core.castShadow = true;
+                group.add(core);
+
+                // 8 Starburst Cones radiating around the core
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.65, 12), goldMat);
+                    spike.position.set(Math.cos(angle) * 0.75, Math.sin(angle) * 0.75, 0);
+                    spike.rotation.z = angle - Math.PI / 2;
+                    group.add(spike);
+                }
+
+                // Classic Mario Star Eyes on both front & back
+                const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e1b4b });
+                [-1, 1].forEach(side => {
+                    [-0.18, 0.18].forEach(xOff => {
+                        const eye = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.26, 0.06), eyeMat);
+                        eye.position.set(xOff, 0.06, side * 0.34);
+                        group.add(eye);
+                    });
+                });
+            }
+
+            return group;
+        }
+
+        function spawnTrashItem() {
+            let typeId = Math.floor(Math.random() * 4);
+            const isBonus = Math.random() < 0.11;
+            if (isBonus) typeId = 4;
+
+            const itemGroup = new THREE.Group();
+            const mesh = createTrashModel(typeId);
+            itemGroup.add(mesh);
+
+            itemGroup.position.set(0, 10.5, binDistance);
+            mesh.rotation.set(
+                (Math.random() - 0.5) * 0.5,
+                Math.random() * Math.PI * 2,
+                (Math.random() - 0.5) * 0.5
+            );
+
+            activeTrash.push({
+                group: itemGroup,
+                mesh: mesh,
+                typeId,
+                rotSpeed: {
+                    x: (Math.random() - 0.5) * 0.04,
+                    y: 0.035 + Math.random() * 0.03,
+                    z: (Math.random() - 0.5) * 0.04
+                },
+                caught: false,
+                spawnTime: clock.getElapsedTime()
+            });
+            scene.add(itemGroup);
+        }
+
+        // --- TROPICAL WATER DROPLET & SUNSHINE SPARKLE PARTICLES ---
+        const particles = [];
+        const dropletGeo = new THREE.SphereGeometry(0.18, 10, 10);
+        const starGeo = new THREE.OctahedronGeometry(0.24, 0);
+
+        function createSplashExplosion(position, colorHex, isGold = false) {
+            const count = isGold ? 28 : 18;
+            for (let i = 0; i < count; i++) {
+                const isWaterBubble = i % 2 === 0 && !isGold;
+                const mat = new THREE.MeshPhysicalMaterial({
+                    color: isWaterBubble ? 0x90e0ef : colorHex,
+                    emissive: isGold ? 0xffaa00 : colorHex,
+                    emissiveIntensity: isGold ? 0.6 : 0.25,
+                    roughness: 0.1,
+                    clearcoat: 1.0
+                });
+                const mesh = new THREE.Mesh(isGold ? starGeo : dropletGeo, mat);
+                mesh.position.copy(position);
+
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.08 + Math.random() * 0.22;
+                const velocity = new THREE.Vector3(
+                    Math.cos(angle) * speed,
+                    0.12 + Math.random() * 0.24,
+                    Math.sin(angle) * speed
+                );
+                scene.add(mesh);
+                particles.push({ mesh, velocity, life: 1.0 });
+            }
+        }
+
+        // --- UI & GAMEPLAY LOGIC ---
+        function getCurrentFrontBinIndex() {
+            let shifts = Math.round(targetRotation / (Math.PI / 2));
+            return ((-shifts % 4) + 4) % 4;
+        }
+
+        function updateUI() {
+            document.getElementById('score-display').innerText = score;
+            let hearts = "";
+            for (let i = 0; i < Math.max(3, lives); i++) {
+                hearts += i < lives ? "❤️" : "🖤";
+            }
+            document.getElementById('lives-display').innerText = hearts;
+
+            const currentFront = getCurrentFrontBinIndex();
+            for (let i = 0; i < 4; i++) {
+                const el = document.getElementById(`ind-${i}`);
+                if (i === currentFront) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            }
+
+            // Tint vertical drop guide beam to match current front pipe
+            beamMat.color.setHex(binTypes[currentFront].rimColor);
+        }
+
+        function triggerCombo(isHit, isGold = false) {
+            const comboEl = document.getElementById('combo-display');
+            if (isHit) {
+                combo++;
+                if (combo > 1) {
+                    comboEl.innerText = `✨ SUNSHINE COMBO x${combo}!`;
+                    comboEl.style.opacity = '1';
+                    comboEl.style.transform = 'scale(1.08)';
+                    setTimeout(() => { comboEl.style.transform = 'scale(1)'; }, 180);
+                    if (combo <= 4 || combo % 3 === 0) {
+                        ariaRandom('combo' + Math.min(4, combo));
+                    }
+                } else if (!isGold && Math.random() < 0.35) {
+                    ariaRandom('correct');
+                }
+                playSFX(combo >= 3 ? 'combo' : 'correct');
+            } else {
+                combo = 0;
+                comboEl.style.opacity = '0';
+                playSFX('wrong');
+                ariaRandom('wrong');
+            }
+        }
+
+        function triggerBinSquash(binIndex) {
+            const b = bins[binIndex];
+            if (b) {
+                b.bounceScale = 1.38;
+            }
+        }
+
+        function checkCollision(trashObj, index) {
+            if (trashObj.group.position.y <= -0.35 && !trashObj.caught) {
+                trashObj.caught = true;
+                const frontBinType = getCurrentFrontBinIndex();
+
+                if (trashObj.typeId === frontBinType || trashObj.typeId === 4) {
+                    const isGold = trashObj.typeId === 4;
+                    const pointsEarned = isGold ? 50 : (10 + Math.min(combo * 2, 20));
+                    score += pointsEarned;
+
+                    triggerCombo(true, isGold);
+                    triggerBinSquash(frontBinType);
+                    createSplashExplosion(
+                        trashObj.group.position,
+                        isGold ? 0xffe600 : binTypes[frontBinType].color,
+                        isGold
+                    );
+                    spawnFloatingScore(
+                        isGold ? `☀️ +${pointsEarned} SHINE!` : `+${pointsEarned}`,
+                        isGold ? '#fde047' : binTypes[frontBinType].hex
+                    );
+
+                    if (isGold) {
+                        lives = Math.min(lives + 1, 5);
+                        playSFX('powerup');
+                        ariaRandom('powerup');
+                    }
+
+                    // Smooth difficulty scaling
+                    currentSpeed = Math.min(baseSpeed + (score * 0.00018), 0.24);
+                    spawnRate = Math.max(115 - Math.floor(score / 35), 42);
+                } else {
+                    lives--;
+                    triggerCombo(false);
+                    createSplashExplosion(trashObj.group.position, 0xff0055, false);
+                    spawnFloatingScore('💥 GOOP!', '#fb7185');
+                    if (lives <= 0) endGame();
+                }
+
+                scene.remove(trashObj.group);
+                activeTrash.splice(index, 1);
+                updateUI();
+            }
+        }
+
+        function startGame() {
+            initAudio();
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('ui-layer').classList.remove('hidden');
+
+            score = 0;
+            lives = 3;
+            combo = 0;
+            currentSpeed = baseSpeed;
+            spawnRate = 115;
+            frameCount = 80; // Spawn first item quickly
+
+            activeTrash.forEach(t => scene.remove(t.group));
+            activeTrash.length = 0;
+
+            gameActive = true;
+            updateUI();
+            ariaRandom('gameStart');
+        }
+
+        function endGame() {
+            gameActive = false;
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = score;
+            ariaRandom('gameOver');
+        }
+
+        function rotateLeft() {
+            if (!gameActive) return;
+            targetRotation += Math.PI / 2;
+            playSFX('swish');
+            updateUI();
+        }
+
+        function rotateRight() {
+            if (!gameActive) return;
+            targetRotation -= Math.PI / 2;
+            playSFX('swish');
+            updateUI();
+        }
+
+        function rotateToBin(targetBinIndex) {
+            if (!gameActive) return;
+            const currentBin = getCurrentFrontBinIndex();
+            if (currentBin === targetBinIndex) return;
+            let diff = (targetBinIndex - currentBin + 4) % 4;
+            if (diff === 1) rotateRight();
+            else if (diff === 3) rotateLeft();
+            else if (diff === 2) {
+                targetRotation -= Math.PI;
+                playSFX('swish');
+                updateUI();
+            }
+        }
+
+        // --- CONTROLS & CAMERA INTERACTION ---
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') rotateLeft();
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') rotateRight();
+        });
+
+        document.getElementById('rot-left-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            rotateLeft();
+        });
+        document.getElementById('rot-right-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            rotateRight();
+        });
+
+        // Direct click on bottom bin indicators to snap directly to that pipe
+        document.querySelectorAll('.bin-indicator').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(el.getAttribute('data-bin'), 10);
+                rotateToBin(idx);
+            });
+        });
+
+        // Camera angle preset toggle button
+        document.getElementById('cam-toggle-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentCamPreset = (currentCamPreset + 1) % camPresets.length;
+            document.getElementById('cam-label').textContent = `Angle: ${camPresets[currentCamPreset].name}`;
+        });
+
+        // Pointer drag for subtle camera orbit inspection OR quick tap left/right to spin carousel
+        let isDragging = false;
+        let pointerDownX = 0;
+        let pointerMoved = false;
+
+        window.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button') || e.target.closest('.bin-indicator')) return;
+            isDragging = true;
+            pointerMoved = false;
+            pointerDownX = e.clientX;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - pointerDownX;
+            if (Math.abs(dx) > 12) {
+                pointerMoved = true;
+                targetCamOrbitOffset = THREE.MathUtils.clamp(dx * 0.005, -0.55, 0.55);
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            targetCamOrbitOffset = 0;
+            if (!pointerMoved && gameActive) {
+                if (e.clientX < window.innerWidth / 2) rotateLeft();
+                else rotateRight();
+            }
+        });
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+
+        // --- MAIN ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsed = clock.getElapsedTime();
+
+            // Smooth springy carousel rotation
+            currentRotation += (targetRotation - currentRotation) * 0.16;
+            carousel.rotation.y = currentRotation;
+            hubMesh.rotation.y = -currentRotation * 1.5;
+
+            // Smooth camera interpolation with elevated view angle & subtle breathing
+            camOrbitOffset += (targetCamOrbitOffset - camOrbitOffset) * 0.1;
+            const preset = camPresets[currentCamPreset];
+            const targetCamX = preset.pos.x + Math.sin(elapsed * 0.45) * 0.35 + camOrbitOffset * 6;
+            const targetCamY = preset.pos.y + Math.sin(elapsed * 0.8) * 0.2;
+            const targetCamZ = preset.pos.z + Math.cos(elapsed * 0.45) * 0.25;
+
+            camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.08);
+            camera.lookAt(preset.look);
+
+            // Animate ocean waves (vertex displacement)
+            for (let i = 0; i < oceanPosAttr.count; i++) {
+                const vx = oceanPosAttr.getX(i);
+                const vz = oceanPosAttr.getZ(i);
+                const wave = Math.sin(vx * 0.18 + elapsed * 2.2) * 0.22 +
+                             Math.cos(vz * 0.15 + elapsed * 1.8) * 0.22;
+                oceanPosAttr.setY(i, oceanBaseY[i] + wave);
+            }
+            oceanPosAttr.needsUpdate = true;
+
+            // Animate shoreline foam rings
+            foamRings.forEach((f) => {
+                const s = f.baseScale + Math.sin(elapsed * 2.4 + f.phase) * 0.04;
+                f.mesh.scale.set(s, s, 1);
+            });
+
+            // Sway tropical palm trees in the sea breeze
+            palmTrees.forEach((tree) => {
+                tree.crown.rotation.z = Math.sin(elapsed * 1.8 + tree.phase) * 0.09;
+                tree.crown.rotation.x = Math.cos(elapsed * 1.4 + tree.phase) * 0.06;
+            });
+
+            // Rotate background Shine Sprite Sun Emblem & drift clouds
+            shineEmblemGroup.rotation.z = elapsed * 0.35;
+            shineEmblemGroup.position.y = 12.5 + Math.sin(elapsed * 1.2) * 0.5;
+
+            clouds.forEach((c) => {
+                c.group.position.x += c.speed;
+                if (c.group.position.x > 35) c.group.position.x = -35;
+            });
+
+            // Animate active bin squash-and-stretch
+            const frontBinIdx = getCurrentFrontBinIndex();
+            bins.forEach((b, idx) => {
+                b.bounceScale += (1.0 - b.bounceScale) * 0.18;
+                const idleBob = Math.sin(elapsed * 3.5 + idx) * 0.05;
+                b.container.scale.set(
+                    b.bounceScale,
+                    1 / Math.sqrt(b.bounceScale),
+                    b.bounceScale
+                );
+                b.container.position.y = idleBob;
+                b.rimMat.emissiveIntensity = idx === frontBinIdx ? 0.55 : 0.15;
+            });
+
+            // Spawn and update falling items
+            if (gameActive) {
+                frameCount++;
+                if (frameCount >= spawnRate) {
+                    spawnTrashItem();
+                    frameCount = 0;
+                }
+
+                for (let i = activeTrash.length - 1; i >= 0; i--) {
+                    const t = activeTrash[i];
+                    t.group.position.y -= currentSpeed;
+                    t.mesh.rotation.x += t.rotSpeed.x;
+                    t.mesh.rotation.y += t.rotSpeed.y;
+                    t.mesh.rotation.z += t.rotSpeed.z;
+
+                    checkCollision(t, i);
+                    if (t.group && t.group.position.y < -10) {
+                        scene.remove(t.group);
+                        activeTrash.splice(i, 1);
+                    }
+                }
+            }
+
+            // Update splash particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.mesh.position.add(p.velocity);
+                p.velocity.y -= 0.011;
+                p.life -= 0.024;
+                p.mesh.scale.setScalar(Math.max(0.001, p.life));
+                p.mesh.rotation.y += 0.1;
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = () => {
+            updateUI();
+            animate();
+        };
+    </script>
+</body>
+</html>

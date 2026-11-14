@@ -2771,10 +2771,10 @@
   <div id="intro-overlay">
     <div id="voxel-start-screen">
       <div class="start-content-wrapper">
-        <img src="assets/images/intro.png" alt="Initiate Sequence" class="intro-graphic">
-        <div class="start-hud-badge">
+        <video id="intro-video" class="intro-graphic" src="assets/videos/intro.mp4" autoplay playsinline preload="auto"></video>
+        <div class="start-hud-badge" id="intro-hud-badge">
           <span class="pulse-dot"></span>
-          <span class="start-hud-text">[ CLICK ANYWHERE TO INITIALIZE ENIAC SYSTEM ]</span>
+          <span class="start-hud-text" id="intro-hud-text">[ CLICK ANYWHERE TO INITIALIZE ENIAC SYSTEM ]</span>
         </div>
       </div>
     </div>
@@ -2914,13 +2914,19 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 20px;
+      justify-content: center;
+      width: 94vw;
+      height: 92vh;
+      gap: 16px;
     }
 
     .intro-graphic {
-      max-width: 75vw;
-      max-height: 70vh;
+      width: min(94vw, 1520px);
+      height: min(82vh, 855px);
+      max-width: 94vw;
+      max-height: 82vh;
       object-fit: contain;
+      border-radius: 12px;
       filter: drop-shadow(0 0 25px rgba(255, 100, 0, 0.3));
       animation: introPulse 3s ease-in-out infinite alternate;
     }
@@ -3015,10 +3021,75 @@
 
         window.addEventListener('resize', vOnWindowResize, false);
         window.addEventListener('keydown', vOnKeyDown, false);
-        document.getElementById('voxel-start-screen').addEventListener('click', vStartSequence);
+        vInitIntroVideo();
 
         vUpdateCamera(0);
         vRenderer.render(vScene, vCamera);
+      }
+
+      function vInitIntroVideo() {
+        const startScreen = document.getElementById('voxel-start-screen');
+        const video = document.getElementById('intro-video');
+        const hudText = document.getElementById('intro-hud-text');
+        if (!startScreen || !video) {
+          if (startScreen) startScreen.addEventListener('click', vStartSequence);
+          return;
+        }
+
+        let playingWithSound = false;
+
+        function tryPlayWithSound() {
+          video.muted = false;
+          video.volume = 1.0;
+          const p = video.play();
+          if (p && typeof p.then === 'function') {
+            p.then(() => {
+              playingWithSound = true;
+              if (hudText) hudText.textContent = '[ CLICK ANYWHERE TO INITIALIZE ENIAC SYSTEM ]';
+            }).catch(() => {
+              // Browser blocked unmuted autoplay on reload; start muted and unmute on click
+              playingWithSound = false;
+              video.muted = true;
+              video.play().catch(() => {});
+              if (hudText) hudText.textContent = '[ CLICK ANYWHERE TO PLAY WITH SOUND & START ]';
+            });
+          }
+        }
+
+        // Auto-detect any video file dropped in assets/videos/ if intro.mp4 is missing
+        video.addEventListener('error', function onVideoErr() {
+          video.removeEventListener('error', onVideoErr);
+          fetch('assets/videos/')
+            .then(r => r.ok ? r.text() : '')
+            .then(html => {
+              const match = html.match(/href=["']([^"']+\.(?:mp4|webm|mov|m4v|ogg))["']/i);
+              if (match && match[1]) {
+                const file = match[1].replace(/^\.?\//, '');
+                video.src = file.startsWith('assets/videos/') ? file : ('assets/videos/' + file);
+                tryPlayWithSound();
+              }
+            })
+            .catch(() => {});
+        });
+
+        video.addEventListener('ended', () => {
+          if (!vIsRunning) vStartSequence();
+        });
+
+        startScreen.addEventListener('click', () => {
+          if (!playingWithSound && video.readyState >= 1) {
+            playingWithSound = true;
+            video.muted = false;
+            video.volume = 1.0;
+            video.currentTime = 0;
+            video.play().catch(() => vStartSequence());
+            if (hudText) hudText.textContent = '[ PLAYING // CLICK AGAIN TO INITIALIZE ENIAC ]';
+            return;
+          }
+          vStartSequence();
+        });
+
+        tryPlayWithSound();
       }
 
       function vOnKeyDown(e) {
@@ -3030,6 +3101,11 @@
       }
 
       function vStartSequence() {
+        if (vIsRunning) return;
+        const video = document.getElementById('intro-video');
+        if (video) {
+          try { video.pause(); } catch (e) {}
+        }
         document.getElementById('voxel-start-screen').style.display = 'none';
         vSetupAudio();
         vStartTime = Date.now();
@@ -5336,6 +5412,27 @@
 
 
   <section id="interactive-showcase">
+    <!-- 2027 MAINSTREAM GAME PREMIERE (TOP OF NEWS) -->
+    <div id="ot-2027-game-premiere" class="ot-premiere-2027">
+      <div class="ot-premiere-header">
+        <div class="ot-blinker-badge" role="status" aria-live="polite">
+          <span class="ot-blinker-dot" aria-hidden="true"></span>
+          <span class="ot-blinker-text">ORDINARY TECHNOLOGY'S FIRST MAINSTREAM GAME COMING IN 2027</span>
+        </div>
+        <div class="ot-premiere-actions">
+          <button type="button" class="ot-premiere-btn" id="ot-premiere-unmute-btn" onclick="(function(btn){const f=document.getElementById('ot-premiere-yt');if(!f||!f.contentWindow)return;const muted=btn.dataset.unmuted!=='1';f.contentWindow.postMessage(JSON.stringify({event:'command',func:muted?'unMute':'mute',args:[]}),'*');if(muted)f.contentWindow.postMessage(JSON.stringify({event:'command',func:'setVolume',args:[100]}),'*');btn.dataset.unmuted=muted?'1':'0';btn.textContent=muted?'🔊 AUDIO: ON':'🔇 UNMUTE AUDIO';})(this)">🔇 UNMUTE AUDIO</button>
+          <a href="https://www.youtube.com/watch?v=juQVqcuRs70" target="_blank" rel="noopener" class="ot-premiere-btn">WATCH ON YOUTUBE ↗</a>
+        </div>
+      </div>
+      <div class="ot-premiere-video-wrap">
+        <iframe
+          id="ot-premiere-yt"
+          src="https://www.youtube.com/embed/juQVqcuRs70?autoplay=1&mute=1&loop=1&playlist=juQVqcuRs70&playsinline=1&rel=0&modestbranding=1&enablejsapi=1"
+          title="Ordinary Technology's First Mainstream Game Coming in 2027"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"></iframe>
+      </div>
+    </div>
+
     <div class="section-eyebrow scroll-reveal">
       <span class="live-dot"></span>
       <span>LIVE GLOBAL TELEMETRY // OCTOBER 2026 VERIFIED DISPATCHES</span>
@@ -5981,25 +6078,18 @@
 
 
 
-  <section id="uncanny-zone-container" class="scroll-reveal">
-    <div id="particles" style="background: transparent !important; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; min-height: 450px;">
-      <div id="vignette" style="background: none !important;"></div>
-      <div id="noise-overlay-particles"></div>
-    </div>
-  </section>
-
   <section id="recycling-game" class="scroll-reveal">
     <h2 class="glitch-effect" data-text="ORDINARY RECYCLING // SPACE-AGE TRAINING SIMULATOR">ORDINARY RECYCLING //
       SPACE-AGE TRAINING SIMULATOR</h2>
     <div style="display: flex; justify-content: center; align-items: center; min-height: 700px;">
-      <iframe src="ordinary-recycling/index.html" title="Ordinary Recycling Game" width="900" height="700"
+      <iframe src="assets/games/ecosorterv2.html" title="Ordinary Recycling Game" width="900" height="700"
         style="border: 2px solid var(--primary); border-radius: 12px; box-shadow: 0 0 40px rgba(0,255,204,0.15); background: #000;"
         allowfullscreen></iframe>
     </div>
     <div style="text-align:center; margin-top:1.5rem; color:var(--secondary); font-size:1.1rem;">
       <strong>Tip:</strong> Drag and drop the items into the correct bins to score points. <br>
       <span style="font-size:0.95em; color:var(--tertiary);">If the game does not load, <a
-          href="ordinary-recycling/index.html" target="_blank"
+          href="assets/games/ecosorterv2.html" target="_blank"
           style="color:var(--primary);text-decoration:underline;">open it in a new tab</a>.</span>
     </div>
   </section>
@@ -7267,169 +7357,6 @@
     });
   </script>
 
-  <script>
-    // --- WebGL Sandstorm Effect for #particles div ---
-    function setupSandstormSystem() {
-      const container = document.getElementById('particles');
-      if (!container) return;
-
-      // Ensure noise overlay for this section is generated/updated
-      generateSectionNoise(document.getElementById('noise-overlay-particles'));
-
-      // Clean up previous canvas if any
-      const existingCanvas = container.querySelector('canvas');
-      if (existingCanvas) existingCanvas.remove();
-
-      const canvas = document.createElement('canvas');
-      canvas.style.position = 'absolute';
-      canvas.style.top = '0';
-      canvas.style.left = '0';
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
-      canvas.style.zIndex = '1';
-      canvas.style.pointerEvents = 'none';
-      container.appendChild(canvas);
-
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
-      const scene = new THREE.Scene();
-      
-      const camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
-      camera.position.z = 100;
-
-      const numParticles = 2000;
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(numParticles * 3);
-      const velocities = [];
-      const startTimes = new Float32Array(numParticles);
-      const colors = new Float32Array(numParticles * 3);
-      
-      // Provide fallback hex colors if css vars aren't read properly
-      const c1Str = getComputedStyle(document.documentElement).getPropertyValue('--sand-color-1').trim() || '#D2B48C';
-      const c2Str = getComputedStyle(document.documentElement).getPropertyValue('--sand-color-2').trim() || '#F4A460';
-      const c3Str = getComputedStyle(document.documentElement).getPropertyValue('--sand-color-3').trim() || '#C2B280';
-      
-      const colorOptions = [
-        new THREE.Color(c1Str),
-        new THREE.Color(c2Str),
-        new THREE.Color(c3Str)
-      ];
-
-      for (let i = 0; i < numParticles; i++) {
-        positions[i * 3] = (Math.random() - 0.5) * 300;
-        positions[i * 3 + 1] = (Math.random() - 0.5) * 200;
-        positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
-        
-        velocities.push({
-          x: (Math.random() - 0.3) * 0.5 + 0.5,
-          y: (Math.random() - 0.5) * 0.2
-        });
-
-        startTimes[i] = performance.now() + Math.random() * 3000;
-        
-        const col = colorOptions[Math.floor(Math.random() * colorOptions.length)];
-        colors[i * 3] = col.r;
-        colors[i * 3 + 1] = col.g;
-        colors[i * 3 + 2] = col.b;
-      }
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      
-      const material = new THREE.PointsMaterial({
-        size: 2,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.6,
-        sizeAttenuation: true
-      });
-
-      const particleSystem = new THREE.Points(geometry, material);
-      scene.add(particleSystem);
-
-      let resizeTimer = null;
-      function resize() {
-        if(!container) return;
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-          const w = container.offsetWidth;
-          const h = container.offsetHeight;
-          if(w === 0 || h === 0) return;
-          camera.aspect = w / h;
-          camera.updateProjectionMatrix();
-          renderer.setSize(w, h, false);
-        }, 100);
-      }
-      
-      window.addEventListener('resize', resize);
-      resize();
-
-      function animate() {
-        if (!document.getElementById('particles')) return;
-        window.sandstormAnimationId = requestAnimationFrame(animate);
-        
-        const positions = particleSystem.geometry.attributes.position.array;
-        const time = performance.now();
-        
-        for (let i = 0; i < numParticles; i++) {
-          if (time < startTimes[i]) continue;
-          
-          let x = positions[i * 3];
-          let y = positions[i * 3 + 1];
-          const v = velocities[i];
-          
-          x -= v.x * (1 + Math.sin(time / 1000 + y / 100) * 0.5);
-          y += v.y * (1 + Math.cos(time / 800 + x / 100) * 0.3);
-          
-          if (x < -150) { 
-            x = 150 + Math.random() * 50; 
-            y = (Math.random() - 0.5) * 200; 
-            startTimes[i] = time + Math.random() * 500;
-          }
-          if (y < -100) y = 100;
-          if (y > 100) y = -100;
-          
-          positions[i * 3] = x;
-          positions[i * 3 + 1] = y;
-        }
-        
-        particleSystem.geometry.attributes.position.needsUpdate = true;
-        renderer.render(scene, camera);
-      }
-
-      if (window.sandstormAnimationId) {
-        cancelAnimationFrame(window.sandstormAnimationId);
-      }
-      animate();
-    }
-
-    // Specific noise generator for the sandstorm section's overlay
-    function generateSectionNoise(overlay) {
-      if (!overlay) return;
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 100;
-      canvas.height = 100;
-      const imageData = ctx.createImageData(canvas.width, canvas.height);
-      const data = imageData.data;
-      const sandColorBase = [180, 150, 120];
-      for (let i = 0; i < data.length; i += 4) {
-        const val = Math.random();
-        data[i] = sandColorBase[0] + (val - 0.5) * 40;
-        data[i + 1] = sandColorBase[1] + (val - 0.5) * 40;
-        data[i + 2] = sandColorBase[2] + (val - 0.5) * 40;
-        data[i + 3] = Math.random() * 30 + 5;
-      }
-      ctx.putImageData(imageData, 0, 0);
-      overlay.style.backgroundImage = `url(${canvas.toDataURL()})`;
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', setupSandstormSystem);
-    } else {
-      setupSandstormSystem();
-    }
-  </script>
-
   <!-- <script src="shader.js?v=4" defer></script> DISABLED for desert -->
 
 
@@ -8389,17 +8316,18 @@
               // Create command panel UI
               const commandPanel = document.createElement('div');
               commandPanel.id = 'command-panel';
+              commandPanel.style.display = 'none';
               commandPanel.innerHTML = `
-              < div id = "command-header" >
-            <span>Command Panel</span>
-            <button id="minimize-btn">−</button>
-            <button id="close-btn">×</button>
-        </div >
+              <div id="command-header">
+                <span>Command Panel</span>
+                <button id="minimize-btn">−</button>
+                <button id="close-btn">×</button>
+              </div>
               <div id="command-body">
                 <div id="command-output"></div>
                 <div id="command-input-container">
                   <input type="text" id="command-input" placeholder="Type command (help for options)">
-                    <button id="execute-btn">Run</button>
+                  <button id="execute-btn">Run</button>
                 </div>
                 <div id="command-tabs">
                   <button class="tab-btn active" data-tab="history">History</button>
@@ -8423,209 +8351,131 @@
               // Style the command panel
               const style = document.createElement('style');
               style.textContent = `
-            #command - panel {
+            #command-panel {
               position: fixed;
               bottom: 20px;
               right: 20px;
               width: 400px;
-              max - height: 600px;
-              background: linear - gradient(180deg, rgba(var(--rgb - primary), 0.06), rgba(8, 8, 10, 0.95));
+              max-height: 600px;
+              background: rgba(8, 8, 12, 0.96);
               color: rgba(255, 255, 255, 0.95);
-              border - radius: 10px;
-              border: 1px solid rgba(var(--rgb - primary), 0.12);
-              box - shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 6px 22px rgba(var(--rgb - primary), 0.03);
-              font - family: 'Space Grotesk', 'Consolas', 'Monaco', monospace;
-              z - index: 10000;
-              transition: all 0.28s cubic - bezier(.2, .9, .2, 1);
-              display: flex;
-              flex - direction: column;
+              border-radius: 10px;
+              border: 1px solid rgba(255, 255, 255, 0.14);
+              box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+              font-family: 'Space Grotesk', 'Consolas', 'Monaco', monospace;
+              z-index: 10000;
+              display: none;
+              flex-direction: column;
               overflow: hidden;
             }
-
-            /* header uses primary red tint to match hardpoint */
-            #command - header {
+            #command-header {
               display: flex;
-              justify - content: space - between;
-              align - items: center;
+              justify-content: space-between;
+              align-items: center;
               padding: 10px 12px;
-              background: linear - gradient(90deg, rgba(var(--rgb - primary), 0.12), rgba(0, 0, 0, 0.2));
+              background: rgba(255, 107, 63, 0.14);
               color: var(--text);
-              border - radius: 10px 10px 0 0;
+              border-radius: 10px 10px 0 0;
               cursor: move;
-              font - family: 'Space Grotesk', monospace;
-              font - weight: 700;
+              font-weight: 700;
             }
-
-            #minimize - btn, #close - btn {
+            #minimize-btn, #close-btn {
               background: none;
               border: none;
               color: white;
-              font - size: 18px;
+              font-size: 18px;
               cursor: pointer;
               padding: 0;
               width: 24px;
               height: 24px;
-              display: flex;
-              align - items: center;
-              justify - content: center;
-              margin - left: 5px;
             }
-
-            #close - btn:hover {
-              background - color: rgba(255, 255, 255, 0.2);
-              border - radius: 4px;
-            }
-
-            #command - body {
+            #command-body {
               padding: 14px;
               flex: 1;
               display: flex;
-              flex - direction: column;
+              flex-direction: column;
               overflow: hidden;
-              background: linear - gradient(180deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.4));
             }
-
-            #command - output {
+            #command-output {
               background: rgba(0, 0, 0, 0.45);
               padding: 10px;
-              border - radius: 6px;
-              margin - bottom: 10px;
-              min - height: 80px;
-              font - size: 14px;
-              white - space: pre - wrap;
-              overflow - y: auto;
-              flex - shrink: 0;
-              border: 1px solid rgba(var(--rgb - primary), 0.06);
+              border-radius: 6px;
+              margin-bottom: 10px;
+              min-height: 80px;
+              font-size: 14px;
+              white-space: pre-wrap;
+              overflow-y: auto;
             }
-
-            #command - input - container {
+            #command-input-container {
               display: flex;
-              margin - bottom: 10px;
-              flex - shrink: 0;
+              margin-bottom: 10px;
             }
-
-            #command - input {
+            #command-input {
               flex: 1;
               padding: 8px;
-              background - color: #1e1e1e;
+              background-color: #1e1e1e;
               color: #d4d4d4;
               border: 1px solid #3e3e42;
-              border - radius: 4px;
-              font - family: inherit;
+              border-radius: 4px;
+              font-family: inherit;
             }
-
-            #execute - btn {
-              margin - left: 8px;
+            #execute-btn {
+              margin-left: 8px;
               padding: 8px 12px;
-              background: linear - gradient(180deg, rgba(var(--rgb - secondary), 0.12), rgba(var(--rgb - primary), 0.08));
+              background: rgba(255, 107, 63, 0.2);
               color: white;
-              border: 1px solid rgba(var(--rgb - primary), 0.08);
-              border - radius: 6px;
+              border: 1px solid rgba(255, 107, 63, 0.4);
+              border-radius: 6px;
               cursor: pointer;
-              box - shadow: 0 6px 18px rgba(var(--rgb - primary), 0.06);
             }
-
-            #command - tabs {
+            #command-tabs {
               display: flex;
-              margin - bottom: 10px;
-              border - bottom: 1px solid #3e3e42;
-              flex - shrink: 0;
+              margin-bottom: 10px;
+              border-bottom: 1px solid #3e3e42;
             }
-        
-        .tab - btn {
+            .tab-btn {
               background: none;
               border: none;
               color: #d4d4d4;
               padding: 8px 12px;
               cursor: pointer;
-              border - bottom: 2px solid transparent;
-              margin - right: 5px;
+              border-bottom: 2px solid transparent;
+              margin-right: 5px;
             }
-        
-        .tab - btn.active {
-              border - bottom: 2px solid #007acc;
+            .tab-btn.active {
+              border-bottom: 2px solid #007acc;
               color: #007acc;
             }
-
-            #command - tab - content {
+            #command-tab-content {
               flex: 1;
-              overflow - y: auto;
+              overflow-y: auto;
             }
-        
-        .tab - content {
+            .tab-content {
               display: none;
-              height: 100 %;
+              height: 100%;
             }
-        
-        .tab - content.active {
+            .tab-content.active {
               display: block;
             }
-
-            #command - history, #elements - list, #styles - list {
-              background - color: #1e1e1e;
-              border - radius: 4px;
+            #command-history, #elements-list, #styles-list {
+              background-color: #1e1e1e;
+              border-radius: 4px;
               padding: 10px;
-              height: 100 %;
-              overflow - y: auto;
+              height: 100%;
+              overflow-y: auto;
             }
-        
-        .command - history - item, .element - item, .style - item {
+            .command-history-item, .element-item, .style-item {
               padding: 6px 8px;
-              border - bottom: 1px solid #3e3e42;
+              border-bottom: 1px solid #3e3e42;
               cursor: pointer;
-              font - size: 13px;
+              font-size: 13px;
             }
-        
-        .command - history - item: last - child, .element - item: last - child, .style - item: last - child {
-              border - bottom: none;
-            }
-        
-        .element - item: hover, .style - item:hover {
-              background - color: #2a2d2e;
-            }
-        
-        .element - item.selected {
-              background - color: #094771;
-            }
-
-            #command - panel.minimized {
+            #command-panel.minimized {
               width: 220px;
               height: 44px;
-              overflow: visible;
             }
-
-            #command - panel.minimized #command - body {
+            #command-panel.minimized #command-body {
               display: none;
-            }
-        
-        .highlight - element {
-              outline: 2px dashed #ff9900!important;
-              outline - offset: 2px!important;
-            }
-        
-        .color - picker {
-              display: inline - block;
-              width: 20px;
-              height: 20px;
-              border: 1px solid #ccc;
-              cursor: pointer;
-              margin - left: 10px;
-            }
-        
-        .style - value {
-              float: right;
-              color: #569cd6;
-            }
-        
-        .style - input {
-              width: 100 %;
-              padding: 4px;
-              background - color: #1e1e1e;
-              color: #d4d4d4;
-              border: 1px solid #3e3e42;
-              border - radius: 3px;
-              font - family: inherit;
-              font - size: 12px;
             }
             `;
 
@@ -8684,7 +8534,8 @@
               let isDragging = false;
               let dragOffsetX, dragOffsetY;
 
-              document.getElementById('command-header').addEventListener('mousedown', (e) => {
+              const commandHeaderEl = document.getElementById('command-header');
+              if (commandHeaderEl) commandHeaderEl.addEventListener('mousedown', (e) => {
                 isDragging = true;
                 dragOffsetX = e.clientX - commandPanelElement.offsetLeft;
                 dragOffsetY = e.clientY - commandPanelElement.offsetTop;
