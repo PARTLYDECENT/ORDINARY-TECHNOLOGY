@@ -3392,22 +3392,34 @@
 
         window.addEventListener('message', function onMessage(event) {
           if (event.data === 'introComplete') {
-            if (window._initSpatialWeb) {
-                console.log("🚀 Intro completed. Initializing Spatial Web...");
-                window._initSpatialWeb();
-            }
             window.removeEventListener('message', onMessage);
+            // Immediately release the intro WebGL context before initializing SpatialWeb
+            if (vRenderer) {
+              try {
+                vRenderer.dispose();
+                if (typeof vRenderer.forceContextLoss === 'function') vRenderer.forceContextLoss();
+                if (vRenderer.domElement) vRenderer.domElement.remove();
+              } catch (e) { }
+              vRenderer = null;
+            }
+            if (window._initSpatialWeb) {
+              console.log("🚀 Intro completed. Initializing Spatial Web...");
+              try {
+                window._initSpatialWeb();
+              } catch (err) {
+                console.warn("⚠️ Spatial Web WebGL context unavailable, continuing without 3D background:", err);
+              }
+            }
             overlay.style.transition = 'opacity 1s ease';
             overlay.style.opacity = '0';
             overlay.style.pointerEvents = 'none';
             setTimeout(() => {
-              if (vRenderer) { vRenderer.dispose(); vRenderer.domElement.remove(); }
               if (window._vOsc) { try { window._vOsc.stop(); } catch (e) { } }
               if (vAudioCtx) { try { vAudioCtx.close(); } catch (e) { } }
               overlay.remove();
               document.body.style.overflow = '';
               window.removeEventListener('resize', vOnWindowResize);
-            }, 1800);
+            }, 1200);
           }
         });
       }
@@ -8048,10 +8060,18 @@
             </div>
 
             <script>
-              // --- LIVE SHADERTOY GLSL ENGINE (8 INTERACTIVE VIEWPORTS) ---
+              // --- LIVE SHADERTOY GLSL ENGINE (SINGLE SHARED OFF-SCREEN WEBGL CONTEXT) ---
+              // Uses 1 shared offscreen WebGL context and copies frames to 2D canvases so
+              // the browser never hits the 16-WebGL-context limit or loses context during the ENIAC intro.
               (function initShadertoyGallery() {
                 const cards = document.querySelectorAll('#shadertoy-live-grid .shadertoy-card');
                 if (!cards.length) return;
+
+                const offscreen = document.createElement('canvas');
+                offscreen.width = 360;
+                offscreen.height = 200;
+                const gl = offscreen.getContext('webgl', { antialias: false, depth: false, stencil: false, powerPreference: 'low-power', preserveDrawingBuffer: true });
+                if (!gl) return;
 
                 const vsSource = `
                   attribute vec2 aPos;
@@ -8245,59 +8265,55 @@
                   }
                 `;
 
+                const compile = (type, src) => {
+                  const s = gl.createShader(type);
+                  gl.shaderSource(s, src);
+                  gl.compileShader(s);
+                  return s;
+                };
+
+                const prog = gl.createProgram();
+                gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSource));
+                gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fsCommon));
+                gl.linkProgram(prog);
+                gl.useProgram(prog);
+
+                const buf = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+                const aPos = gl.getAttribLocation(prog, 'aPos');
+                gl.enableVertexAttribArray(aPos);
+                gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+                const uRes = gl.getUniformLocation(prog, 'iResolution');
+                const uTime = gl.getUniformLocation(prog, 'iTime');
+                const uMouse = gl.getUniformLocation(prog, 'iMouse');
+                const uMode = gl.getUniformLocation(prog, 'iMode');
+
                 const instances = [];
 
                 cards.forEach((card) => {
                   const canvas = card.querySelector('.shadertoy-canvas');
+                  if (!canvas) return;
+                  canvas.width = offscreen.width;
+                  canvas.height = offscreen.height;
+                  const ctx2d = canvas.getContext('2d');
+                  if (!ctx2d) return;
+
                   const mode = parseInt(card.dataset.shaderMode || '0', 10);
-                  const gl = canvas.getContext('webgl', { antialias: false, powerPreference: 'low-power' });
-                  if (!gl) return;
-
-                  const compile = (type, src) => {
-                    const s = gl.createShader(type);
-                    gl.shaderSource(s, src);
-                    gl.compileShader(s);
-                    return s;
-                  };
-
-                  const prog = gl.createProgram();
-                  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSource));
-                  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fsCommon));
-                  gl.linkProgram(prog);
-                  gl.useProgram(prog);
-
-                  const buf = gl.createBuffer();
-                  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-                  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
-
-                  const aPos = gl.getAttribLocation(prog, 'aPos');
-                  gl.enableVertexAttribArray(aPos);
-                  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-                  const uRes = gl.getUniformLocation(prog, 'iResolution');
-                  const uTime = gl.getUniformLocation(prog, 'iTime');
-                  const uMouse = gl.getUniformLocation(prog, 'iMouse');
-                  const uMode = gl.getUniformLocation(prog, 'iMode');
-
-                  const state = { card, canvas, gl, prog, uRes, uTime, uMouse, uMode, mode, mouseX: 160, mouseY: 120, visible: false };
+                  const state = { card, canvas, ctx2d, mode, mouseX: 180, mouseY: 100, visible: false, renderedOnce: false };
 
                   canvas.addEventListener('pointermove', (e) => {
                     const r = canvas.getBoundingClientRect();
-                    state.mouseX = (e.clientX - r.left);
-                    state.mouseY = (r.height - (e.clientY - r.top));
+                    if (r.width > 0 && r.height > 0) {
+                      state.mouseX = ((e.clientX - r.left) / r.width) * offscreen.width;
+                      state.mouseY = (1.0 - (e.clientY - r.top) / r.height) * offscreen.height;
+                    }
                   }, { passive: true });
 
                   instances.push(state);
                 });
-
-                const resizeInstance = (inst) => {
-                  const w = Math.max(1, Math.floor(inst.canvas.clientWidth * 0.85));
-                  const h = Math.max(1, Math.floor(inst.canvas.clientHeight * 0.85));
-                  if (inst.canvas.width !== w || inst.canvas.height !== h) {
-                    inst.canvas.width = w;
-                    inst.canvas.height = h;
-                  }
-                };
 
                 if ('IntersectionObserver' in window) {
                   const io = new IntersectionObserver((entries) => {
@@ -8305,27 +8321,30 @@
                       const inst = instances.find((x) => x.card === en.target);
                       if (inst) inst.visible = en.isIntersecting;
                     });
-                  }, { rootMargin: '150px' });
+                  }, { rootMargin: '120px' });
                   instances.forEach((inst) => io.observe(inst.card));
                 } else {
                   instances.forEach((inst) => { inst.visible = true; });
                 }
 
                 const t0 = performance.now();
+                const W = offscreen.width;
+                const H = offscreen.height;
+                gl.viewport(0, 0, W, H);
+                gl.useProgram(prog);
+                gl.uniform2f(uRes, W, H);
+
                 function renderLoop(now) {
                   const elapsed = (now - t0) * 0.001;
                   for (let i = 0; i < instances.length; i++) {
                     const inst = instances[i];
-                    if (!inst.visible) continue;
-                    resizeInstance(inst);
-                    const { gl } = inst;
-                    gl.viewport(0, 0, inst.canvas.width, inst.canvas.height);
-                    gl.useProgram(inst.prog);
-                    gl.uniform2f(inst.uRes, inst.canvas.width, inst.canvas.height);
-                    gl.uniform1f(inst.uTime, elapsed);
-                    gl.uniform2f(inst.uMouse, inst.mouseX * 0.85, inst.mouseY * 0.85);
-                    gl.uniform1i(inst.uMode, inst.mode);
+                    if (!inst.visible && inst.renderedOnce) continue;
+                    gl.uniform1f(uTime, elapsed);
+                    gl.uniform2f(uMouse, inst.mouseX, inst.mouseY);
+                    gl.uniform1i(uMode, inst.mode);
                     gl.drawArrays(gl.TRIANGLES, 0, 6);
+                    inst.ctx2d.drawImage(offscreen, 0, 0);
+                    inst.renderedOnce = true;
                   }
                   requestAnimationFrame(renderLoop);
                 }
