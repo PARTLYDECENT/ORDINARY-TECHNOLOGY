@@ -1,0 +1,2209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Open-Wheel XV700 Tube Chassis — Interactive 3D Mechanical Model</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #070b12;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #e2e8f0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #viewport {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    canvas:active { cursor: grabbing; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .glass {
+      background: rgba(10, 15, 26, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    /* Custom range sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(51, 65, 85, 0.9);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.65);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+      cursor: pointer;
+    }
+    /* 3D projected callout pins */
+    .callout-pin {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.15s ease;
+      z-index: 15;
+    }
+    .callout-pin:hover {
+      transform: translate(-50%, -104%) scale(1.04);
+      z-index: 25;
+    }
+    .callout-badge {
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(56, 189, 248, 0.55);
+      color: #f8fafc;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .callout-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #38bdf8;
+      box-shadow: 0 0 8px #38bdf8;
+      flex-shrink: 0;
+    }
+    .callout-stem {
+      width: 1.5px;
+      height: 14px;
+      background: linear-gradient(to bottom, rgba(56, 189, 248, 0.8), rgba(56, 189, 248, 0.08));
+      margin: 0 auto;
+    }
+    .custom-scroll::-webkit-scrollbar { width: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 999px; }
+  </style>
+</head>
+<body>
+  <!-- 3D WebGL Viewport Container -->
+  <div id="viewport"></div>
+
+  <!-- Projected 3D Callout Overlay Layer -->
+  <div id="callout-layer" class="fixed inset-0 pointer-events-none overflow-hidden z-10"></div>
+
+  <!-- Top-Left Title & Build Spec Banner -->
+  <div class="fixed top-3 left-3 z-20 max-w-[calc(100vw-6rem)] sm:max-w-md pointer-events-none">
+    <div class="glass rounded-2xl px-4 py-3 pointer-events-auto">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex h-2.5 w-2.5 rounded-full bg-sky-400 shadow-[0_0_10px_#38bdf8]"></span>
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-white">
+          XV700 Open-Wheel Spaceframe
+        </h1>
+        <span class="mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/30">
+          3D CAD Sim
+        </span>
+      </div>
+      <p class="text-[11px] sm:text-xs text-slate-400 mt-1 leading-relaxed">
+        Mid-Mount Yamaha XV700 75&deg; V-Twin &bull; Shaft to Subaru R160 Diff &bull; Flange Sprocket Drag Alternator &bull; 3-Link De Dion Rear Axle &bull; Flat Laid-Down Pushrod Coilovers &bull; High-Mount Fuel Cell
+      </p>
+    </div>
+  </div>
+
+  <!-- Mobile Controls Toggle Button -->
+  <button id="toggle-panel-btn" class="fixed top-3 right-3 z-30 glass rounded-xl p-2.5 text-slate-200 hover:text-white hover:border-sky-400/50 transition flex items-center gap-2 text-xs font-semibold">
+    <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+    </svg>
+    <span class="hidden sm:inline">Controls</span>
+  </button>
+
+  <!-- Right-Side Engineering Controls Panel -->
+  <aside id="control-panel" class="fixed top-14 right-3 bottom-3 z-20 w-[calc(100vw-1.5rem)] max-w-xs flex flex-col gap-2.5 pointer-events-none transition-all duration-200">
+    <div class="glass rounded-2xl p-3.5 overflow-y-auto custom-scroll pointer-events-auto flex flex-col gap-3.5 max-h-full">
+
+      <!-- Camera Inspection Presets -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Camera Inspection Views</span>
+          <button id="btn-reset-cam" class="text-[10px] font-medium text-sky-400 hover:text-sky-300 transition">Reset</button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button data-cam="overview" class="cam-btn bg-sky-500/20 border border-sky-400/50 text-sky-200 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left">
+            3/4 Overview
+          </button>
+          <button data-cam="alternator" class="cam-btn bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left">
+            Sprocket &amp; Alt Drive
+          </button>
+          <button data-cam="engine" class="cam-btn bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left">
+            XV700 &amp; Fuel Cell
+          </button>
+          <button data-cam="steering" class="cam-btn bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left">
+            Front Flat Pushrods &amp; PS
+          </button>
+          <button data-cam="rearSusp" class="cam-btn bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left">
+            3-Link Rear &amp; Rockers
+          </button>
+          <button data-cam="top" class="cam-btn bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left">
+            Top Blueprint
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Kinematics Sliders -->
+      <div class="border-t border-slate-700/60 pt-3 flex flex-col gap-3">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Live Kinematics</span>
+
+        <!-- Drivetrain RPM -->
+        <div>
+          <div class="flex justify-between items-center text-xs mb-1">
+            <span class="text-slate-300">Driveshaft / Engine RPM</span>
+            <span id="val-rpm" class="mono text-[11px] text-amber-300 font-semibold">1,450 RPM</span>
+          </div>
+          <input id="slider-rpm" type="range" min="0" max="6500" step="50" value="1450" />
+          <div class="flex justify-between text-[10px] text-slate-500 mono mt-0.5">
+            <span>Alt Overdrive (2.14:1):</span>
+            <span id="val-alt-rpm" class="text-emerald-400">3,107 RPM</span>
+          </div>
+        </div>
+
+        <!-- Suspension Bump / Droop -->
+        <div>
+          <div class="flex justify-between items-center text-xs mb-1">
+            <span class="text-slate-300">Suspension Bump / Droop</span>
+            <span id="val-susp" class="mono text-[11px] text-sky-300 font-semibold">0 mm</span>
+          </div>
+          <input id="slider-susp" type="range" min="-42" max="42" step="1" value="0" />
+        </div>
+
+        <!-- Hydraulic Power Steering -->
+        <div>
+          <div class="flex justify-between items-center text-xs mb-1">
+            <span class="text-slate-300">Power Steering Angle</span>
+            <span id="val-steer" class="mono text-[11px] text-sky-300 font-semibold">0&deg;</span>
+          </div>
+          <input id="slider-steer" type="range" min="-30" max="30" step="1" value="0" />
+        </div>
+      </div>
+
+      <!-- Display & Demo Toggles -->
+      <div class="border-t border-slate-700/60 pt-3 grid grid-cols-2 gap-1.5">
+        <button id="btn-demo" class="bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/25 text-[11px] font-semibold py-2 px-2 rounded-xl transition">
+          Auto-Articulate: OFF
+        </button>
+        <button id="btn-xray" class="bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-semibold py-2 px-2 rounded-xl transition">
+          Chassis X-Ray: OFF
+        </button>
+        <button id="btn-callouts" class="bg-sky-500/20 border border-sky-400/50 text-sky-200 hover:bg-sky-500/30 text-[11px] font-semibold py-2 px-2 rounded-xl transition">
+          3D Labels: ON
+        </button>
+        <button id="btn-wireframe" class="bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-semibold py-2 px-2 rounded-xl transition">
+          Wireframe: OFF
+        </button>
+      </div>
+
+      <!-- Active Inspection Note Card -->
+      <div class="bg-slate-900/75 border border-slate-700/60 rounded-xl p-2.5">
+        <div id="info-title" class="text-xs font-semibold text-sky-300">Open-Wheel Spaceframe Architecture</div>
+        <p id="info-desc" class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+          Triangulated chromoly tube chassis with high-mounted gravity-fed fuel cell behind the roll hoop, flat laid-down inboard coilovers on welded double-shear rocker towers, and a 3-link De Dion rear axle.
+        </p>
+      </div>
+
+      <!-- Interaction Hint -->
+      <div class="text-[10px] text-slate-500 text-center leading-tight">
+        Drag to orbit &bull; Right-drag / Shift+drag to pan &bull; Scroll / pinch to zoom
+      </div>
+    </div>
+  </aside>
+
+  <!-- Error Fallback Toast (No alert() used) -->
+  <div id="error-box" class="hidden fixed bottom-4 left-4 z-50 glass border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-xs max-w-sm"></div>
+
+  <script>
+    // =========================================================================
+    // GLOBAL APPLICATION STATE & CONFIGURATION
+    // =========================================================================
+    const state = {
+      rpm: 1450,
+      suspMM: 0,
+      steerDeg: 0,
+      autoDemo: false,
+      xray: false,
+      showCallouts: true,
+      wireframe: false,
+      driveAngle: 0,
+      chainOffset: 0,
+      demoTime: 0
+    };
+
+    // Camera inspection presets with engineering notes
+    const CAMERA_PRESETS = {
+      overview: {
+        target: [0, 0.44, -0.10], theta: 0.72, phi: 1.14, radius: 3.45,
+        title: "Open-Wheel Spaceframe Architecture",
+        desc: "Triangulated chromoly tube chassis with high-mounted gravity-fed fuel cell behind the roll hoop, flat laid-down inboard coilovers on welded double-shear rocker towers, and a 3-link De Dion rear axle."
+      },
+      alternator: {
+        target: [0.10, 0.36, -1.05], theta: 0.48, phi: 1.24, radius: 0.92,
+        title: "Pinion-Flange Sprocket & Drag Alternator",
+        desc: "Because the Subaru R160 diff is chassis-mounted inside the 3-link De Dion setup, the 30T flange sprocket and roller chain to the 14T high-mount mini drag alternator maintain constant tension throughout suspension travel."
+      },
+      engine: {
+        target: [0.0, 0.56, -0.46], theta: 1.18, phi: 1.10, radius: 1.42,
+        title: "XV700 V-Twin & High-Mount Fuel Cell",
+        desc: "Mid-mounted 75° air-cooled Yamaha XV700 V-twin fed by an elevated baffled racing fuel cell framed high between the roll-hoop stays, complete with billet filler cap, sight gauge, and braided gravity-feed line."
+      },
+      steering: {
+        target: [0.0, 0.40, 1.20], theta: 0.36, phi: 0.96, radius: 1.18,
+        title: "Flat Laid-Down Front Pushrods & Power Steering",
+        desc: "Staggered transverse coilovers sit completely flat on an elevated central double-shear bridge—clear of all frame tubing—actuated by CNC billet triangular rocker arms above the hydraulic power steering rack."
+      },
+      rearSusp: {
+        target: [0.0, 0.40, -1.24], theta: 2.52, phi: 1.15, radius: 1.48,
+        title: "3-Link De Dion Rear Axle & Flat Longitudinal Springs",
+        desc: "Curved tubular De Dion axle beam located by twin lower trailing arms, a central over-diff upper 3rd link, and a rear Panhard bar. Pushrods drive elevated billet rockers and flat laid-down longitudinal coilovers."
+      },
+      top: {
+        target: [0.0, 0.34, -0.05], theta: 0.01, phi: 0.12, radius: 3.90,
+        title: "Top Planform Blueprint",
+        desc: "Reveals centerline packaging: staggered flat front coilovers, high-mount fuel cell above the XV700 V-twin, longitudinal flat rear coilovers, 3-link rear axle geometry, and offset drag-alternator chain drive."
+      }
+    };
+
+    // Dynamic kinematic references updated every frame
+    const kin = {
+      engineGroup: null,
+      driveshaftGroup: null,
+      driveSprocket: null,
+      altSprocket: null,
+      altFan: null,
+      chainLinks: [],
+      chainPathPoints: [],
+      chainTotalLen: 1,
+      steeringColumnShaft: null,
+      rackInnerBar: null,
+      rackBootL: null,
+      rackBootR: null,
+      frontCorners: [],
+      rearCorners: [],
+      rearAxleGrp: null,
+      rearThreeLink: null,
+      callouts: []
+    };
+
+    // Scene globals
+    let scene, camera, renderer, rootGroup;
+    let clock;
+    const allMaterials = [];
+    const chassisMaterials = [];
+
+    // Smooth spherical orbit camera state
+    const camOrbit = {
+      target: new THREE.Vector3(0, 0.44, -0.10),
+      desiredTarget: new THREE.Vector3(0, 0.44, -0.10),
+      theta: 0.72,
+      desiredTheta: 0.72,
+      phi: 1.14,
+      desiredPhi: 1.14,
+      radius: 3.45,
+      desiredRadius: 3.45
+    };
+
+    // Shared unit cylinder geometry for dynamic links & telescoping damper shafts
+    const UNIT_CYL_GEO = new THREE.CylinderGeometry(1, 1, 1, 12);
+
+    // =========================================================================
+    // PBR MATERIAL LIBRARY
+    // =========================================================================
+    let MAT = {};
+    function initMaterials() {
+      const makeStd = (cfg, isChassis = false) => {
+        const m = new THREE.MeshStandardMaterial(cfg);
+        allMaterials.push(m);
+        if (isChassis) chassisMaterials.push(m);
+        return m;
+      };
+
+      MAT = {
+        chassisPrimary:   makeStd({ color: 0x3b82f6, metalness: 0.58, roughness: 0.32, transparent: true, opacity: 1.0 }, true),
+        chassisSecondary: makeStd({ color: 0x1e3a8a, metalness: 0.55, roughness: 0.38, transparent: true, opacity: 1.0 }, true),
+        chassisFloor:     makeStd({ color: 0x1e293b, metalness: 0.45, roughness: 0.65, transparent: true, opacity: 1.0 }, true),
+        steelDark:        makeStd({ color: 0x334155, metalness: 0.72, roughness: 0.38 }),
+        steelRaw:         makeStd({ color: 0x64748b, metalness: 0.80, roughness: 0.30 }),
+        castIron:         makeStd({ color: 0x3f4650, metalness: 0.55, roughness: 0.62 }),
+        aluminumCast:     makeStd({ color: 0x94a3b8, metalness: 0.78, roughness: 0.36 }),
+        aluminumMachined: makeStd({ color: 0xdbeafe, metalness: 0.88, roughness: 0.22 }),
+        chrome:           makeStd({ color: 0xf1f5f9, metalness: 0.96, roughness: 0.12 }),
+        engineBlack:      makeStd({ color: 0x181c24, metalness: 0.45, roughness: 0.52 }),
+        exhaustStainless: makeStd({ color: 0xcbd5e1, metalness: 0.88, roughness: 0.24 }),
+        exhaustHeatTint:  makeStd({ color: 0xd4a373, metalness: 0.85, roughness: 0.26 }),
+        anodizedRed:      makeStd({ color: 0xef4444, metalness: 0.68, roughness: 0.28 }),
+        anodizedBlue:     makeStd({ color: 0x0ea5e9, metalness: 0.72, roughness: 0.24 }),
+        anodizedGold:     makeStd({ color: 0xf59e0b, metalness: 0.78, roughness: 0.26 }),
+        springCoil:       makeStd({ color: 0xf97316, metalness: 0.50, roughness: 0.32 }),
+        copperWinding:    makeStd({ color: 0xb45309, metalness: 0.82, roughness: 0.32 }),
+        chainGold:        makeStd({ color: 0xfbbf24, metalness: 0.85, roughness: 0.26 }),
+        rubber:           makeStd({ color: 0x14171d, metalness: 0.08, roughness: 0.88 }),
+        tireTread:        makeStd({ color: 0x111318, metalness: 0.05, roughness: 0.92 }),
+        brakeRotor:       makeStd({ color: 0x9ca3af, metalness: 0.85, roughness: 0.32 }),
+        seatFabric:       makeStd({ color: 0x1e2028, metalness: 0.05, roughness: 0.90 }),
+        fluidReservoir:   makeStd({ color: 0xfef3c7, metalness: 0.05, roughness: 0.22, transparent: true, opacity: 0.78 })
+      };
+    }
+
+    // =========================================================================
+    // PROCEDURAL GEOMETRY HELPERS
+    // =========================================================================
+
+    /** Creates a static cylindrical tube between two 3D points */
+    function createTube(p1, p2, radius, material, parent, addCaps = false) {
+      const v1 = (p1 instanceof THREE.Vector3) ? p1 : new THREE.Vector3(...p1);
+      const v2 = (p2 instanceof THREE.Vector3) ? p2 : new THREE.Vector3(...p2);
+      const dir = new THREE.Vector3().subVectors(v2, v1);
+      const len = dir.length();
+      if (len < 1e-5) return null;
+
+      const geo = new THREE.CylinderGeometry(radius, radius, len, 12);
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.position.copy(v1).add(v2).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (parent) parent.add(mesh);
+
+      if (addCaps) {
+        const capGeo = new THREE.SphereGeometry(radius * 1.04, 10, 10);
+        const c1 = new THREE.Mesh(capGeo, material);
+        c1.position.copy(v1);
+        const c2 = new THREE.Mesh(capGeo, material);
+        c2.position.copy(v2);
+        if (parent) parent.add(c1, c2);
+      }
+      return mesh;
+    }
+
+    /** Creates a dynamic link mesh whose endpoints can be updated every frame */
+    function createDynamicLink(radius, material, parent) {
+      const mesh = new THREE.Mesh(UNIT_CYL_GEO, material);
+      mesh.userData.radius = radius;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (parent) parent.add(mesh);
+      return mesh;
+    }
+
+    /** Updates a dynamic link mesh to span exactly from p1 to p2 */
+    function updateDynamicLink(mesh, p1, p2) {
+      const dir = new THREE.Vector3().subVectors(p2, p1);
+      const len = Math.max(0.001, dir.length());
+      const r = mesh.userData.radius || 0.01;
+      mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      mesh.scale.set(r, len, r);
+    }
+
+    /** Creates a spherical Heim-joint / rod-end node */
+    function createJointNode(pos, radius, material, parent) {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 12), material);
+      const v = (pos instanceof THREE.Vector3) ? pos : new THREE.Vector3(...pos);
+      mesh.position.copy(v);
+      mesh.castShadow = true;
+      if (parent) parent.add(mesh);
+      return mesh;
+    }
+
+    /** Creates a unit-height (Y: 0 -> 1) helical coil spring mesh */
+    function createUnitHelicalSpring(coilRadius, turns, wireRadius, material) {
+      const pts = [];
+      const segs = Math.floor(turns * 22);
+      for (let i = 0; i <= segs; i++) {
+        const t = i / segs;
+        const ang = t * turns * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(ang) * coilRadius, t, Math.sin(ang) * coilRadius));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const geo = new THREE.TubeGeometry(curve, segs, wireRadius, 8, false);
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    /** Creates a toothed chain sprocket (axis along Z, centered at Z=0) */
+    function createSprocketMesh(pitchRadius, teeth, thickness, boreRadius, material) {
+      const shape = new THREE.Shape();
+      const rootR = pitchRadius - 0.0055;
+      const tipR = pitchRadius + 0.0045;
+      const step = (Math.PI * 2) / teeth;
+
+      for (let i = 0; i < teeth; i++) {
+        const a0 = i * step;
+        const a1 = a0 + step * 0.25;
+        const a2 = a0 + step * 0.48;
+        const a3 = a0 + step * 0.72;
+        const p0 = [Math.cos(a0) * rootR, Math.sin(a0) * rootR];
+        const p1 = [Math.cos(a1) * tipR,  Math.sin(a1) * tipR];
+        const p2 = [Math.cos(a2) * tipR,  Math.sin(a2) * tipR];
+        const p3 = [Math.cos(a3) * rootR, Math.sin(a3) * rootR];
+        if (i === 0) shape.moveTo(p0[0], p0[1]);
+        else shape.lineTo(p0[0], p0[1]);
+        shape.lineTo(p1[0], p1[1]);
+        shape.lineTo(p2[0], p2[1]);
+        shape.lineTo(p3[0], p3[1]);
+      }
+      shape.closePath();
+
+      // Center bore hole
+      const bore = new THREE.Path();
+      bore.absarc(0, 0, boreRadius, 0, Math.PI * 2, true);
+      shape.holes.push(bore);
+
+      // Weight-reduction lightening holes for larger sprockets
+      if (pitchRadius > 0.05) {
+        const numHoles = 6;
+        const ringR = (pitchRadius + boreRadius) * 0.49;
+        const holeR = Math.min(0.011, (pitchRadius - boreRadius) * 0.22);
+        for (let k = 0; k < numHoles; k++) {
+          const ang = (k / numHoles) * Math.PI * 2;
+          const h = new THREE.Path();
+          h.absarc(Math.cos(ang) * ringR, Math.sin(ang) * ringR, holeR, 0, Math.PI * 2, true);
+          shape.holes.push(h);
+        }
+      }
+
+      const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: thickness,
+        bevelEnabled: true,
+        bevelThickness: 0.001,
+        bevelSize: 0.001,
+        bevelSegments: 2
+      });
+      geo.center();
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    /**
+     * Welded Double-Shear Suspension Clevis Bracket (twin side tabs + base weld plate + hex bolt)
+     * Provides realistic suspension pickup points on the tube chassis and De Dion axle.
+     */
+    function createClevisBracket(pos, rotEuler, parent, gap = 0.024, tabHeight = 0.036) {
+      const grp = new THREE.Group();
+      const v = (pos instanceof THREE.Vector3) ? pos : new THREE.Vector3(...pos);
+      grp.position.copy(v);
+      if (rotEuler) grp.rotation.set(...rotEuler);
+
+      const tabGeo = new THREE.BoxGeometry(0.005, tabHeight, 0.028);
+      [-gap * 0.5, gap * 0.5].forEach(tx => {
+        const tab = new THREE.Mesh(tabGeo, MAT.steelDark);
+        tab.position.set(tx, 0, 0);
+        tab.castShadow = true;
+        grp.add(tab);
+      });
+
+      const base = new THREE.Mesh(new THREE.BoxGeometry(gap + 0.010, 0.006, 0.030), MAT.steelDark);
+      base.position.set(0, -tabHeight * 0.5, 0);
+      grp.add(base);
+
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, gap + 0.018, 6), MAT.chrome);
+      bolt.rotation.z = Math.PI / 2;
+      bolt.position.set(0, tabHeight * 0.14, 0);
+      grp.add(bolt);
+
+      if (parent) parent.add(grp);
+      return grp;
+    }
+
+    /**
+     * CNC Billet Triangular Bellcrank / Rocker Arm (extruded in local XY plane, pivot at origin)
+     * Includes corner padding, center lightening pocket, bearing pivot hub, and heim clevis bosses.
+     */
+    function createBellcrankMesh(pA, pB, thickness, material) {
+      const grp = new THREE.Group();
+
+      const cx = (pA[0] + pB[0]) / 3;
+      const cy = (pA[1] + pB[1]) / 3;
+      const verts = [[0, 0], pA, pB];
+      const pad = 0.014;
+
+      const shape = new THREE.Shape();
+      verts.forEach((pt, idx) => {
+        const dx = pt[0] - cx;
+        const dy = pt[1] - cy;
+        const d = Math.hypot(dx, dy) || 1;
+        const ox = pt[0] + (dx / d) * pad;
+        const oy = pt[1] + (dy / d) * pad;
+        if (idx === 0) shape.moveTo(ox, oy);
+        else shape.lineTo(ox, oy);
+      });
+      shape.closePath();
+
+      // Center CNC weight-reduction lightening pocket
+      const pocket = new THREE.Path();
+      pocket.absarc(cx, cy, 0.010, 0, Math.PI * 2, true);
+      shape.holes.push(pocket);
+
+      const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: thickness,
+        bevelEnabled: true,
+        bevelThickness: 0.0015,
+        bevelSize: 0.0015,
+        bevelSegments: 2
+      });
+      // Translate ONLY along Z so pivot (0,0) remains exact!
+      geo.translate(0, 0, -thickness * 0.5);
+
+      const plate = new THREE.Mesh(geo, material);
+      plate.castShadow = true;
+      plate.receiveShadow = true;
+      grp.add(plate);
+
+      // Machined Pivot Bearing Boss at origin (0,0)
+      const pivotBoss = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, thickness + 0.016, 16), MAT.aluminumMachined);
+      pivotBoss.rotation.x = Math.PI / 2;
+      grp.add(pivotBoss);
+      const pivotBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, thickness + 0.026, 6), MAT.chrome);
+      pivotBolt.rotation.x = Math.PI / 2;
+      grp.add(pivotBolt);
+
+      // Heim-joint clevis pins at Pushrod Ear (pA) & Shock Ear (pB)
+      [pA, pB].forEach(pt => {
+        const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, thickness + 0.010, 12), MAT.anodizedGold);
+        boss.rotation.x = Math.PI / 2;
+        boss.position.set(pt[0], pt[1], 0);
+        grp.add(boss);
+      });
+
+      return grp;
+    }
+
+    /**
+     * Full Multi-Part Laid-Down Coilover Damper Assembly:
+     * Threaded anodized damper body, adjustable preload collar, spring perches,
+     * telescoping chrome shaft, bump stop, heim eyelets, and clear helical coil spring.
+     */
+    function createCoiloverAssembly(parent, bodyLen = 0.145, springRadius = 0.023, turns = 7.5) {
+      const group = new THREE.Group();
+      parent.add(group);
+
+      // Chassis-end heim eyelet
+      const eyeBase = new THREE.Mesh(new THREE.TorusGeometry(0.009, 0.004, 8, 14), MAT.aluminumMachined);
+      eyeBase.rotation.y = Math.PI / 2;
+      group.add(eyeBase);
+
+      // Threaded Anodized Damper Body
+      const damperBody = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.0135, bodyLen, 16), MAT.anodizedBlue);
+      damperBody.position.y = 0.014 + bodyLen * 0.5;
+      damperBody.castShadow = true;
+      group.add(damperBody);
+
+      // Adjustable Billet Preload Lock Collar & Lower Spring Perch
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(springRadius + 0.005, springRadius + 0.005, 0.012, 18), MAT.anodizedGold);
+      collar.position.y = 0.042;
+      group.add(collar);
+
+      // Urethane Bump Stop seated at seal head
+      const bumpStop = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.012, 0.016, 12), MAT.rubber);
+      bumpStop.position.y = 0.014 + bodyLen + 0.008;
+      group.add(bumpStop);
+
+      // Telescoping Chrome Damper Shaft
+      const pistonRod = new THREE.Mesh(UNIT_CYL_GEO, MAT.chrome);
+      group.add(pistonRod);
+
+      // Moving Upper Spring Retainer Hat
+      const upperPerch = new THREE.Mesh(new THREE.CylinderGeometry(springRadius + 0.004, springRadius + 0.004, 0.010, 18), MAT.aluminumMachined);
+      group.add(upperPerch);
+
+      // Rocker-end heim eyelet
+      const eyeTip = new THREE.Mesh(new THREE.TorusGeometry(0.009, 0.004, 8, 14), MAT.aluminumMachined);
+      eyeTip.rotation.y = Math.PI / 2;
+      group.add(eyeTip);
+
+      // Helical Coil Spring seated strictly between collar and upperPerch
+      const springMesh = createUnitHelicalSpring(springRadius, turns, 0.0044, MAT.springCoil);
+      group.add(springMesh);
+
+      return { group, bodyLen, pistonRod, upperPerch, eyeTip, springMesh };
+    }
+
+    /** Updates multi-part laid-down coilover between live chassis anchor and rocker shock ear */
+    function updateCoiloverAssembly(coil, pAnchor, pRocker) {
+      const dir = new THREE.Vector3().subVectors(pRocker, pAnchor);
+      const len = Math.max(0.11, dir.length());
+      coil.group.position.copy(pAnchor);
+      coil.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+
+      const bodyEnd = 0.014 + coil.bodyLen;
+      const rodStart = bodyEnd * 0.85;
+      const rodLen = Math.max(0.02, len - rodStart - 0.006);
+      coil.pistonRod.position.y = rodStart + rodLen * 0.5;
+      coil.pistonRod.scale.set(0.006, rodLen, 0.006);
+
+      const springStart = 0.048;
+      const perchY = len - 0.022;
+      coil.upperPerch.position.y = perchY;
+      coil.eyeTip.position.y = len;
+
+      const springLen = Math.max(0.04, perchY - springStart - 0.004);
+      coil.springMesh.position.y = springStart;
+      coil.springMesh.scale.set(1, springLen, 1);
+    }
+
+    /** Creates an open-wheel racing slick tire + deep-dish billet multi-spoke wheel */
+    function createWheelAssembly(radius, width, isRear) {
+      const grp = new THREE.Group();
+
+      // Tire carcass (cylinder along X axis)
+      const tread = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width * 0.88, 32), MAT.tireTread);
+      tread.rotation.z = Math.PI / 2;
+      tread.castShadow = true;
+      tread.receiveShadow = true;
+      grp.add(tread);
+
+      // Rounded tire shoulders (sidewall tori)
+      const shoulderR = radius - 0.032;
+      [-width * 0.41, width * 0.41].forEach(sx => {
+        const torus = new THREE.Mesh(new THREE.TorusGeometry(shoulderR, 0.032, 12, 32), MAT.rubber);
+        torus.rotation.y = Math.PI / 2;
+        torus.position.x = sx;
+        grp.add(torus);
+      });
+
+      // Outer Rim Barrel & Lip
+      const rimR = radius * 0.58;
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(rimR, rimR, width * 0.78, 24, 1, true), MAT.steelDark);
+      barrel.rotation.z = Math.PI / 2;
+      grp.add(barrel);
+
+      const lipOuter = new THREE.Mesh(new THREE.TorusGeometry(rimR, 0.011, 10, 28), MAT.aluminumMachined);
+      lipOuter.rotation.y = Math.PI / 2;
+      lipOuter.position.x = width * 0.36;
+      grp.add(lipOuter);
+
+      // Center Hub + 6 Machined Spokes
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.055, 16), MAT.steelDark);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.x = width * 0.14;
+      grp.add(hub);
+
+      // Anodized Center-Lock Nut
+      const lockNut = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.032, 6), isRear ? MAT.anodizedRed : MAT.anodizedGold);
+      lockNut.rotation.z = Math.PI / 2;
+      lockNut.position.x = width * 0.25;
+      grp.add(lockNut);
+
+      const spokeGeo = new THREE.BoxGeometry(0.016, rimR * 0.92, 0.022);
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        const spoke = new THREE.Mesh(spokeGeo, MAT.aluminumMachined);
+        spoke.position.set(width * 0.18, Math.cos(ang) * rimR * 0.45, Math.sin(ang) * rimR * 0.45);
+        spoke.rotation.x = -ang;
+        grp.add(spoke);
+      }
+
+      return grp;
+    }
+
+    // =========================================================================
+    // 1. OPEN-WHEEL CHROMOLY TUBE SPACEFRAME CHASSIS + HIGH-MOUNT FUEL CELL
+    // =========================================================================
+    function buildTubeChassis(root) {
+      const grp = new THREE.Group();
+      root.add(grp);
+
+      const R_MAIN = 0.017;
+      const R_BRACE = 0.013;
+      const R_ROLL = 0.021;
+
+      // Key symmetric chassis station coordinates [halfWidth, yHeight, zPos]
+      const L = {
+        noseTip:   [0.14, 0.18,  1.56],
+        frontBulk: [0.22, 0.15,  1.28],
+        pedalBulk: [0.24, 0.15,  0.88],
+        dashBulk:  [0.34, 0.15,  0.48],
+        seatRear:  [0.34, 0.15, -0.18],
+        engRear:   [0.27, 0.16, -0.84],
+        diffRear:  [0.23, 0.18, -1.32]
+      };
+      const U = {
+        noseTip:   [0.12, 0.34,  1.54],
+        frontBulk: [0.22, 0.45,  1.26],
+        pedalBulk: [0.26, 0.50,  0.84],
+        dashBulk:  [0.36, 0.56,  0.48],
+        seatRear:  [0.36, 0.58, -0.18],
+        engRear:   [0.28, 0.54, -0.84],
+        diffRear:  [0.24, 0.46, -1.30]
+      };
+
+      const stations = ['noseTip', 'frontBulk', 'pedalBulk', 'dashBulk', 'seatRear', 'engRear', 'diffRear'];
+
+      const addMirrorTube = (a, b, r, mat = MAT.chassisPrimary) => {
+        [-1, 1].forEach(s => {
+          createTube([s * a[0], a[1], a[2]], [s * b[0], b[1], b[2]], r, mat, grp, true);
+        });
+      };
+      const addCrossTube = (pt, r, mat = MAT.chassisPrimary) => {
+        createTube([-pt[0], pt[1], pt[2]], [pt[0], pt[1], pt[2]], r, mat, grp, true);
+      };
+
+      // Longitudinal Lower & Upper Rails + Vertical Uprights + Side Triangulation
+      for (let i = 0; i < stations.length - 1; i++) {
+        const k1 = stations[i];
+        const k2 = stations[i + 1];
+        addMirrorTube(L[k1], L[k2], R_MAIN);
+        addMirrorTube(U[k1], U[k2], R_MAIN);
+        // Side bay diagonal triangulation (alternating Warren truss)
+        if (i % 2 === 0) addMirrorTube(L[k1], U[k2], R_BRACE, MAT.chassisSecondary);
+        else addMirrorTube(U[k1], L[k2], R_BRACE, MAT.chassisSecondary);
+      }
+
+      // Station Verticals & Floor Cross-Members
+      stations.forEach((k, idx) => {
+        addMirrorTube(L[k], U[k], idx === 0 || idx === stations.length - 1 ? R_MAIN : R_BRACE);
+        addCrossTube(L[k], R_MAIN);
+      });
+
+      // Floor Pan Diagonals
+      createTube([-L.frontBulk[0], L.frontBulk[1], L.frontBulk[2]], [ L.pedalBulk[0], L.pedalBulk[1], L.pedalBulk[2]], R_BRACE, MAT.chassisSecondary, grp);
+      createTube([ L.frontBulk[0], L.frontBulk[1], L.frontBulk[2]], [-L.pedalBulk[0], L.pedalBulk[1], L.pedalBulk[2]], R_BRACE, MAT.chassisSecondary, grp);
+      createTube([-L.dashBulk[0],  L.dashBulk[1],  L.dashBulk[2]],  [ L.seatRear[0],  L.seatRear[1],  L.seatRear[2]],  R_BRACE, MAT.chassisSecondary, grp);
+      createTube([ L.dashBulk[0],  L.dashBulk[1],  L.dashBulk[2]],  [-L.seatRear[0],  L.seatRear[1],  L.seatRear[2]],  R_BRACE, MAT.chassisSecondary, grp);
+
+      // Upper Cross-Braces (Nose, Front Bulkhead, Dash Hoop, Rear Firewall, Rear Subframe)
+      addCrossTube(U.noseTip, R_MAIN);
+      addCrossTube(U.frontBulk, R_MAIN);
+      addCrossTube(U.pedalBulk, R_BRACE, MAT.chassisSecondary);
+      addCrossTube(U.dashBulk, R_MAIN);
+      addCrossTube(U.seatRear, R_MAIN);
+      addCrossTube(U.diffRear, R_MAIN);
+
+      // ---- DEDICATED SUSPENSION TOWERS & MOUNTS FOR FLAT LAID-DOWN SPRINGS ----
+      // 1. Front Raised Twin-Shear Central Shock Bridge (keeps flat front coilovers 105mm clear above nose tube!)
+      createTube([-0.14, 0.45, 1.26], [-0.06, 0.555, 1.225], 0.011, MAT.chassisSecondary, grp, true);
+      createTube([ 0.14, 0.45, 1.26], [ 0.06, 0.555, 1.225], 0.011, MAT.chassisSecondary, grp, true);
+      createTube([-0.06, 0.555, 1.225], [ 0.06, 0.555, 1.225], 0.011, MAT.chassisSecondary, grp, true);
+      createTube([0.0, 0.555, 1.225], [0.0, 0.34, 1.54], 0.010, MAT.chassisSecondary, grp, true);
+
+      // Front Staggered Rocker Pivot Towers (Left at Z=1.255, Right at Z=1.195)
+      [[-1, 1.255], [1, 1.195]].forEach(([s, zP]) => {
+        createTube([s * 0.22, 0.45, zP], [s * 0.235, 0.495, zP], 0.012, MAT.steelDark, grp);
+        createClevisBracket([s * 0.235, 0.495, zP], [0, Math.PI / 2, 0], grp, 0.022, 0.034);
+        createClevisBracket([-s * 0.045, 0.555, zP], [0, Math.PI / 2, 0], grp, 0.020, 0.030);
+      });
+
+      // 2. Rear Raised Rocker Pivot Towers & Forward Longitudinal Flat-Shock Mount Towers
+      [-1, 1].forEach(s => {
+        createTube([s * 0.248, 0.47, -1.24], [s * 0.295, 0.565, -1.24], 0.012, MAT.chassisSecondary, grp);
+        createTube([s * 0.24,  0.46, -1.30], [s * 0.295, 0.565, -1.24], 0.010, MAT.chassisSecondary, grp);
+        createClevisBracket([s * 0.295, 0.565, -1.24], [0, 0, 0], grp, 0.024, 0.036);
+
+        createTube([s * 0.28, 0.54, -0.84], [s * 0.295, 0.630, -0.88], 0.012, MAT.chassisSecondary, grp);
+        createTube([s * 0.27, 0.52, -0.96], [s * 0.295, 0.630, -0.88], 0.010, MAT.chassisSecondary, grp);
+        createClevisBracket([s * 0.295, 0.630, -0.88], [0, 0, 0], grp, 0.020, 0.032);
+      });
+
+      // 3. Rear 3-Link Chassis Crossmember & Panhard Drop-Tower
+      createTube([-0.28, 0.48, -0.82], [0.28, 0.48, -0.82], 0.013, MAT.chassisSecondary, grp, true);
+      createClevisBracket([-0.05, 0.48, -0.82], [0, 0, 0], grp, 0.022, 0.034);
+      [-1, 1].forEach(s => {
+        createClevisBracket([s * 0.29, 0.17, -0.78], [0, 0, 0], grp, 0.024, 0.034);
+      });
+      // Right-Side Panhard Chassis Drop-Bracket behind rear bulkhead
+      createTube([0.23, 0.18, -1.32], [0.26, 0.27, -1.45], 0.012, MAT.chassisSecondary, grp);
+      createTube([0.24, 0.46, -1.30], [0.26, 0.27, -1.45], 0.011, MAT.chassisSecondary, grp);
+      createClevisBracket([0.26, 0.27, -1.45], [0, Math.PI / 2, 0], grp, 0.022, 0.032);
+
+      // ---- Main Roll Hoop + Diagonal + Rear Stays ----
+      const hoopCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.36, 0.58, -0.18),
+        new THREE.Vector3(-0.31, 0.94, -0.21),
+        new THREE.Vector3(-0.18, 1.07, -0.23),
+        new THREE.Vector3( 0.00, 1.09, -0.23),
+        new THREE.Vector3( 0.18, 1.07, -0.23),
+        new THREE.Vector3( 0.31, 0.94, -0.21),
+        new THREE.Vector3( 0.36, 0.58, -0.18)
+      ]);
+      const hoopMesh = new THREE.Mesh(new THREE.TubeGeometry(hoopCurve, 36, R_ROLL, 14, false), MAT.chassisPrimary);
+      hoopMesh.castShadow = true;
+      grp.add(hoopMesh);
+
+      // Roll hoop diagonal safety brace
+      createTube([-0.24, 1.01, -0.22], [0.35, 0.58, -0.18], 0.014, MAT.chassisSecondary, grp, true);
+      // Rear stays sweeping from roll hoop top to engine-rear upper nodes
+      [-1, 1].forEach(s => {
+        createTube([s * 0.24, 1.01, -0.22], [s * 0.28, 0.54, -0.84], 0.016, MAT.chassisPrimary, grp, true);
+        createTube([s * 0.36, 0.56,  0.48], [s * 0.33, 0.72,  0.42], 0.014, MAT.chassisPrimary, grp, true);
+      });
+      // Front Dash Instrument Hoop
+      const dashHoop = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.33, 0.72, 0.42),
+        new THREE.Vector3(-0.18, 0.76, 0.42),
+        new THREE.Vector3( 0.18, 0.76, 0.42),
+        new THREE.Vector3( 0.33, 0.72, 0.42)
+      ]);
+      grp.add(new THREE.Mesh(new THREE.TubeGeometry(dashHoop, 20, 0.014, 10, false), MAT.chassisPrimary));
+
+      // ---- Cockpit Floor Pan & Aluminum Firewall ----
+      const floorGeo = new THREE.BoxGeometry(0.64, 0.012, 1.06);
+      const floorPan = new THREE.Mesh(floorGeo, MAT.chassisFloor);
+      floorPan.position.set(0, 0.145, 0.35);
+      floorPan.receiveShadow = true;
+      grp.add(floorPan);
+
+      const firewall = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.40, 0.010), MAT.aluminumCast);
+      firewall.position.set(0, 0.36, -0.19);
+      grp.add(firewall);
+
+      // ---- Fiberglass Racing Bucket Seat ----
+      const seatGrp = new THREE.Group();
+      const seatBase = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.045, 0.44), MAT.seatFabric);
+      seatBase.position.set(0, 0.18, 0.14);
+      seatBase.rotation.x = -0.10;
+      const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.56, 0.05), MAT.seatFabric);
+      seatBack.position.set(0, 0.43, -0.08);
+      seatBack.rotation.x = -0.28;
+      seatGrp.add(seatBase, seatBack);
+      [-0.21, 0.21].forEach(bx => {
+        const bolster = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.26, 0.36), MAT.seatFabric);
+        bolster.position.set(bx, 0.28, 0.07);
+        seatGrp.add(bolster);
+      });
+      grp.add(seatGrp);
+
+      // ---- Aluminum Pedal Box (Throttle, Brake, Clutch) ----
+      [-0.10, 0.0, 0.10].forEach((px, idx) => {
+        const pedalArm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.16, 0.018), MAT.aluminumMachined);
+        pedalArm.position.set(px, 0.25, 0.90);
+        pedalArm.rotation.x = 0.22;
+        grp.add(pedalArm);
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.075, 0.008), idx === 1 ? MAT.anodizedRed : MAT.aluminumMachined);
+        pad.position.set(px, 0.31, 0.88);
+        pad.rotation.x = 0.22;
+        grp.add(pad);
+      });
+
+      // ---- HIGH-MOUNT GRAVITY-FED RACING FUEL CELL (Elevated in Roll-Hoop Stay Cradle) ----
+      const fcCenter = new THREE.Vector3(0, 0.80, -0.43);
+      createTube([-0.255, 0.70, -0.36], [ 0.255, 0.70, -0.36], 0.011, MAT.chassisSecondary, grp, true);
+      createTube([-0.265, 0.70, -0.52], [ 0.265, 0.70, -0.52], 0.011, MAT.chassisSecondary, grp, true);
+      [-0.22, 0.22].forEach(fx => {
+        createTube([fx, 0.70, -0.36], [fx, 0.70, -0.52], 0.010, MAT.chassisSecondary, grp, true);
+        createTube([fx, 0.70, -0.36], [fx * 1.15, 0.90, -0.26], 0.009, MAT.chassisSecondary, grp, true);
+        createTube([fx, 0.70, -0.52], [fx * 1.20, 0.65, -0.68], 0.009, MAT.chassisSecondary, grp, true);
+      });
+
+      const fuelCell = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.175, 0.22), MAT.anodizedRed);
+      fuelCell.position.copy(fcCenter);
+      fuelCell.castShadow = true;
+      fuelCell.receiveShadow = true;
+      grp.add(fuelCell);
+
+      [-0.12, 0.12].forEach(sx => {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.186, 0.232), MAT.aluminumMachined);
+        strap.position.set(sx, fcCenter.y, fcCenter.z);
+        grp.add(strap);
+      });
+
+      const fillerRing = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.046, 0.018, 18), MAT.aluminumMachined);
+      fillerRing.position.set(0, fcCenter.y + 0.095, fcCenter.z);
+      const fillerCap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.014, 16), MAT.anodizedGold);
+      fillerCap.position.set(0, fcCenter.y + 0.108, fcCenter.z);
+      grp.add(fillerRing, fillerCap);
+
+      // Translucent Side Sight-Glass Fuel Level Tube
+      const sightTube = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.13, 10), MAT.fluidReservoir);
+      sightTube.position.set(-0.20, fcCenter.y, fcCenter.z + 0.04);
+      grp.add(sightTube);
+
+      // Braided Stainless Gravity-Feed AN-6 Fuel Line dropping down to XV700 CV Carburetors
+      const fuelLineCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.08, fcCenter.y - 0.088, fcCenter.z - 0.02),
+        new THREE.Vector3(-0.09, 0.66, -0.44),
+        new THREE.Vector3(-0.04, 0.60, -0.46),
+        new THREE.Vector3( 0.00, 0.56, -0.48)
+      ]);
+      grp.add(new THREE.Mesh(new THREE.TubeGeometry(fuelLineCurve, 18, 0.0055, 8, false), MAT.chrome));
+      const anFit = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.018, 6), MAT.anodizedBlue);
+      anFit.position.set(-0.08, fcCenter.y - 0.092, fcCenter.z - 0.02);
+      grp.add(anFit);
+
+      // Compact Lightweight Lithium Racing Battery (occupying freed lower-left bay)
+      const battTray = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.010, 0.18), MAT.steelDark);
+      battTray.position.set(-0.22, 0.17, -0.98);
+      const battery = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.11, 0.15), MAT.engineBlack);
+      battery.position.set(-0.22, 0.23, -0.98);
+      battery.castShadow = true;
+      const posTerm = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.022, 10), MAT.anodizedRed);
+      posTerm.position.set(-0.18, 0.295, -0.94);
+      const negTerm = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.022, 10), MAT.anodizedBlue);
+      negTerm.position.set(-0.26, 0.295, -0.94);
+      grp.add(battTray, battery, posTerm, negTerm);
+    }
+
+    // =========================================================================
+    // 2. MID-MOUNTED YAMAHA XV700 75° AIR-COOLED V-TWIN ENGINE
+    // =========================================================================
+    function buildYamahaXV700(root) {
+      const eng = new THREE.Group();
+      eng.position.set(0, 0.29, -0.50);
+      root.add(eng);
+      kin.engineGroup = eng;
+
+      // Cast Aluminum Crankcase & Gearbox Block
+      const crankcase = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.17, 0.34), MAT.aluminumCast);
+      crankcase.castShadow = true;
+      crankcase.receiveShadow = true;
+      eng.add(crankcase);
+
+      // Signature Virago Teardrop Chrome Side Clutch & Stator Covers
+      [-0.13, 0.13].forEach(sx => {
+        const cover = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.092, 0.045, 22), MAT.chrome);
+        cover.rotation.z = Math.PI / 2;
+        cover.position.set(sx, -0.015, 0.03);
+        cover.castShadow = true;
+        eng.add(cover);
+
+        const rearGearCover = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.072, 0.042, 18), MAT.chrome);
+        rearGearCover.rotation.z = Math.PI / 2;
+        rearGearCover.position.set(sx, -0.01, -0.09);
+        eng.add(rearGearCover);
+      });
+
+      // Lower Oil Sump Pan
+      const sump = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.055, 0.28), MAT.engineBlack);
+      sump.position.set(0, -0.105, 0);
+      eng.add(sump);
+
+      // Helper: Finned Air-Cooled XV700 Cylinder + Head + Valve Cover + Spark Plug
+      const buildCylinder = (tiltRad, xOffset, zOffset) => {
+        const cylGrp = new THREE.Group();
+        cylGrp.position.set(xOffset, 0.055, zOffset);
+        cylGrp.rotation.x = tiltRad; // 75° V-angle: +37.5° forward, -37.5° rearward
+
+        // Core Cylinder Barrel
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.056, 0.056, 0.15, 18), MAT.engineBlack);
+        barrel.position.y = 0.075;
+        barrel.castShadow = true;
+        cylGrp.add(barrel);
+
+        // 10 Deep Air-Cooling Fins with machined bright outer edges
+        for (let f = 0; f < 10; f++) {
+          const finR = 0.078 + (f > 6 ? 0.014 : 0);
+          const fin = new THREE.Mesh(new THREE.CylinderGeometry(finR, finR, 0.0045, 20), f % 2 === 0 ? MAT.engineBlack : MAT.aluminumMachined);
+          fin.position.y = 0.02 + f * 0.0155;
+          fin.castShadow = true;
+          cylGrp.add(fin);
+        }
+
+        // Finned Cylinder Head Block
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.078, 0.145), MAT.aluminumCast);
+        head.position.y = 0.185;
+        head.castShadow = true;
+        cylGrp.add(head);
+
+        // Chrome Overhead Cam / Tappet Valve Cover
+        const valveCover = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.032, 0.125), MAT.chrome);
+        valveCover.position.y = 0.235;
+        cylGrp.add(valveCover);
+
+        // Spark Plug + Red Ignition Boot
+        const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.042, 8), MAT.anodizedRed);
+        plug.position.set(0.078, 0.19, 0);
+        plug.rotation.z = -0.65;
+        cylGrp.add(plug);
+
+        eng.add(cylGrp);
+      };
+
+      const halfV = THREE.MathUtils.degToRad(37.5); // True 75° Virago XV700 V-angle
+      buildCylinder( halfV,  0.022,  0.035); // Front Cylinder
+      buildCylinder(-halfV, -0.022, -0.035); // Rear Cylinder
+
+      // Dual Hitachi CV Carburetors + Chrome Pod Filters nestled in the 75° V-Valley
+      [-0.038, 0.038].forEach((cx, idx) => {
+        const carbBody = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.068, 14), MAT.aluminumMachined);
+        carbBody.position.set(cx, 0.23, idx === 0 ? -0.015 : 0.015);
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.030, 0.016, 14), MAT.chrome);
+        cap.position.set(cx, 0.272, idx === 0 ? -0.015 : 0.015);
+        const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.034, 0.062, 16), MAT.anodizedRed);
+        pod.rotation.z = Math.PI / 2;
+        pod.position.set(cx + (idx === 0 ? -0.055 : 0.055), 0.245, idx === 0 ? -0.015 : 0.015);
+        eng.add(carbBody, cap, pod);
+      });
+
+      // Swept Stainless Dual Exhaust Headers + Compact Megaphone Mufflers
+      const headerFront = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0.02, 0.21,  0.19),
+        new THREE.Vector3(0.18, 0.16,  0.22),
+        new THREE.Vector3(0.24, 0.02,  0.05),
+        new THREE.Vector3(0.24, -0.05, -0.25),
+        new THREE.Vector3(0.23, -0.02, -0.52)
+      ]);
+      const headerRear = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.02, 0.21, -0.19),
+        new THREE.Vector3(-0.19, 0.15, -0.24),
+        new THREE.Vector3(-0.24, 0.01, -0.35),
+        new THREE.Vector3(-0.23, -0.02, -0.54)
+      ]);
+      [headerFront, headerRear].forEach(curve => {
+        const pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.018, 12, false), MAT.exhaustHeatTint);
+        pipe.castShadow = true;
+        eng.add(pipe);
+      });
+
+      // Twin Rear Slash-Cut Exhaust Cans
+      [-0.23, 0.23].forEach(ex => {
+        const can = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.026, 0.24, 16), MAT.exhaustStainless);
+        can.rotation.x = Math.PI / 2;
+        can.position.set(ex, -0.02, -0.64);
+        can.castShadow = true;
+        eng.add(can);
+      });
+
+      // Rear Shaft-Drive Bevel Output Housing pointing directly at Subaru R160 Diff
+      const bevelOut = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.054, 0.10, 16), MAT.aluminumCast);
+      bevelOut.rotation.x = Math.PI / 2;
+      bevelOut.position.set(0, 0.0, -0.21);
+      eng.add(bevelOut);
+    }
+
+    // =========================================================================
+    // 3. DRIVESHAFT + SUBARU R160 DIFF + FLANGE SPROCKET + CHAIN DRAG ALTERNATOR
+    // =========================================================================
+    function buildDrivetrainAndDragAlternator(root) {
+      const zEngineOut = -0.76;
+      const zSprocket = -1.045;
+      const zDiffCenter = -1.20;
+
+      // ---- 3A. CHASSIS-MOUNTED SUBARU R160 REAR DIFFERENTIAL ----
+      const diffGrp = new THREE.Group();
+      diffGrp.position.set(0, 0.30, zDiffCenter);
+      root.add(diffGrp);
+
+      // Main Cast Iron Differential Pumpkin
+      const pumpkin = new THREE.Mesh(new THREE.SphereGeometry(0.112, 22, 18), MAT.castIron);
+      pumpkin.scale.set(1.05, 0.96, 1.08);
+      pumpkin.castShadow = true;
+      pumpkin.receiveShadow = true;
+      diffGrp.add(pumpkin);
+
+      // Forward Pinion Snout extending to Z = -1.045
+      const pinionSnout = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.064, 0.145, 18), MAT.castIron);
+      pinionSnout.rotation.x = Math.PI / 2;
+      pinionSnout.position.set(0, 0, 0.095);
+      diffGrp.add(pinionSnout);
+
+      // Finned Cast Aluminum Subaru R160 Rear Cover
+      const rearCover = new THREE.Mesh(new THREE.CylinderGeometry(0.096, 0.104, 0.036, 16), MAT.aluminumCast);
+      rearCover.rotation.x = Math.PI / 2;
+      rearCover.position.set(0, 0, -0.102);
+      diffGrp.add(rearCover);
+
+      for (let i = -3; i <= 3; i++) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.155, 0.018), MAT.aluminumMachined);
+        fin.position.set(i * 0.022, 0, -0.122);
+        diffGrp.add(fin);
+      }
+
+      // Subaru Mustache-Bar Rear Mount + Urethane Bushings
+      createTube([-0.23, 0.30, zDiffCenter - 0.11], [0.23, 0.30, zDiffCenter - 0.11], 0.014, MAT.steelDark, root);
+      [-0.22, 0.22].forEach(bx => {
+        const bush = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.032, 12), MAT.anodizedRed);
+        bush.position.set(bx, 0.30, zDiffCenter - 0.11);
+        root.add(bush);
+      });
+
+      // Left & Right Splined Diff Output Flanges
+      [-0.125, 0.125].forEach(sx => {
+        const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.030, 0.055, 14), MAT.steelRaw);
+        stub.rotation.z = Math.PI / 2;
+        stub.position.set(sx, 0, 0);
+        diffGrp.add(stub);
+      });
+
+      // ---- 3B. ROTATING DRIVESHAFT + U-JOINTS + PINION-FLANGE SPROCKET ----
+      const dShaftGrp = new THREE.Group();
+      dShaftGrp.position.set(0, 0.30, (zEngineOut + zSprocket) * 0.5);
+      root.add(dShaftGrp);
+      kin.driveshaftGroup = dShaftGrp;
+
+      const shaftLen = Math.abs(zSprocket - zEngineOut);
+      const shaftTube = new THREE.Mesh(new THREE.CylinderGeometry(0.023, 0.023, shaftLen - 0.05, 18), MAT.steelRaw);
+      shaftTube.rotation.x = Math.PI / 2;
+      shaftTube.castShadow = true;
+      dShaftGrp.add(shaftTube);
+
+      // Visual stripe on driveshaft so rotation is unmistakably clear
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.049, shaftLen - 0.07), MAT.anodizedGold);
+      dShaftGrp.add(stripe);
+
+      // Front & Rear U-Joint Cross Yokes
+      [shaftLen * 0.44, -shaftLen * 0.44].forEach(uz => {
+        const yoke1 = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.022, 0.028), MAT.steelDark);
+        yoke1.position.z = uz;
+        const yoke2 = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.055, 0.028), MAT.steelDark);
+        yoke2.position.z = uz;
+        dShaftGrp.add(yoke1, yoke2);
+      });
+
+      // Driveshaft Companion Flange + Subaru Pinion Flange sandwiching the 30T Sprocket!
+      const driveSprocketGrp = new THREE.Group();
+      driveSprocketGrp.position.set(0, 0.30, zSprocket);
+      root.add(driveSprocketGrp);
+      kin.driveSprocket = driveSprocketGrp;
+
+      const flangeFront = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.012, 18), MAT.aluminumMachined);
+      flangeFront.rotation.x = Math.PI / 2;
+      flangeFront.position.z = 0.014;
+      const flangeRear = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.012, 18), MAT.steelDark);
+      flangeRear.rotation.x = Math.PI / 2;
+      flangeRear.position.z = -0.014;
+      driveSprocketGrp.add(flangeFront, flangeRear);
+
+      // 4 Flange Bolts clamping Driveshaft Flange -> Sprocket -> Diff Pinion Flange
+      for (let b = 0; b < 4; b++) {
+        const ang = (b / 4) * Math.PI * 2 + Math.PI / 4;
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.042, 6), MAT.chrome);
+        bolt.rotation.x = Math.PI / 2;
+        bolt.position.set(Math.cos(ang) * 0.036, Math.sin(ang) * 0.036, 0);
+        driveSprocketGrp.add(bolt);
+      }
+
+      // 30-Tooth Steel Pinion-Flange Drive Sprocket (pitch radius = 0.072m)
+      const R_DRIVE = 0.072;
+      const sprocket30T = createSprocketMesh(R_DRIVE, 30, 0.010, 0.024, MAT.steelDark);
+      driveSprocketGrp.add(sprocket30T);
+
+      // ---- 3C. HIGH-MOUNT MINI DRAG ALTERNATOR (14T OVERDRIVE SPROCKET) ----
+      const altPos = new THREE.Vector3(0.215, 0.435, zSprocket);
+      const R_ALT = 0.034; // 30 / 14 = 2.143x overdrive ratio!
+
+      const altAssembly = new THREE.Group();
+      altAssembly.position.copy(altPos);
+      root.add(altAssembly);
+
+      // Slotted Cast Aluminum Mini-Denso Drag Alternator Housing (sits rearward of sprocket)
+      const altBody = new THREE.Mesh(new THREE.CylinderGeometry(0.054, 0.054, 0.095, 20), MAT.aluminumCast);
+      altBody.rotation.x = Math.PI / 2;
+      altBody.position.z = -0.072;
+      altBody.castShadow = true;
+      altAssembly.add(altBody);
+
+      // Exposed Copper Stator Windings peeking through ventilation band
+      const stator = new THREE.Mesh(new THREE.CylinderGeometry(0.0555, 0.0555, 0.026, 20), MAT.copperWinding);
+      stator.rotation.x = Math.PI / 2;
+      stator.position.z = -0.072;
+      altAssembly.add(stator);
+
+      // Rear Black Rectifier Cap + B+ Red Power Post
+      const rearCap = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.042, 0.024, 18), MAT.engineBlack);
+      rearCap.rotation.x = Math.PI / 2;
+      rearCap.position.z = -0.128;
+      const bPost = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.022, 8), MAT.anodizedRed);
+      bPost.position.set(0.032, 0.032, -0.135);
+      altAssembly.add(rearCap, bPost);
+
+      // Billet Mounting Bracket + Turnbuckle Chain Tensioner tied to upper right chassis rail
+      createTube([altPos.x, altPos.y - 0.05, altPos.z - 0.07], [0.23, 0.29, -1.16], 0.010, MAT.aluminumMachined, root);
+      createTube([altPos.x + 0.04, altPos.y + 0.03, altPos.z - 0.06], [0.26, 0.51, -1.04], 0.008, MAT.anodizedGold, root);
+
+      // Rotating Alternator Input Shaft + 14T Sprocket + Billet Cooling Fan
+      const altSpinGrp = new THREE.Group();
+      altAssembly.add(altSpinGrp);
+      kin.altSprocket = altSpinGrp;
+
+      const altShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.05, 12), MAT.chrome);
+      altShaft.rotation.x = Math.PI / 2;
+      altShaft.position.z = -0.015;
+      altSpinGrp.add(altShaft);
+
+      const sprocket14T = createSprocketMesh(R_ALT, 14, 0.010, 0.010, MAT.anodizedGold);
+      altSpinGrp.add(sprocket14T);
+
+      // Billet Cooling Fan Blades behind the 14T sprocket
+      const fanGrp = new THREE.Group();
+      fanGrp.position.z = -0.020;
+      for (let b = 0; b < 8; b++) {
+        const ang = (b / 8) * Math.PI * 2;
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.046, 0.003), MAT.aluminumMachined);
+        blade.position.set(Math.cos(ang) * 0.026, Math.sin(ang) * 0.026, 0);
+        blade.rotation.z = ang + 0.4;
+        blade.rotation.y = 0.45;
+        fanGrp.add(blade);
+      }
+      altSpinGrp.add(fanGrp);
+      kin.altFan = fanGrp;
+
+      // ---- 3D. ANIMATED GOLD ROLLER CHAIN LOOP (EXACT EXTERNAL TANGENTS) ----
+      const c1 = new THREE.Vector2(0, 0.30);
+      const c2 = new THREE.Vector2(altPos.x, altPos.y);
+      const dVec = new THREE.Vector2().subVectors(c2, c1);
+      const dist = dVec.length();
+      const baseAngle = Math.atan2(dVec.y, dVec.x);
+      const phi = Math.acos(THREE.MathUtils.clamp((R_DRIVE - R_ALT) / dist, -1, 1));
+
+      // Construct ordered closed 2D path around drive sprocket -> top run -> alt sprocket -> bottom run
+      const pathPts = [];
+      const arcSteps1 = 22;
+      const startA1 = baseAngle + phi;
+      const endA1 = baseAngle + Math.PI * 2 - phi;
+      for (let i = 0; i <= arcSteps1; i++) {
+        const a = THREE.MathUtils.lerp(startA1, endA1, i / arcSteps1);
+        pathPts.push(new THREE.Vector3(c1.x + Math.cos(a) * R_DRIVE, c1.y + Math.sin(a) * R_DRIVE, zSprocket));
+      }
+      const arcSteps2 = 14;
+      const startA2 = baseAngle - phi;
+      const endA2 = baseAngle + phi;
+      for (let i = 0; i <= arcSteps2; i++) {
+        const a = THREE.MathUtils.lerp(startA2, endA2, i / arcSteps2);
+        pathPts.push(new THREE.Vector3(c2.x + Math.cos(a) * R_ALT, c2.y + Math.sin(a) * R_ALT, zSprocket));
+      }
+      // Close loop
+      pathPts.push(pathPts[0].clone());
+
+      // Precompute cumulative arc-length table for smooth uniform roller spacing
+      const cumLens = [0];
+      let totalLen = 0;
+      for (let i = 1; i < pathPts.length; i++) {
+        totalLen += pathPts[i].distanceTo(pathPts[i - 1]);
+        cumLens.push(totalLen);
+      }
+      kin.chainPathPoints = { pts: pathPts, cumLens };
+      kin.chainTotalLen = totalLen;
+
+      const numLinks = 54;
+      const linkPlateGeo = new THREE.BoxGeometry(0.014, 0.0085, 0.015);
+      const rollerGeo = new THREE.CylinderGeometry(0.0042, 0.0042, 0.017, 8);
+      rollerGeo.rotateX(Math.PI / 2);
+
+      for (let i = 0; i < numLinks; i++) {
+        const linkGrp = new THREE.Group();
+        const plate = new THREE.Mesh(linkPlateGeo, i % 2 === 0 ? MAT.chainGold : MAT.steelDark);
+        const roller = new THREE.Mesh(rollerGeo, MAT.chrome);
+        linkGrp.add(plate, roller);
+        root.add(linkGrp);
+        kin.chainLinks.push(linkGrp);
+      }
+      updateChainLinks(0);
+    }
+
+    /** Samples position & tangent along the closed chain path at distance s */
+    function sampleChainPath(s) {
+      const { pts, cumLens } = kin.chainPathPoints;
+      const total = kin.chainTotalLen;
+      let d = ((s % total) + total) % total;
+      let lo = 0, hi = cumLens.length - 1;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (cumLens[mid] <= d) lo = mid; else hi = mid;
+      }
+      const segLen = Math.max(1e-6, cumLens[lo + 1] - cumLens[lo]);
+      const t = (d - cumLens[lo]) / segLen;
+      const pos = new THREE.Vector3().lerpVectors(pts[lo], pts[lo + 1], t);
+      const dir = new THREE.Vector3().subVectors(pts[lo + 1], pts[lo]).normalize();
+      return { pos, angle: Math.atan2(dir.y, dir.x) };
+    }
+
+    /** Repositions all 54 roller chain links around both sprockets */
+    function updateChainLinks(offsetMeters) {
+      const n = kin.chainLinks.length;
+      const step = kin.chainTotalLen / n;
+      for (let i = 0; i < n; i++) {
+        const sample = sampleChainPath(i * step + offsetMeters);
+        const link = kin.chainLinks[i];
+        link.position.copy(sample.pos);
+        link.rotation.z = sample.angle;
+      }
+    }
+
+    // =========================================================================
+    // 4. SIMPLE HYDRAULIC POWER STEERING RACK & STEERING COLUMN
+    // =========================================================================
+    function buildPowerSteeringSystem(root) {
+      const rackPos = new THREE.Vector3(0, 0.23, 1.11);
+
+      // Main Aluminum Hydraulic Power Steering Rack Cylinder Housing
+      const rackHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.44, 18), MAT.aluminumCast);
+      rackHousing.rotation.z = Math.PI / 2;
+      rackHousing.position.copy(rackPos);
+      rackHousing.castShadow = true;
+      root.add(rackHousing);
+
+      // Anodized Billet Rack Mounting Clamps bolted to chassis
+      [-0.14, 0.14].forEach(cx => {
+        const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.068, 0.064), MAT.anodizedBlue);
+        clamp.position.set(cx, rackPos.y - 0.01, rackPos.z);
+        root.add(clamp);
+      });
+
+      // Hydraulic Rotary Pinion Valve Tower
+      const valveTower = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.030, 0.105, 16), MAT.aluminumMachined);
+      valveTower.position.set(0.0, rackPos.y + 0.038, rackPos.z - 0.025);
+      valveTower.rotation.x = -0.82;
+      root.add(valveTower);
+
+      // Stainless Hydraulic Pressure & Return Hardlines along the Rack with AN Fittings
+      [-0.015, 0.015].forEach((hy, idx) => {
+        const lineCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(0.02, rackPos.y + 0.065 + hy * 0.5, rackPos.z - 0.04),
+          new THREE.Vector3(0.11, rackPos.y + 0.042 + hy, rackPos.z - 0.01),
+          new THREE.Vector3(0.19, rackPos.y + 0.028, rackPos.z + (idx === 0 ? 0.012 : -0.012)),
+          new THREE.Vector3(idx === 0 ? 0.20 : -0.18, rackPos.y + 0.022, rackPos.z)
+        ]);
+        root.add(new THREE.Mesh(new THREE.TubeGeometry(lineCurve, 20, 0.0042, 8, false), MAT.chrome));
+        const fit = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.015, 6), idx === 0 ? MAT.anodizedRed : MAT.anodizedBlue);
+        fit.position.set(idx === 0 ? 0.20 : -0.18, rackPos.y + 0.026, rackPos.z);
+        root.add(fit);
+      });
+
+      // Remote Translucent Power Steering Fluid Reservoir + Supply Hose
+      const resPos = new THREE.Vector3(-0.19, 0.44, 0.96);
+      const resBody = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.030, 0.095, 16), MAT.fluidReservoir);
+      resBody.position.copy(resPos);
+      const resCap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.016, 16), MAT.engineBlack);
+      resCap.position.set(resPos.x, resPos.y + 0.054, resPos.z);
+      root.add(resBody, resCap);
+
+      const resHose = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(resPos.x, resPos.y - 0.045, resPos.z),
+        new THREE.Vector3(-0.16, 0.31, 1.03),
+        new THREE.Vector3(-0.02, rackPos.y + 0.06, rackPos.z - 0.04)
+      ]);
+      root.add(new THREE.Mesh(new THREE.TubeGeometry(resHose, 16, 0.006, 8, false), MAT.rubber));
+
+      // Sliding Inner Chrome Rack Bar + Rubber Accordion Bellows Boots
+      const rackInner = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.62, 12), MAT.chrome);
+      rackInner.rotation.z = Math.PI / 2;
+      rackInner.position.copy(rackPos);
+      root.add(rackInner);
+      kin.rackInnerBar = rackInner;
+
+      const makeBoot = (side) => {
+        const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.015, 0.095, 14), MAT.rubber);
+        boot.rotation.z = side * Math.PI / 2;
+        boot.position.set(side * 0.26, rackPos.y, rackPos.z);
+        root.add(boot);
+        return boot;
+      };
+      kin.rackBootL = makeBoot(-1);
+      kin.rackBootR = makeBoot(1);
+
+      // ---- Collapsible Steering Column & Quick-Release Formula Steering Wheel ----
+      const colStart = new THREE.Vector3(0, rackPos.y + 0.075, rackPos.z - 0.06);
+      const colEnd   = new THREE.Vector3(0, 0.65, 0.34);
+      const colDir   = new THREE.Vector3().subVectors(colEnd, colStart);
+      const colLen   = colDir.length();
+
+      const colPivot = new THREE.Group();
+      colPivot.position.copy(colStart);
+      colPivot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), colDir.clone().normalize());
+      root.add(colPivot);
+
+      const colShaftGrp = new THREE.Group();
+      colPivot.add(colShaftGrp);
+      kin.steeringColumnShaft = colShaftGrp;
+
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, colLen, 12), MAT.chrome);
+      shaft.position.y = colLen * 0.5;
+      colShaftGrp.add(shaft);
+
+      // Anodized Quick-Release Hub + D-Shaped Suede/Aluminum Formula Steering Wheel
+      const wheelHub = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.045, 16), MAT.anodizedGold);
+      wheelHub.position.y = colLen;
+      colShaftGrp.add(wheelHub);
+
+      const wheelRim = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.016, 12, 28), MAT.rubber);
+      wheelRim.rotation.x = Math.PI / 2;
+      wheelRim.position.y = colLen + 0.018;
+      colShaftGrp.add(wheelRim);
+
+      // Top Center Yellow Alignment Marker + 3 Spoke Plate
+      const topMark = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.036, 0.036), MAT.anodizedGold);
+      topMark.position.set(0, colLen + 0.018, -0.14);
+      const spokeBar = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.008, 0.030), MAT.aluminumMachined);
+      spokeBar.position.set(0, colLen + 0.015, 0);
+      const spokeDown = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.008, 0.13), MAT.aluminumMachined);
+      spokeDown.position.set(0, colLen + 0.015, 0.065);
+      colShaftGrp.add(topMark, spokeBar, spokeDown);
+    }
+
+    // =========================================================================
+    // 5. FRONT FLAT PUSHROD SUSPENSION + REAR 3-LINK DE DION AXLE & FLAT SPRINGS
+    // =========================================================================
+    function buildSuspensionAndWheels(root) {
+      // ---- FRONT PUSHROD SUSPENSION (Z = +1.25, Staggered Flat Laid-Down Transverse Coilovers) ----
+      [-1, 1].forEach(side => {
+        const zAxle = 1.25;
+        const zPlane = side < 0 ? 1.255 : 1.195; // Staggered so both flat coilovers clear each other!
+
+        const corner = {
+          side,
+          isFront: true,
+          zAxle,
+          zPlane,
+          lcaInF: new THREE.Vector3(side * 0.22, 0.16, zAxle + 0.16),
+          lcaInR: new THREE.Vector3(side * 0.22, 0.16, zAxle - 0.17),
+          ucaInF: new THREE.Vector3(side * 0.22, 0.37, zAxle + 0.13),
+          ucaInR: new THREE.Vector3(side * 0.22, 0.37, zAxle - 0.15),
+          bellPivot: new THREE.Vector3(side * 0.235, 0.495, zPlane),
+          shockAnchor: new THREE.Vector3(-side * 0.045, 0.555, zPlane),
+          baseWheelPos: new THREE.Vector3(side * 0.72, 0.28, zAxle),
+          bellPushLocal: new THREE.Vector3(side * 0.058, -0.022, 0),
+          bellShockLocal: new THREE.Vector3(-side * 0.008, 0.060, 0)
+        };
+
+        // Welded double-shear A-arm pickup clevises on front chassis rails
+        [corner.lcaInF, corner.lcaInR, corner.ucaInF, corner.ucaInR].forEach(pt => {
+          createClevisBracket(pt, [0, 0, -side * Math.PI / 2], root, 0.020, 0.026);
+        });
+
+        const uprightGrp = new THREE.Group();
+        uprightGrp.position.copy(corner.baseWheelPos);
+        root.add(uprightGrp);
+
+        const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.21, 0.085), MAT.aluminumMachined);
+        knuckle.position.set(-side * 0.06, 0, 0);
+        knuckle.castShadow = true;
+        uprightGrp.add(knuckle);
+
+        const steerArm = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.022, 0.12), MAT.steelDark);
+        steerArm.position.set(-side * 0.075, -0.05, -0.08);
+        uprightGrp.add(steerArm);
+
+        const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.135, 0.018, 24), MAT.brakeRotor);
+        rotor.rotation.z = Math.PI / 2;
+        rotor.position.set(-side * 0.025, 0, 0);
+        uprightGrp.add(rotor);
+
+        const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.088, 0.058), MAT.anodizedRed);
+        caliper.position.set(-side * 0.025, 0.055, -0.095);
+        uprightGrp.add(caliper);
+
+        const wheelSpin = new THREE.Group();
+        const wheelMesh = createWheelAssembly(0.28, 0.21, false);
+        if (side < 0) wheelMesh.rotation.y = Math.PI;
+        wheelSpin.add(wheelMesh);
+        uprightGrp.add(wheelSpin);
+
+        corner.uprightGrp = uprightGrp;
+        corner.wheelSpin = wheelSpin;
+        corner.lcaLegF = createDynamicLink(0.011, MAT.steelDark, root);
+        corner.lcaLegR = createDynamicLink(0.011, MAT.steelDark, root);
+        corner.ucaLegF = createDynamicLink(0.0095, MAT.steelDark, root);
+        corner.ucaLegR = createDynamicLink(0.0095, MAT.steelDark, root);
+        corner.pushrod = createDynamicLink(0.0085, MAT.anodizedGold, root);
+        corner.tieRod  = createDynamicLink(0.008, MAT.chrome, root);
+        corner.pushHeimOut = createJointNode([0, 0, 0], 0.011, MAT.anodizedRed, root);
+
+        // CNC Billet Triangular Bellcrank Rocker Arm seated in double-shear pivot tower
+        const bellGrp = new THREE.Group();
+        bellGrp.position.copy(corner.bellPivot);
+        root.add(bellGrp);
+        const rockerMesh = createBellcrankMesh(
+          [corner.bellPushLocal.x, corner.bellPushLocal.y],
+          [corner.bellShockLocal.x, corner.bellShockLocal.y],
+          0.014,
+          MAT.anodizedRed
+        );
+        bellGrp.add(rockerMesh);
+        corner.bellGrp = bellGrp;
+
+        // Flat Laid-Down Transverse Multi-Part Coilover Shock (well clear above tubing!)
+        corner.coilover = createCoiloverAssembly(root, 0.135, 0.022, 7.0);
+
+        kin.frontCorners.push(corner);
+      });
+
+      // ---- REAR 3-LINK DE DION AXLE + FLAT LAID-DOWN LONGITUDINAL PUSHROD SUSPENSION ----
+      const zAxleRear = -1.20;
+
+      const rearAxleGrp = new THREE.Group();
+      root.add(rearAxleGrp);
+      kin.rearAxleGrp = rearAxleGrp;
+
+      // Curved Tubular De Dion Axle Beam sweeping cleanly behind the sprung Subaru R160 diff
+      const deDionCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.66, 0.27, zAxleRear),
+        new THREE.Vector3(-0.56, 0.26, -1.35),
+        new THREE.Vector3(-0.24, 0.28, -1.42),
+        new THREE.Vector3( 0.00, 0.29, -1.43),
+        new THREE.Vector3( 0.24, 0.28, -1.42),
+        new THREE.Vector3( 0.56, 0.26, -1.35),
+        new THREE.Vector3( 0.66, 0.27, zAxleRear)
+      ]);
+      const deDionTube = new THREE.Mesh(new THREE.TubeGeometry(deDionCurve, 44, 0.022, 14, false), MAT.steelRaw);
+      deDionTube.castShadow = true;
+      deDionTube.receiveShadow = true;
+      rearAxleGrp.add(deDionTube);
+
+      // Gusseted Upper 3rd-Link Truss Tower welded to center of De Dion beam
+      createTube([-0.22, 0.28, -1.42], [-0.05, 0.48, -1.40], 0.013, MAT.steelDark, rearAxleGrp);
+      createTube([ 0.12, 0.28, -1.42], [-0.05, 0.48, -1.40], 0.013, MAT.steelDark, rearAxleGrp);
+      createTube([-0.05, 0.29, -1.43], [-0.05, 0.48, -1.40], 0.011, MAT.steelDark, rearAxleGrp);
+      createClevisBracket([-0.05, 0.48, -1.40], [0, 0, 0], rearAxleGrp, 0.022, 0.032);
+
+      // Welded Lower Trailing-Arm & Pushrod Clevis Brackets on De Dion Axle Ends
+      [-1, 1].forEach(s => {
+        createClevisBracket([s * 0.54, 0.22, -1.32], [0, 0, 0], rearAxleGrp, 0.024, 0.032);
+        createClevisBracket([s * 0.57, 0.29, -1.32], [0, 0, 0], rearAxleGrp, 0.020, 0.028);
+      });
+      // Left Axle Panhard Bar Clevis Bracket
+      createClevisBracket([-0.46, 0.27, -1.45], [0, Math.PI / 2, 0], rearAxleGrp, 0.022, 0.030);
+
+      // 3-Link Locating Rods + Panhard Bar (Updated every frame!)
+      kin.rearThreeLink = {
+        lowerL: createDynamicLink(0.014, MAT.steelDark, root),
+        lowerR: createDynamicLink(0.014, MAT.steelDark, root),
+        upper3rd: createDynamicLink(0.014, MAT.anodizedBlue, root),
+        panhard: createDynamicLink(0.012, MAT.chrome, root),
+        chassisLowerL: new THREE.Vector3(-0.29, 0.17, -0.78),
+        chassisLowerR: new THREE.Vector3( 0.29, 0.17, -0.78),
+        chassisUpper:  new THREE.Vector3(-0.05, 0.48, -0.82),
+        chassisPanhard: new THREE.Vector3(0.26, 0.27, -1.45),
+        axleLowerL: new THREE.Vector3(-0.54, 0.22, -1.32),
+        axleLowerR: new THREE.Vector3( 0.54, 0.22, -1.32),
+        axleUpper:  new THREE.Vector3(-0.05, 0.48, -1.40),
+        axlePanhard: new THREE.Vector3(-0.46, 0.27, -1.45),
+        heims: Array.from({ length: 8 }, () => createJointNode([0, 0, 0], 0.013, MAT.anodizedRed, root))
+      };
+
+      // Rear Hubs, Brakes, Wheels (attached to De Dion Axle) + Elevated Rockers & Flat Longitudinal Coilovers
+      [-1, 1].forEach(side => {
+        const corner = {
+          side,
+          isFront: false,
+          zAxle: zAxleRear,
+          bellPivot: new THREE.Vector3(side * 0.295, 0.565, -1.24),
+          shockAnchor: new THREE.Vector3(side * 0.295, 0.630, -0.88),
+          diffStubPos: new THREE.Vector3(side * 0.135, 0.30, zAxleRear),
+          baseWheelPos: new THREE.Vector3(side * 0.74, 0.31, zAxleRear),
+          axlePushLocal: new THREE.Vector3(side * 0.57, 0.29, -1.32),
+          bellPushLocal: new THREE.Vector3(0, -0.020, -0.062),
+          bellShockLocal: new THREE.Vector3(0, 0.065, 0.0)
+        };
+
+        const uprightGrp = new THREE.Group();
+        uprightGrp.position.copy(corner.baseWheelPos);
+        rearAxleGrp.add(uprightGrp);
+
+        const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.21, 0.10), MAT.aluminumMachined);
+        knuckle.position.set(-side * 0.075, 0, 0);
+        knuckle.castShadow = true;
+        uprightGrp.add(knuckle);
+
+        const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.020, 24), MAT.brakeRotor);
+        rotor.rotation.z = Math.PI / 2;
+        rotor.position.set(-side * 0.035, 0, 0);
+        uprightGrp.add(rotor);
+
+        const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.092, 0.062), MAT.anodizedRed);
+        caliper.position.set(-side * 0.035, 0.06, 0.10);
+        uprightGrp.add(caliper);
+
+        const wheelSpin = new THREE.Group();
+        const wheelMesh = createWheelAssembly(0.31, 0.29, true);
+        if (side < 0) wheelMesh.rotation.y = Math.PI;
+        wheelSpin.add(wheelMesh);
+        uprightGrp.add(wheelSpin);
+
+        corner.uprightGrp = uprightGrp;
+        corner.wheelSpin = wheelSpin;
+        corner.pushrod = createDynamicLink(0.0095, MAT.anodizedGold, root);
+        corner.pushHeimOut = createJointNode([0, 0, 0], 0.011, MAT.anodizedRed, root);
+
+        // Articulating CV Half-Shaft connecting sprung Subaru R160 Diff Stub -> De Dion Rear Hub
+        corner.cvShaft = createDynamicLink(0.015, MAT.steelRaw, root);
+        corner.cvBootIn  = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.034, 0.065, 14), MAT.rubber);
+        corner.cvBootOut = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.024, 0.065, 14), MAT.rubber);
+        root.add(corner.cvBootIn, corner.cvBootOut);
+
+        // CNC Billet Rear Rocker Arm (pivots around X-axis to drive flat longitudinal shock!)
+        const bellGrp = new THREE.Group();
+        bellGrp.position.copy(corner.bellPivot);
+        root.add(bellGrp);
+        const rockerMesh = createBellcrankMesh(
+          [corner.bellPushLocal.z, corner.bellPushLocal.y],
+          [corner.bellShockLocal.z, corner.bellShockLocal.y],
+          0.015,
+          MAT.anodizedRed
+        );
+        rockerMesh.rotation.y = -Math.PI / 2;
+        bellGrp.add(rockerMesh);
+        corner.bellGrp = bellGrp;
+
+        // Flat Laid-Down Longitudinal Multi-Part Coilover Shock (cleanly above rear chassis rails!)
+        corner.coilover = createCoiloverAssembly(root, 0.185, 0.025, 8.0);
+
+        kin.rearCorners.push(corner);
+      });
+    }
+
+    /**
+     * Updates ALL articulating suspension wishbones, 3-link De Dion rear axle,
+     * CNC billet rocker arms, flat laid-down telescoping coilovers, CV axles,
+     * and hydraulic power steering rack + tie-rods.
+     */
+    function updateMechanicalKinematics() {
+      const bump = state.suspMM * 0.001;
+      const steerRad = THREE.MathUtils.degToRad(state.steerDeg);
+
+      // 1. Update Power Steering Rack linear slide & Steering Wheel rotation
+      const rackSlideX = -Math.sin(steerRad) * 0.058;
+      if (kin.rackInnerBar) {
+        kin.rackInnerBar.position.x = rackSlideX;
+        kin.rackBootL.scale.x = 1 + rackSlideX * 4.5;
+        kin.rackBootR.scale.x = 1 - rackSlideX * 4.5;
+      }
+      if (kin.steeringColumnShaft) {
+        kin.steeringColumnShaft.rotation.y = -steerRad * 2.8;
+      }
+
+      // 2. Update Front Pushrod Corners, CNC Billet Rockers, Flat Transverse Coilovers & Tie-Rods
+      kin.frontCorners.forEach(c => {
+        const s = c.side;
+        const hubX = c.baseWheelPos.x - s * (bump * bump * 1.1);
+        const hubY = c.baseWheelPos.y + bump;
+        const hubZ = c.baseWheelPos.z;
+        c.uprightGrp.position.set(hubX, hubY, hubZ);
+
+        const ackermann = steerRad * (1 + s * Math.sin(steerRad) * 0.14);
+        c.uprightGrp.rotation.y = -ackermann;
+
+        const lcaBall = new THREE.Vector3(hubX - s * 0.065, hubY - 0.095, hubZ);
+        const ucaBall = new THREE.Vector3(hubX - s * 0.060, hubY + 0.095, hubZ);
+
+        updateDynamicLink(c.lcaLegF, c.lcaInF, lcaBall);
+        updateDynamicLink(c.lcaLegR, c.lcaInR, lcaBall);
+        updateDynamicLink(c.ucaLegF, c.ucaInF, ucaBall);
+        updateDynamicLink(c.ucaLegR, c.ucaInR, ucaBall);
+
+        const bellRot = s * (bump * 6.5);
+        c.bellGrp.rotation.z = bellRot;
+
+        const pushOut = lcaBall.clone().lerp(c.lcaInF, 0.16);
+        pushOut.y += 0.012;
+        c.pushHeimOut.position.copy(pushOut);
+
+        const bellPushWorld = c.bellPushLocal.clone()
+          .applyAxisAngle(new THREE.Vector3(0, 0, 1), bellRot)
+          .add(c.bellPivot);
+        updateDynamicLink(c.pushrod, pushOut, bellPushWorld);
+
+        const bellShockWorld = c.bellShockLocal.clone()
+          .applyAxisAngle(new THREE.Vector3(0, 0, 1), bellRot)
+          .add(c.bellPivot);
+        updateCoiloverAssembly(c.coilover, c.shockAnchor, bellShockWorld);
+
+        const rackEnd = new THREE.Vector3(rackSlideX + s * 0.31, 0.23, 1.11);
+        const steerArmLocal = new THREE.Vector3(-s * 0.075, -0.05, -0.125);
+        steerArmLocal.applyAxisAngle(new THREE.Vector3(0, 1, 0), -ackermann);
+        const steerArmWorld = c.uprightGrp.position.clone().add(steerArmLocal);
+        updateDynamicLink(c.tieRod, rackEnd, steerArmWorld);
+      });
+
+      // 3. Update Rear 3-Link De Dion Axle, Trailing Arms, Upper 3rd Link, Panhard Bar, Rockers & Flat Shocks
+      if (kin.rearAxleGrp && kin.rearThreeLink) {
+        const axleDz = -(bump * bump) * 0.9;
+        const axleDx = -(bump * bump) * 0.65;
+        const axleOffset = new THREE.Vector3(axleDx, bump, axleDz);
+        kin.rearAxleGrp.position.copy(axleOffset);
+
+        const tl = kin.rearThreeLink;
+        const wLowerL  = tl.axleLowerL.clone().add(axleOffset);
+        const wLowerR  = tl.axleLowerR.clone().add(axleOffset);
+        const wUpper   = tl.axleUpper.clone().add(axleOffset);
+        const wPanhard = tl.axlePanhard.clone().add(axleOffset);
+
+        updateDynamicLink(tl.lowerL,   tl.chassisLowerL,  wLowerL);
+        updateDynamicLink(tl.lowerR,   tl.chassisLowerR,  wLowerR);
+        updateDynamicLink(tl.upper3rd, tl.chassisUpper,   wUpper);
+        updateDynamicLink(tl.panhard,  tl.chassisPanhard, wPanhard);
+
+        const heimPts = [
+          tl.chassisLowerL, wLowerL,
+          tl.chassisLowerR, wLowerR,
+          tl.chassisUpper,  wUpper,
+          tl.chassisPanhard, wPanhard
+        ];
+        heimPts.forEach((pt, idx) => tl.heims[idx].position.copy(pt));
+
+        kin.rearCorners.forEach(c => {
+          const s = c.side;
+
+          const bellRotX = bump * 6.0;
+          c.bellGrp.rotation.x = bellRotX;
+
+          const pushOut = c.axlePushLocal.clone().add(axleOffset);
+          c.pushHeimOut.position.copy(pushOut);
+
+          const bellPushWorld = c.bellPushLocal.clone()
+            .applyAxisAngle(new THREE.Vector3(1, 0, 0), bellRotX)
+            .add(c.bellPivot);
+          updateDynamicLink(c.pushrod, pushOut, bellPushWorld);
+
+          const bellShockWorld = c.bellShockLocal.clone()
+            .applyAxisAngle(new THREE.Vector3(1, 0, 0), bellRotX)
+            .add(c.bellPivot);
+          updateCoiloverAssembly(c.coilover, c.shockAnchor, bellShockWorld);
+
+          const cvOut = new THREE.Vector3(
+            c.baseWheelPos.x - s * 0.08 + axleDx,
+            c.baseWheelPos.y + bump,
+            c.baseWheelPos.z + axleDz
+          );
+          updateDynamicLink(c.cvShaft, c.diffStubPos, cvOut);
+          const cvDir = new THREE.Vector3().subVectors(cvOut, c.diffStubPos).normalize();
+          const cvQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), cvDir);
+          c.cvBootIn.position.copy(c.diffStubPos).addScaledVector(cvDir, 0.042);
+          c.cvBootIn.quaternion.copy(cvQuat);
+          c.cvBootOut.position.copy(cvOut).addScaledVector(cvDir, -0.042);
+          c.cvBootOut.quaternion.copy(cvQuat);
+        });
+      }
+    }
+
+    // =========================================================================
+    // 6. STUDIO ENVIRONMENT, LIGHTING, CALLOUTS & CAMERA ORBIT CONTROLS
+    // =========================================================================
+    function buildEnvironment() {
+      // Matte Garage Floor Plane
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(18, 64),
+        new THREE.MeshStandardMaterial({ color: 0x0b111c, roughness: 0.85, metalness: 0.15 })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      // Subtle Blueprint Engineering Grid
+      const grid = new THREE.GridHelper(12, 36, 0x1e3a5f, 0x132033);
+      grid.position.y = 0.002;
+      scene.add(grid);
+
+      // Three-Point Studio Lighting Rig
+      scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.85));
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+      keyLight.position.set(4.5, 6.5, 4.2);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(2048, 2048);
+      keyLight.shadow.camera.near = 1;
+      keyLight.shadow.camera.far = 16;
+      const d = 2.6;
+      keyLight.shadow.camera.left = -d;
+      keyLight.shadow.camera.right = d;
+      keyLight.shadow.camera.top = d;
+      keyLight.shadow.camera.bottom = -d;
+      keyLight.shadow.bias = -0.0005;
+      scene.add(keyLight);
+
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.72);
+      rimLight.position.set(-4.2, 3.2, -3.8);
+      scene.add(rimLight);
+
+      const fillWarm = new THREE.PointLight(0xfbbf24, 0.48, 9);
+      fillWarm.position.set(1.8, 1.2, -1.8);
+      scene.add(fillWarm);
+    }
+
+    function initCallouts() {
+      const layer = document.getElementById('callout-layer');
+      const specs = [
+        { id: 'fuel',      label: 'High-Mount Gravity Fuel Cell',       pos: new THREE.Vector3(0, 0.92, -0.43),     preset: 'engine' },
+        { id: 'engine',    label: 'Yamaha XV700 75° V-Twin',            pos: new THREE.Vector3(-0.14, 0.54, -0.48), preset: 'engine' },
+        { id: 'alt',       label: 'Flange Sprocket → Drag Alternator',  pos: new THREE.Vector3(0.22, 0.50, -1.045), preset: 'alternator' },
+        { id: 'threelink', label: '3-Link De Dion Rear Axle & Panhard', pos: new THREE.Vector3(-0.08, 0.48, -1.42), preset: 'rearSusp' },
+        { id: 'rearFlat',  label: 'Flat Longitudinal Coilover & Rocker',pos: new THREE.Vector3(0.30, 0.67, -1.06),  preset: 'rearSusp' },
+        { id: 'steering',  label: 'Hydraulic Power Steering Rack',      pos: new THREE.Vector3(-0.08, 0.31, 1.11),  preset: 'steering' },
+        { id: 'frontFlat', label: 'Flat Staggered Front Pushrod Shocks',pos: new THREE.Vector3(0.10, 0.60, 1.24),   preset: 'steering' }
+      ];
+
+      specs.forEach(s => {
+        const el = document.createElement('div');
+        el.className = 'callout-pin';
+        el.innerHTML = `<div class="callout-badge"><span class="callout-dot"></span><span>${s.label}</span></div><div class="callout-stem"></div>`;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyCameraPreset(s.preset);
+        });
+        layer.appendChild(el);
+        kin.callouts.push({ el, pos: s.pos });
+      });
+    }
+
+    function updateCallouts() {
+      const layer = document.getElementById('callout-layer');
+      layer.style.display = state.showCallouts ? 'block' : 'none';
+      if (!state.showCallouts) return;
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const proj = new THREE.Vector3();
+
+      kin.callouts.forEach(c => {
+        proj.copy(c.pos).project(camera);
+        if (proj.z > 1) {
+          c.el.style.opacity = '0';
+          c.el.style.pointerEvents = 'none';
+          return;
+        }
+        const x = (proj.x * 0.5 + 0.5) * w;
+        const y = (-proj.y * 0.5 + 0.5) * h;
+        c.el.style.left = `${x}px`;
+        c.el.style.top = `${y}px`;
+        c.el.style.opacity = '1';
+        c.el.style.pointerEvents = 'auto';
+      });
+    }
+
+    function applyCameraPreset(key) {
+      const p = CAMERA_PRESETS[key];
+      if (!p) return;
+      camOrbit.desiredTarget.set(...p.target);
+      camOrbit.desiredTheta = p.theta;
+      camOrbit.desiredPhi = p.phi;
+      camOrbit.desiredRadius = p.radius;
+
+      document.getElementById('info-title').textContent = p.title;
+      document.getElementById('info-desc').textContent = p.desc;
+
+      document.querySelectorAll('.cam-btn').forEach(btn => {
+        const active = btn.dataset.cam === key;
+        btn.className = active
+          ? 'cam-btn bg-sky-500/20 border border-sky-400/50 text-sky-200 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left'
+          : 'cam-btn bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-medium py-2 px-2.5 rounded-xl transition text-left';
+      });
+    }
+
+    function setupCameraControls(dom) {
+      let isDragging = false;
+      let isPanning = false;
+      let prevX = 0, prevY = 0;
+      let pinchDist = 0;
+
+      const panCamera = (dx, dy) => {
+        const factor = camOrbit.radius * 0.0014;
+        const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+        const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+        camOrbit.desiredTarget.addScaledVector(right, -dx * factor);
+        camOrbit.desiredTarget.addScaledVector(up, dy * factor);
+        camOrbit.desiredTarget.y = Math.max(0.05, Math.min(2.2, camOrbit.desiredTarget.y));
+      };
+
+      dom.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        isPanning = (e.button === 2 || e.shiftKey);
+        prevX = e.clientX;
+        prevY = e.clientY;
+      });
+      window.addEventListener('mouseup', () => { isDragging = false; isPanning = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - prevX;
+        const dy = e.clientY - prevY;
+        prevX = e.clientX;
+        prevY = e.clientY;
+        if (isPanning) {
+          panCamera(dx, dy);
+        } else {
+          camOrbit.desiredTheta -= dx * 0.007;
+          camOrbit.desiredPhi = THREE.MathUtils.clamp(camOrbit.desiredPhi - dy * 0.007, 0.08, Math.PI * 0.49);
+        }
+      });
+      dom.addEventListener('contextmenu', e => e.preventDefault());
+
+      dom.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        camOrbit.desiredRadius = THREE.MathUtils.clamp(camOrbit.desiredRadius * (1 + e.deltaY * 0.001), 0.55, 8.0);
+      }, { passive: false });
+
+      // Touch Orbit & Pinch-Zoom Support
+      dom.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          isDragging = true;
+          prevX = e.touches[0].clientX;
+          prevY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          isDragging = false;
+          pinchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+      }, { passive: false });
+
+      dom.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging) {
+          const dx = e.touches[0].clientX - prevX;
+          const dy = e.touches[0].clientY - prevY;
+          prevX = e.touches[0].clientX;
+          prevY = e.touches[0].clientY;
+          camOrbit.desiredTheta -= dx * 0.008;
+          camOrbit.desiredPhi = THREE.MathUtils.clamp(camOrbit.desiredPhi - dy * 0.008, 0.08, Math.PI * 0.49);
+        } else if (e.touches.length === 2) {
+          const d = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          if (pinchDist > 0) {
+            camOrbit.desiredRadius = THREE.MathUtils.clamp(camOrbit.desiredRadius * (pinchDist / d), 0.55, 8.0);
+          }
+          pinchDist = d;
+        }
+      }, { passive: false });
+
+      dom.addEventListener('touchend', () => { isDragging = false; pinchDist = 0; });
+    }
+
+    function bindUIControls() {
+      // Collapse panel by default on small narrow screens so 3D canvas stays unobstructed
+      const panel = document.getElementById('control-panel');
+      let panelOpen = window.innerWidth >= 768;
+      const syncPanel = () => {
+        panel.style.opacity = panelOpen ? '1' : '0';
+        panel.style.transform = panelOpen ? 'translateX(0)' : 'translateX(115%)';
+        panel.style.pointerEvents = panelOpen ? 'none' : 'none';
+        panel.querySelector('div').style.pointerEvents = panelOpen ? 'auto' : 'none';
+      };
+      syncPanel();
+
+      document.getElementById('toggle-panel-btn').addEventListener('click', () => {
+        panelOpen = !panelOpen;
+        syncPanel();
+      });
+
+      document.querySelectorAll('.cam-btn').forEach(btn => {
+        btn.addEventListener('click', () => applyCameraPreset(btn.dataset.cam));
+      });
+      document.getElementById('btn-reset-cam').addEventListener('click', () => applyCameraPreset('overview'));
+
+      // Sliders
+      const sliderRpm = document.getElementById('slider-rpm');
+      const valRpm = document.getElementById('val-rpm');
+      const valAltRpm = document.getElementById('val-alt-rpm');
+      sliderRpm.addEventListener('input', () => {
+        state.rpm = Number(sliderRpm.value);
+        valRpm.textContent = `${state.rpm.toLocaleString()} RPM`;
+        valAltRpm.textContent = `${Math.round(state.rpm * (30 / 14)).toLocaleString()} RPM`;
+      });
+
+      const sliderSusp = document.getElementById('slider-susp');
+      const valSusp = document.getElementById('val-susp');
+      sliderSusp.addEventListener('input', () => {
+        state.autoDemo = false;
+        updateToggleBtn('btn-demo', 'Auto-Articulate', false);
+        state.suspMM = Number(sliderSusp.value);
+        valSusp.textContent = `${state.suspMM > 0 ? '+' : ''}${state.suspMM} mm`;
+        updateMechanicalKinematics();
+      });
+
+      const sliderSteer = document.getElementById('slider-steer');
+      const valSteer = document.getElementById('val-steer');
+      sliderSteer.addEventListener('input', () => {
+        state.autoDemo = false;
+        updateToggleBtn('btn-demo', 'Auto-Articulate', false);
+        state.steerDeg = Number(sliderSteer.value);
+        valSteer.textContent = `${state.steerDeg}°`;
+        updateMechanicalKinematics();
+      });
+
+      // Helper for toggle button styling
+      const updateToggleBtn = (id, label, on) => {
+        const el = document.getElementById(id);
+        el.textContent = `${label}: ${on ? 'ON' : 'OFF'}`;
+        el.className = on
+          ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200 hover:bg-sky-500/30 text-[11px] font-semibold py-2 px-2 rounded-xl transition'
+          : 'bg-slate-800/70 border border-slate-700/80 text-slate-300 hover:bg-slate-700/80 text-[11px] font-semibold py-2 px-2 rounded-xl transition';
+      };
+
+      document.getElementById('btn-demo').addEventListener('click', () => {
+        state.autoDemo = !state.autoDemo;
+        updateToggleBtn('btn-demo', 'Auto-Articulate', state.autoDemo);
+      });
+
+      document.getElementById('btn-xray').addEventListener('click', () => {
+        state.xray = !state.xray;
+        updateToggleBtn('btn-xray', 'Chassis X-Ray', state.xray);
+        chassisMaterials.forEach(m => {
+          m.opacity = state.xray ? 0.22 : 1.0;
+          m.depthWrite = !state.xray;
+          m.needsUpdate = true;
+        });
+      });
+
+      document.getElementById('btn-callouts').addEventListener('click', () => {
+        state.showCallouts = !state.showCallouts;
+        updateToggleBtn('btn-callouts', '3D Labels', state.showCallouts);
+      });
+
+      document.getElementById('btn-wireframe').addEventListener('click', () => {
+        state.wireframe = !state.wireframe;
+        updateToggleBtn('btn-wireframe', 'Wireframe', state.wireframe);
+        allMaterials.forEach(m => { m.wireframe = state.wireframe; });
+      });
+    }
+
+    // =========================================================================
+    // MAIN ANIMATION LOOP & INITIALIZATION
+    // =========================================================================
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, clock.getDelta());
+
+      // Smooth damped camera orbit interpolation
+      const damp = 1 - Math.exp(-8 * dt);
+      camOrbit.target.lerp(camOrbit.desiredTarget, damp);
+      camOrbit.theta += (camOrbit.desiredTheta - camOrbit.theta) * damp;
+      camOrbit.phi += (camOrbit.desiredPhi - camOrbit.phi) * damp;
+      camOrbit.radius += (camOrbit.desiredRadius - camOrbit.radius) * damp;
+
+      const sinPhi = Math.sin(camOrbit.phi);
+      camera.position.set(
+        camOrbit.target.x + camOrbit.radius * sinPhi * Math.sin(camOrbit.theta),
+        camOrbit.target.y + camOrbit.radius * Math.cos(camOrbit.phi),
+        camOrbit.target.z + camOrbit.radius * sinPhi * Math.cos(camOrbit.theta)
+      );
+      camera.lookAt(camOrbit.target);
+
+      // Optional Auto-Articulate Suspension & Steering Showcase
+      if (state.autoDemo) {
+        state.demoTime += dt;
+        state.suspMM = Math.round(Math.sin(state.demoTime * 1.9) * 38);
+        state.steerDeg = Math.round(Math.sin(state.demoTime * 1.1) * 24);
+        document.getElementById('slider-susp').value = state.suspMM;
+        document.getElementById('val-susp').textContent = `${state.suspMM > 0 ? '+' : ''}${state.suspMM} mm`;
+        document.getElementById('slider-steer').value = state.steerDeg;
+        document.getElementById('val-steer').textContent = `${state.steerDeg}°`;
+        updateMechanicalKinematics();
+      }
+
+      // Live Drivetrain Rotation (Driveshaft -> Flange Sprocket -> Chain -> Overdrive Drag Alternator -> Diff -> Wheels)
+      if (state.rpm > 0) {
+        // Visually readable angular velocity scaled from RPM
+        const visualRadPerSec = (state.rpm / 1450) * 5.2;
+        const dAngle = visualRadPerSec * dt;
+        state.driveAngle += dAngle;
+
+        if (kin.driveshaftGroup) kin.driveshaftGroup.rotation.z = state.driveAngle;
+        if (kin.driveSprocket) kin.driveSprocket.rotation.z = state.driveAngle;
+        if (kin.altSprocket) kin.altSprocket.rotation.z = state.driveAngle * (30 / 14);
+
+        // Advance roller chain strictly synced with drive sprocket pitch circumference (R = 0.072m)
+        state.chainOffset += dAngle * 0.072;
+        updateChainLinks(state.chainOffset);
+
+        // Spin wheels through Subaru R160 3.90:1 final drive ratio
+        const wheelSpinStep = dAngle / 3.9;
+        kin.frontCorners.forEach(c => { c.wheelSpin.rotation.x += wheelSpinStep * (0.31 / 0.28); });
+        kin.rearCorners.forEach(c => { c.wheelSpin.rotation.x += wheelSpinStep; });
+
+        // Subtle V-twin idle thump vibration on the Yamaha XV700
+        if (kin.engineGroup) {
+          const vibAmp = 0.0014 * Math.min(1.5, state.rpm / 1450);
+          kin.engineGroup.position.x = Math.sin(performance.now() * 0.055) * vibAmp;
+          kin.engineGroup.position.y = 0.29 + Math.cos(performance.now() * 0.072) * vibAmp * 0.7;
+        }
+      }
+
+      updateCallouts();
+      renderer.render(scene, camera);
+    }
+
+    function initApp() {
+      try {
+        const container = document.getElementById('viewport');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x070b12);
+        scene.fog = new THREE.FogExp2(0x070b12, 0.075);
+
+        camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.05, 60);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.12;
+        container.appendChild(renderer.domElement);
+
+        clock = new THREE.Clock();
+        initMaterials();
+        buildEnvironment();
+
+        rootGroup = new THREE.Group();
+        scene.add(rootGroup);
+
+        // Procedurally construct every mechanical sub-assembly
+        buildTubeChassis(rootGroup);
+        buildYamahaXV700(rootGroup);
+        buildDrivetrainAndDragAlternator(rootGroup);
+        buildPowerSteeringSystem(rootGroup);
+        buildSuspensionAndWheels(rootGroup);
+
+        // Solve initial neutral kinematics
+        updateMechanicalKinematics();
+        initCallouts();
+        setupCameraControls(renderer.domElement);
+        bindUIControls();
+
+        window.addEventListener('resize', () => {
+          const w = container.clientWidth;
+          const h = container.clientHeight;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        });
+
+        animate();
+      } catch (err) {
+        const box = document.getElementById('error-box');
+        box.textContent = `WebGL Initialization Error: ${err.message}`;
+        box.classList.remove('hidden');
+      }
+    }
+
+    window.onload = initApp;
+  </script>
+</body>
+</html>

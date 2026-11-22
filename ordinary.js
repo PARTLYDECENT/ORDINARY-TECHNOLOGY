@@ -153,6 +153,12 @@ function handleConsoleInput(event) {
       return;
     }
 
+    if (command === 'komorebissecret') {
+      showNotification('ACCESSING CLASSIFIED SIMULATION: REDACTED_01...');
+      setTimeout(() => { window.location.href = 'assets/games/redacted1.html'; }, 500);
+      return;
+    }
+
     const action = commands[command];
 
     if (action) {

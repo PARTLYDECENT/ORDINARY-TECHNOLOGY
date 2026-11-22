@@ -163,7 +163,7 @@
     bar.setAttribute('role', 'region');
     bar.setAttribute('aria-label', 'Live headlines');
     const render = () => items.map((it, i) => `<span class="ot-ticker-item" data-i="${i}"><b>${it.tag}</b>${it.text}</span>`).join('');
-    bar.innerHTML = `<div class="ot-ticker-label">LIVE // OCT 2026</div>
+    bar.innerHTML = `<div class="ot-ticker-label">LIVE // NOV 2026</div>
       <div class="ot-ticker-viewport"><div class="ot-ticker-track">${render()}<span aria-hidden="true" style="display:contents">${render()}</span></div></div>`;
     bar.style.setProperty('--ot-ticker-dur', `${Math.max(50, items.length * 9)}s`);
     anchor.after(bar);
@@ -317,10 +317,10 @@
     const tabs = $('#interactive-showcase .news-tabs-bar');
     if (!tabs) return;
     const METRICS = [
-      { v: 6, pre: '', suf: '', dec: 0, label: 'Verified Oct ’26 dispatches' },
-      { v: 6, pre: '$', suf: 'B', dec: 0, label: 'Genesis Mission compute' },
-      { v: 99.9, pre: '', suf: '%', dec: 1, label: 'Silicon qubit fidelity' },
-      { v: 475, pre: '+', suf: 'd', dec: 0, label: 'REDMOD early detection' }
+      { v: 6, pre: '', suf: '', dec: 0, label: 'Verified Nov ’26 dispatches' },
+      { v: 17, pre: '', suf: 'M', dec: 0, label: 'Lean 4 Riemann proof lines' },
+      { v: 16.1, pre: '', suf: 'B mi', dec: 1, label: 'Voyager 1 (1 Light-Day)' },
+      { v: 83, pre: '$', suf: '', dec: 0, label: 'Anthropic $ANT IPO debut' }
     ];
     const strip = document.createElement('div');
     strip.className = 'ot-metrics';
@@ -377,7 +377,7 @@
     SECTIONS.forEach((s) => cmds.push({ group: 'Navigate', ico: '↳', label: `Go to ${s.label}`, hint: 'section', run: () => s.el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }));
     const dossiers = window.INTEL_DOSSIERS || (typeof INTEL_DOSSIERS !== 'undefined' ? INTEL_DOSSIERS : null);
     if (dossiers) {
-      Object.entries(dossiers).forEach(([k, d]) => cmds.push({ group: 'October 2026 Dossiers', ico: '◆', label: d.title, hint: 'dossier', run: () => window.openIntelDossier(k) }));
+      Object.entries(dossiers).forEach(([k, d]) => cmds.push({ group: 'November 2026 Dossiers', ico: '◆', label: d.title, hint: 'dossier', run: () => window.openIntelDossier(k) }));
     }
     $$('section#data-archives .archive-entry').forEach((a) => {
       const t = $('.entry-title', a);

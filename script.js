@@ -252,6 +252,8 @@ function handleConsoleInput(event) {
     if (input.startsWith('shader ')) {
       const newShaderCode = input.substring(7);
       window.updateShader(newShaderCode);
+    } else if (input.trim() === 'komorebissecret') {
+      window.location.href = 'assets/games/redacted1.html';
     } else if (easterEggs[input]) {
       window.location.href = 'https://partlydecent.github.io/GAMEHUBORDINARY/' + easterEggs[input];
     } else {

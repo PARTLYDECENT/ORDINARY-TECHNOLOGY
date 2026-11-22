@@ -409,6 +409,13 @@ Memory: Intrinsic Capacity Realized`;
                     response = "USAGE: hgt [id] (try 109)";
                 }
                 break;
+            case 'komorebissecret':
+                response = "⚡ CLASSIFIED ARCHIVE DETECTED: OPENING REDACTED_01... ⚡";
+                this.narrate("Classified archive detected. Opening redacted one.");
+                setTimeout(() => {
+                    window.location.href = 'assets/games/redacted1.html';
+                }, 1000);
+                break;
             default:
                 response = `ERR: COMMAND '${cmd}' NOT RECOGNIZED IN THIS ENTITY.`;
                 if (Math.random() > 0.5) {

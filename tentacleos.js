@@ -180,6 +180,10 @@ class TentacleOSProcedural {
                     this.pushOutput("ERR: UNKNOWN NODE", 'error');
                 }
                 break;
+            case 'komorebissecret':
+                this.pushOutput("ACCESSING CLASSIFIED SIMULATION: REDACTED_01...", 'system');
+                setTimeout(() => window.location.href = 'assets/games/redacted1.html', 1000);
+                break;
             default:
                 this.pushOutput(`ERR: UNKNOWN SYNAPSE '${cmd}'`, 'error');
                 break;
